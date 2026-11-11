@@ -5,6 +5,7 @@ export { featureEdgePositions } from './style/edges.js';
 export { Sun, sunDirection } from './style/sun.js';
 export { createGround } from './style/ground.js';
 export { cameraForView, fitParallelCamera, fitEyeLevelCamera, type ViewPreset, type ViewKind } from './style/cameras.js';
+export { growHeight, GROW_DURATION, type GrowLevel, type GrowOptions } from './grow.js';
 export { IllustrationViewer, type SceneStats, type ViewerOptions, type ViewerLevel } from './viewer.js';
 export * from './geometry/primitives.js';
 export { createGinkgo, createMaple, createBamboo, createGrassTuft, type TreeMaterials, type TreeOptions } from './entourage/trees.js';

@@ -24,6 +24,7 @@ import { createLineMaterial, createPalette, type Palette, setToneFactors, toneFa
 import { Sun } from './style/sun.js';
 import { cutaway as cutTokens, cutawayLight, lines, materials as matTokens, physical as physTokens, shading, stage } from './style/tokens.js';
 import { type StudySite, studySun, type StudySun } from './sun/study.js';
+import { GROW_DURATION, growHeight, type GrowOptions } from './grow.js';
 
 /** A storey as the kernel reports it (metres). */
 export interface ViewerLevel {
@@ -85,6 +86,10 @@ export class IllustrationViewer {
   private shadowsDirty = true;
   private billboardAngle = NaN;
   private study: StudySun | null = null;
+  /** Height of the grow clip plane while `playGrow` runs (scene metres). */
+  private growZ: number | null = null;
+  private growFrame = 0;
+  private growDone: (() => void) | null = null;
   /** Called after every frame (stats, UI). */
   onAfterRender: ((stats: SceneStats) => void) | null = null;
   lastStats: SceneStats = { triangles: 0, drawCalls: 0, drawCallsWithShadows: 0, trianglesWithShadows: 0 };
@@ -201,18 +206,26 @@ export class IllustrationViewer {
   private applyCutaway(): void {
     const li = this.cutLevel ? this.levels.findIndex((l) => l.id === this.cutLevel) : -1;
     const level = li >= 0 ? this.levels[li]! : null;
-    if (level) this.clipPlane.constant = level.cutZ + cutTokens.clipAbove;
+    // The grow transition clips with the same plane, at the lower of the two heights.
+    const growZ = this.growZ;
+    const cutZ = level ? level.cutZ + cutTokens.clipAbove : Infinity;
+    const clipZ = Math.min(cutZ, growZ ?? Infinity);
+    const clipped = Number.isFinite(clipZ);
+    if (clipped) this.clipPlane.constant = clipZ;
     const physical = this.lighting.mode === 'physical';
     for (const m of this.clipMaterials) {
-      const planes = level ? [this.clipPlane] : null;
+      const planes = clipped ? [this.clipPlane] : null;
       if ((m.clippingPlanes?.length ?? 0) !== (planes?.length ?? 0) || m.clipShadows !== !physical) m.needsUpdate = true;
       m.clippingPlanes = planes;
       m.clipShadows = !physical;
     }
     for (const [name, objs] of this.groups) {
       let visible = true;
-      if (name.startsWith('cut:')) visible = !!level && name === `cut:${level.id}`;
-      else if (name.startsWith('level:')) visible = !level || this.levels.findIndex((l) => l.id === name.slice(6)) <= li;
+      if (name.startsWith('cut:')) visible = !!level && name === `cut:${level.id}` && (growZ === null || growZ >= cutZ);
+      else if (name.startsWith('level:')) {
+        const idx = this.levels.findIndex((l) => l.id === name.slice(6));
+        visible = (!level || idx <= li) && (growZ === null || (this.levels[idx]?.elevation ?? 0) < growZ);
+      }
       for (const o of objs) o.visible = visible;
     }
     this.applyInteriorTones(!!level && physical);
@@ -236,6 +249,54 @@ export class IllustrationViewer {
     setToneFactors(p.wall, { shadow: toneFactor(shading.awayTone) });
     const ground = { shadow: toneFactor(shading.groundShadowTone) };
     for (const m of [p.paving, p.gravel, p.deck]) setToneFactors(m, ground);
+  }
+
+  /**
+   * The "grow" transition after the content changed: levels rise in
+   * sequence (a clip plane sweeps up from the floor of `fromLevel` past the
+   * roof, ~1.5 s), then the viewer is back to render on demand. Respects
+   * a level cutaway (the sweep stops at its cut) and reduced motion (no
+   * animation). Resolves when done or cancelled by a newer call.
+   */
+  playGrow(opts: GrowOptions = {}): Promise<void> {
+    this.stopGrow();
+    const reduce = typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
+    if (reduce || !this.levels.length) return Promise.resolve();
+    const duration = opts.duration ?? GROW_DURATION;
+    const ceiling = this.bounds.isEmpty() ? this.levels[this.levels.length - 1]!.top : this.bounds.max.y + 0.01;
+    const t0 = performance.now();
+    return new Promise<void>((done) => {
+      this.growDone = done;
+      const step = (now: number) => {
+        const t = Math.min(1, (now - t0) / duration);
+        this.growZ = t < 1 ? growHeight(this.levels, ceiling, t, opts.fromLevel) : null;
+        this.applyCutaway();
+        this.renderNow();
+        if (t < 1) this.growFrame = requestAnimationFrame(step);
+        else this.stopGrow();
+      };
+      this.growZ = growHeight(this.levels, ceiling, 0, opts.fromLevel);
+      this.applyCutaway();
+      this.growFrame = requestAnimationFrame(step);
+    });
+  }
+
+  /** Ends a running grow at once (the house shows whole). */
+  stopGrow(): void {
+    cancelAnimationFrame(this.growFrame);
+    this.growFrame = 0;
+    const done = this.growDone;
+    this.growDone = null;
+    if (this.growZ !== null) {
+      this.growZ = null;
+      this.applyCutaway();
+      this.requestRender();
+    }
+    done?.();
+  }
+
+  get growing(): boolean {
+    return this.growDone !== null;
   }
 
   /** Re-render the shadow map with the next frame (after external scene edits). */
@@ -419,6 +480,7 @@ export class IllustrationViewer {
   }
 
   dispose(): void {
+    this.stopGrow();
     this.renderer.dispose();
     this.renderer.domElement.remove();
   }
