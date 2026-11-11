@@ -136,3 +136,18 @@ Re-check each against the task 013 layout before fixing; some may be gone.
   Steady-state frames are 3-5x cheaper without blur (e.g. working
   indicator 207 ms -> 41 ms, warmed up).
 - A redo that cannot be restored after a reload reads as "undone".
+
+## After task 015 (studio layout chosen by the owner)
+- Desktop houses render 5-13% narrower than the approved mockups (a larger
+  white margin was kept so the ground shadow does not clip when pinned).
+- The phone sheet re-frames the house on open/close but does not follow
+  the finger during a drag; the closing sheet animates a frozen copy.
+- Landscape phone: the sheet stands beside the toolbar instead of carrying
+  it; the sun panel scrolls there.
+- Changes cards have no per-change area delta (the model has none).
+- Design concerns raised by the implementer, for the owner: icon-only
+  tools are less discoverable; hover expansion shifts neighbouring icons;
+  the phone input is hidden while a sheet is open, so you cannot ask the
+  assistant about what the panel shows; the recent strip covers 36-42% of
+  the house on phone.
+- Not tested on real phones, WeChat, or with the iOS keyboard.
