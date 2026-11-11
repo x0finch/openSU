@@ -28,6 +28,12 @@ export interface PlanOptions {
    * ~1.6); the zero-overlap rules still hold.
    */
   textScale?: number;
+  /**
+   * Small screens: no dimension chains and no title (the drawing is too
+   * small for them and the app names the level), a narrow white margin,
+   * the north arrow above the drawing's top-left corner.
+   */
+  compact?: boolean;
 }
 
 export interface PlanReport {
@@ -90,8 +96,10 @@ export function renderPlanDetailed(house: ResolvedHouse, levelId: string, option
 
   // Extent of the drawing (mm): spaces and walls, the wall thickness, canopies below.
   const ext = unionBox([inflate(plan.extent, 130), ...canopies])!;
-  const pad = tl.margin + tl.dimOffset1 + tl.dimTierGap + ty.font.dimSize + 10 * ty.scale;
-  const v = new View(s, ext.x0, ext.y1, pad, pad);
+  const compact = options.compact === true;
+  const pad = compact ? 12 : tl.margin + tl.dimOffset1 + tl.dimTierGap + ty.font.dimSize + 10 * ty.scale;
+  const padTop = compact ? pad + 2 * tl.northRadius + 30 * ty.scale : pad;
+  const v = new View(s, ext.x0, ext.y1, pad, padTop);
   const extPx = v.rect(ext);
   const texts: TextBox[] = [];
 
@@ -104,23 +112,28 @@ export function renderPlanDetailed(house: ResolvedHouse, levelId: string, option
   // --- Labels first so furniture can yield; then draw what is left.
   const ownCanopies = plan.openings.map((o) => openingCanopy(o.op, o.thickness)).filter((r): r is Rect => !!r);
   // Labels keep clear of walls and of canopy outlines drawn over the floor.
-  const labels = placeLabels(plan, v, items0, openings.swings, texts, [...walls.wallBoxes, ...ownCanopies], ty);
+  const labels = placeLabels(plan, v, items0, openings.swings, texts, [...walls.wallBoxes, ...ownCanopies], ty, options.compact === true);
   const items = items0.filter((p) => !labels.removed.has(p.id));
   texts.push(...labels.boxes);
 
   // --- Dimensions, north arrow, title.
-  const dims = drawDims(plan, v, extPx, texts, ty);
+  const dims = compact ? { svg: '', boxes: [], linesPx: extPx, extentPx: extPx } : drawDims(plan, v, extPx, texts, ty);
   texts.push(...dims.boxes);
-  const north = northArrow(tl.margin + tl.northRadius + 6 * ty.scale, tl.margin + tl.northRadius + 14 * ty.scale, house.site.northDeg, texts, ty);
+  const north = compact
+    ? northArrow(pad + tl.northRadius, pad + tl.northRadius + 14 * ty.scale, house.site.northDeg, texts, ty)
+    : northArrow(tl.margin + tl.northRadius + 6 * ty.scale, tl.margin + tl.northRadius + 14 * ty.scale, house.site.northDeg, texts, ty);
   const levelName = house.levels[idx]!.name;
   const title = options.title ?? `${levelName}平面图`;
   const subtitle = options.subtitle === false ? '' : (options.subtitle ?? `${ORDINAL[idx] ?? `LEVEL ${idx + 1}`} PLAN`);
   const width = Math.ceil(extPx.x1 + pad);
   // Title centred on the drawing's extents (plan plus dimension chains).
-  const tb = titleBlock((dims.linesPx.x0 + dims.linesPx.x1) / 2, dims.extentPx.y1 + tl.titleGap, title, subtitle, texts, ty);
-  const height = Math.ceil(tb.bottom + tl.margin);
+  const tb = compact ? { svg: '', bottom: extPx.y1 } : titleBlock((dims.linesPx.x0 + dims.linesPx.x1) / 2, dims.extentPx.y1 + tl.titleGap, title, subtitle, texts, ty);
+  const height = Math.ceil(tb.bottom + (compact ? pad : tl.margin));
 
   // --- Assemble, bottom to top.
+  // Planting stays inside the plot (ground floor) and out of the rooms.
+  const plantBox = plan.plot ? v.rect(plan.plot) : { x0: 0, y0: 0, x1: width, y1: height };
+  const plantArea = `M${f(plantBox.x0)},${f(plantBox.y0)}H${f(plantBox.x1)}V${f(plantBox.y1)}H${f(plantBox.x0)}Z`;
   const out: string[] = [];
   out.push(`<svg xmlns="http://www.w3.org/2000/svg"${attrs({ width, height, viewBox: `0 0 ${width} ${height}` })}>`);
   out.push(`<title>${title}</title>`);
@@ -129,6 +142,8 @@ export function renderPlanDetailed(house: ResolvedHouse, levelId: string, option
     + `<pattern id="lawn" patternUnits="userSpaceOnUse" width="16" height="16"><rect width="16" height="16" fill="${color.lawn}"/><circle cx="4" cy="5" r="0.7" fill="${color.lawnDot}"/><circle cx="12" cy="13" r="0.7" fill="${color.lawnDot}"/></pattern>`
     + `<pattern id="deck" patternUnits="userSpaceOnUse" width="${f(v.len(600))}" height="${f(v.len(150))}"><rect width="${f(v.len(600))}" height="${f(v.len(150))}" fill="${color.deck}"/><path d="M0,0.25H${f(v.len(600))}" stroke="${color.deckLine}" stroke-width="${stroke.furnitureDetail}"/></pattern>`
     + `<pattern id="gravel" patternUnits="userSpaceOnUse" width="9" height="9"><rect width="9" height="9" fill="${color.gravel}"/><circle cx="2" cy="2.5" r="0.6" fill="${color.gravelDot}"/><circle cx="6.5" cy="6" r="0.5" fill="${color.gravelDot}"/></pattern>`
+    // Tree crowns stay outside the rooms (they read as being under the roof eaves there).
+    + `<clipPath id="outdoors-${plan.level.id}"><path clip-rule="evenodd"${attrs({ d: `${plantArea}${plan.spaces.filter((sp) => !sp.outdoor).map((sp) => pathOfRings(sp.rings, v)).join('')}` })}/></clipPath>`
     + '</defs>');
   out.push(rectEl({ x0: 0, y0: 0, x1: width, y1: height }, { fill: color.page }));
 
@@ -162,7 +177,7 @@ export function renderPlanDetailed(house: ResolvedHouse, levelId: string, option
   const tops = items.filter((p) => p.layer === 'top');
   const plants = items.filter((p) => p.layer === 'plant');
   if (floorItems.length) out.push(`<g filter="url(#soft)">${floorItems.map(sym).join('')}</g>`);
-  if (plants.length) out.push(`<g filter="url(#soft)">${plants.map(sym).join('')}</g>`);
+  if (plants.length) out.push(`<g clip-path="url(#outdoors-${plan.level.id})"><g filter="url(#soft)">${plants.map(sym).join('')}</g></g>`);
   if (pieces.length) out.push(`<g filter="url(#soft)">${pieces.map(sym).join('')}</g>`);
   if (tops.length) out.push(`<g>${tops.map(sym).join('')}</g>`);
 

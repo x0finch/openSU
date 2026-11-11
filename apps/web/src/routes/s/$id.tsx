@@ -1,4 +1,5 @@
 import { createFileRoute, Link, notFound } from '@tanstack/react-router';
+import { DEFAULT_TEMPLATE, isTemplateId, TEMPLATE_META } from '@opensu/agent/templates-meta';
 import { createIsomorphicFn } from '@tanstack/react-start';
 import { getRequestUrl } from '@tanstack/react-start/server';
 import { useEffect } from 'react';
@@ -20,9 +21,12 @@ const origin = createIsomorphicFn()
 export const Route = createFileRoute('/s/$id')({
   ssr: 'data-only',
   loader: ({ params }) => {
-    if (!ID.test(params.id)) throw notFound();
-    // Placeholder until sharing exists: no storage lookup yet.
-    return { id: params.id, title: '现代坡顶自建房', origin: origin() };
+    if (!ID.test(params.id) && !isTemplateId(params.id)) throw notFound();
+    // Placeholder until sharing exists: no storage lookup yet. The title is
+    // the shared house's own name: a template id names that template, any
+    // other id shows the default house (the one the studio opens with).
+    const house = TEMPLATE_META.find((t) => t.id === params.id) ?? TEMPLATE_META.find((t) => t.id === DEFAULT_TEMPLATE)!;
+    return { id: params.id, title: house.name, origin: origin() };
   },
   head: ({ loaderData }) => {
     if (!loaderData) return {};
@@ -67,12 +71,13 @@ function SharePage() {
       <p className="tnum mt-6 text-xs text-ink-3">
         {t('share.id')} · {id}
       </p>
-      <Link
-        to="/studio"
+      {/* A full page load: the studio reads ?sample= once, at start. */}
+      <a
+        href={isTemplateId(id) ? `/studio?sample=${id}` : '/studio'}
         className="mt-10 inline-flex h-11 w-fit items-center gap-2 rounded-ui bg-ink px-5 text-sm font-medium text-white transition-opacity hover:opacity-90"
       >
         {t('share.open')}
-      </Link>
+      </a>
     </main>
   );
 }

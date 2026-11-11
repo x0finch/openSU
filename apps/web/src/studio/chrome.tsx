@@ -28,9 +28,11 @@ function useFacts(d: Derived | null) {
   };
 }
 
-function projectTitle(t: ReturnType<typeof useT>, style: string | undefined): string {
-  const key = `project.title.${style ?? 'modern-pitched'}` as MessageKey;
-  return t(key) || style || '';
+/** The house's own name; the internal golden benchmark shows its style title instead. */
+function projectTitle(t: ReturnType<typeof useT>, house: { name: string; style: string } | null | undefined): string {
+  if (house?.name && !house.name.startsWith('Golden sample')) return house.name;
+  const key = `project.title.${house?.style ?? 'modern-pitched'}` as MessageKey;
+  return t(key) || house?.style || '';
 }
 
 /**
@@ -96,7 +98,7 @@ export function TitleBlock({ derived, onRect }: { derived: Derived | null; onRec
     return () => ro.disconnect();
   }, [onRect]);
   const facts = useFacts(derived);
-  const style = useStudio((s) => s.house?.style);
+  const house = useStudio((s) => s.house);
   const chatOpen = useStudio((s) => s.chatOpen);
   const rows: [MessageKey, string | undefined][] = [
     ['facts.plot', facts?.plot],
@@ -110,7 +112,7 @@ export function TitleBlock({ derived, onRect }: { derived: Derived | null; onRec
         <span className="text-[13px] font-semibold tracking-tight">openSU</span>
       </Link>
       <h1 className="mt-5 text-[20px] leading-7 font-semibold tracking-[-0.01em] text-balance">
-        {projectTitle(t, style)}
+        {projectTitle(t, house)}
         <span className="ml-2 inline-block translate-y-[-2px] rounded-[5px] border border-hairline px-1.5 align-middle text-2xs font-normal tracking-normal text-ink-2">
           {t('project.sample')}
         </span>
@@ -512,7 +514,7 @@ export { ChatRail, MobileChat } from '../chat/ChatPanel';
 export function MobileHeader({ derived }: { derived: Derived | null }) {
   const t = useT();
   const facts = useFacts(derived);
-  const style = useStudio((s) => s.house?.style);
+  const house = useStudio((s) => s.house);
   const setChat = useStudio((s) => s.setChatOpen);
   return (
     <header className="pointer-events-none absolute inset-x-0 top-0 bg-gradient-to-b from-white via-white/85 to-transparent px-4 pt-[max(4px,env(safe-area-inset-top))] pb-6 land:pb-2">
@@ -523,7 +525,7 @@ export function MobileHeader({ derived }: { derived: Derived | null }) {
             <span className="text-xs font-semibold tracking-tight">openSU</span>
           </Link>
           <p className="hidden min-w-0 truncate text-sm land:block">
-            <span className="font-semibold">{projectTitle(t, style)}</span>
+            <span className="font-semibold">{projectTitle(t, house)}</span>
             <span className="tnum ml-2 text-xs text-ink-2">{facts ? `${facts.plot} · ${facts.area}` : ''}</span>
           </p>
         </div>
@@ -537,7 +539,7 @@ export function MobileHeader({ derived }: { derived: Derived | null }) {
         </div>
       </div>
       <div className="min-w-0 land:hidden">
-        <h1 className="truncate text-[17px] leading-6 font-semibold">{projectTitle(t, style)}</h1>
+        <h1 className="truncate text-[17px] leading-6 font-semibold">{projectTitle(t, house)}</h1>
         <p className="tnum mt-0.5 truncate text-xs text-ink-2">
           {facts ? `${facts.plot} · ${facts.area} · ${facts.storeys}` : <Skeleton w={180} />}
         </p>

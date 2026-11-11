@@ -74,23 +74,45 @@ export function restoreChat(): void {
   if (s?.chat.length) restoreItems(s.chat);
 }
 
-/** Saves the house and the transcript shortly after they change. */
+/**
+ * The edited house becomes the saved one: `?sample=` is dropped from the
+ * address (a reload then restores the edits instead of the template).
+ */
+function adoptSample(): void {
+  try {
+    const u = new URL(location.href);
+    u.searchParams.delete('sample');
+    history.replaceState(history.state, '', u);
+  } catch {
+    /* keep the address */
+  }
+}
+
+/**
+ * Saves the house and the transcript shortly after they change. A page
+ * opened on an explicit template (`?sample=`) neither restores nor
+ * overwrites the save while it shows that template untouched; its first
+ * edit adopts it (see `adoptSample`) and saving starts.
+ */
 export function useAutosave(): void {
   useEffect(() => {
-    if (sampleRequested()) return;
-    restoreChat();
+    if (!sampleRequested()) restoreChat();
     let timer = 0;
     const schedule = () => {
       clearTimeout(timer);
       timer = window.setTimeout(() => {
         const house = useStudio.getState().house;
         const chat = useChat.getState();
-        if (!house || chat.running) return;
+        if (!house || chat.running || sampleRequested()) return;
         save(house, chat.items);
       }, DELAY);
     };
     const offHouse = useStudio.subscribe((s, p) => {
-      if (s.house !== p.house) schedule();
+      if (s.house === p.house) return;
+      // The template arriving (or a reset to it) is not an edit.
+      if (sampleRequested() && (!p.house || resetting)) return;
+      if (sampleRequested()) adoptSample();
+      schedule();
     });
     const offChat = useChat.subscribe((s, p) => {
       if (s.items !== p.items || s.running !== p.running) schedule();
@@ -104,10 +126,17 @@ export function useAutosave(): void {
 }
 
 /** Starts over: the template house, an empty conversation, nothing saved. */
+let resetting = false;
+
 export async function resetToTemplate(): Promise<void> {
   // Never on the server: keeps the model chunk out of the Worker bundle.
   const m = await (import.meta.env.SSR ? new Promise<never>(() => {}) : import('../studio/house-data'));
   newChat();
   clearSaved();
-  useStudio.getState().setHouse(m.loadSample(), { fromLevel: 0 });
+  resetting = true;
+  try {
+    useStudio.getState().setHouse(m.loadSample(), { fromLevel: 0 });
+  } finally {
+    resetting = false;
+  }
 }

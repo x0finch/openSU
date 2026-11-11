@@ -17,8 +17,9 @@ function image(w: number, h: number, rects: [number, number, number, number][]):
 describe('facts', () => {
   it('formats the golden sample header', () => {
     const facts = sheetFacts(resolve(golden));
-    expect(facts[0]).toBe('宅基地：12x15M');
-    expect(facts[1]).toMatch(/^总面积：\d+㎡$/);
+    // Width x depth like the studio (the golden plot is 15 m wide, 12 m deep).
+    expect(facts[0]).toBe('宅基地：15 × 12 m');
+    expect(facts[1]).toMatch(/^建筑面积：\d+\.\d m²$/);
     expect(facts[2]).toBe('现代坡顶');
   });
   it('rounds metres to one decimal', () => {

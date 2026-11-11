@@ -14,13 +14,14 @@ export function metres(mm: number): string {
 }
 
 /**
- * Header facts: plot size (short side first, like "12x15M"), total interior
- * area rounded to m², and the style label when the preset has one.
+ * Header facts, worded like the studio's info block: plot size as width x
+ * depth ("宅基地：12 × 14 m"), interior floor area ("建筑面积：163.8 m²"), and
+ * the style label when the preset has one.
  */
 export function sheetFacts(house: ResolvedHouse): string[] {
   const { width, depth } = house.site;
-  const [a, b] = width <= depth ? [width, depth] : [depth, width];
-  const lines = [`宅基地：${metres(a)}x${metres(b)}M`, `总面积：${Math.round(house.interiorArea / 1e6)}㎡`];
+  const area = (Math.round(house.interiorArea / 1e5) / 10).toFixed(1);
+  const lines = [`宅基地：${metres(width)} × ${metres(depth)} m`, `建筑面积：${area} m²`];
   const style = STYLE_LABELS[house.style];
   if (style) lines.push(style);
   return lines;

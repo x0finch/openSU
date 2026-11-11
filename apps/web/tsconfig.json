@@ -8,6 +8,7 @@
       "@opensu/render/tokens": ["../../packages/render/src/style/tokens.ts"],
       "@opensu/render/sun": ["../../packages/render/src/sun/study.ts"],
       "@opensu/agent/starter": ["../../packages/agent/src/starter.ts"],
+      "@opensu/agent/templates-meta": ["../../packages/agent/src/templates/meta.ts"],
       "@opensu/agent": ["../../packages/agent/src/index.ts"],
       "@opensu/model": ["../../packages/model/src/index.ts"],
       "@opensu/furnish": ["../../packages/furnish/src/index.ts"],

@@ -62,7 +62,13 @@ metres, model axes (X east, Y north, Z up; the renderer converts once).
   The underside at the eave wall line is the level top plus `eaveOffset`.
   Eaves overhang by `overhang`, verges by 300 (when the roof has
   overhangs); an edge against a higher roof or a taller storey is clipped
-  to the wall face. Skylights sit on the tiles. Flat roofs and canopies are
+  to the wall face. Two gable / hip roofs on the same level with the same
+  eave height whose footprints share a whole edge, where the higher one's
+  ridge runs along that edge, are joined: the lower roof runs on into the
+  higher one's footprint until it dies into its slope, so they meet in
+  valley lines (one roof, no gable wall or gap at the junction); the walls
+  under the extension rise to it. Mono roofs never join (the golden
+  sample's stepped mono roofs are unchanged). Skylights sit on the tiles. Flat roofs and canopies are
   massing slabs; canopy edges along an exterior wall stop at its face,
   free-standing canopies get slim posts.
 - **Openings** (`openings.ts`) cut the wall through its thickness. Exterior
@@ -98,17 +104,16 @@ metres, model axes (X east, Y north, Z up; the renderer converts once).
   supporting line; coplanar continuations of the same material cancel;
   what remains (free edges, folds over 25 degrees, material changes) is
   drawn. Wall faces continuing across a floor level give the floor lines.
-- **Entourage** (`entourage.ts`), seeded from the house: a large ginkgo in
-  the most open courtyard / garden, at its sunny-side corner away from the
-  fence; a green maple in a garden beside the porch; bamboo along fences in strips up to
-  2 m deep (not on the sunny side, clear of gates, pier and doors), grass on
-  the sunny side, a red maple in front of large glazing; a planter with a
-  small tree and a runner on the largest terrace; a person at the main
-  entrance, in the open; a car in each carport. People are placed where no
-  tree crown is around or in front of them in the fixed presentation views.
-  Plants carry a clip box: the renderer drops low foliage outside the fence
-  (or terrace rails), so no stray leaves show on fence faces. Explicit model `entourage` replaces the
-  rules.
+- **Entourage** (`entourage.ts`): plants come from the shared site
+  planting of `@opensu/furnish` (`plantSite`), so the floor plan shows the
+  same trees, bamboo and grass; the kernel sets their height above the
+  ground finish, deck or terrace planter (whose box it builds) and their
+  clip boxes. It adds a person at the main entrance, in the open, a person
+  on the largest terrace and a car in each carport. People are placed where
+  no tree crown is around or in front of them in the fixed presentation
+  views. Plants carry a clip box: the renderer drops low foliage outside
+  the fence (or terrace rails), so no stray leaves show on fence faces.
+  Explicit model `entourage` replaces the rules.
 
 - **Furniture** (`furniture.ts`): the placements of `@opensu/furnish` (the
   plan's furniture) built from simple recipes per kind in a local frame

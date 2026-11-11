@@ -8,6 +8,7 @@
 import type { ResolvedRoof } from '@opensu/model';
 import { CANOPY, FLAT_ROOF, POST, ROOF_DEPTH, TILE_EDGE, VERGE } from './constants';
 import { type Ctx, grow, intersect, type Rect } from './context';
+import { rectUnionRings } from '@opensu/furnish';
 import { evalPlane, flat, type Plane } from './massing';
 import type { V3 } from './mesh';
 
@@ -61,7 +62,68 @@ export function pitchedRoofs(ctx: Ctx): PitchedRoof[] {
     }
     out.push({ roof, li, bbox, cells, planeAt, t });
   }
+  joinRoofs(out);
   return out;
+}
+
+/**
+ * Two pitched roofs that meet: `l` (the lower ridge) runs on into the
+ * footprint of `d` (the higher ridge, parallel to the shared edge) until it
+ * dies into d's slope, so they meet in valleys instead of a gable wall and a
+ * gap. `s` is the shared edge (an X position when `vertical`, else Y); `lSide`
+ * the side of it l lies on; `ext` the part of d's footprint between the
+ * shared edge and d's ridge.
+ */
+export interface RoofJoin { d: PitchedRoof; l: PitchedRoof; vertical: boolean; s: number; lSide: -1 | 1; ext: Rect }
+
+const joins = new WeakMap<PitchedRoof[], RoofJoin[]>();
+
+const rectArea = (r: Rect) => (r[2] - r[0]) * (r[3] - r[1]);
+
+/** Ridge height above the eave, direction (null for a hip) and position. */
+function ridgeOf(r: PitchedRoof): { h: number; ew: boolean | null; mid: number } | null {
+  const [x0, y0, x1, y1] = r.bbox;
+  if (r.roof.kind === 'gable') {
+    const ew = (r.roof.ridge ?? 'EW') === 'EW';
+    return { h: ((ew ? y1 - y0 : x1 - x0) / 2) * r.t, ew, mid: ew ? (y0 + y1) / 2 : (x0 + x1) / 2 };
+  }
+  if (r.roof.kind === 'hip') return { h: (Math.min(x1 - x0, y1 - y0) / 2) * r.t, ew: null, mid: 0 };
+  return null;
+}
+
+/**
+ * Pairs of gable / hip roofs on the same level with the same eave height
+ * whose rectangular footprints share a whole edge, where the higher one's
+ * ridge runs along that edge: the lower one's wall zone extends over the
+ * part of the higher one it will cover. Mono roofs and other meetings keep
+ * the old rule (an edge against a higher roof stops at the wall face).
+ */
+function joinRoofs(roofs: PitchedRoof[]): void {
+  const found: RoofJoin[] = [];
+  const used = new Set<PitchedRoof>();
+  const full = (r: PitchedRoof) => Math.abs(r.cells.reduce((s, c) => s + rectArea(c), 0) - rectArea(r.bbox)) < 1;
+  for (const a of roofs) {
+    for (const b of roofs) {
+      if (a === b || used.has(a) || used.has(b) || a.li !== b.li || a.roof.eaveOffset !== b.roof.eaveOffset) continue;
+      const ra = ridgeOf(a), rb = ridgeOf(b);
+      if (!ra || !rb || !full(a) || !full(b) || ra.h <= rb.h) continue;
+      // a is the higher one (d), b the lower one (l).
+      const [ax0, ay0, ax1, ay1] = a.bbox, [bx0, by0, bx1, by1] = b.bbox;
+      let vertical: boolean, s: number, lSide: -1 | 1;
+      if ((ax0 === bx1 || ax1 === bx0) && ay0 === by0 && ay1 === by1) {
+        vertical = true; s = ax0 === bx1 ? ax0 : ax1; lSide = ax0 === bx1 ? -1 : 1;
+      } else if ((ay0 === by1 || ay1 === by0) && ax0 === bx0 && ax1 === bx1) {
+        vertical = false; s = ay0 === by1 ? ay0 : ay1; lSide = ay0 === by1 ? -1 : 1;
+      } else continue;
+      if (ra.ew !== null && ra.ew === vertical) continue;
+      const mid = ra.ew === null ? (vertical ? (ax0 + ax1) / 2 : (ay0 + ay1) / 2) : ra.mid;
+      const ext: Rect = vertical ? [Math.min(s, mid), ay0, Math.max(s, mid), ay1] : [ax0, Math.min(s, mid), ax1, Math.max(s, mid)];
+      found.push({ d: a, l: b, vertical, s, lSide, ext });
+      used.add(a).add(b);
+    }
+  }
+  for (const j of found) j.l.cells.push(j.ext);
+  joins.set(roofs, found);
 }
 
 function roofCells(ctx: Ctx, roof: ResolvedRoof): Rect[] {
@@ -306,26 +368,113 @@ function outerSides(poly: [number, number][], outline: [number, number][]): bool
 
 /** Emits the tiled roof slab (boards + tiles) and skylights. */
 export function buildRoofSlabs(ctx: Ctx, roofs: PitchedRoof[]): void {
+  const joined = joins.get(roofs) ?? [];
+  const inJoin = new Set(joined.flatMap((j) => [j.d, j.l]));
   for (const r of roofs) {
-    const lvId = ctx.levels[r.li]!.level.id;
-    const outline = offsetOutline(outlineEdges(ctx, r, roofs));
-    const board = ctx.parts.get({ id: `${r.roof.id}:board`, level: lvId, role: 'roof', material: 'fascia' });
-    const tile = ctx.parts.get({ id: `${r.roof.id}:tile`, level: lvId, role: 'roof', material: 'roofTile' });
-    const layers: [number, number, typeof board][] = [[0, ROOF_DEPTH - TILE_EDGE, board], [ROOF_DEPTH - TILE_EDGE, ROOF_DEPTH, tile]];
-    for (const f of facets(r, outline)) {
-      const at = (p: [number, number], dz: number): V3 => [p[0], p[1], evalPlane(f.plane, p[0], p[1]) + dz];
-      for (const [d0, d1, pb] of layers) {
-        if (d1 === ROOF_DEPTH) pb.polygon(f.poly.map((p) => at(p, d1)));
-        if (d0 === 0) pb.polygon([...f.poly].reverse().map((p) => at(p, d0)));
-        f.poly.forEach((p, i) => {
-          if (!f.sides[i]) return;
-          const q = f.poly[(i + 1) % f.poly.length]!;
-          pb.polygon([at(p, d0), at(q, d0), at(q, d1), at(p, d1)]);
-        });
-      }
-    }
-    for (const sk of r.roof.skylights) skylight(ctx, r, lvId, sk.at[0], sk.at[1], sk.width, sk.length);
+    if (!inJoin.has(r)) emitFacets(ctx, r, facets(r, offsetOutline(outlineEdges(ctx, r, roofs))));
+    for (const sk of r.roof.skylights) skylight(ctx, r, ctx.levels[r.li]!.level.id, sk.at[0], sk.at[1], sk.width, sk.length);
   }
+  for (const j of joined) {
+    const f = joinFacets(ctx, j);
+    emitFacets(ctx, j.d, f.d);
+    emitFacets(ctx, j.l, f.l);
+  }
+}
+
+/** Boards (fascia, underside) and tiles of a roof's facets. */
+function emitFacets(ctx: Ctx, r: PitchedRoof, fs: Facet[]): void {
+  const lvId = ctx.levels[r.li]!.level.id;
+  const board = ctx.parts.get({ id: `${r.roof.id}:board`, level: lvId, role: 'roof', material: 'fascia' });
+  const tile = ctx.parts.get({ id: `${r.roof.id}:tile`, level: lvId, role: 'roof', material: 'roofTile' });
+  const layers: [number, number, typeof board][] = [[0, ROOF_DEPTH - TILE_EDGE, board], [ROOF_DEPTH - TILE_EDGE, ROOF_DEPTH, tile]];
+  for (const f of fs) {
+    const at = (p: [number, number], dz: number): V3 => [p[0], p[1], evalPlane(f.plane, p[0], p[1]) + dz];
+    for (const [d0, d1, pb] of layers) {
+      if (d1 === ROOF_DEPTH) pb.polygon(f.poly.map((p) => at(p, d1)));
+      if (d0 === 0) pb.polygon([...f.poly].reverse().map((p) => at(p, d0)));
+      f.poly.forEach((p, i) => {
+        if (!f.sides[i]) return;
+        const q = f.poly[(i + 1) % f.poly.length]!;
+        pb.polygon([at(p, d0), at(q, d0), at(q, d1), at(p, d1)]);
+      });
+    }
+  }
+}
+
+/** The part of a convex polygon where the plane is > 0 (strict) or >= 0. */
+function clipHalf(poly: [number, number][], f: Plane, strict: boolean): [number, number][] {
+  const v = (p: [number, number]) => evalPlane(f, p[0], p[1]);
+  const inside = (x: number) => (strict ? x > 1e-6 : x >= -1e-6);
+  const out: [number, number][] = [];
+  for (let i = 0; i < poly.length; i++) {
+    const p = poly[i]!, q = poly[(i + 1) % poly.length]!;
+    const vp = v(p), vq = v(q);
+    if (inside(vp)) out.push(p);
+    if (inside(vp) !== inside(vq)) {
+      const t = vp / (vp - vq);
+      out.push([p[0] + (q[0] - p[0]) * t, p[1] + (q[1] - p[1]) * t]);
+    }
+  }
+  return out.length >= 3 ? out : [];
+}
+
+/**
+ * Facets of two joined roofs: each footprint offset by its eaves and verges
+ * (none along the shared edge), cut on a grid through both ridges and the
+ * shared edge; in d's part next to the shared edge each cell splits along
+ * the valley line where l's plane rises above d's.
+ */
+function joinFacets(ctx: Ctx, j: RoofJoin): { d: Facet[]; l: Facet[] } {
+  const offRect = (r: PitchedRoof): Rect => {
+    const rg = ridgeOf(r)!;
+    const over = r.roof.overhang;
+    const verge = r.roof.vergeOverhang ?? (over > 0 ? Math.min(VERGE, over) : 0);
+    const upper = ctx.levels[r.li + 1];
+    const [x0, y0, x1, y1] = r.bbox;
+    const side = (dir: Dir): number => {
+      const shared = j.vertical ? (dir === 'E' && x1 === j.s) || (dir === 'W' && x0 === j.s) : (dir === 'N' && y1 === j.s) || (dir === 'S' && y0 === j.s);
+      if (shared) return 0;
+      const mx = dir === 'E' ? x1 + 1 : dir === 'W' ? x0 - 1 : (x0 + x1) / 2;
+      const my = dir === 'N' ? y1 + 1 : dir === 'S' ? y0 - 1 : (y0 + y1) / 2;
+      const sp = upper && ctx.spaceAt(upper.index, mx, my);
+      if (sp && !sp.outdoor) return -120;
+      const eave = rg.ew === null || (rg.ew ? dir === 'N' || dir === 'S' : dir === 'E' || dir === 'W');
+      return eave ? over : verge;
+    };
+    return [x0 - side('W'), y0 - side('S'), x1 + side('E'), y1 + side('N')];
+  };
+  const od = offRect(j.d), ol = offRect(j.l);
+  const outline = rectUnionRings([od, ol].map((r) => ({ x0: r[0], y0: r[1], x1: r[2], y1: r[3] })))[0] as [number, number][];
+  const xs = new Set<number>([od[0], od[2], ol[0], ol[2]]), ys = new Set<number>([od[1], od[3], ol[1], ol[3]]);
+  (j.vertical ? xs : ys).add(j.s);
+  for (const r of [j.d, j.l]) {
+    const rg = ridgeOf(r)!;
+    if (rg.ew === true) ys.add(rg.mid);
+    else if (rg.ew === false) xs.add(rg.mid);
+    else { xs.add((r.bbox[0] + r.bbox[2]) / 2); ys.add((r.bbox[1] + r.bbox[3]) / 2); }
+  }
+  const sx = [...xs].sort((a, b) => a - b), sy = [...ys].sort((a, b) => a - b);
+  const inRect = (r: Rect, x: number, y: number) => x > r[0] && x < r[2] && y > r[1] && y < r[3];
+  const res = { d: [] as Facet[], l: [] as Facet[] };
+  const push = (into: Facet[], poly: [number, number][], plane: Plane) => {
+    if (poly.length >= 3) into.push({ poly, plane, sides: outerSides(poly, outline) });
+  };
+  for (let a = 0; a + 1 < sx.length; a++) {
+    for (let b = 0; b + 1 < sy.length; b++) {
+      const cell: Rect = [sx[a]!, sy[b]!, sx[a + 1]!, sy[b + 1]!];
+      const cx = (cell[0] + cell[2]) / 2, cy = (cell[1] + cell[3]) / 2;
+      if (!inRect(od, cx, cy) && !inRect(ol, cx, cy)) continue;
+      const poly = rectPoly(cell);
+      if (Math.sign((j.vertical ? cx : cy) - j.s) === j.lSide) { push(res.l, poly, j.l.planeAt(cx, cy)); continue; }
+      const pd = j.d.planeAt(cx, cy);
+      if (!inRect(j.ext, cx, cy)) { push(res.d, poly, pd); continue; }
+      const pl = j.l.planeAt(cx, cy);
+      const diff: Plane = { a: pl.a - pd.a, b: pl.b - pd.b, c: pl.c - pd.c };
+      push(res.l, clipHalf(poly, diff, true), pl);
+      push(res.d, clipHalf(poly, { a: -diff.a, b: -diff.b, c: -diff.c }, false), pd);
+    }
+  }
+  return res;
 }
 
 function skylight(ctx: Ctx, r: PitchedRoof, lvId: string, xc: number, yc: number, w: number, d: number): void {

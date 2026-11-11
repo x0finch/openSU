@@ -19,6 +19,8 @@ export default defineConfig({
       '@opensu/render/sun': fileURLToPath(new URL('../../packages/render/src/sun/study.ts', import.meta.url)),
       // The starter house alone (no TanStack AI), for the model chunk.
       '@opensu/agent/starter': fileURLToPath(new URL('../../packages/agent/src/starter.ts', import.meta.url)),
+      // Template names only (no model), for share-page titles on the Worker.
+      '@opensu/agent/templates-meta': fileURLToPath(new URL('../../packages/agent/src/templates/meta.ts', import.meta.url)),
       '@opensu/agent': src('agent'),
       '@opensu/model': src('model'),
       '@opensu/furnish': src('furnish'),

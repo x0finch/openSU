@@ -23,7 +23,7 @@ describe('runTurn', () => {
 
     expect(r.status).toBe('ok');
     expect(r.committed).toBe(true);
-    expect(pos(session.house, '2')).toBe(7800);
+    expect(pos(session.house, '2')).toBe(5100);
     expect(r.changes).toEqual([{ summary: '客厅向东加宽 600 mm', details: [expect.stringContaining('2')] }]);
     expect(r.text).toContain('客厅现在宽 5.4 m');
     expect(events.filter((e) => e.type === 'text').length).toBeGreaterThan(4);
@@ -80,7 +80,7 @@ describe('runTurn', () => {
     expect(r.rejected).toBe(MAX_REPAIRS + 1);
     expect(m.requests).toHaveLength(MAX_REPAIRS + 2);
     // The first, valid batch is kept.
-    expect(pos(session.house, '2')).toBe(7800);
+    expect(pos(session.house, '2')).toBe(5100);
     expect(r.committed).toBe(true);
     expect(session.undo()).toBe(before);
   });
@@ -90,7 +90,7 @@ describe('runTurn', () => {
     const before = session.house;
     const m = scripted([
       { tools: [{ name: 'edit_house', args: widen }] },
-      { tools: [{ name: 'edit_house', args: { summary: '书房改名', commands: [{ op: 'update_space', space: 'l1-study', name: '茶室' }] } }] },
+      { tools: [{ name: 'edit_house', args: { summary: '书房改名', commands: [{ op: 'update_space', space: 'l1-laundry', name: '茶室' }] } }] },
       { text: '完成。' },
     ]);
     const r = await runTurn({ adapter: m.adapter, session, text: '加宽客厅，书房改茶室' });
@@ -110,7 +110,7 @@ describe('runTurn', () => {
     expect(msgs.some((x) => x.tool_calls)).toBe(false);
     expect(String(msgs[2]!.content)).toContain('客厅向东加宽 600 mm');
     // The new turn sees the edited grid.
-    expect(systemText(msgs)).toContain('2=7800');
+    expect(systemText(msgs)).toContain('2=5100');
   });
 
   it('new_house replaces the house as one undo step', async () => {

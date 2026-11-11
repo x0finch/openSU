@@ -15,6 +15,7 @@ const zh = {
   'landing.f3.title': '一键出图',
   'landing.f3.body': '轴测在上，彩色平面在下，直接分享。',
   'landing.footer': 'openSU · AGPL-3.0',
+  'landing.heroCaption': '示例项目「{name}」',
 
   'project.title.modern-pitched': '现代坡顶自建房',
   'project.sample': '示例',
@@ -39,6 +40,7 @@ const zh = {
   'view.axo-nw': '西北轴测',
   'view.axo-sw': '西南轴测',
   'view.eye-sw': '西南人视',
+  'view.eye-se': '东南人视',
   'view.elev-south': '南立面',
   'view.elev-east': '东立面',
   'view.elev-north': '北立面',
@@ -147,6 +149,7 @@ const en: Record<MessageKey, string> = {
   'landing.f3.title': 'One-click sheets',
   'landing.f3.body': 'Axonometric on top, coloured plan below, ready to share.',
   'landing.footer': 'openSU · AGPL-3.0',
+  'landing.heroCaption': 'The sample project: {name}',
 
   'project.title.modern-pitched': 'Pitched-roof house',
   'project.sample': 'Sample',
@@ -171,6 +174,7 @@ const en: Record<MessageKey, string> = {
   'view.axo-nw': 'Axonometric NW',
   'view.axo-sw': 'Axonometric SW',
   'view.eye-sw': 'Eye level SW',
+  'view.eye-se': 'Eye level SE',
   'view.elev-south': 'South elevation',
   'view.elev-east': 'East elevation',
   'view.elev-north': 'North elevation',

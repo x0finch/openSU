@@ -14,6 +14,10 @@
     "./starter": {
       "types": "./dist/starter.d.ts",
       "import": "./dist/starter.js"
+    },
+    "./templates-meta": {
+      "types": "./dist/templates/meta.d.ts",
+      "import": "./dist/templates/meta.js"
     }
   },
   "scripts": {

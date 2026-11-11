@@ -58,7 +58,11 @@ function wantsLabel(sp: SpaceInfo): boolean {
 
 export interface LabelResult { svg: string; boxes: TextBox[]; removed: Set<string>; missing: string[] }
 
-export function placeLabels(plan: LevelPlan, v: View, items: Placement[], swings: Rect[], taken: TextBox[], wallBoxes: Rect[], ty: Typography = typography()): LabelResult {
+/**
+ * `compact` (small screens): Chinese names only, and furniture yields before
+ * a name is set smaller, so names stay as large as the room allows.
+ */
+export function placeLabels(plan: LevelPlan, v: View, items: Placement[], swings: Rect[], taken: TextBox[], wallBoxes: Rect[], ty: Typography = typography(), compact = false): LabelResult {
   const VARIANTS = variants(ty.font);
   const removed = new Set<string>();
   const boxes: TextBox[] = [];
@@ -84,8 +88,8 @@ export function placeLabels(plan: LevelPlan, v: View, items: Placement[], swings
       const obstacles = [...solids, ...swingPx, ...stairs, ...wallPx, ...taken, ...boxes];
       for (const va of variants) {
         // Outdoor labels are optional: only the full form. Stacked names only in niches.
-        if (sp.outdoor && va.en === null) continue;
-        if (va.vertical && Math.min(sp.clear.x1 - sp.clear.x0, sp.clear.y1 - sp.clear.y0) > 900) continue;
+        if (sp.outdoor && va.en === null && !compact) continue;
+        if (va.vertical && !compact && Math.min(sp.clear.x1 - sp.clear.x0, sp.clear.y1 - sp.clear.y0) > 900) continue;
         const { w, h } = boxSize(sp, va, ty);
         const best = bestSpot(parts, w + 2 * pad, h + 2 * pad, obstacles, softs, centroid);
         if (!best) continue;
@@ -99,7 +103,22 @@ export function placeLabels(plan: LevelPlan, v: View, items: Placement[], swings
     // 1. The full label as things are. 2. The full label once this room's
     // rugs give way (a rug is the cheapest thing to lose). 3. Smaller forms,
     // then furniture yields piece by piece, lowest priority first.
-    let done = attemptWith(removed, VARIANTS.slice(0, 1));
+    const BIG: Variant[] = [{ cn: ty.font.cnSize, en: null }, { cn: ty.font.cnSize, en: null, vertical: true }];
+    let done = attemptWith(removed, compact ? BIG.slice(0, 1) : VARIANTS.slice(0, 1));
+    // Outdoor names are optional: on small screens only at full size.
+    if (!done && compact && sp.outdoor) continue;
+    if (!done && compact) {
+      // Furniture yields first, piece by piece; only then do names shrink.
+      for (let attempt = 0; attempt < 12 && !done; attempt++) {
+        if (attemptWith(removed, BIG)) { done = true; break; }
+        const live = items.filter((p) => !removed.has(p.id));
+        const victim = live.filter((p) => p.space === sp.id && p.layer !== 'top' && p.layer !== 'plant' && p.priority < 9)
+          .sort((a, b) => a.priority - b.priority || dist(a, centroid, v) - dist(b, centroid, v))[0];
+        if (!victim) break;
+        removed.add(victim.id);
+        for (const p of live) if (p.layer === 'top' && victim.kind === 'counter' && overlaps(footprint(p), footprint(victim))) removed.add(p.id);
+      }
+    }
     if (!done) {
       const rugs = items.filter((p) => p.space === sp.id && p.layer === 'floor' && p.priority <= 1);
       if (rugs.length) {
@@ -108,7 +127,7 @@ export function placeLabels(plan: LevelPlan, v: View, items: Placement[], swings
       }
     }
     for (let attempt = 0; attempt < 12 && !done; attempt++) {
-      if (attemptWith(removed, VARIANTS)) { done = true; break; }
+      if (attemptWith(removed, compact ? VARIANTS.filter((x) => x.en === null) : VARIANTS)) { done = true; break; }
       const live = items.filter((p) => !removed.has(p.id));
       const mine = live.filter((p) => p.space === sp.id && p.layer !== 'top').sort((a, b) => a.priority - b.priority || dist(a, centroid, v) - dist(b, centroid, v));
       const victim = mine.find((p) => p.priority < 8);

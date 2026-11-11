@@ -79,6 +79,23 @@ describe('golden floor plans', () => {
     }
   });
 
+  it('compact (phones): no dimension chains or title, Chinese names only, collision-free', () => {
+    for (const textScale of [1, 1.5, 2]) {
+      for (const l of house.levels) {
+        const full = renderPlanDetailed(house, l.id, { textScale });
+        const r = renderPlanDetailed(house, l.id, { textScale, compact: true });
+        expect(checkPlan(r), `${l.id} @ ${textScale}`).toEqual([]);
+        expect(r.missingLabels, `${l.id} @ ${textScale}`).toEqual([]);
+        expect(r.texts.filter((t) => t.kind === 'dim' || t.kind === 'title')).toEqual([]);
+        expect(r.texts.filter((t) => t.kind === 'north').length).toBe(1);
+        expect(r.svg).not.toContain('LIVING');
+        // The drawing itself is the same size; only the margins shrink.
+        expect(r.width).toBeLessThan(full.width);
+        expect(r.view.s).toBe(full.view.s);
+      }
+    }
+  });
+
   it('stays collision-free with sheet-sized text (textScale)', () => {
     for (const textScale of [1.4, 1.75, 2]) {
       for (const l of house.levels) {

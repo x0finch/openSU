@@ -11,7 +11,7 @@ export type FurnitureKind =
   | 'toilet' | 'vanity' | 'shower' | 'washer'
   | 'desk' | 'desk-chair' | 'bookshelf' | 'shelves'
   | 'outdoor-table' | 'bistro-table' | 'outdoor-chair' | 'lounger'
-  | 'tree' | 'shrub' | 'pot-plant' | 'car' | 'parking-bay';
+  | 'tree' | 'shrub' | 'bamboo' | 'grass' | 'planter' | 'pot-plant' | 'car' | 'parking-bay';
 
 export interface Placement {
   /** Stable id: "<space>:<kind>:<n>". */

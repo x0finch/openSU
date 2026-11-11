@@ -178,13 +178,13 @@ try {
     await settle(page);
     const px0 = await canvasPixels(page);
 
-    // 1. "把客厅加宽 600": text streams first, then the tool call is applied.
+    // 1. "把北侧房间加深 600": text streams first, then the tool call is applied.
     stub.config.holdMs = 2500;
     stub.config.delay = 20;
-    await sendMessage(page, '把客厅加宽 600');
-    await page.waitForFunction(() => document.querySelector('[data-testid=assistant-message]')?.textContent?.includes('轴线 1'), null, { timeout: 30000 });
+    await sendMessage(page, '把北侧房间加深 600');
+    await page.waitForFunction(() => document.querySelector('[data-testid=assistant-message]')?.textContent?.includes('轴线 F'), null, { timeout: 30000 });
     const midText = await page.getByTestId('assistant-message').first().textContent();
-    check(/客厅向西加宽/.test(midText ?? '') && (await page.getByTestId('changes-card').count()) === 0, 'stream shows text before the tool call is applied');
+    check(/北侧房间加深/.test(midText ?? '') && (await page.getByTestId('changes-card').count()) === 0, 'stream shows text before the tool call is applied');
     await shot(page, 'chat-streaming-desktop');
     stub.config.holdMs = 0;
     stub.config.delay = 8;
@@ -197,11 +197,11 @@ try {
     await settle(page);
     const area1 = await shownArea(page);
     const px1 = await canvasPixels(page);
-    check(Math.abs(area1 - area0 - 12.2) < 0.15, `edit applied: interior area ${area0} -> ${area1} m² (+12.2 expected)`);
+    check(Math.abs(area1 - area0 - 13.3) < 0.15, `edit applied: interior area ${area0} -> ${area1} m² (+13.3 expected)`);
     const d01 = pixelDiff(px0, px1);
     check(d01 > 0.005, `3D view changed after the edit (${(d01 * 100).toFixed(1)}% pixels differ)`);
     const card = page.getByTestId('changes-card').first();
-    check((await card.textContent())?.includes('客厅向西加宽 600 mm'), 'changes card lists the edit in plain language');
+    check((await card.textContent())?.includes('北侧房间加深 600 mm'), 'changes card lists the edit in plain language');
     await page.waitForTimeout(200);
     await shot(page, 'chat-changes-desktop');
 
@@ -218,15 +218,15 @@ try {
     check((await card.getByRole('button', { name: '恢复' }).count()) === 1, 'undone card offers redo');
 
     // 3. A bad edit followed by a repair round.
-    await sendMessage(page, '二楼书房改成卧室');
+    await sendMessage(page, '二楼起居室改成卧室');
     await waitDone(page, 2);
     await waitGrown(page);
     const rep = received('study-to-bedroom');
     const firstResult = rep[1]?.toolResults?.[0] ?? '';
     check(rep.length === 3, `repair: 3 model calls (edit, repair, reply): ${rep.length}`);
-    check(/"ok":false/.test(firstResult) && /l2-study/.test(firstResult), 'repair: the rejected batch went back with errors naming the right id');
+    check(/"ok":false/.test(firstResult) && /l2-family/.test(firstResult), 'repair: the rejected batch went back with errors naming the right id');
     const msg2 = page.getByTestId('assistant-message').nth(1);
-    check((await msg2.textContent())?.includes('二楼书房已改成卧室'), 'repair: final reply shown');
+    check((await msg2.textContent())?.includes('二楼起居室已改成卧室'), 'repair: final reply shown');
     check((await msg2.getByTestId('changes-card').count()) === 1, 'repair: one changes card for the repaired edit');
     await page.waitForTimeout(200);
     await shot(page, 'chat-repair-desktop');
@@ -375,7 +375,7 @@ try {
     check(s.serverKey === false, 'without a key the relay says so');
     const { ctx, page } = await open(preview.base, DESKTOP, '/studio');
     await page.getByRole('button', { name: '打开 AI 助手' }).click();
-    await sendMessage(page, '把客厅加宽 600');
+    await sendMessage(page, '把北侧房间加深 600');
     await waitDone(page, 1);
     const t = await page.getByTestId('assistant-message').first().textContent();
     check(t?.includes('还没有配置 AI 密钥') && (await page.getByRole('button', { name: '打开设置' }).count()) === 1, 'no key: calm message with a way to add one');

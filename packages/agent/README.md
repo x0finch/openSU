@@ -8,7 +8,7 @@ caller passes in (the app passes one that talks to its `/api/chat` relay).
 
 ```sh
 pnpm --filter @opensu/agent test       # turn controller against a scripted model
-pnpm --filter @opensu/agent starter    # validates the starter house, prints describeHouse
+pnpm --filter @opensu/agent starter    # validates the template houses (see below)
 ```
 
 ## How a turn works (`runTurn`)
@@ -27,8 +27,8 @@ pnpm --filter @opensu/agent starter    # validates the starter house, prints des
      on failure `{ ok: false, errors, note }` with the repair attempts left.
      `summary` is one line in the user's language for the changes card.
    - `get_house()` -> the full description (rarely needed).
-   - `new_house({ template: 'starter' | 'blank', plotWidth?, plotDepth? })`
-     replaces the house.
+   - `new_house({ template: 't1' | 't2' | 't3' | 'blank', plotWidth?, plotDepth? })`
+     replaces the house (a template, or an empty plot).
 4. Every kept batch is reported at once (`house` event), so the drawing
    follows the conversation. Rejected batches go back to the model with the
    validator's messages; after 1 attempt + 3 repairs (`MAX_REPAIRS`) the
@@ -46,18 +46,39 @@ into exceptions and classified (`classifyError`): `no-key` (relay has no key
 and none was given), `auth`, `rate-limit`, `upstream` (also errors inside a
 200 stream), `network`.
 
-## Starter house (`src/starter.ts`)
+## Template houses (`src/templates/`)
 
-Our own design, not the golden reference: plot 16.8 x 18 m, house 12 x 10.2 m
-on a 300 mm module, two storeys (3.3 m + 3.0 m), gable roof 26 deg east-west.
-Ground floor: living room, open entry hall and an elder's bedroom to the
-south; dining, kitchen, U stair in the middle bay, a lobby with bathroom and
-a study to the north. Upper floor: master bedroom, family room onto a balcony
-that shelters the front door, second bedroom; two bathrooms (one stacked over
-the ground-floor one), a kids' room and a study to the north. 244.8 m²
-interior. It is built from `blankHouse()` with `STARTER_COMMANDS` (the same
-commands the assistant uses) and validates with no errors and no warnings
-(`test/starter.test.ts`).
+Three houses of our own design (not the golden reference), each a script
+of `edit_house` commands applied to `blankHouse()`; each validates with no
+errors and no warnings. `templateHouse(id)` builds one, `TEMPLATES` lists
+them with their commands, `TEMPLATE_META` (`src/templates/meta.ts`, no
+model import, exported as `@opensu/agent/templates-meta`) only names,
+summaries and plots. The default house (`DEFAULT_TEMPLATE`, `starterHouse()`)
+is T1; `new_house` offers `t1`, `t2`, `t3` and `blank` (`starter` still
+means the default).
+
+- **T1 白墙坡顶小院** (default), plot 12 x 14 m, 159.5 m²: an L of a
+  two-storey main block across the north (east-west gable, with a
+  north-south gable over the east bay whose gable end faces the street)
+  and a single-storey wing to the south-west whose flat roof is the master
+  bedroom's terrace. South courtyard with a timber deck in front of the
+  living room, a carport under a canopy that also shelters the front door,
+  garden to the south-west, bamboo along the side and back paths.
+- **T2 平顶现代**, plot 10 x 12 m, 160.9 m²: three flat-roofed storeys
+  stepping back to the north; a full-width terrace on the second floor
+  (roofing the entrance porch) and a roof terrace in front of the top-floor
+  tea room. A U stair along the north wall with a landing hall on every
+  floor, wet rooms stacked in the west column.
+- **T3 三合院**, plot 15 x 15 m, 226.8 m²: a two-storey main hall under an
+  east-west gable and two single-storey wings (tea room and kitchen west,
+  elders' bedroom east) under mono-pitch roofs falling into the courtyard;
+  a timber veranda along the 堂屋, a balcony above it, gate on the axis.
+
+`pnpm --filter @opensu/agent starter [t1|t2|t3] [--describe]` validates
+them and prints areas (and the description). `test/templates-quality.test.ts`
+checks every template and the golden sample across the pipeline: every
+main room furnished, overlap-free plans at screen and sheet text sizes,
+the plan and the 3D scene showing the same planting, the triangle budget.
 
 ## Tests
 

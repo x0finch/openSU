@@ -108,6 +108,83 @@ function livingRoom(room: Room, compact: boolean): void {
       { sofaW: 1800, chairs: false, chairW: 0, gap: 0, tableW: 900, toTable: 700 },
     ];
   for (const sp of specs) if (room.place(tvLounge(sp), sides, 'center')) return;
+  // No TV wall with room in front of it (open plans, glazed rooms): a
+  // free-standing sofa group, facing the sunny glazing first.
+  const facings = rankSides((s) => (room.sideStats(s, 'any').tall ? 2 : 0) + (s === 'S' ? 1 : 0));
+  for (const sp of specs) for (const f of facings) if (freeLounge(room, sp, f)) return;
+  for (const f of facings) if (freeLounge(room, { sofaW: 1800, chairs: false, chairW: 0, gap: 0, tableW: 900, toTable: 400 }, f, 150)) return;
+}
+
+const VEC: Record<Side, [number, number]> = { N: [0, 1], S: [0, -1], E: [1, 0], W: [-1, 0] };
+const sideOfVec = (x: number, y: number): Side => (Math.abs(x) > Math.abs(y) ? (x > 0 ? 'E' : 'W') : y > 0 ? 'N' : 'S');
+
+/** A free-standing sofa group: sofa facing `facing`, coffee table in front, armchairs either side. */
+function freeLounge(room: Room, o: LoungeSpec, facing: Side, clearance = 300): boolean {
+  const [fx, fy] = VEC[facing];
+  const [sx, sy] = [fy, -fx];
+  const at = (fwd: number, lat: number) => ({ dx: fx * fwd + sx * lat, dy: fy * fwd + sy * lat });
+  const tableF = 440 + Math.max(350, o.toTable - 400) + 300;
+  const items: Parameters<Room['placeFree']>[0] = [
+    { kind: 'sofa', ...at(0, 0), w: o.sofaW, d: 880, facing, priority: 9, variant: o.sofaW >= 2200 ? '3' : '2' },
+    { kind: 'coffee-table', ...at(tableF, 0), w: o.tableW, d: 600, facing, priority: 4 },
+  ];
+  let rugHalf = Math.max(o.tableW / 2 + 450, o.sofaW / 2 - 100);
+  if (o.chairs) {
+    const lat = o.tableW / 2 + o.gap + o.chairW / 2;
+    items.push({ kind: 'armchair', ...at(tableF, lat), w: o.chairW, d: o.chairW, facing: sideOfVec(-sx, -sy), priority: 3 });
+    items.push({ kind: 'armchair', ...at(tableF, -lat), w: o.chairW, d: o.chairW, facing: sideOfVec(sx, sy), priority: 3 });
+    rugHalf = Math.max(rugHalf, lat + o.chairW * 0.05);
+  }
+  const rugF0 = 200, rugF1 = tableF + 300 + 450;
+  const rugAt = at((rugF0 + rugF1) / 2, 0);
+  items.unshift({ kind: 'rug', ...rugAt, w: 2 * rugHalf, d: rugF1 - rugF0, facing, layer: 'floor', priority: 1 });
+  const c = center(room.R);
+  // Centre the group (sofa plus table) on the room.
+  const prefer: [number, number] = [c[0] - fx * tableF / 2, c[1] - fy * tableF / 2];
+  return room.placeFree(items, clearance, prefer);
+}
+
+// ---------------------------------------------------------------------------
+// Halls
+
+/** A ground-floor hall with a front door (an exterior door at least 900 wide). */
+export function isEntryHall(plan: Room['plan'], id: string): boolean {
+  return plan.index === 0 && plan.byId.get(id)?.type === 'hall' && plan.openings.some((o) => o.op.kind === 'door' && o.op.width >= 900 && o.op.sides.includes(id)
+    && o.op.sides.some((x) => x !== id && (x === null || plan.byId.get(x)?.outdoor)));
+}
+
+/** Side of the room holding its front door (the widest exterior door). */
+function frontDoorSide(room: Room): Side | null {
+  const { sp, R } = room;
+  const doors = room.plan.openings.filter((o) => o.op.kind === 'door' && o.op.sides.includes(sp.id)
+    && o.op.sides.some((x) => x !== sp.id && (x === null || room.plan.byId.get(x)?.outdoor)));
+  const d = doors.sort((a, b) => b.op.width - a.op.width)[0];
+  if (!d) return null;
+  const [cx, cy] = d.op.center;
+  if (d.op.orient === 'EW') return Math.abs(cy - R.y0) < Math.abs(cy - R.y1) ? 'S' : 'N';
+  return Math.abs(cx - R.x0) < Math.abs(cx - R.x1) ? 'W' : 'E';
+}
+
+/**
+ * Entry halls get a shoe cabinet beside the front door and a plant; other
+ * halls big enough to sit in get a console and a plant. Corridors stay empty.
+ */
+function hall(room: Room): void {
+  const { sp, R } = room;
+  const short = Math.min(width(R), height(R));
+  const entry = isEntryHall(room.plan, sp.id);
+  if (!entry && short < 2200) return;
+  // Beside the front door, never across its path: walls perpendicular to
+  // the door's wall first, the wall facing the door not at all.
+  const doorSide = entry ? frontDoorSide(room) : null;
+  const sides = rankSides((s) => room.sideStats(s, 'solid').longest - (room.sideStats(s, 'solid').door ? 600 : 0) + (doorSide && isPerp(s, doorSide) ? 3000 : 0))
+    .filter((s) => !doorSide || s !== opposite(doorSide));
+  const cab = entry ? [1500, 1200, 900] : [1200, 900];
+  for (const len of cab) {
+    const g: Group = { items: [{ kind: entry ? 'shelves' : 'side-table', u: 0, v: 0, w: len, d: entry ? 380 : 400, priority: 6 }], W: len, D: entry ? 380 : 400, clear: 700, back: 'solid' };
+    if (room.place(g, sides, ['start', 'end', 'center'])) break;
+  }
+  if (short >= 1500) cornerPlant(room, R, Math.min(600, short * 0.3), 'pot-plant');
 }
 
 // ---------------------------------------------------------------------------
@@ -308,28 +385,6 @@ function storage(room: Room): void {
 // ---------------------------------------------------------------------------
 // Outdoor
 
-function plantsAlong(room: Room, R: Rect, opts: { maxDia: number; kind: 'tree' | 'shrub'; spacing: number }): void {
-  const w = width(R), h = height(R);
-  const alongX = w >= h;
-  const long = alongX ? w : h, short = alongX ? h : w;
-  const n = Math.max(1, Math.round(long / opts.spacing));
-  const slot = long / n;
-  for (let k = 0; k < n; k++) {
-    // Deterministic size rhythm so rows do not look stamped.
-    const f = [1, 0.82, 0.92, 0.78, 0.96][k % 5]!;
-    const dia = Math.min(opts.maxDia, short * 0.86, slot * 1.05) * f;
-    if (dia < 450) continue;
-    const t = (alongX ? R.x0 : R.y0) + slot * (k + 0.5);
-    const off = (short - dia) / 2 * ([0, -0.5, 0.45, -0.3, 0.3][k % 5]!);
-    const c = (alongX ? (R.y0 + R.y1) / 2 : (R.x0 + R.x1) / 2) + off;
-    const [x, y] = alongX ? [t, c] : [c, t];
-    const box = { x0: x - dia / 2, y0: y - dia / 2, x1: x + dia / 2, y1: y + dia / 2 };
-    if (room.hard.some((b) => overlaps(b, box)) || room.solids.some((b) => overlaps(b, box))) continue;
-    room.add({ kind: k % 2 && opts.kind === 'tree' && n > 2 ? 'shrub' : opts.kind, x, y, w: k % 2 && n > 2 ? dia * 0.8 : dia, d: k % 2 && n > 2 ? dia * 0.8 : dia, facing: 'S', layer: 'plant', priority: 2, variant: String(k) });
-    room.solids.push(box);
-  }
-}
-
 function outdoorTableSet(room: Room, R: Rect): boolean {
   const w = width(R), h = height(R);
   const alongX = w >= h;
@@ -369,7 +424,7 @@ function bistro(room: Room, R: Rect, prefer: [number, number]): boolean {
   return room.placeFree(items, 150, prefer);
 }
 
-function cornerPlant(room: Room, R: Rect, dia0: number, kind: 'tree' | 'pot-plant'): boolean {
+function cornerPlant(room: Room, R: Rect, dia0: number, kind: 'pot-plant'): boolean {
   const corners: [number, number][] = [[R.x1, R.y1], [R.x0, R.y1], [R.x1, R.y0], [R.x0, R.y0]];
   // Planting may stand in front of glazing but not in a door swing or on furniture.
   for (const dia of [dia0, dia0 * 0.8, dia0 * 0.65]) {
@@ -377,8 +432,7 @@ function cornerPlant(room: Room, R: Rect, dia0: number, kind: 'tree' | 'pot-plan
       const x = cx === R.x1 ? cx - dia / 2 - 60 : cx + dia / 2 + 60;
       const y = cy === R.y1 ? cy - dia / 2 - 60 : cy + dia / 2 + 60;
       const r = { x0: x - dia / 2, y0: y - dia / 2, x1: x + dia / 2, y1: y + dia / 2 };
-      const ok = contains(room.R, r) && !room.hard.some((b) => overlaps(b, r)) && !room.solids.some((b) => overlaps(b, r))
-        && (kind === 'pot-plant' || room.free(r));
+      const ok = contains(room.R, r) && !room.hard.some((b) => overlaps(b, r)) && !room.solids.some((b) => overlaps(b, r));
       if (!ok) continue;
       room.add({ kind, x, y, w: dia, d: dia, facing: 'S', layer: 'plant', priority: 2, variant: '3' });
       room.solids.push(r);
@@ -388,24 +442,16 @@ function cornerPlant(room: Room, R: Rect, dia0: number, kind: 'tree' | 'pot-plan
   return false;
 }
 
+// Trees, bamboo and grass come from the shared site planting (`planting.ts`);
+// the rules here only furnish outdoor rooms around them.
 function courtyard(room: Room): void {
   const { R } = room;
   const short = Math.min(width(R), height(R)), long = Math.max(width(R), height(R));
   if (short >= 2400 && long >= 3600) {
     outdoorTableSet(room, R);
-    cornerPlant(room, R, Math.min(1500, short * 0.5), 'tree');
   } else if (short >= 1150 && long >= 2200) {
     const c = center(R);
     bistro(room, R, [c[0] - width(R) * 0.2, c[1]]);
-  } else if (short >= 700 && long >= 4000) {
-    plantsAlong(room, R, { maxDia: 1100, kind: 'shrub', spacing: 3200 });
-  }
-}
-
-function garden(room: Room): void {
-  for (const part of room.sp.parts) {
-    const short = Math.min(width(part), height(part));
-    plantsAlong(room, part, { maxDia: 1700, kind: short >= 1000 ? 'tree' : 'shrub', spacing: short >= 1400 ? 1700 : 1300 });
   }
 }
 
@@ -458,6 +504,7 @@ export function furnishRoom(room: Room, sp: SpaceInfo): void {
     case 'bedroom': return bedroom(room);
     case 'living': return livingRoom(room, false);
     case 'family': return livingRoom(room, true);
+    case 'hall': return hall(room);
     case 'dining': return diningRoom(room);
     case 'kitchen': return kitchen(room);
     case 'bathroom': return bathroom(room);
@@ -465,7 +512,6 @@ export function furnishRoom(room: Room, sp: SpaceInfo): void {
     case 'study': return study(room);
     case 'storage': return storage(room);
     case 'courtyard': return courtyard(room);
-    case 'garden': return garden(room);
     case 'carport': return carport(room);
     case 'terrace': return terrace(room);
     case 'balcony': return balcony(room);

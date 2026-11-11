@@ -3,7 +3,13 @@
   "compilerOptions": {
     "noEmit": true,
     "lib": ["ES2022"],
-    "types": ["node"]
+    "types": ["node"],
+    "paths": {
+      "@opensu/model": ["../model/src/index.ts"],
+      "@opensu/furnish": ["../furnish/src/index.ts"],
+      "@opensu/plan": ["../plan/src/index.ts"],
+      "@opensu/kernel": ["../kernel/src/index.ts"]
+    }
   },
   "include": ["test", "scripts"]
 }
