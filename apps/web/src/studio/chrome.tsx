@@ -342,13 +342,19 @@ export function MobileSheet({ derived, onHeight }: { derived: Derived | null; on
   const onMove = (e: RPointerEvent) => {
     if (start.current !== null) setDragY(e.clientY - start.current);
   };
+  const dragged = useRef(false);
   const onUp = () => {
     if (start.current === null) return;
-    if (Math.abs(dragY) < 6) setOpen(!open);
-    else if (dragY > 30) setOpen(false);
+    dragged.current = Math.abs(dragY) >= 6;
+    if (dragY > 30) setOpen(false);
     else if (dragY < -30) setOpen(true);
     start.current = null;
     setDragY(0);
+  };
+  // Tap and keyboard toggle; a drag already decided in onUp.
+  const onClick = () => {
+    if (dragged.current) dragged.current = false;
+    else setOpen(!open);
   };
 
   const views = VIEW_GROUPS.flatMap((g) => g.ids);
@@ -365,6 +371,7 @@ export function MobileSheet({ derived, onHeight }: { derived: Derived | null; on
         onPointerMove={onMove}
         onPointerUp={onUp}
         onPointerCancel={onUp}
+        onClick={onClick}
         className="flex h-6 w-full touch-none items-start justify-center pt-2"
       >
         <span className="h-1 w-9 rounded-full bg-hairline" />

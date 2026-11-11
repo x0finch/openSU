@@ -101,6 +101,8 @@ export function createEngine(container: HTMLElement, resolved: ResolvedHouse, op
   let anim = 0;
   let fadeTimer = 0;
   let disposed = false;
+  /** True once the user orbits / zooms away from the preset framing. */
+  let moved = false;
 
   const aspect = () => Math.max(1, container.clientWidth) / Math.max(1, container.clientHeight);
 
@@ -118,18 +120,31 @@ export function createEngine(container: HTMLElement, resolved: ResolvedHouse, op
     controls.zoomToCursor = true;
     controls.update();
     controls.addEventListener('change', () => viewer.requestRender());
+    controls.addEventListener('start', () => (moved = true));
   }
 
   function snap(preset: ViewPreset): void {
     viewer.setLighting(defaultLighting);
     viewer.setView(preset);
     attachControls();
+    moved = false;
+  }
+
+  /** Keeps the preset framing on resize until the user takes over the camera. */
+  function resize(): void {
+    viewer.resize();
+    const view = viewer.currentView;
+    if (!moved && !anim && !fadeTimer && view) {
+      viewer.setView(view);
+      attachControls();
+    }
   }
 
   function stop(): void {
     cancelAnimationFrame(anim);
     clearTimeout(fadeTimer);
     anim = 0;
+    fadeTimer = 0;
     canvas.style.opacity = '1';
   }
 
@@ -148,6 +163,7 @@ export function createEngine(container: HTMLElement, resolved: ResolvedHouse, op
       controls = null;
       canvas.style.opacity = '0';
       fadeTimer = window.setTimeout(() => {
+        fadeTimer = 0;
         snap(preset);
         requestAnimationFrame(() => (canvas.style.opacity = '1'));
       }, FADE);
@@ -192,7 +208,7 @@ export function createEngine(container: HTMLElement, resolved: ResolvedHouse, op
   return {
     viewer,
     setView,
-    resize: () => viewer.resize(),
+    resize,
     inkCoverage() {
       viewer.renderNow();
       const gl = viewer.renderer.getContext();
