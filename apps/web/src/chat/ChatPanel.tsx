@@ -58,12 +58,24 @@ function Caret() {
   return <span className="ml-0.5 inline-block h-[1.05em] w-[2px] translate-y-[2px] animate-[caret_1s_steps(1)_infinite] bg-ink" aria-hidden="true" />;
 }
 
-/** One quiet status line with a sweeping hairline (same language as the loaders). */
+/** What the assistant is doing right now, in words. */
+function phaseLabel(t: ReturnType<typeof useT>, phase: ChatItem['phase']): string {
+  if (phase === 'repairing') return t('chat.repairing');
+  if (phase === 'working') return t('chat.working');
+  if (phase === 'writing') return t('chat.writing');
+  return t('chat.thinking');
+}
+
+/**
+ * One quiet status line with a sweeping hairline (same language as the
+ * loaders). The sweep is a transform on a 32 x 1 px box with its paint
+ * contained: cheap to animate even with software GL under it.
+ */
 function Progress({ label }: { label: string }) {
   return (
     <div className="flex items-center gap-2.5 text-xs text-ink-2" role="status">
-      <span className="relative h-px w-8 overflow-hidden bg-hairline">
-        <span className="absolute inset-y-0 left-0 w-2/5 animate-[progress-sweep_1.2s_cubic-bezier(0.6,0,0.4,1)_infinite] bg-ink" />
+      <span className="relative h-px w-8 overflow-hidden bg-hairline [contain:strict]">
+        <span className="absolute inset-y-0 left-0 w-2/5 animate-[progress-sweep_1.2s_cubic-bezier(0.6,0,0.4,1)_infinite] bg-ink will-change-transform" />
       </span>
       {label}
     </div>
@@ -166,11 +178,12 @@ function AssistantMessage({ item, latest }: { item: ChatItem; latest: boolean })
   const t = useT();
   const running = item.phase !== 'done';
   const openSettings = useChat((s) => s.setSettingsOpen);
-  const progress = item.phase === 'repairing' ? t('chat.repairing') : item.phase === 'working' ? t('chat.working') : t('chat.thinking');
+  const progress = phaseLabel(t, item.phase);
   return (
     <div className="animate-[fade-in_200ms_ease-out]" data-testid="assistant-message" data-phase={item.phase}>
       {(item.text || running) && <RichText text={item.text} caret={running && !!item.text} />}
-      {running && (!item.text || item.phase !== 'thinking') && <div className={item.text ? 'mt-2.5' : ''}><Progress label={progress} /></div>}
+      {/* While the reply streams, its caret is the indicator. */}
+      {running && item.phase !== 'writing' && (!item.text || item.phase !== 'thinking') && <div className={item.text ? 'mt-2.5' : ''}><Progress label={progress} /></div>}
       <ChangesCard item={item} />
       {item.aborted && <p className="mt-2 text-xs text-ink-3">{t('chat.aborted')}</p>}
       {item.gaveUp && (
@@ -504,7 +517,7 @@ function BarSummary({ item, onOpen }: { item: ChatItem; onOpen: () => void }) {
   const n = item.changes?.length ?? 0;
   const undone = item.undo === 'undone' || item.undo === 'can-redo';
   let line: ReactNode = null;
-  if (running) line = <Progress label={item.phase === 'repairing' ? t('chat.repairing') : item.phase === 'working' ? t('chat.working') : t('chat.thinking')} />;
+  if (running) line = <Progress label={phaseLabel(t, item.phase)} />;
   else if (item.error || item.gaveUp) line = <span className="truncate text-ink-2">{item.gaveUp ? t('chat.gaveUp') : errorText(t, item)}</span>;
   else if (n) {
     line = (
