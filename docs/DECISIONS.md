@@ -32,6 +32,10 @@ One line each. Change only with the lead's sign-off.
 - `apps/web`         TanStack Start app
 - 3D: three.js on WebGL2 (not WebGPU): share links open on phones / WeChat.
 - Edges are generated from geometry, not post-process edge detection.
+- Two lighting modes. Presentation: the sun is art-directed relative to the
+  camera (behind the viewer, ~40 deg to one side, high) so one visible face
+  is sunlit and the other lightly shaded; used for stills and sheets.
+  Sun study: the sun is physically placed from latitude, date and time.
 - Render on demand; no continuous loop when nothing changes.
 - Budget: whole house < 150k triangles, < 150 draw calls.
 
