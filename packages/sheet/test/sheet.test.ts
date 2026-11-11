@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { golden, resolve } from '@opensu/model';
-import { metres, sheetFacts } from '../src/facts.js';
+import { facingZh, metres, placeFact, sheetFacts } from '../src/facts.js';
 import { hitsKeepout, inkMask, placeDrawing } from '../src/layout.js';
 import { layout } from '../src/tokens.js';
 import { checkPlan, renderPlanDetailed } from '@opensu/plan';
@@ -21,6 +21,16 @@ describe('facts', () => {
     expect(facts[0]).toBe('宅基地：15 × 12 m');
     expect(facts[1]).toMatch(/^建筑面积：\d+\.\d m²$/);
     expect(facts[2]).toBe('现代坡顶');
+  });
+  it('shows place and orientation only once the user has set them', () => {
+    expect(sheetFacts(resolve(golden))).toHaveLength(3);
+    const site = { ...golden.site, latitude: 30.66, longitude: 104.06, placeName: '成都', northDeg: 15 };
+    expect(sheetFacts(resolve({ ...golden, site })).at(-1)).toBe('成都 · 朝南偏东 15°');
+    expect(placeFact({ ...golden.site, northDeg: -20 })).toBe('朝南偏西 20°');
+    expect(placeFact({ ...golden.site, latitude: -33.87, longitude: 151.21, northDeg: 180 })).toBe('33.87°S 151.21°E · 朝正北');
+    expect(facingZh(0)).toBe('正南');
+    expect(facingZh(90)).toBe('正东');
+    expect(facingZh(-60)).toBe('西偏南 30°');
   });
   it('rounds metres to one decimal', () => {
     expect(metres(12000)).toBe('12');

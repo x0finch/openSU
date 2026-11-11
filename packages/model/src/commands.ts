@@ -622,6 +622,16 @@ const removeRoof: Handler<z.infer<typeof RemoveRoof>> = (work, cmd, index) => {
   work.record(index, cmd.op, `Removed roof "${roof.id}".`, [], [roof.id]);
 };
 
+/** True for a time zone the platform knows (Intl); without Intl any name passes. */
+function validTimeZone(tz: string): boolean {
+  try {
+    new Intl.DateTimeFormat('en-US', { timeZone: tz });
+    return true;
+  } catch (e) {
+    return !(e instanceof RangeError);
+  }
+}
+
 const updateSite: Handler<z.infer<typeof UpdateSite>> = (work, cmd, index) => {
   const site = work.house.site;
   const parts: string[] = [];
@@ -629,6 +639,9 @@ const updateSite: Handler<z.infer<typeof UpdateSite>> = (work, cmd, index) => {
     if (cmd[k] !== undefined) { site[k] = cmd[k]; parts.push(`${k} ${cmd[k]}`); }
   }
   if (patch(site, 'utcOffsetHours', cmd.utcOffsetHours)) parts.push(`utcOffsetHours ${cmd.utcOffsetHours ?? 'default'}`);
+  if (cmd.timeZone && !validTimeZone(cmd.timeZone)) fail('bad-args', `Unknown time zone "${cmd.timeZone}" (use an IANA name such as "Asia/Shanghai").`);
+  if (patch(site, 'timeZone', cmd.timeZone)) parts.push(`timeZone ${cmd.timeZone ?? 'removed'}`);
+  if (patch(site, 'placeName', cmd.placeName)) parts.push(`place ${cmd.placeName ?? 'removed'}`);
   if (patch(site, 'fence', cmd.fence)) parts.push(cmd.fence ? `fence ${fmt(cmd.fence.height)} high, ${cmd.fence.gates.length} gates` : 'fence removed');
   if (!parts.length) fail('bad-args', 'Nothing to change.');
   work.changed();

@@ -240,7 +240,9 @@ export const UpdateSite = z.strictObject({
   northDeg: z.number().finite().optional().describe('True north, degrees clockwise from +Y.'),
   latitude: z.number().min(-90).max(90).optional(),
   longitude: z.number().min(-180).max(180).optional(),
-  utcOffsetHours: z.number().min(-12).max(14).nullable().optional().describe('Local clock offset for the sun study; null = default (8).'),
+  utcOffsetHours: z.number().min(-12).max(14).nullable().optional().describe('Local clock offset for the sun study; null = default (8). Used only when timeZone is not set.'),
+  timeZone: z.string().min(1).max(64).nullable().optional().describe('IANA time zone of the place, e.g. "Asia/Shanghai", "Europe/Berlin"; null removes it.'),
+  placeName: z.string().min(1).max(80).nullable().optional().describe('Name of the place shown to the user, e.g. "成都" or "Berlin"; null removes it.'),
   fence: z.strictObject({ height: Length, gates: z.array(Gate) }).nullable().optional().describe('Plot fence with gates (`at` along the fence side from its west/south end); null removes it.'),
 }).describe('Change the plot.');
 

@@ -17,5 +17,5 @@ export { createRand, type Rand } from './entourage/random.js';
 export { presentationSun, sunForView, defaultLighting, type LightingMode, type SunPosition } from './style/lighting.js';
 export { createHouseObject, MATERIAL_SLOTS, BAKE_GROUP, type HouseObject } from './house.js';
 export { solarPosition, sunriseSunset, parseSolarDate, type SolarDate, type SolarInput, type SolarPosition, type SunTimes } from './sun/solar.js';
-export { studySun, clampToDaylight, datePresets, type StudySite, type StudySun } from './sun/study.js';
+export { studySun, clampToDaylight, datePresets, siteOffsetHours, zoneOffsetHours, type StudySite, type StudySun } from './sun/study.js';
 export { OffscreenView, type OffscreenRenderOptions, type FrameWindow } from './offscreen.js';

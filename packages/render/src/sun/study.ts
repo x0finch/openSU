@@ -1,7 +1,7 @@
 // Sun study: the physical sun for a site, a date and a clock time, in the
 // model's bearings (the model may be rotated against true north).
 import { physical } from '../style/tokens.js';
-import { type SolarDate, solarPosition, sunriseSunset, type SunTimes } from './solar.js';
+import { parseSolarDate, type SolarDate, solarPosition, sunriseSunset, type SunTimes } from './solar.js';
 
 /** Site parameters of the sun study (as the kernel reports them). */
 export interface StudySite {
@@ -9,8 +9,10 @@ export interface StudySite {
   longitude: number;
   /** True north, degrees clockwise from model +Y. */
   northDeg: number;
-  /** Local clock offset from UTC, hours. */
+  /** Local clock offset from UTC, hours (used when there is no `timeZone`). */
   utcOffsetHours: number;
+  /** IANA time zone: the clock offset follows the date (daylight saving). */
+  timeZone?: string;
 }
 
 export interface StudySun {
@@ -23,6 +25,37 @@ export interface StudySun {
   /** Clock time actually used (clamped to sunrise..sunset). */
   minutes: number;
   times: SunTimes;
+  /** Clock offset from UTC used for this date, hours. */
+  utcOffsetHours: number;
+}
+
+/**
+ * Offset of a time zone's clock from UTC (hours) around local noon of a
+ * date, from the platform's time-zone data (Intl), so daylight saving time
+ * is included. Null when the zone is unknown or Intl has no time zones.
+ */
+export function zoneOffsetHours(timeZone: string, date: SolarDate): number | null {
+  let fmt: Intl.DateTimeFormat;
+  try {
+    fmt = new Intl.DateTimeFormat('en-US', { timeZone, hourCycle: 'h23', year: 'numeric', month: 'numeric', day: 'numeric', hour: 'numeric', minute: 'numeric' });
+  } catch {
+    return null;
+  }
+  const d = parseSolarDate(date);
+  const offsetAt = (t: number) => {
+    const p: Record<string, number> = {};
+    for (const x of fmt.formatToParts(new Date(t))) if (x.type !== 'literal') p[x.type] = Number(x.value);
+    return (Date.UTC(p.year!, p.month! - 1, p.day!, p.hour! % 24, p.minute!) - Math.floor(t / 60000) * 60000) / 3600000;
+  };
+  // Local noon of that date: start from UTC noon and correct once.
+  const noonUtc = Date.UTC(d.year, d.month - 1, d.day, 12);
+  const first = offsetAt(noonUtc);
+  return offsetAt(noonUtc - first * 3600000);
+}
+
+/** The clock offset of a site for a date: its time zone's, else its fixed offset. */
+export function siteOffsetHours(site: StudySite, date: SolarDate): number {
+  return (site.timeZone ? zoneOffsetHours(site.timeZone, date) : null) ?? site.utcOffsetHours;
 }
 
 /** Clamps a clock time to the daylight span of the date (polar night: solar noon). */
@@ -33,7 +66,8 @@ export function clampToDaylight(times: SunTimes, minutes: number): number {
 }
 
 export function studySun(site: StudySite, date: SolarDate, minutes: number): StudySun {
-  const base = { latitude: site.latitude, longitude: site.longitude, utcOffsetHours: site.utcOffsetHours, date };
+  const utcOffsetHours = siteOffsetHours(site, date);
+  const base = { latitude: site.latitude, longitude: site.longitude, utcOffsetHours, date };
   const times = sunriseSunset(base);
   const m = clampToDaylight(times, minutes);
   const p = solarPosition({ ...base, minutes: m });
@@ -44,6 +78,7 @@ export function studySun(site: StudySite, date: SolarDate, minutes: number): Stu
     trueElevationDeg: p.elevationDeg,
     minutes: m,
     times,
+    utcOffsetHours,
   };
 }
 

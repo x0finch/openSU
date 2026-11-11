@@ -98,7 +98,7 @@ export function describeHouse(house: House, issues?: readonly Issue[]): string {
   L.push('Space rows: id type cells WxD(m) area(m²) "name" [flags] | walls of interior spaces per side: side@line span:neighbour (out = outside, ~ = open, no wall).');
   L.push('Opening rows: id kind host:side span at width[xheight sill] [extras] => from-to along its wall (x for N/S walls, y for E/W). at = start+offset from the west/south end of the span, end+offset, or center. Height/sill omitted = defaults (door 2100/0, sliding-door 2400/0, window 1500/900).');
   const gates = (s.fence?.gates ?? []).map((g) => `${g.id} ${g.side} ${g.at === 'center' ? 'center' : `${g.at.from}+${fmt(g.at.offset)}`} w${fmt(g.width)}${g.kind ? ` ${g.kind}` : ''}`);
-  L.push(`SITE ${fmt(s.width)} x ${fmt(s.depth)}, north ${s.northDeg}°, lat ${s.latitude} lon ${s.longitude}${s.utcOffsetHours !== undefined ? ` UTC${s.utcOffsetHours >= 0 ? '+' : ''}${s.utcOffsetHours}` : ''}${s.fence ? `; fence h${fmt(s.fence.height)}${gates.length ? `, gates: ${gates.join('; ')}` : ''}` : '; no fence'}`);
+  L.push(`SITE ${fmt(s.width)} x ${fmt(s.depth)}, north ${s.northDeg}°, lat ${s.latitude} lon ${s.longitude}${s.placeName ? ` (${s.placeName})` : ''}${s.timeZone ? ` ${s.timeZone}` : s.utcOffsetHours !== undefined ? ` UTC${s.utcOffsetHours >= 0 ? '+' : ''}${s.utcOffsetHours}` : ''}${s.fence ? `; fence h${fmt(s.fence.height)}${gates.length ? `, gates: ${gates.join('; ')}` : ''}` : '; no fence'}`);
   L.push(`GRID X ${house.grid.x.map((g) => `${g.id}=${fmt(g.pos)}`).join(' ')}`);
   L.push(`GRID Y ${house.grid.y.map((g) => `${g.id}=${fmt(g.pos)}`).join(' ')}`);
 
