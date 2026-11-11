@@ -3,6 +3,7 @@ import {
   type Camera,
   Color,
   Mesh,
+  MeshDepthMaterial,
   NoToneMapping,
   type Object3D,
   OrthographicCamera,
@@ -16,7 +17,7 @@ import {
   WebGLRenderer,
 } from 'three';
 import type { LineMaterial } from 'three/addons/lines/LineMaterial.js';
-import { bakeScene } from './style/batch.js';
+import { bakeScene, CLIP_GROUP } from './style/batch.js';
 import { applyLensShift, applyOrthoAspect, cameraForView, type ViewPreset } from './style/cameras.js';
 import { defaultLighting, type LightingMode, sunForView } from './style/lighting.js';
 import { createGround } from './style/ground.js';
@@ -126,7 +127,7 @@ export class IllustrationViewer {
     this.edgeMaterial = createLineMaterial(lines.color, lines.width, lines.profileWidth);
     this.floorMaterial = createLineMaterial(lines.floorLineColor, lines.floorLineWidth);
     this.scene.background = new Color(stage.background);
-    this.scene.add(this.sun.light, this.sun.target);
+    this.scene.add(this.sun.light, this.sun.outdoor, this.sun.target);
     this.resize();
   }
 
@@ -148,6 +149,19 @@ export class IllustrationViewer {
     this.walkData = (root.userData.walk as WalkData | undefined) ?? null;
     if (this.walker) this.exitWalk();
     for (const m of this.clipLineMaterials) m.resolution.copy(this.edgeMaterial.resolution);
+    // The outdoor sun never sees what a cutaway hides: clippable meshes clip
+    // their shadow-depth pass for that light only.
+    const outdoorCam = this.sun.outdoor.shadow.camera;
+    const plane = this.clipPlane;
+    for (const o of this.groups.get(CLIP_GROUP) ?? []) {
+      if (!isSurface(o) || !o.castShadow) continue;
+      o.customDepthMaterial = new MeshDepthMaterial();
+      o.onBeforeShadow = (_r, _o, _c, shadowCamera, _g, depth) => {
+        if (shadowCamera !== outdoorCam || !this.sun.outdoor.visible) return;
+        depth.clippingPlanes = [plane];
+        depth.clipShadows = true;
+      };
+    }
     if (this.cutLevel && !this.levels.some((l) => l.id === this.cutLevel)) this.cutLevel = null;
     this.scene.add(baked.group);
     this.bounds.makeEmpty();
@@ -240,6 +254,9 @@ export class IllustrationViewer {
       for (const o of objs) o.visible = visible && !(this.walker && o.userData.billboard);
     }
     this.applyInteriorTones(this.walker ? 'walk' : !!level && physical ? 'cutaway' : null);
+    // Cutaway shadow rule: with the physical sun the hidden parts shade the
+    // inside of the house but never the garden (a second, outdoor sun).
+    this.sun.outdoor.visible = !!level && physical;
     this.shadowsDirty = true;
   }
 
@@ -261,6 +278,7 @@ export class IllustrationViewer {
       const shade = toneToward(matTokens.floor, cutawayLight.floorShade);
       setToneFactors(p.floor, { sun, away: shade, shadow: shade });
       setToneFactors(p.wall, { shadow: toneFactor(shading.awayTone) });
+      for (const m of furniture) setToneFactors(m, { shadow: toneFactor(shading.awayTone) });
       return;
     }
     // Walk: a light interior; sun patches are the accent.

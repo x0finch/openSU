@@ -42,11 +42,18 @@ uniform vec3 uAwayTone;
 uniform vec3 uShadowTone;
 uniform float uSunFullAt;
 uniform float uAwayBelow;
+uniform int uShadowLight;
 float gSunDot = -1.0;
 float gSunVis = 1.0;
+int gLightIndex = 0;
 void RE_Direct_Illustration( const in IncidentLight directLight, const in vec3 geometryPosition, const in vec3 geometryNormal, const in vec3 geometryViewDir, const in vec3 geometryClearcoatNormal, const in LambertMaterial material, inout ReflectedLight reflectedLight ) {
-  gSunDot = dot( geometryNormal, directLight.direction );
-  gSunVis = directLight.color.r;
+  // The sun may come as two lights with the same direction but different
+  // shadow casters (level cutaway): the material picks whose shadows it takes.
+  if ( gLightIndex == 0 || gLightIndex == uShadowLight ) {
+    gSunDot = dot( geometryNormal, directLight.direction );
+    gSunVis = directLight.color.r;
+  }
+  gLightIndex ++;
 }
 #undef RE_Direct
 #define RE_Direct RE_Direct_Illustration
@@ -77,6 +84,26 @@ interface ToneUniforms {
 }
 
 const toneUniforms = new WeakMap<Material, ToneUniforms>();
+const shadowLights = new WeakMap<Material, { value: number }>();
+
+/**
+ * Which sun light's shadows a shaded material receives when the sun comes
+ * as two lights (0 = the interior sun, whose shadows include parts hidden
+ * by a cutaway; 1 = the outdoor sun, whose do not). With one light every
+ * material uses it. Takes effect without a recompile.
+ */
+export function setShadowLight(mat: Material, index: 0 | 1): void {
+  let u = shadowLights.get(mat);
+  if (!u) shadowLights.set(mat, (u = { value: index }));
+  u.value = index;
+}
+
+function shadowLightUniform(mat: Material): { value: number } {
+  let u = shadowLights.get(mat);
+  // Materials of the site (palette originals) take the outdoor sun.
+  if (!u) shadowLights.set(mat, (u = { value: 1 }));
+  return u;
+}
 
 /**
  * Tone bands as colour factors (linear), for `setToneFactors`. A factor is
@@ -149,8 +176,9 @@ export function createShadedMaterial(color: string, opts: ShadedOptions = {}): M
     base,
   };
   toneUniforms.set(mat, uniforms);
-  mat.onBeforeCompile = (shader) => {
+  mat.onBeforeCompile = function (this: Material, shader) {
     // Shared uniform objects: tone overrides reach every twin without a recompile.
+    shader.uniforms.uShadowLight = shadowLightUniform(this);
     shader.uniforms.uSunTone = uniforms.uSunTone;
     shader.uniforms.uAwayTone = uniforms.uAwayTone;
     shader.uniforms.uShadowTone = uniforms.uShadowTone;

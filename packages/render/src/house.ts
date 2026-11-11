@@ -128,6 +128,7 @@ export function createHouseObject(geometry: HouseGeometry, pal: Palette): HouseO
     mesh.userData.partId = part.id;
     mesh.userData.role = part.role;
     if (part.level) mesh.userData.level = part.level;
+    if (part.role === 'stair') mesh.userData.interior = true;
     mesh.userData.bakeGroup = !part.level ? BAKE_GROUP.site
       : part.role === 'cut' ? BAKE_GROUP.cut(part.level)
       : part.role === 'stair' ? BAKE_GROUP.level(part.level)

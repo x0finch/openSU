@@ -12,10 +12,18 @@ export function sunDirection(azimuthDeg: number, elevationDeg: number): Vector3 
   return new Vector3(Math.sin(az) * Math.cos(el), Math.sin(el), -Math.cos(az) * Math.cos(el)).normalize();
 }
 
-/** One directional sun with a shadow frustum fitted tightly to the scene. */
+/**
+ * One directional sun with a shadow frustum fitted tightly to the scene.
+ * In a level cutaway with the physical sun it comes as two identical lights
+ * that differ only in what casts their shadows: `light` sees the whole house
+ * (the light inside stays true), `outdoor` does not see the parts hidden by
+ * the cutaway (the garden is lit as if they were not there). Materials pick
+ * one with `setShadowLight`.
+ */
 export class Sun {
   readonly light: DirectionalLight;
   readonly target = new Object3D();
+  readonly outdoor: DirectionalLight;
   azimuthDeg = 210;
   elevationDeg: number = sunTokens.elevationDeg;
 
@@ -28,6 +36,15 @@ export class Sun {
     s.radius = sunTokens.shadowRadius;
     s.bias = sunTokens.shadowBias;
     s.normalBias = sunTokens.shadowNormalBias;
+    this.outdoor = new DirectionalLight(new Color(sunTokens.color), sunTokens.intensity);
+    this.outdoor.castShadow = true;
+    this.outdoor.target = this.target;
+    this.outdoor.visible = false;
+    const o = this.outdoor.shadow;
+    o.mapSize.set(sunTokens.shadowMapSize, sunTokens.shadowMapSize);
+    o.radius = sunTokens.shadowRadius;
+    o.bias = sunTokens.shadowBias;
+    o.normalBias = sunTokens.shadowNormalBias;
   }
 
   setDirection(azimuthDeg: number, elevationDeg: number = sunTokens.elevationDeg): void {
@@ -46,11 +63,17 @@ export class Sun {
     const radius = bounds.getSize(new Vector3()).length() * 0.5 + sunTokens.shadowMargin;
     const dir = sunDirection(this.azimuthDeg, this.elevationDeg);
     this.light.position.copy(center).addScaledVector(dir, radius * 2);
+    this.outdoor.position.copy(this.light.position);
     this.target.position.copy(center);
     this.light.updateMatrixWorld();
+    this.outdoor.updateMatrixWorld();
     this.target.updateMatrixWorld();
+    this.fitCamera(this.light, bounds, center, radius);
+    this.fitCamera(this.outdoor, bounds, center, radius);
+  }
 
-    const cam = this.light.shadow.camera;
+  private fitCamera(light: DirectionalLight, bounds: Box3, center: Vector3, radius: number): void {
+    const cam = light.shadow.camera;
     cam.position.copy(this.light.position);
     cam.lookAt(center);
     cam.updateMatrixWorld();
@@ -72,7 +95,7 @@ export class Sun {
     // Shadows land on the ground beyond the bounds: extend the far plane.
     cam.far = -min.z + m + radius * 2;
     cam.updateProjectionMatrix();
-    this.light.shadow.needsUpdate = true;
+    light.shadow.needsUpdate = true;
   }
 }
 
