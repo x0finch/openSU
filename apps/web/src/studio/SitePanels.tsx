@@ -70,6 +70,10 @@ export function LocationPanel({ panel, desktop, onClose }: { panel: SitePanel; d
   useEffect(() => {
     if (desktop) input.current?.focus({ preventScroll: true });
   }, [desktop]);
+  // A note ("could not get your location") is about the last attempt only:
+  // a new search or another place clears it.
+  useEffect(() => setNote(null), [q, site?.latitude, site?.longitude]);
+  useEffect(() => setQ(''), [site?.latitude, site?.longitude]);
 
   const choose = async (p: Place) => {
     const name = placeName(p, lang);

@@ -26,8 +26,15 @@ export interface SunState {
 /** What the 3D engine reports for the current date and time. */
 export interface SunInfo {
   date: string;
+  /**
+   * Whole clock minutes the slider runs between: sunrise and sunset (may
+   * pass midnight: >= 1440), the whole day in polar day, solar noon in
+   * polar night. The texts show these same minutes.
+   */
   sunrise: number;
   sunset: number;
+  /** The sun never sets ('day') or never rises ('night') on that date. */
+  polar: 'day' | 'night' | null;
   /** Time actually used (clamped to daylight). */
   minutes: number;
   /** True compass bearing and elevation of the sun, degrees. */

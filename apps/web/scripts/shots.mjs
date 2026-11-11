@@ -399,7 +399,7 @@ async function siteChecks() {
   const px0 = await canvasPixels(page);
   await page.getByTestId('project-menu').click();
   await page.getByTestId('menu-orientation').click();
-  await page.getByRole('button', { name: '正东' }).click();
+  await page.getByRole('button', { name: '东（90°）' }).click();
   await page.waitForFunction(() => window.__studio.store.getState().house.site.northDeg === 90, null, { timeout: 10000 });
   await page.waitForTimeout(400);
   await settle(page);
@@ -417,7 +417,7 @@ async function siteChecks() {
   let diff = 0;
   for (let i = 0; i < px0.length; i += 4) if (Math.abs(px0[i] - px1[i]) > 30) diff++;
   check(diff / (px0.length / 4) > 0.01, `the shadows move with the orientation (${((100 * diff) / (px0.length / 4)).toFixed(1)}% pixels differ)`);
-  check((await page.getByTestId('ori-text').textContent())?.includes('正东'), 'the dial describes the orientation in everyday words');
+  check((await page.getByTestId('ori-text').textContent())?.includes('东（90°）'), 'the dial describes the orientation by the compass');
   await shot(page, 'studio-orientation-east');
   await page.keyboard.press('Escape');
   // Southern hemisphere: Sydney's winter solstice is in June, the noon sun stands in the north.

@@ -338,8 +338,18 @@ function MessageList({ className, from = 0, spacer = true, translucent }: { clas
     const el = ref.current;
     if (!el) return;
     const n = items.filter((i) => i.role === 'user').length;
-    const fresh = users.current >= 0 && n > users.current;
+    const first = users.current < 0;
+    const fresh = !first && n > users.current;
     users.current = n;
+    if (first) {
+      // Opened (strip, pinned sheet): the last exchange is read from its
+      // start, never with its first message cut under the header.
+      const msgs = el.querySelectorAll<HTMLElement>('[data-testid=user-message]');
+      const last = msgs[msgs.length - 1]?.closest<HTMLElement>('[data-msg]');
+      el.scrollTop = last ? Math.max(0, last.offsetTop - 12) : 0;
+      stick.current = el.scrollHeight - el.scrollTop - el.clientHeight < 40;
+      return;
+    }
     if (fresh) {
       const msgs = el.querySelectorAll<HTMLElement>('[data-testid=user-message]');
       const last = msgs[msgs.length - 1]?.closest<HTMLElement>('[data-msg]');
@@ -404,18 +414,79 @@ function useMarkSeen(): void {
   }, []);
 }
 
-/** The newest assistant turn that is under way (the phase drives the status phrase). */
+/** Each status phrase stays at least this long, so a quick phase can still be read. */
+const MIN_PHASE_MS = 1100;
+
+/**
+ * The newest assistant turn that is under way and the phase its status
+ * phrase shows. The phrase follows the store's phases in order, each held
+ * for MIN_PHASE_MS: a fast turn still reads "正在思考… / 正在修改房子… /
+ * 正在回复…" (text streamed just before an edit gives way to the edit).
+ */
 function useWorking(): { phase: ChatItem['phase']; prompt: string } | null {
-  const phase = useChat((s) => {
+  const live = useChat((s) => {
     if (!s.running) return null;
-    for (let i = s.items.length - 1; i >= 0; i--) if (s.items[i]!.role === 'assistant' && !s.items[i]!.manual) return s.items[i]!.phase ?? 'thinking';
-    return 'thinking';
+    for (let i = s.items.length - 1; i >= 0; i--) {
+      const it = s.items[i]!;
+      if (it.role === 'assistant' && !it.manual) return `${it.id}|${it.phase ?? 'thinking'}`;
+    }
+    return '|thinking';
   });
   const prompt = useChat((s) => {
     for (let i = s.items.length - 1; i >= 0; i--) if (s.items[i]!.role === 'user') return s.items[i]!.text;
     return '';
   });
-  return phase ? { phase, prompt } : null;
+  const [shown, setShown] = useState<{ id: string; phase: ChatItem['phase'] } | null>(null);
+  const queue = useRef<ChatItem['phase'][]>([]);
+  const since = useRef(0);
+  const timer = useRef(0);
+  const shownRef = useRef(shown);
+  shownRef.current = shown;
+  useEffect(() => {
+    const show = (v: { id: string; phase: ChatItem['phase'] } | null) => {
+      since.current = performance.now();
+      setShown(v);
+    };
+    const pump = () => {
+      clearTimeout(timer.current);
+      const cur = shownRef.current;
+      if (!cur || !queue.current.length) return;
+      const wait = MIN_PHASE_MS - (performance.now() - since.current);
+      if (wait > 0) {
+        timer.current = window.setTimeout(pump, wait);
+        return;
+      }
+      const next = queue.current.shift()!;
+      shownRef.current = { id: cur.id, phase: next };
+      show(shownRef.current);
+      if (queue.current.length) timer.current = window.setTimeout(pump, MIN_PHASE_MS);
+    };
+    if (!live) {
+      clearTimeout(timer.current);
+      queue.current = [];
+      shownRef.current = null;
+      show(null);
+      return;
+    }
+    const [id, phase] = live.split('|') as [string, ChatItem['phase']];
+    const cur = shownRef.current;
+    if (!cur || cur.id !== id) {
+      clearTimeout(timer.current);
+      queue.current = [];
+      shownRef.current = { id, phase };
+      show(shownRef.current);
+      return;
+    }
+    const q = queue.current;
+    const last = q.length ? q[q.length - 1] : cur.phase;
+    if (phase === last) return;
+    // Text streamed just before an edit is part of the edit: it gives way.
+    if (q.length && q[q.length - 1] === 'writing' && (phase === 'working' || phase === 'repairing')) q[q.length - 1] = phase;
+    else q.push(phase);
+    pump();
+  }, [live]);
+  useEffect(() => () => clearTimeout(timer.current), []);
+  return shown ? { phase: shown.phase, prompt } : null;
 }
 
 function statusKey(phase: ChatItem['phase']): MessageKey {
@@ -441,6 +512,7 @@ export function ChatInput({ phone, pinned, className }: { phone?: boolean; pinne
   const recent = useStudio((s) => s.recent);
   const setRecent = useStudio((s) => s.setRecent);
   const working = useWorking();
+  const note = useChangeNote();
   const box = useRef<HTMLDivElement>(null);
   const ref = useRef<HTMLTextAreaElement>(null);
   useMarkSeen();
@@ -522,11 +594,12 @@ export function ChatInput({ phone, pinned, className }: { phone?: boolean; pinne
             value={text}
             onChange={(e) => setText(e.target.value)}
             onKeyDown={onKey}
-            placeholder={working ? '' : t('prompt.placeholder')}
+            placeholder={working || (note.item && !pinned) ? '' : t('prompt.placeholder')}
             aria-label={t('chat.placeholder')}
             className="block max-h-[120px] min-h-[34px] w-full resize-none bg-transparent py-[7px] text-[14px] leading-5 outline-none placeholder:text-ink-3 [&:focus-visible]:outline-none"
             data-testid="prompt-bar"
           />
+          {!working && !text && note.item && !pinned && <ChangeNote item={note.item} hold={note.hold} />}
           {working && !text && (
             <p className="pointer-events-none absolute inset-0 flex items-center truncate text-[14px] text-ink" role="status" data-testid="chat-status" data-phase={working.phase}>
               <span className="truncate">
@@ -713,11 +786,11 @@ export function SettingsHost({ phone }: { phone?: boolean }) {
 
 /**
  * When a turn (or a change made in the studio) completes while the
- * conversation is out of sight: "已修改：… 撤销" for a few seconds above the
- * input; problems offer "查看" (the recent strip).
+ * conversation is out of sight: the item to sum up in the input bar
+ * ("已修改：… 撤销") for a few seconds; problems offer "查看" (the recent
+ * strip). Hovering or focusing the note keeps it.
  */
-export function ChangeToast({ className }: { className?: string }) {
-  const t = useT();
+function useChangeNote(): { item: ChatItem | null; hold: (on: boolean) => void } {
   const [id, setId] = useState<string | null>(null);
   const item = useChat((s) => (id ? s.items.find((i) => i.id === id) : undefined));
   const hidden = useStudio((s) => s.recent || s.pinned);
@@ -742,45 +815,57 @@ export function ChangeToast({ className }: { className?: string }) {
       } else if (s.items.length > p.items.length && last?.manual && last.changes?.length) {
         setId(last.id);
         arm();
-      }
+      } else if (s.running && !p.running) setId(null);
     });
     return () => {
       unsub();
       clearTimeout(timer.current);
     };
   }, []);
-  if (!id || !item || hidden) return null;
+  return { item: !id || !item || hidden ? null : item, hold: (on) => (hover.current = on) };
+}
+
+/**
+ * The after-turn note inside the input bar (task 016: one calm line with
+ * undo in the bar, never a separate element over the house). It takes the
+ * placeholder's place; typing hides it.
+ */
+function ChangeNote({ item, hold }: { item: ChatItem; hold: (on: boolean) => void }) {
+  const t = useT();
   const n = item.changes?.length ?? 0;
   const undone = item.undo === 'undone' || item.undo === 'can-redo';
   const problem = !n && (item.error || item.gaveUp);
+  const btn = 'pointer-events-auto h-7 shrink-0 rounded-full bg-wash hover:bg-hairline';
   return (
     <div
-      className={cx('glass pointer-events-auto flex h-[38px] max-w-full animate-[strip-rise_260ms_cubic-bezier(0.22,0.8,0.24,1)] items-center gap-2 rounded-full pr-1.5 pl-3.5 text-[13px] whitespace-nowrap', className)}
+      className="pointer-events-none absolute inset-0 flex animate-[fade-in_200ms_ease-out] items-center gap-2 text-[14px] whitespace-nowrap"
       role="status"
       data-testid="change-toast"
-      onPointerEnter={() => (hover.current = true)}
-      onPointerLeave={() => (hover.current = false)}
-      onFocus={() => (hover.current = true)}
-      onBlur={() => (hover.current = false)}
+      onPointerEnter={() => hold(true)}
+      onPointerLeave={() => hold(false)}
+      onFocus={() => hold(true)}
+      onBlur={() => hold(false)}
     >
       {problem ? (
         <>
           <NoteIcon width={15} height={15} className="shrink-0 text-ink-2" />
           <span className="min-w-0 truncate text-ink-2">{item.gaveUp ? t('chat.gaveUp') : errorText(t, item)}</span>
-          <SmallButton onClick={() => useStudio.getState().setRecent(true)} className="rounded-full">{t('chat.show')}</SmallButton>
+          <SmallButton onClick={() => useStudio.getState().setRecent(true)} className={btn}>{t('chat.show')}</SmallButton>
         </>
       ) : (
         <>
           <PlanCheckIcon width={15} height={15} className={cx('shrink-0', undone ? 'text-ink-3' : 'text-ink')} />
-          <span className={cx('min-w-0 truncate', undone && 'text-ink-2 line-through decoration-ink-3')}>{t('chat.changed', { s: item.changes![n - 1]!.summary })}</span>
+          <span className={cx('min-w-0 truncate', undone ? 'text-ink-2 line-through decoration-ink-3' : 'text-ink')} data-testid="change-note-text">
+            {t('chat.changed', { s: item.changes![n - 1]!.summary })}
+          </span>
           {n > 1 && <span className="tnum shrink-0 text-ink-3">+{n - 1}</span>}
           {item.undo === 'can-undo' && (
-            <SmallButton onClick={() => undoTurn(item.id)} icon={<UndoIcon width={14} height={14} />} className="rounded-full">
+            <SmallButton onClick={() => undoTurn(item.id)} icon={<UndoIcon width={14} height={14} />} className={btn}>
               {t('chat.undo')}
             </SmallButton>
           )}
           {item.undo === 'can-redo' && (
-            <SmallButton onClick={() => redoTurn(item.id)} icon={<RedoIcon width={14} height={14} />} className="rounded-full">
+            <SmallButton onClick={() => redoTurn(item.id)} icon={<RedoIcon width={14} height={14} />} className={btn}>
               {t('chat.redo')}
             </SmallButton>
           )}

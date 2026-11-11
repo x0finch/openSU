@@ -70,8 +70,9 @@ export function northForBearing(bearing: number): number {
 }
 
 /**
- * A bearing in everyday words, relative to the compass: "正南", "南偏东 15°";
- * "due south", "15° east of south".
+ * A bearing in compass words: "南（180°）", "南偏东 15°"; "south (180°)",
+ * "15° east of south". Plain compass facts: no "正南" / "due south", which
+ * read as the ideal orientation even where the sun is in the north.
  */
 export function bearingText(bearing: number, lang: Lang): string {
   const b = ((bearing % 360) + 360) % 360;
@@ -79,9 +80,14 @@ export function bearingText(bearing: number, lang: Lang): string {
   let d = Math.round(b - k * 90);
   if (d > 180) d -= 360;
   const names = DIRS[lang];
-  if (d === 0) return lang === 'zh' ? `正${names[k]}` : `due ${names[k]}`;
+  if (d === 0) return lang === 'zh' ? `${names[k]}（${k * 90}°）` : `${names[k]} (${k * 90}°)`;
   const side = names[(k + (d > 0 ? 1 : 3)) % 4];
   return lang === 'zh' ? `${names[k]}偏${side} ${Math.abs(d)}°` : `${Math.abs(d)}° ${side} of ${names[k]}`;
+}
+
+/** A bearing in compass words without the degrees of a cardinal point: "南", "南偏东 15°"; "south", "15° east of south". */
+export function bearingWords(bearing: number, lang: Lang): string {
+  return bearingText(bearing, lang).replace(/[（(]\d+°[）)]$/, '').trim();
 }
 
 /** Which way the sunny side lies at a latitude (the noon sun): south north of the tropics, north in the south. */

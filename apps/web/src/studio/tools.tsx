@@ -3,16 +3,16 @@
 // slides out on hover, focus and while the tool is in use; the panel is a
 // card hanging under the toolbar. Phone: the toolbar sits at the bottom
 // with labels; the panel is a bottom sheet the toolbar rides on (PhoneDock).
-import { type KeyboardEvent as RKeyboardEvent, type ReactNode, useLayoutEffect, useRef, useState } from 'react';
+import { Fragment, type KeyboardEvent as RKeyboardEvent, type ReactNode, useLayoutEffect, useRef, useState } from 'react';
 import {
   ChevronLeftIcon, ChevronRightIcon, CheckIcon, CloseIcon, CubeIcon, FitIcon, LayersIcon, MinusIcon, PauseIcon, PinIcon, PlayIcon, PlusIcon, ResetViewIcon,
   SunIcon, ViewIcon,
 } from '../components/icons';
 import { cx } from '../components/ui';
 import { levelName, type MessageKey, useT } from '../lib/i18n';
-import { bearingText, frontBearing, placeText, utcText } from '../lib/site';
+import { bearingText, bearingWords, frontBearing, placeText, utcText } from '../lib/site';
 import { SUN_DATES, type SunDateId, type Tray, useStudio } from '../lib/store';
-import { compass, dayText, hhmm, hourTicks, sunDate } from '../lib/sun';
+import { clock, compass, dayText, hourTicks, sunDate } from '../lib/sun';
 import { DEFAULT_VIEW, presetById, type ViewId } from '../lib/views';
 import type { Derived } from './house-data';
 import { planCommands } from './PlanView';
@@ -121,7 +121,9 @@ export function Toolbar({ derived, phone, className }: { derived: Derived | null
   const level = useStudio((s) => s.level);
   const view = useStudio((s) => s.view);
   const sun = useStudio((s) => s.sun);
+  const polarNight = useStudio((s) => s.sunInfo?.polar === 'night');
   const setSun = useStudio((s) => s.setSun);
+  const sunLabel = polarNight ? t('sun.polarNight') : clock(sun.minutes, lang);
   const ref = useRef<HTMLDivElement>(null);
   const levels = derived?.levels ?? null;
   const lv = (id: string | null) => {
@@ -159,36 +161,41 @@ export function Toolbar({ derived, phone, className }: { derived: Derived | null
         </>
       ) : (
         <>
-          <ToolButton
-            phone={phone}
-            icon={<CubeIcon {...icon} />}
-            label={viewText}
-            on={open('views')}
-            set={view !== DEFAULT_VIEW}
-            show={open('views') || view !== DEFAULT_VIEW}
-            expanded={open('views')}
-            controls={TRAY_ID.views}
-            onClick={() => toggle('views')}
-            ariaLabel={view !== DEFAULT_VIEW ? `${t('bar.views')}: ${t(`view.${view}`)}` : t('bar.views')}
-            testId="bar-views"
-          />
-          <ToolButton
-            phone={phone}
-            icon={<LayersIcon {...icon} />}
-            label={cut ? lv(cut) : t('bar.levels')}
-            on={open('levels')}
-            set={!!cut}
-            show={open('levels') || !!cut}
-            expanded={open('levels')}
-            controls={TRAY_ID.levels}
-            onClick={() => toggle('levels')}
-            ariaLabel={cut ? `${t('bar.levels')}: ${lv(cut)}` : t('bar.levels')}
-            testId="bar-levels"
-          />
+          {/* Walking: only what applies to walking (the sun, and the way out). */}
+          {!walk && (
+            <>
+            <ToolButton
+              phone={phone}
+              icon={<CubeIcon {...icon} />}
+              label={viewText}
+              on={open('views')}
+              set={view !== DEFAULT_VIEW}
+              show={open('views') || view !== DEFAULT_VIEW}
+              expanded={open('views')}
+              controls={TRAY_ID.views}
+              onClick={() => toggle('views')}
+              ariaLabel={view !== DEFAULT_VIEW ? `${t('bar.views')}: ${t(`view.${view}`)}` : t('bar.views')}
+              testId="bar-views"
+            />
+            <ToolButton
+              phone={phone}
+              icon={<LayersIcon {...icon} />}
+              label={cut ? lv(cut) : t('bar.levels')}
+              on={open('levels')}
+              set={!!cut}
+              show={open('levels') || !!cut}
+              expanded={open('levels')}
+              controls={TRAY_ID.levels}
+              onClick={() => toggle('levels')}
+              ariaLabel={cut ? `${t('bar.levels')}: ${lv(cut)}` : t('bar.levels')}
+              testId="bar-levels"
+            />
+            </>
+          )}
           <ToolButton
             phone={phone}
             icon={<SunIcon {...icon} />}
-            label={sun.on ? hhmm(sun.minutes) : t('bar.sun')}
+            label={sun.on ? sunLabel : t('bar.sun')}
             on={open('sun')}
             set={sun.on}
             show={open('sun') || sun.on}
@@ -201,7 +208,7 @@ export function Toolbar({ derived, phone, className }: { derived: Derived | null
                 if (!sun.on) setSun({ on: true });
               }
             }}
-            ariaLabel={sun.on ? `${t('bar.sun')} ${hhmm(sun.minutes)}` : t('bar.sun')}
+            ariaLabel={sun.on ? `${t('bar.sun')} ${sunLabel}` : t('bar.sun')}
             testId="bar-sun"
           />
           {!phone && <Divider />}
@@ -368,16 +375,32 @@ function LevelsPanel({ derived, onClose }: { derived: Derived; onClose: () => vo
   );
 }
 
-/** Time of day on a sunrise..sunset track: the range and its hour ticks. */
+/** Time of day on a sunrise..sunset track: the range and its hour ticks (never colliding). */
 export function SunSlider({ className }: { className?: string }) {
   const t = useT();
+  const lang = useStudio((s) => s.lang);
   const sun = useStudio((s) => s.sun);
   const info = useStudio((s) => s.sunInfo);
   const setSun = useStudio((s) => s.setSun);
-  const lo = Math.ceil(info?.sunrise ?? 360);
-  const hi = Math.floor(info?.sunset ?? 1080);
-  const value = Math.min(hi, Math.max(lo, sun.minutes));
+  const lo = info?.sunrise ?? 360;
+  const hi = info?.sunset ?? 1080;
+  const value = Math.min(hi, Math.max(lo, Math.round(sun.minutes)));
   const fill = ((value - lo) / Math.max(1, hi - lo)) * 100;
+  const ref = useRef<HTMLDivElement>(null);
+  const [width, setWidth] = useState(260);
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const on = () => setWidth(el.clientWidth || 260);
+    on();
+    const ro = new ResizeObserver(on);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+  const loText = clock(lo, lang);
+  const hiText = clock(hi, lang);
+  // End labels take ~6 px per character (half of it beside the end), hour labels two digits.
+  const endGap = Math.max(loText.length, hiText.length) * 6.2 + 4;
   return (
     <div className={cx('relative min-w-0 pb-3.5', className)}>
       <input
@@ -390,18 +413,16 @@ export function SunSlider({ className }: { className?: string }) {
         value={value}
         onChange={(e) => setSun({ on: true, playing: false, minutes: Number(e.target.value) })}
         aria-label={t('sun.time')}
-        aria-valuetext={hhmm(value)}
+        aria-valuetext={clock(value, lang)}
       />
-      <div className="tnum pointer-events-none absolute inset-x-[9px] bottom-0 h-3 text-2xs leading-none text-ink-3" aria-hidden="true">
-        <span className="absolute top-0 left-[-9px]">{hhmm(lo)}</span>
-        {hourTicks(lo, hi)
-          .filter((h) => h * 60 - lo > 70 && hi - h * 60 > 70)
-          .map((h) => (
-            <span key={h} className="absolute top-0 -translate-x-1/2 whitespace-nowrap" style={{ left: `${((h * 60 - lo) / (hi - lo)) * 100}%` }}>
-              {h}
-            </span>
-          ))}
-        <span className="absolute top-0 right-[-9px]">{hhmm(hi)}</span>
+      <div ref={ref} className="tnum pointer-events-none absolute inset-x-[9px] bottom-0 h-3 text-2xs leading-none whitespace-nowrap text-ink-3" aria-hidden="true" data-testid="sun-ticks">
+        <span className="absolute top-0 left-[-9px]">{loText}</span>
+        {hourTicks(lo, hi, width, endGap).map((h) => (
+          <span key={h} className="absolute top-0 -translate-x-1/2" style={{ left: `${((h * 60 - lo) / (hi - lo)) * 100}%` }}>
+            {h % 24}
+          </span>
+        ))}
+        <span className="absolute top-0 right-[-9px]">{hiText}</span>
       </div>
     </div>
   );
@@ -412,8 +433,8 @@ function PlayButton({ size = 36 }: { size?: number }) {
   const sun = useStudio((s) => s.sun);
   const info = useStudio((s) => s.sunInfo);
   const setSun = useStudio((s) => s.setSun);
-  const lo = Math.ceil(info?.sunrise ?? 360);
-  const hi = Math.floor(info?.sunset ?? 1080);
+  const lo = info?.sunrise ?? 360;
+  const hi = info?.sunset ?? 1080;
   const value = Math.min(hi, Math.max(lo, sun.minutes));
   const play = () => {
     if (sun.playing) setSun({ playing: false });
@@ -444,7 +465,7 @@ export function SunTime({ className }: { className?: string }) {
       <PlayButton />
       <SunSlider className="flex-1" />
       <div className="w-[52px] shrink-0 text-right">
-        <p className="tnum text-[15px] leading-5 font-medium tracking-tight">{hhmm(sun.minutes)}</p>
+        <p className="tnum text-[15px] leading-5 font-medium tracking-tight">{info?.polar === 'night' ? t('sun.polarNight') : clock(sun.minutes, lang)}</p>
         <p className="tnum truncate text-2xs text-ink-2">{info && sun.on ? `${compass(info.azimuth, lang)} ${Math.max(0, Math.round(info.elevation))}°` : t('sun.offShort')}</p>
       </div>
     </div>
@@ -485,7 +506,7 @@ function DateRow() {
             tabIndex={on ? 0 : -1}
             data-value={id}
             onClick={() => pick(id)}
-            className={cx('h-[30px] min-w-0 flex-1 truncate rounded-[8px] px-1 text-[13px] transition-colors', on ? 'bg-white text-ink shadow-[0_1px_2px_rgba(0,0,0,0.08),0_0_0_1px_rgba(0,0,0,0.04)]' : 'text-ink-2 hover:text-ink')}
+            className={cx('h-[30px] flex-auto rounded-[8px] px-1 text-[13px] whitespace-nowrap transition-colors', on ? 'bg-white text-ink shadow-[0_1px_2px_rgba(0,0,0,0.08),0_0_0_1px_rgba(0,0,0,0.04)]' : 'text-ink-2 hover:text-ink')}
           >
             {lang === 'zh' ? t(`sun.date.${id}`) : t(`sun.date.${id}`).split(' ')[0]}
           </button>
@@ -512,7 +533,7 @@ function SiteRow({ icon, text, meta, onClick, label, testId }: { icon: ReactNode
   return (
     <button type="button" onClick={onClick} aria-label={label} data-testid={testId} className="flex min-h-11 w-full items-center gap-2.5 rounded-[10px] bg-wash px-3 py-1.5 text-left text-[13px] transition-colors hover:bg-hairline">
       {icon}
-      <span className="min-w-0 flex-1 truncate">{text}</span>
+      <span className="min-w-0 flex-1 leading-[17px] [overflow-wrap:anywhere]">{text}</span>
       <span className="tnum shrink-0 text-xs text-ink-3">{meta}</span>
       <ChevronRightIcon width={14} height={14} className="shrink-0 text-ink-2" />
     </button>
@@ -530,27 +551,53 @@ function SunPanel({ onClose, phone }: { onClose: () => void; phone?: boolean }) 
   const setSun = useStudio((s) => s.setSun);
   const setTray = useStudio((s) => s.setTray);
   const setSitePanel = useStudio((s) => s.setSitePanel);
-  const lo = Math.ceil(info?.sunrise ?? 360);
-  const hi = Math.floor(info?.sunset ?? 1080);
+  const lo = info?.sunrise ?? 360;
+  const hi = info?.sunset ?? 1080;
   const value = Math.min(hi, Math.max(lo, sun.minutes));
   const date = t(`sun.date.${sun.dateId}`);
-  const sub = info ? (info.elevation > 0 ? t('sun.sub', { date, dir: compass(info.azimuth, lang), el: Math.round(info.elevation) }) : t('sun.subOff', { date })) : date;
-  const noon = info ? t('sun.noon', { t: hhmm(info.solarNoon) }) : '';
-  const span = info && !phone ? `${t('sun.rise', { t: hhmm(info.sunrise) })} · ${noon} · ${t('sun.set', { t: hhmm(info.sunset) })}` : noon;
-  const utc = info && (tz || info.utcOffsetHours !== 8) ? ` · ${utcText(info.utcOffsetHours)}` : '';
+  const polar = info?.polar ?? null;
+  const dir = info ? compass(info.azimuth, lang) : '';
+  // At the ends of the slider the sun sits on the horizon (sunrise / sunset), as drawn.
+  const sub = !info
+    ? date
+    : polar === 'night'
+      ? t('sun.subNight', { date })
+      : polar === 'day' || info.elevation >= 1
+        ? t(polar === 'day' ? 'sun.subDay' : 'sun.sub', { date, dir, el: Math.max(0, Math.round(info.elevation)) })
+        : t(value <= (lo + hi) / 2 ? 'sun.subRise' : 'sun.subSet', { date, dir });
+  const noon = info ? t('sun.noon', { t: clock(info.solarNoon, lang) }) : '';
+  const utc = info && (tz || info.utcOffsetHours !== 8) ? utcText(info.utcOffsetHours) : '';
+  // Facts that wrap between, never inside ("日落 17:03" stays on one line).
+  const span = (
+    !info
+      ? []
+      : polar === 'day'
+        ? [t('sun.polarDay'), noon]
+        : polar === 'night'
+          ? [t('sun.polarNight')]
+          : !phone
+            ? [t('sun.rise', { t: clock(info.sunrise, lang) }), noon, t('sun.set', { t: clock(info.sunset, lang) })]
+            : [noon]
+  ).concat(utc ? [utc] : []);
   const placeTxt = site ? placeText(site, lang) : '';
   const [placeMain, placeNote] = placeTxt.includes('（') ? [placeTxt.slice(0, placeTxt.indexOf('（')), placeTxt.slice(placeTxt.indexOf('（'))] : placeTxt.includes(' (') ? [placeTxt.slice(0, placeTxt.indexOf(' (')), placeTxt.slice(placeTxt.indexOf(' ('))] : [placeTxt, ''];
   return (
     <>
       <div className="flex items-center gap-3">
-        <PlayButton />
+        {polar !== 'night' && <PlayButton />}
         <div className="min-w-0 flex-1">
-          <p className="tnum text-[26px] leading-[30px] font-medium">{hhmm(value)}</p>
-          <p className="tnum truncate text-[11.5px] leading-4 text-ink-2">{sub}</p>
+          <p className="tnum text-[26px] leading-[30px] font-medium" data-testid="sun-clock">{polar === 'night' ? t('sun.polarNight') : clock(value, lang)}</p>
+          <p className="tnum text-[11.5px] leading-4 text-ink-2" data-testid="sun-sub">{sub}</p>
         </div>
         <CloseButton onClick={onClose} />
       </div>
-      <SunSlider />
+      {polar === 'night' ? (
+        <p className="rounded-[10px] bg-wash px-3 py-2 text-[12px] leading-[18px] text-ink-2" data-testid="sun-polar-note">
+          {t('sun.polarNightNote')}
+        </p>
+      ) : (
+        <SunSlider />
+      )}
       <DateRow />
       <p className="text-[11.5px] tracking-[0.04em] text-ink-3">{t('sun.site')}</p>
       {site && (
@@ -565,8 +612,8 @@ function SunPanel({ onClose, phone }: { onClose: () => void; phone?: boolean }) 
           />
           <SiteRow
             icon={<MiniDial northDeg={site.northDeg} />}
-            text={t('sun.front', { dir: bearingText(frontBearing(site.northDeg), lang) })}
-            meta={t('sun.dragDial')}
+            text={t('sun.front', { dir: bearingWords(frontBearing(site.northDeg), lang) })}
+            meta={`${Math.round(frontBearing(site.northDeg))}°`}
             onClick={() => setSitePanel({ kind: 'orientation', fromSun: true })}
             label={`${t('more.orientation')}: ${bearingText(frontBearing(site.northDeg), lang)}`}
             testId="sun-orientation"
@@ -575,8 +622,12 @@ function SunPanel({ onClose, phone }: { onClose: () => void; phone?: boolean }) 
       )}
       <div className="flex items-center justify-between gap-2">
         <span className="tnum min-w-0 text-[11.5px] leading-4 text-ink-2" data-testid="sun-noon">
-          {span}
-          {utc}
+          {span.map((x, i) => (
+            <Fragment key={i}>
+              {i > 0 && ' · '}
+              <span className="whitespace-nowrap">{x}</span>
+            </Fragment>
+          ))}
         </span>
         <button
           type="button"

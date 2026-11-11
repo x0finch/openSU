@@ -2,7 +2,7 @@
 // here may be imported statically from the route modules.
 import { Box3, type Mesh, type Object3D, OrthographicCamera, PerspectiveCamera, Vector3 } from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
-import { treeHidesFacade } from '@opensu/furnish';
+import { crownRadius, plantSite, pointInRings, treeHidesFacade } from '@opensu/furnish';
 import { buildHouse } from '@opensu/kernel';
 import type { ResolvedHouse } from '@opensu/model';
 import {
@@ -69,6 +69,8 @@ export interface Engine {
 }
 
 const DURATION = 420;
+/** The sun study re-frames this long after the time stops changing. */
+const SUN_REFRAME_MS = 450;
 const FADE = 150;
 
 const easeInOut = (t: number) => (t < 0.5 ? 4 * t * t * t : 1 - (-2 * t + 2) ** 3 / 2);
@@ -151,6 +153,135 @@ function entouragePoints(root: Object3D): Vector3[] {
   return out;
 }
 
+/**
+ * Vertices of the entourage (a sample, at most ~400 per object): framing
+ * points that follow the round crowns of the trees instead of their boxes,
+ * whose corners would leave uneven white beside a tree.
+ */
+function entourageSamples(root: Object3D): Vector3[] {
+  const out: Vector3[] = [];
+  root.updateMatrixWorld(true);
+  for (const o of root.children) {
+    if (o.userData.partId !== undefined || o.name === 'floor-lines') continue;
+    let count = 0;
+    o.traverse((m) => {
+      const g = (m as Mesh).geometry;
+      if (g?.getAttribute('position')) count += g.getAttribute('position').count;
+    });
+    const step = Math.max(1, Math.floor(count / 400));
+    let i = 0;
+    o.traverse((m) => {
+      const g = (m as Mesh).geometry;
+      const pos = g?.getAttribute('position');
+      if (!pos) return;
+      for (let k = 0; k < pos.count; k++, i++) if (i % step === 0) out.push(new Vector3().fromBufferAttribute(pos, k).applyMatrix4(m.matrixWorld));
+    });
+  }
+  return out;
+}
+
+/** Widest field of view of the eye level from inside the plot (degrees; the walk uses 65). */
+const EYE_MAX_FOV = 64;
+
+/**
+ * Where to stand for the eye level inside a fenced plot (scene x, z and the
+ * bearing from the house to that spot). The eye at 1.6 m behind a fence
+ * sees the wall and the gate, so it stands on the plot's open ground
+ * (gardens, courts, porches; not under a roof, clear of trees, cars and
+ * walls) where the building is seen most whole within EYE_MAX_FOV, from
+ * the side `azimuthDeg` points to (the front and its corner), looking at
+ * two facades rather than square at one; the middle of the view looks
+ * across at least 3.2 m of open ground. Null without a fence or without
+ * such a spot (narrow front strips): the eye level then stays outside.
+ */
+function eyeStand(r: ResolvedHouse, building: readonly Vector3[], obstacles: readonly Vector3[], azimuthDeg: number): { eyeAt: [number, number]; azimuthDeg: number } | null {
+  const site = r.site;
+  if (!site.fence || !building.length) return null;
+  const gf = r.levels[0]!;
+  // A light sample of the building (plan mm: x, y; height m).
+  const step = Math.max(1, Math.floor(building.length / 1500));
+  const pts: [number, number, number][] = [];
+  for (let i = 0; i < building.length; i += step) pts.push([building[i]!.x * 1000, -building[i]!.z * 1000, building[i]!.y]);
+  let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity;
+  for (const p of pts) {
+    x0 = Math.min(x0, p[0]); x1 = Math.max(x1, p[0]);
+    y0 = Math.min(y0, p[1]); y1 = Math.max(y1, p[1]);
+  }
+  const cx = (x0 + x1) / 2, cy = (y0 + y1) / 2;
+  const plants = plantSite(r).filter((p) => p.level === gf.id && p.kind !== 'grass');
+  const ground = gf.spaces.filter((sp) => sp.outdoor && sp.type !== 'carport');
+  const covered = (x: number, y: number) => r.roofs.some((rf) => pointInRings(rf.rings, x, y)) || r.levels.slice(1).some((lv) => lv.spaces.some((sp) => pointInRings(sp.rings, x, y)));
+  const onGround = (x: number, y: number) => ground.some((sp) => pointInRings(sp.rings, x, y));
+  const maxTan = Math.tan((EYE_MAX_FOV * Math.PI) / 360) * 2 * 0.9;
+  const eye = 1.6;
+  const want = (azimuthDeg * Math.PI) / 180;
+  let best: { x: number; y: number; score: number } | null = null;
+  for (let x = 600; x <= site.width - 600; x += 500) {
+    for (let y = 600; y <= site.depth - 600; y += 500) {
+      // Open ground with room around (no wall, fence or building within reach).
+      if (![[0, 0], [450, 0], [-450, 0], [0, 450], [0, -450]].every(([a, b]) => onGround(x + a!, y + b!)) || covered(x, y)) continue;
+      if (plants.some((p) => Math.hypot(p.x - x, p.y - y) < (p.kind === 'bamboo' ? 700 : crownRadius(p) * 0.8))) continue;
+      const vx = cx - x, vy = cy - y, L = Math.hypot(vx, vy);
+      if (L < 1) continue;
+      // No crown in the near line of sight.
+      const blocked = plants.some((p) => {
+        const t = ((p.x - x) * vx + (p.y - y) * vy) / L;
+        if (t < 0 || t > 6000) return false;
+        return Math.abs((p.x - x) * vy - (p.y - y) * vx) / L < (p.kind === 'bamboo' ? 500 : crownRadius(p) * 0.7);
+      });
+      if (blocked) continue;
+      // The building as seen looking at its centre through a 3:2 frame at
+      // the widest field of view: the share of it inside the frame's width,
+      // and how much of its height fits there.
+      const ux = vx / L, uy = vy / L;
+      const half = (maxTan * 1.5) / 2;
+      let b0 = Infinity, b1 = -Infinity, near = Infinity, inCone = 0, front = Infinity, centre = Infinity;
+      const depths: number[] = [];
+      for (const p of pts) {
+        const dx = p[0] - x, dy = p[1] - y;
+        const depth = dx * ux + dy * uy;
+        near = Math.min(near, Math.hypot(dx, dy));
+        if (depth < 300 || Math.abs((dx * uy - dy * ux) / depth) > half) continue;
+        inCone++;
+        const up = ((p[2] - eye) * 1000) / depth;
+        // Walls and glazing (not a deck or a step) set how close the building stands.
+        if (p[2] > 0.6) {
+          front = Math.min(front, depth);
+          if (Math.abs((dx * uy - dy * ux) / depth) < half * 0.4) centre = Math.min(centre, depth);
+          depths.push(depth);
+        }
+        b0 = Math.min(b0, up); b1 = Math.max(b1, up);
+      }
+      // Room in front and a deep view (a court, or a facade across a garden, not one wall).
+      depths.sort((a, b) => a - b);
+      const deep = depths.length ? depths[Math.floor(depths.length / 2)]! : 0;
+      // The middle of the picture looks across open ground (3.2 m at least), not at a wall.
+      if (near < 1500 || !inCone || front < 1800 || centre < 3200 || deep < 4500) continue;
+      // Nothing taller than the eye close in front: a garden wall, the fence, a car.
+      let wall = false;
+      for (const o of obstacles) {
+        const dx = o.x * 1000 - x, dy = -o.z * 1000 - y;
+        const depth = dx * ux + dy * uy;
+        if (depth > 150 && depth < 3500 && o.y > 1.1 && Math.abs((dx * uy - dy * ux) / depth) < half) {
+          wall = true;
+          break;
+        }
+      }
+      if (wall) continue;
+      const fit = Math.min(1, maxTan / (b1 - b0)) * (inCone / pts.length);
+      // The side asked for (bearing from the house to the spot), and a corner view.
+      const bearing = Math.atan2(-vx, -vy);
+      const off = Math.abs(Math.atan2(Math.sin(bearing - want), Math.cos(bearing - want)));
+      const corner = Math.abs(Math.sin(2 * bearing));
+      const score = fit * 3 + Math.min(deep, 9000) / 9000 + Math.min(front, 3500) / 2000 - off * 1.2 + corner * 0.3;
+      if (fit > 0.3 && off < 1.6 && (!best || score > best.score)) best = { x, y, score };
+    }
+  }
+  if (!best) return null;
+  const az = (Math.atan2(best.x - cx, best.y - cy) * 180) / Math.PI;
+  return { eyeAt: [best.x / 1000, -best.y / 1000], azimuthDeg: ((az % 360) + 360) % 360 };
+}
+
 export function createEngine(container: HTMLElement, resolved: ResolvedHouse, opts: EngineOptions = {}): Engine {
   const viewer = new IllustrationViewer(container, { pixelRatio: opts.pixelRatio });
   /** True north in scene axes (model +Y turned by the site's northDeg). */
@@ -175,6 +306,8 @@ export function createEngine(container: HTMLElement, resolved: ResolvedHouse, op
   /** Current lighting: presentation, or the physical sun by date and time. */
   let lighting: LightingMode = defaultLighting;
   const sceneCenter = new Vector3();
+  /** Bounds of the architecture (scene axes): what zoom and pan keep on screen. */
+  const houseBox = new Box3();
   let radius = 0;
 
   let current = resolved;
@@ -187,10 +320,17 @@ export function createEngine(container: HTMLElement, resolved: ResolvedHouse, op
   function eyeSide(preset: ViewPreset): ViewPreset {
     if (preset.kind !== 'eye' || preset.id !== 'eye-sw') return preset;
     const hidden = treeHidesFacade(current, preset.azimuthDeg) && !treeHidesFacade(current, EYE_ALTERNATE.azimuthDeg);
-    return hidden ? { ...preset, azimuthDeg: EYE_ALTERNATE.azimuthDeg } : preset;
+    const p = hidden ? { ...preset, azimuthDeg: EYE_ALTERNATE.azimuthDeg } : preset;
+    // Behind a fence the eye at 1.6 m sees the wall and the gate: stand
+    // inside the plot instead, in the garden or court on that side.
+    const at = wideFrame ? eyeStand(current, buildingPoints, eyeObstacles, p.azimuthDeg) : null;
+    return at ? { ...p, ...at, maxFovDeg: EYE_MAX_FOV, frame: buildingPoints } : p;
   }
 
   let wideFrame = !!opts.wideFrame;
+  /** The building alone (no plot), for the eye level from inside the fence; what may stand in its way (plot walls, fence, cars). */
+  let buildingPoints: Vector3[] = [];
+  let eyeObstacles: Vector3[] = [];
 
   /** Builds and shows a house; frees the geometry of the previous one. */
   function load(r: ResolvedHouse): void {
@@ -198,7 +338,20 @@ export function createEngine(container: HTMLElement, resolved: ResolvedHouse, op
     const old = viewer.scene.getObjectByName('baked');
     old?.traverse((o) => (o as Mesh).geometry?.dispose());
     const house = createHouseObject(buildHouse(r), viewer.palette);
-    viewer.setContent(house.root, wideFrame ? [...house.framePoints, ...entouragePoints(house.root)] : house.framePoints);
+    buildingPoints = house.buildingPoints;
+    const inBuilding = new Set(buildingPoints);
+    const low = entouragePoints(house.root).filter((q, i, all) => {
+      // Corners of low entourage (cars, people), not of trees.
+      const k = Math.floor(i / 8) * 8;
+      const top = Math.max(...all.slice(k, k + 8).map((v) => v.y));
+      return top < 2.5;
+    });
+    eyeObstacles = [...house.framePoints.filter((q) => !inBuilding.has(q)), ...low];
+    // The studio frames the whole picture: the house, its trees and people,
+    // and the shadow it casts on the ground (`?frame=full`: the renderer's
+    // framing on the architecture alone).
+    viewer.setFrameShadows(wideFrame);
+    viewer.setContent(house.root, wideFrame ? [...house.framePoints, ...entourageSamples(house.root)] : house.framePoints);
     site = house.root.userData.site as StudySite;
     const n = (r.site.northDeg * Math.PI) / 180;
     north.set(Math.sin(n), 0, -Math.cos(n));
@@ -209,6 +362,7 @@ export function createEngine(container: HTMLElement, resolved: ResolvedHouse, op
       max.max(p);
     }
     sceneCenter.copy(min).add(max).multiplyScalar(0.5);
+    houseBox.set(min, max);
     radius = 0;
     for (const p of house.framePoints) radius = Math.max(radius, p.distanceTo(sceneCenter));
   }
@@ -260,7 +414,7 @@ export function createEngine(container: HTMLElement, resolved: ResolvedHouse, op
       // Between "the house fills the screen" and "a small house with room around it".
       controls.zoomToCursor = true;
       controls.minZoom = cam.zoom * 0.55;
-      controls.maxZoom = cam.zoom * 5;
+      controls.maxZoom = cam.zoom * 3.5;
     } else if (cam instanceof PerspectiveCamera) {
       // Eye level: orbit around the house, never into it.
       controls.zoomToCursor = false;
@@ -275,6 +429,7 @@ export function createEngine(container: HTMLElement, resolved: ResolvedHouse, op
     let interacting = false;
     controls.addEventListener('start', () => (interacting = true));
     controls.addEventListener('end', () => (interacting = false));
+    let good = { pos: c.object.position.clone(), target: c.target.clone(), zoom: (c.object as OrthographicCamera).zoom ?? 1, quat: c.object.quaternion.clone() };
     controls.addEventListener('change', () => {
       if (interacting) setMoved(true);
       // Pan stays near the plot: clamp the target, moving the camera with it.
@@ -286,8 +441,44 @@ export function createEngine(container: HTMLElement, resolved: ResolvedHouse, op
         c.object.position.add(d);
         c.object.updateMatrixWorld();
       }
+      // Zooming and panning never lose the house: a step that would leave
+      // too little of it on screen is taken back.
+      const cam = c.object as OrthographicCamera | PerspectiveCamera;
+      cam.updateMatrixWorld();
+      if (onScreen(cam)) good = { pos: cam.position.clone(), target: t.clone(), zoom: cam.zoom, quat: cam.quaternion.clone() };
+      else {
+        cam.position.copy(good.pos);
+        cam.quaternion.copy(good.quat);
+        t.copy(good.target);
+        if (cam.zoom !== good.zoom) {
+          cam.zoom = good.zoom;
+          cam.updateProjectionMatrix();
+        }
+        cam.updateMatrixWorld();
+      }
       viewer.requestRender();
     });
+  }
+
+  /**
+   * Enough of the house on screen: the projected box of the architecture
+   * covers at least 40 % of the screen (or of itself, when smaller) in each
+   * direction.
+   */
+  function onScreen(cam: OrthographicCamera | PerspectiveCamera): boolean {
+    let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity;
+    const v = new Vector3();
+    for (let i = 0; i < 8; i++) {
+      v.set(i & 1 ? houseBox.max.x : houseBox.min.x, i & 2 ? houseBox.max.y : houseBox.min.y, i & 4 ? houseBox.max.z : houseBox.min.z);
+      const view = v.clone().applyMatrix4(cam.matrixWorldInverse);
+      if (view.z > -0.05) continue;
+      v.project(cam);
+      x0 = Math.min(x0, v.x); x1 = Math.max(x1, v.x);
+      y0 = Math.min(y0, v.y); y1 = Math.max(y1, v.y);
+    }
+    if (x0 === Infinity) return false;
+    const ok = (a: number, b: number) => Math.min(b, 1) - Math.max(a, -1) >= 0.4 * Math.min(2, b - a);
+    return ok(x0, x1) && ok(y0, y1);
   }
 
   function snap(preset: ViewPreset): void {
@@ -440,6 +631,17 @@ export function createEngine(container: HTMLElement, resolved: ResolvedHouse, op
     });
   }
 
+  /** Sun study date and time the framing was made for ('off' = presentation light). */
+  let sunKey = 'off';
+  let sunTimer = 0;
+
+  /** Frames the current preset again (animated) unless the user has taken the camera. */
+  function reframe(): void {
+    if (movedFlag || viewer.walking || fadeTimer) return;
+    const view = anim && goal ? goal : viewer.currentView;
+    if (view) setView(view, viewer.cutaway, !(viewer.camera instanceof OrthographicCamera));
+  }
+
   const engine: Engine = {
     viewer,
     enterWalk,
@@ -485,6 +687,16 @@ export function createEngine(container: HTMLElement, resolved: ResolvedHouse, op
       lighting = sun ? { mode: 'physical', date: sun.date, minutes: sun.minutes } : defaultLighting;
       // Mid-transition the presentation sun is interpolated; the last frame applies `lighting`.
       if (!anim || lighting.mode === 'physical') viewer.setLighting(lighting);
+      // The framed shadow follows the sun: switching it on or off re-frames
+      // the house at once; a new date or time once it has settled (not
+      // while the slider is dragged or the day plays).
+      const key = sun ? `${sun.date}|${Math.round(sun.minutes)}` : 'off';
+      if (key === sunKey || !wideFrame) return;
+      const toggled = (key === 'off') !== (sunKey === 'off');
+      sunKey = key;
+      clearTimeout(sunTimer);
+      if (toggled) reframe();
+      else sunTimer = window.setTimeout(reframe, SUN_REFRAME_MS);
     },
     sunAt: (date, minutes) => studySun(site, date, minutes),
     resize,
@@ -492,7 +704,20 @@ export function createEngine(container: HTMLElement, resolved: ResolvedHouse, op
       const moving = !!(anim || fadeTimer);
       stop();
       const cam = viewer.camera;
+      const before = current.site;
       load(r);
+      const s = r.site;
+      // A new place or orientation moves the sun and its shadows: the house
+      // is framed afresh (from where the camera was), even after an orbit.
+      if (!viewer.walking && (s.latitude !== before.latitude || s.longitude !== before.longitude || s.northDeg !== before.northDeg || s.timeZone !== before.timeZone || s.utcOffsetHours !== before.utcOffsetHours)) {
+        const view = (moving && goal) || viewer.currentView;
+        if (view) {
+          setMoved(false);
+          viewer.camera = cam;
+          setView(view, viewer.cutaway);
+          return;
+        }
+      }
       if (moving && goal && !viewer.walking) {
         // A view change was under way (e.g. a new template resets the view):
         // finish it on the new house instead of freezing mid-morph.
@@ -533,6 +758,7 @@ export function createEngine(container: HTMLElement, resolved: ResolvedHouse, op
     stats: () => viewer.lastStats,
     dispose() {
       disposed = true;
+      clearTimeout(sunTimer);
       walkListeners.clear();
       stop();
       dropControls();
