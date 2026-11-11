@@ -1,0 +1,4 @@
+# Cloudflare local runtime state and generated types
+.wrangler/
+.dev.vars*
+worker-configuration.d.ts

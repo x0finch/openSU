@@ -1,0 +1,16 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "jsx": "react-jsx",
+    "types": ["vite/client", "node"],
+    "paths": {
+      "@opensu/render/tokens": ["../../packages/render/src/style/tokens.ts"],
+      "@opensu/model": ["../../packages/model/src/index.ts"],
+      "@opensu/kernel": ["../../packages/kernel/src/index.ts"],
+      "@opensu/render": ["../../packages/render/src/index.ts"],
+      "@opensu/plan": ["../../packages/plan/src/index.ts"]
+    }
+  },
+  "include": ["src", "vite.config.ts"]
+}
