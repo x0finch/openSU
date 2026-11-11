@@ -5,3 +5,4 @@ dist/
 .reference/
 artifacts/
 .DS_Store
+.claude/worktrees/
