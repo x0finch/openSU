@@ -301,7 +301,11 @@ export function createEngine(container: HTMLElement, resolved: ResolvedHouse, op
   function resize(): void {
     viewer.resize();
     const view = viewer.currentView;
-    if (!movedFlag && !anim && !fadeTimer && view && !viewer.walking) {
+    if (movedFlag || fadeTimer || !view || viewer.walking) return;
+    // A morph under way (e.g. the re-frame of a pinned column that also
+    // resizes the canvas) is re-aimed at the framing for the new size.
+    if (anim && goal) setView(goal, viewer.cutaway);
+    else {
       viewer.setView(view);
       attachControls();
     }

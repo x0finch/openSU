@@ -22,7 +22,7 @@ const RIDE_GAP = 8;
 /** A drag down this far (px), or a quick flick, closes the sheet. */
 const CLOSE_DRAG = 70;
 /** Width of the sheet when the phone is held sideways, px. */
-export const LAND_SHEET = 372;
+export const LAND_SHEET = 360;
 
 type SheetKind = 'tool' | 'chat';
 

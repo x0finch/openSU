@@ -38,7 +38,7 @@ const PIN_COLUMN = 360;
 const GAP_DESKTOP = 12;
 const GAP_PHONE = 6;
 /** The renderer's white margin, scaled: the insets already keep the house clear of the controls. */
-const FRAME_MARGIN = { desktop: 0.4, phone: 0.35 };
+const FRAME_MARGIN = { desktop: 0.55, phone: 0.35 };
 
 function useMedia(query: string): boolean {
   const [on, setOn] = useState(() => typeof matchMedia === 'function' && matchMedia(query).matches);

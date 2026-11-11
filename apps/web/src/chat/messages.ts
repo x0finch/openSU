@@ -99,7 +99,7 @@ export const chatEn: Record<keyof typeof chatZh, string> = {
   'chat.writing': 'Writing the reply',
   'chat.repairing': 'Rejected by validation, fixing it',
   'chat.changes': 'Changes',
-  'chat.changedN': '{n} change(s)',
+  'chat.changedN': 'Changes: {n}',
   'chat.undo': 'Undo',
   'chat.undone': 'Undone',
   'chat.redo': 'Redo',

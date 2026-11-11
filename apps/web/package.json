@@ -14,6 +14,7 @@
     "deploy": "vite build && wrangler deploy",
     "cf-typegen": "wrangler types",
     "chat": "node scripts/chat-e2e.mjs",
+    "layout": "node scripts/layout-check.mjs",
     "chat:stub": "node scripts/chat-stub.mjs",
     "hero": "node scripts/hero.mjs"
   },
