@@ -258,7 +258,8 @@ export function PhoneDock({ derived, landscape, onExtent }: { derived: Derived |
             <div ref={toolbar} className="w-[360px] shrink-0">
               <Toolbar derived={derived} phone />
             </div>
-            <div className={cx('relative min-w-0 flex-1 transition-opacity duration-200', hideInput && 'pointer-events-none opacity-0')} inert={hideInput || undefined}>
+            <div className={cx('relative flex min-w-0 flex-1 flex-col gap-2 transition-opacity duration-200', hideInput && 'pointer-events-none opacity-0')} inert={hideInput || undefined}>
+              {!want && !shown && !walk && <Hints className="max-w-full" />}
               {above}
               {!(pinned && want === 'chat') && <ChatInput phone pinned={pinned} />}
             </div>
