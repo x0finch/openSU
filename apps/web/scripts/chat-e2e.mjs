@@ -244,7 +244,9 @@ try {
     await sendMessage(page, '在客厅南墙开一扇 9 米的门');
     await waitDone(page, 4);
     check(received('give-up').length === 4, `give-up: stops after 1 attempt + 3 repairs (${received('give-up').length} model calls)`);
-    check((await page.getByTestId('assistant-message').nth(3).textContent())?.includes('没能通过校验'), 'give-up: the user is told plainly');
+    const giveUpText = (await page.getByTestId('assistant-message').nth(3).textContent()) ?? '';
+    check(giveUpText.includes('没能做成') && !/"[a-z0-9]+-[a-z0-9-]+"/.test(giveUpText), 'give-up: the user is told plainly (no raw validator text or ids)');
+    check((await page.getByTestId('assistant-message').nth(3).getByRole('button', { name: '重试' }).count()) === 0, 'give-up: no retry (the same words would fail again)');
     check((await shownArea(page)) === areaBefore, 'give-up: the house is unchanged');
     await shot(page, 'chat-giveup-desktop');
 

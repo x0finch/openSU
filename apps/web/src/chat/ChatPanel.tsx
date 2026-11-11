@@ -173,13 +173,10 @@ function AssistantMessage({ item, latest }: { item: ChatItem; latest: boolean })
       <ChangesCard item={item} />
       {item.aborted && <p className="mt-2 text-xs text-ink-3">{t('chat.aborted')}</p>}
       {item.gaveUp && (
-        <Note actions={latest && <SmallButton onClick={() => retry(item.id)} icon={<RetryIcon width={14} height={14} />}>{t('chat.retry')}</SmallButton>}>
+        // The same words again would fail the same way: no retry, a next step instead.
+        <Note>
           {t('chat.gaveUp')}
-          {!!item.lastErrors?.length && (
-            <span className="mt-1.5 block font-mono text-[11px] leading-4 text-ink-2" lang="en">
-              {item.lastErrors.slice(0, 2).map((e) => e.replace(/^[a-z-]+: /, '')).join(' ')}
-            </span>
-          )}
+          {!!item.lastErrors?.length && <Details label={t('chat.gaveUpDetails')} lines={item.lastErrors.slice(0, 3).map(humanizeValidation)} />}
         </Note>
       )}
       {item.error && (
@@ -189,7 +186,10 @@ function AssistantMessage({ item, latest }: { item: ChatItem; latest: boolean })
               {(item.error.kind === 'no-key' || item.error.kind === 'auth') && (
                 <SmallButton onClick={() => openSettings(true)} icon={<SlidersIcon width={14} height={14} />}>{t('chat.err.openSettings')}</SmallButton>
               )}
-              {latest && <SmallButton onClick={() => retry(item.id)} icon={<RetryIcon width={14} height={14} />}>{t('chat.retry')}</SmallButton>}
+              {/* Retrying cannot help until a key is set. */}
+              {latest && item.error.kind !== 'no-key' && item.error.kind !== 'auth' && (
+                <SmallButton onClick={() => retry(item.id)} icon={<RetryIcon width={14} height={14} />}>{t('chat.retry')}</SmallButton>
+              )}
             </>
           }
         >
@@ -200,12 +200,65 @@ function AssistantMessage({ item, latest }: { item: ChatItem; latest: boolean })
   );
 }
 
-function UserMessage({ item }: { item: ChatItem }) {
+/** Technical detail behind a disclosure (validator wording, kept out of the main message). */
+function Details({ label, lines }: { label: string; lines: string[] }) {
+  const [open, setOpen] = useState(false);
   return (
-    <div className="flex justify-end">
-      <p className="max-w-[85%] rounded-[12px] rounded-br-[4px] bg-ink px-3 py-2 text-[13.5px] leading-[1.5] break-words whitespace-pre-wrap text-white" data-testid="user-message">
+    <span className="mt-1 -ml-1 block">
+      <button
+        type="button"
+        onClick={() => setOpen(!open)}
+        aria-expanded={open}
+        className="inline-flex h-7 items-center gap-1 rounded-[6px] px-1 text-xs text-ink-2 transition-colors hover:text-ink"
+      >
+        <ChevronRightIcon width={13} height={13} className={cx('transition-transform duration-150', open && 'rotate-90')} />
+        {label}
+      </button>
+      {open && (
+        <span className="mt-0.5 block space-y-1 pl-1 text-xs leading-[18px] text-ink-2" lang="en">
+          {lines.map((l, i) => (
+            <span key={i} className="block">
+              {l}
+            </span>
+          ))}
+        </span>
+      )}
+    </span>
+  );
+}
+
+/** Validator text without rule codes and quoted internal ids. */
+function humanizeValidation(e: string): string {
+  return e
+    .replace(/^[a-z-]+: /, '')
+    .replace(/"[a-z0-9]+(?:[-:][a-z0-9]+)+"/gi, 'it')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+/** Long messages fold after a few lines; a toggle shows the rest. */
+const LONG_MESSAGE = 280;
+
+function UserMessage({ item }: { item: ChatItem }) {
+  const t = useT();
+  const long = item.text.length > LONG_MESSAGE || item.text.split('\n').length > 6;
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="flex flex-col items-end">
+      <p
+        className={cx(
+          'max-w-[85%] rounded-[12px] rounded-br-[4px] bg-ink px-3 py-2 text-[13.5px] leading-[1.5] break-words whitespace-pre-wrap text-white',
+          long && !open && 'line-clamp-5',
+        )}
+        data-testid="user-message"
+      >
         {item.text}
       </p>
+      {long && (
+        <button type="button" onClick={() => setOpen(!open)} aria-expanded={open} className="mt-1 h-7 rounded-[6px] px-1.5 text-xs text-ink-2 transition-colors hover:text-ink">
+          {open ? t('chat.showLess') : t('chat.showMore')}
+        </button>
+      )}
     </div>
   );
 }
@@ -384,7 +437,7 @@ function DesktopPanel({ onClose }: { onClose: () => void }) {
   return (
     <section
       aria-label={t('chat.title')}
-      className="glass pointer-events-auto absolute top-[184px] bottom-[92px] left-6 flex w-[360px] animate-[fade-in_160ms_ease-out] flex-col overflow-hidden rounded-ui"
+      className="glass-solid pointer-events-auto absolute top-[184px] bottom-[92px] left-6 flex w-[360px] animate-[fade-in_160ms_ease-out] flex-col overflow-hidden rounded-ui"
       data-testid="chat-panel"
     >
       <PanelHeader onClose={onClose} closeLabel={t('chat.close')} closeIcon={<CloseIcon width={18} height={18} />} />
