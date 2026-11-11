@@ -26,9 +26,10 @@ Workspace packages resolve to their TypeScript sources (Vite aliases and
 Studio deep links: `/studio?mode=plan&level=L2`, `/studio?view=axo-ne`,
 `?lang=en`, sun study `?sun=winter|spring|summer|autumn|today&time=10:00`,
 cutaway `?cut=L1`, sheets `?mode=sheet`, phone controls expanded
-`?panel=open`.
+`?panel=open`, walk mode `?walk=1`.
 
-Besides screenshots, `shots` checks: the time slider changes the shadows
+Besides screenshots, `shots` checks: walk mode (HUD shown, W moves the
+camera, a wall stops, the entrance door lets through, exit), the time slider changes the shadows
 (pixel diff 10:00 vs 15:00) and drives the physical sun, a cutaway hides
 the roof, leaving the sun study returns to presentation light, and the
 sheet set yields 4 PNG blobs of 1500 x 2000.
@@ -65,6 +66,12 @@ string formatting (well inside the 10 ms free-tier budget).
   time of day with play) on desktop, the same controls in the phone bottom
   sheet (collapsed by default: mode switch and time only); `useSunPlayer`
   sweeps sunrise..sunset in 8 s.
+- `src/studio/WalkHUD.tsx` walk mode: the walk button (view rail, phone
+  sheet), exit, level chips (jump to a level's stair top), the floor plan
+  as a mini-map with position and heading, a hint, a touch joystick;
+  `walk-bridge.ts` connects it to the lazy engine (`engine.enterWalk`,
+  `exitWalk`, `onWalk`, `walkMove`, `walkToLevel`). Choosing a view or a
+  cutaway ends the walk; the sun study stays available.
 - `src/studio/SheetGallery.tsx` + `sheet-data.ts` (lazy chunk) the sheet
   set: thumbnails as each sheet is ready, large preview (arrows, swipe),
   download one or all, Web Share API with files where available.

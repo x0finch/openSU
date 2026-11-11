@@ -200,3 +200,61 @@ describe('kernel: roof helper', () => {
     }
   });
 });
+
+describe('kernel: furniture and walk data', () => {
+  const house = resolve(golden);
+  const furnished = geo.furniture;
+
+  it('furnishes every level, within the triangle budget', () => {
+    for (const id of ['L1', 'L2', 'L3']) expect(furnished.filter((f) => f.level === id).length, id).toBeGreaterThan(5);
+    const tris = geo.parts.filter((p) => p.role === 'furniture').reduce((a, p) => a + p.indices.length / 3, 0);
+    expect(tris).toBeGreaterThan(1000);
+    expect(tris).toBeLessThan(15000);
+    expect(geo.stats.triangles).toBeLessThan(60000);
+  });
+
+  it('never puts furniture into a wall, and every piece stands on its floor', () => {
+    for (const f of furnished) {
+      const lv = house.levels.find((l) => l.id === f.level)!;
+      expect(f.min[2], f.id).toBeGreaterThanOrEqual(lv.elevation / 1000 - 1e-6);
+      // Sinks and hobs sit on the worktop.
+      expect(f.min[2], f.id).toBeLessThan(lv.elevation / 1000 + (f.kind === 'sink' || f.kind === 'hob' ? 0.95 : 0.35));
+      for (const w of lv.walls) {
+        const t = w.thickness / 2000;
+        const x0 = Math.min(w.a[0], w.b[0]) / 1000 - t, x1 = Math.max(w.a[0], w.b[0]) / 1000 + t;
+        const y0 = Math.min(w.a[1], w.b[1]) / 1000 - t, y1 = Math.max(w.a[1], w.b[1]) / 1000 + t;
+        const overlap = f.min[0] < x1 - 1e-3 && f.max[0] > x0 + 1e-3 && f.min[1] < y1 - 1e-3 && f.max[1] > y0 + 1e-3;
+        expect(overlap, `${f.id} in ${w.id}`).toBe(false);
+      }
+    }
+  });
+
+  it('keeps doorways free (no piece within 0.4 m of a door or sliding door)', () => {
+    for (const lv of house.levels) {
+      for (const o of lv.openings) {
+        if (o.kind === 'window') continue;
+        const ns = o.orient === 'NS';
+        const lo = (ns ? Math.min(o.a[1], o.b[1]) : Math.min(o.a[0], o.b[0])) / 1000;
+        const hi = lo + o.width / 1000;
+        const c = (ns ? o.a[0] : o.a[1]) / 1000;
+        const zone = ns ? [c - 0.4, lo, c + 0.4, hi] : [lo, c - 0.4, hi, c + 0.4];
+        // Pot plants may stand at the end of wide glazing (as on the plan).
+        for (const f of furnished.filter((x) => x.level === lv.id && x.max[2] - x.min[2] > 0.05 && x.kind !== 'pot-plant')) {
+          const overlap = f.min[0] < zone[2]! && f.max[0] > zone[0]! && f.min[1] < zone[3]! && f.max[1] > zone[1]!;
+          expect(overlap, `${f.id} blocks ${o.id}`).toBe(false);
+        }
+      }
+    }
+  });
+
+  it('starts the walk inside the main entrance and connects the levels by stairs', () => {
+    expect(geo.walk.start.level).toBe('L1');
+    expect(geo.walk.arrivals.map((a) => a.level)).toEqual(['L1', 'L2', 'L3']);
+    const ramps = geo.walk.surfaces.filter((s) => s.ramp);
+    expect(ramps.length).toBe(4);
+    // The flights climb a full storey each, up to the attic floor.
+    expect(Math.max(...ramps.map((r) => r.ramp!.z1))).toBeCloseTo(geo.levels[2]!.elevation, 3);
+    expect(geo.walk.blockers.some((b) => b.kind === 'fence')).toBe(true);
+    expect(geo.walk.blockers.filter((b) => b.kind === 'furniture').length).toBeGreaterThan(20);
+  });
+});

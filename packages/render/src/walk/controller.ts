@@ -23,6 +23,8 @@ export interface WalkState {
 export interface WalkHost {
   /** Draw one frame now. */
   renderNow(): void;
+  /** Draw one frame soon (coalesced: many look events, one frame). */
+  requestRender(): void;
   readonly levels: readonly { id: string; elevation: number }[];
 }
 
@@ -189,7 +191,7 @@ export class WalkController {
   private wake(): void {
     if (this.raf) return;
     if (!this.moving()) {
-      this.host.renderNow();
+      this.host.requestRender();
       return;
     }
     this.last = performance.now();

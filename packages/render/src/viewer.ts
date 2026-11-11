@@ -321,7 +321,7 @@ export class IllustrationViewer {
     const world = new WalkWorld(data, { radius: walkTokens.bodyRadius, stepUp: walkTokens.stepUp });
     if (!this.beforeWalk) this.beforeWalk = { cut: this.cutLevel, preset: this.preset };
     this.cutLevel = null;
-    const walker = new WalkController({ renderNow: () => this.renderNow(), levels: this.levels }, world, {
+    const walker = new WalkController({ renderNow: () => this.renderNow(), requestRender: () => this.requestRender(), levels: this.levels }, world, {
       x: pos[0], y: pos[1], z: lv?.elevation ?? 0, headingDeg: opts.headingDeg ?? base.headingDeg, pitchDeg: opts.pitchDeg ?? 0,
     });
     this.walker = walker;

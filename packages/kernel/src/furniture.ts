@@ -399,7 +399,7 @@ const RECIPES: Partial<Record<FurniturePiece['kind'], Recipe>> = {
     // Glass screen along the front with a slim dark top rail.
     k.box('glass', -hw, -hd, 40, hw, -hd + 10, 1960);
     k.box('furnitureDark', -hw, -hd, 1960, hw, -hd + 20, 2000);
-    k.cyl('furnitureDark', 0, hd - 60, 90, 1900, 1920, 12);
+    k.cyl('furnitureDark', 0, hd - 110, 90, 1900, 1920, 12);
   },
   washer(k) {
     const hw = k.w / 2, hd = k.d / 2;

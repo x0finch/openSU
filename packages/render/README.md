@@ -21,10 +21,13 @@ pnpm test       # solar position unit tests
 elev-south, axo-sw`, the sun study `sun-winter-09, sun-winter-12,
 sun-winter-15, sun-summer-12` (SE axonometric, physical sun at the golden
 site), the cutaways `cut-L1, cut-L2`, `cut-L1-sun-winter-15`,
-`cut-L1-sun-winter-10` and `cut-L2-sun-winter-10`, and
-prints the sun position and the cost of a shadow update. Demo URL
+`cut-L1-sun-winter-10` and `cut-L2-sun-winter-10`, the furnished
+cutaways `cut-L1-furnished`, `cut-L2-furnished` and the walk views
+`walk-living`, `walk-dining`, `walk-bedroom`, `walk-terrace` (winter
+10:00), and prints the sun position and the cost of a shadow update. Demo URL
 parameters: `view=`, `sun=winter|spring|summer|autumn|today|YYYY-MM-DD`,
-`time=HH:MM`, `year=`, `cut=L1|none`, `hide=`.
+`time=HH:MM`, `year=`, `cut=L1|none`, `hide=`, walk mode
+`walk=start|L1|L2|L3&at=x,y&heading=deg&pitch=deg` (metres, model axes).
 
 The demo shows the golden sample through model -> kernel -> render
 (`@opensu/model` and `@opensu/kernel` are aliased to their sources, so no
@@ -86,6 +89,30 @@ renders a single view with debug switches.
   `floorSunTint`), walls in a cast shadow use the turned-away tone and
   outdoor paving / gravel / decks the ground-shadow tone. Tone bands are
   shared uniforms (`setToneFactors`), so switching costs no recompile.
+- Cutaway shadow rule (physical sun): the sun comes as two identical
+  lights. The interior one sees the whole house (its clipped parts keep
+  shading the rooms); the outdoor one does not see what the cutaway hides
+  (clippable meshes clip their shadow-depth pass for it). House materials
+  and stairs take the interior sun's shadows, site and garden the
+  outdoor's (`setShadowLight`), so the garden is lit as if the hidden
+  parts were not there. With "all levels" there is one light and real
+  ground shadows.
+- Furniture: palette materials `furniture`, `furnitureWood`, `textile`,
+  `fixture`, `furnitureDark` (`furniture` tokens). Furniture is part of the
+  clippable house group (cut at the section plane, with caps).
+- Walk mode (`src/walk/`): `viewer.enterWalk({ level?, position?,
+  headingDeg?, pitchDeg? })` / `exitWalk()`. `WalkWorld` is the pure
+  collision (body disc of 0.25 m over the kernel's walk surfaces, stopped
+  by blockers whose height range meets the body; sliding along walls;
+  stair ramps within a step of 0.45 m). `WalkController` is the camera
+  (1.6 m eye, 65 deg vertical field, wider on portrait screens), keyboard
+  (WASD / arrows, Q/E or arrows to turn, Shift to run), drag to look, and
+  `setMove(forward, strafe)` for a touch joystick. It renders every frame
+  only while something moves. While walking: interior tones from
+  `walkLight` (light shade, lighter ceilings, warm sun patches), window
+  glass at `walk.glassOpacity` so the garden shows, people silhouettes
+  hidden, the presentation sun fixed at entry (turning never redraws
+  shadows), billboard turns do not redraw shadows either.
 - `src/style/ground.ts` - invisible ground that only shows received shadows.
 - `src/style/cameras.ts` - presets: parallel axonometric, eye-level two-point
   perspective (horizontal view axis + lens shift), straight elevation.
