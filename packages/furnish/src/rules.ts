@@ -153,6 +153,18 @@ export function isEntryHall(plan: Room['plan'], id: string): boolean {
     && o.op.sides.some((x) => x !== id && (x === null || plan.byId.get(x)?.outdoor)));
 }
 
+/** Side of the room holding its front door (the widest exterior door). */
+function frontDoorSide(room: Room): Side | null {
+  const { sp, R } = room;
+  const doors = room.plan.openings.filter((o) => o.op.kind === 'door' && o.op.sides.includes(sp.id)
+    && o.op.sides.some((x) => x !== sp.id && (x === null || room.plan.byId.get(x)?.outdoor)));
+  const d = doors.sort((a, b) => b.op.width - a.op.width)[0];
+  if (!d) return null;
+  const [cx, cy] = d.op.center;
+  if (d.op.orient === 'EW') return Math.abs(cy - R.y0) < Math.abs(cy - R.y1) ? 'S' : 'N';
+  return Math.abs(cx - R.x0) < Math.abs(cx - R.x1) ? 'W' : 'E';
+}
+
 /**
  * Entry halls get a shoe cabinet beside the front door and a plant; other
  * halls big enough to sit in get a console and a plant. Corridors stay empty.
@@ -162,7 +174,11 @@ function hall(room: Room): void {
   const short = Math.min(width(R), height(R));
   const entry = isEntryHall(room.plan, sp.id);
   if (!entry && short < 2200) return;
-  const sides = rankSides((s) => room.sideStats(s, 'solid').longest - (room.sideStats(s, 'solid').door ? 600 : 0));
+  // Beside the front door, never across its path: walls perpendicular to
+  // the door's wall first, the wall facing the door not at all.
+  const doorSide = entry ? frontDoorSide(room) : null;
+  const sides = rankSides((s) => room.sideStats(s, 'solid').longest - (room.sideStats(s, 'solid').door ? 600 : 0) + (doorSide && isPerp(s, doorSide) ? 3000 : 0))
+    .filter((s) => !doorSide || s !== opposite(doorSide));
   const cab = entry ? [1500, 1200, 900] : [1200, 900];
   for (const len of cab) {
     const g: Group = { items: [{ kind: entry ? 'shelves' : 'side-table', u: 0, v: 0, w: len, d: entry ? 380 : 400, priority: 6 }], W: len, D: entry ? 380 : 400, clear: 700, back: 'solid' };

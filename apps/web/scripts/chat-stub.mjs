@@ -25,36 +25,36 @@ const cjk = (s) => /[一-鿿]/.test(s);
 const SCRIPTS = [
   {
     name: 'widen-living',
-    match: /客厅.*加宽|living room.*wider/i,
+    match: /北侧.*加深|客厅.*加宽|north rooms.*deeper|living room.*wider/i,
     steps: (zh) => [
       {
         text: zh
-          ? '好的，客厅向西加宽 600 mm：把西墙所在的轴线 1 外移。同一条轴线上的餐厅、厨房，以及二楼的主卧、卫生间和儿童房也会一起变宽。'
-          : 'Sure: the living room grows 600 mm to the west by moving grid line 1. The dining room and kitchen on that line, and the master bedroom, bathroom and kids room upstairs, widen with it.',
+          ? '好的，北侧房间加深 600 mm：把北墙所在的轴线 F 外移。同一条轴线上的厨房、楼梯、洗衣房，以及二楼的主卫和卫生间都会一起变深。'
+          : 'Sure: the north rooms get 600 mm deeper by moving grid line F, the north wall. The kitchen, stair and laundry on that line, and both bathrooms upstairs, deepen with it.',
         hold: true,
-        tools: [{ name: 'edit_house', args: { summary: zh ? '客厅向西加宽 600 mm' : 'Living room 600 mm wider (west)', commands: [{ op: 'move_grid_line', line: '1', by: -600 }] } }],
+        tools: [{ name: 'edit_house', args: { summary: zh ? '北侧房间加深 600 mm' : 'North rooms 600 mm deeper', commands: [{ op: 'move_grid_line', line: 'F', by: 600 }] } }],
       },
       {
         text: zh
-          ? '改好了。客厅现在 **5.4 × 4.8 m**，约 25.9 m²；整栋房子的建筑面积增加约 12.2 m²。西侧院子从 2.4 m 收窄到 1.8 m，仍可通行。'
-          : 'Done. The living room is now **5.4 × 4.8 m**, about 25.9 m²; the house gains about 12.2 m² in total. The west side yard narrows from 2.4 m to 1.8 m and stays passable.',
+          ? '改好了。厨房现在 **3.6 × 3.3 m**，约 11.9 m²；整栋房子的建筑面积增加约 13.3 m²。北侧小院从 1.1 m 收窄到 0.5 m，只够种竹子。'
+          : 'Done. The kitchen is now **3.6 × 3.3 m**, about 11.9 m²; the house gains about 13.3 m² in total. The north strip narrows from 1.1 m to 0.5 m, enough for bamboo only.',
       },
     ],
   },
   {
     name: 'study-to-bedroom',
-    match: /书房.*卧室|study.*bedroom/i,
+    match: /起居室.*卧室|书房.*卧室|family room.*bedroom|study.*bedroom/i,
     steps: (zh) => [
       // A deliberately wrong id: the validator answers with the nearest ids.
-      { tools: [{ name: 'edit_house', args: { summary: zh ? '二楼书房改为卧室' : 'Upstairs study becomes a bedroom', commands: [{ op: 'update_space', space: 'l2-studyroom', type: 'bedroom', name: '卧室', nameEn: 'Bedroom' }] } }] },
+      { tools: [{ name: 'edit_house', args: { summary: zh ? '二楼起居室改为卧室' : 'Upstairs family room becomes a bedroom', commands: [{ op: 'update_space', space: 'l2-familyroom', type: 'bedroom', name: '卧室', nameEn: 'Bedroom' }] } }] },
       {
-        text: zh ? '书房的编号是 l2-study，我改正后重新提交。' : 'The study id is l2-study; resubmitting with the right id.',
-        tools: [{ name: 'edit_house', args: { summary: zh ? '二楼书房改为卧室' : 'Upstairs study becomes a bedroom', commands: [{ op: 'update_space', space: 'l2-study', type: 'bedroom', name: '卧室', nameEn: 'Bedroom' }] } }],
+        text: zh ? '起居室的编号是 l2-family，我改正后重新提交。' : 'The family room id is l2-family; resubmitting with the right id.',
+        tools: [{ name: 'edit_house', args: { summary: zh ? '二楼起居室改为卧室' : 'Upstairs family room becomes a bedroom', commands: [{ op: 'update_space', space: 'l2-family', type: 'bedroom', name: '卧室', nameEn: 'Bedroom' }] } }],
       },
       {
         text: zh
-          ? '二楼书房已改成卧室：4.5 × 2.7 m，约 12.2 m²，北窗 1.8 m。它朝北，冬天没有直射阳光；如果更看重采光，可以和南侧的次卧对调。'
-          : 'The upstairs study is now a bedroom: 4.5 × 2.7 m, about 12.2 m², with a 1.8 m north window. Facing north it gets no direct winter sun; swap it with the south bedroom if daylight matters more.',
+          ? '二楼起居室已改成卧室：4.5 × 3.9 m，约 17.6 m²，朝南的推拉门通向阳台。楼梯口仍是开敞的，可以考虑加一道墙和门。'
+          : 'The upstairs family room is now a bedroom: 4.5 × 3.9 m, about 17.6 m², with a south sliding door onto the balcony. It is still open to the stair; consider a wall and a door there.',
       },
     ],
   },
@@ -62,16 +62,16 @@ const SCRIPTS = [
     name: 'roof-pitch',
     match: /坡度|flatter/i,
     steps: (zh) => [
-      { tools: [{ name: 'edit_house', args: { summary: zh ? '屋顶坡度 26° 改为 20°' : 'Roof pitch 26° to 20°', commands: [{ op: 'update_roof', roof: 'roof-main', pitchDeg: 20 }] } }] },
-      { text: zh ? '屋顶坡度从 26° 改为 20°，屋脊降低约 0.6 m，外观更舒展；坡度仍够排水。' : 'The roof pitch goes from 26° to 20°: the ridge drops by about 0.6 m and the house looks calmer; still steep enough to drain.' },
+      { tools: [{ name: 'edit_house', args: { summary: zh ? '屋顶坡度 27° 改为 20°' : 'Roof pitch 27° to 20°', commands: [{ op: 'update_roof', roof: 'roof-main', pitchDeg: 20 }] } }] },
+      { text: zh ? '屋顶坡度从 27° 改为 20°，屋脊降低约 0.5 m，外观更舒展；坡度仍够排水。' : 'The roof pitch goes from 27° to 20°: the ridge drops by about 0.5 m and the house looks calmer; still steep enough to drain.' },
     ],
   },
   {
     name: 'new-house',
     match: /新房子|重新开始|start a new house|start over/i,
     steps: (zh) => [
-      { tools: [{ name: 'new_house', args: { template: 'starter', summary: zh ? '新建两层样板房' : 'New two-storey starter house' } }] },
-      { text: zh ? '新房子准备好了：两层，12 × 10.2 m，建筑面积约 245 m²。告诉我你的宅基地尺寸和房间需求，我来调整。' : 'A new house is ready: two storeys, 12 × 10.2 m, about 245 m². Tell me your plot size and the rooms you need and I will adapt it.' },
+      { tools: [{ name: 'new_house', args: { template: 't1', summary: zh ? '新建样板房「白墙坡顶小院」' : 'New sample house 白墙坡顶小院' } }] },
+      { text: zh ? '新房子准备好了：白墙坡顶小院，两层，宅基地 12 × 14 m，建筑面积约 160 m²。告诉我你的宅基地尺寸和房间需求，我来调整。' : 'A new house is ready: 白墙坡顶小院, two storeys on a 12 × 14 m plot, about 160 m². Tell me your plot size and the rooms you need and I will adapt it.' },
     ],
   },
   {
