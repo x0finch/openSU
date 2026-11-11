@@ -121,6 +121,9 @@ export function renderPlanDetailed(house: ResolvedHouse, levelId: string, option
   const height = Math.ceil(tb.bottom + tl.margin);
 
   // --- Assemble, bottom to top.
+  // Planting stays inside the plot (ground floor) and out of the rooms.
+  const plantBox = plan.plot ? v.rect(plan.plot) : { x0: 0, y0: 0, x1: width, y1: height };
+  const plantArea = `M${f(plantBox.x0)},${f(plantBox.y0)}H${f(plantBox.x1)}V${f(plantBox.y1)}H${f(plantBox.x0)}Z`;
   const out: string[] = [];
   out.push(`<svg xmlns="http://www.w3.org/2000/svg"${attrs({ width, height, viewBox: `0 0 ${width} ${height}` })}>`);
   out.push(`<title>${title}</title>`);
@@ -129,6 +132,8 @@ export function renderPlanDetailed(house: ResolvedHouse, levelId: string, option
     + `<pattern id="lawn" patternUnits="userSpaceOnUse" width="16" height="16"><rect width="16" height="16" fill="${color.lawn}"/><circle cx="4" cy="5" r="0.7" fill="${color.lawnDot}"/><circle cx="12" cy="13" r="0.7" fill="${color.lawnDot}"/></pattern>`
     + `<pattern id="deck" patternUnits="userSpaceOnUse" width="${f(v.len(600))}" height="${f(v.len(150))}"><rect width="${f(v.len(600))}" height="${f(v.len(150))}" fill="${color.deck}"/><path d="M0,0.25H${f(v.len(600))}" stroke="${color.deckLine}" stroke-width="${stroke.furnitureDetail}"/></pattern>`
     + `<pattern id="gravel" patternUnits="userSpaceOnUse" width="9" height="9"><rect width="9" height="9" fill="${color.gravel}"/><circle cx="2" cy="2.5" r="0.6" fill="${color.gravelDot}"/><circle cx="6.5" cy="6" r="0.5" fill="${color.gravelDot}"/></pattern>`
+    // Tree crowns stay outside the rooms (they read as being under the roof eaves there).
+    + `<clipPath id="outdoors-${plan.level.id}"><path clip-rule="evenodd"${attrs({ d: `${plantArea}${plan.spaces.filter((sp) => !sp.outdoor).map((sp) => pathOfRings(sp.rings, v)).join('')}` })}/></clipPath>`
     + '</defs>');
   out.push(rectEl({ x0: 0, y0: 0, x1: width, y1: height }, { fill: color.page }));
 
@@ -162,7 +167,7 @@ export function renderPlanDetailed(house: ResolvedHouse, levelId: string, option
   const tops = items.filter((p) => p.layer === 'top');
   const plants = items.filter((p) => p.layer === 'plant');
   if (floorItems.length) out.push(`<g filter="url(#soft)">${floorItems.map(sym).join('')}</g>`);
-  if (plants.length) out.push(`<g filter="url(#soft)">${plants.map(sym).join('')}</g>`);
+  if (plants.length) out.push(`<g clip-path="url(#outdoors-${plan.level.id})"><g filter="url(#soft)">${plants.map(sym).join('')}</g></g>`);
   if (pieces.length) out.push(`<g filter="url(#soft)">${pieces.map(sym).join('')}</g>`);
   if (tops.length) out.push(`<g>${tops.map(sym).join('')}</g>`);
 

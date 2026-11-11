@@ -89,8 +89,24 @@ export function drawStair(st: StairInfo, v: View, texts: TextBox[], ty: Typograp
     s += `<path${attrs({ d: 'M' + P.map(([x, y]) => `${f(x)},${f(y)}`).join('L'), fill: 'none', stroke: color.stairArrow, 'stroke-width': stroke.stair })}/>`;
   }
   // Arrows: up along the first flight to the break; down along the arriving flight.
-  const arrow = (fl: Flight, from: number, to: number, label: string) => {
+  const clipPx = v.rect(clip);
+  const inClipPx = (x: number, y: number, r: number) => x - r >= clipPx.x0 - 0.5 && x + r <= clipPx.x1 + 0.5 && y - r >= clipPx.y0 - 0.5 && y + r <= clipPx.y1 + 0.5;
+  const labelHalo = { stroke: color.furnitureFill, 'stroke-width': 3, 'paint-order': 'stroke', 'stroke-linejoin': 'round' };
+  const arrow = (fl: Flight, from0: number, to: number, label: string) => {
     const c = (fl.across[0] + fl.across[1]) / 2;
+    // The label goes just outside the start of the flight; where the flight
+    // starts against a wall (the stair is entered from the side), it goes
+    // on the first treads and the arrow starts after it.
+    const size0 = ty.font.stairSize;
+    const outside = (() => {
+      const q0 = L.ns ? v.p([c, from0]) : v.p([from0, c]);
+      const q1 = L.ns ? v.p([c, to]) : v.p([to, c]);
+      const an = Math.atan2(q1[1] - q0[1], q1[0] - q0[0]);
+      const o = v.len(Math.abs(from0 - L.start)) + 4 + size0 / 2;
+      return inClipPx(q0[0] - Math.cos(an) * o, q0[1] - Math.sin(an) * o, size0 / 2);
+    })();
+    const shift = outside ? 0 : (size0 + 6) / v.len(1);
+    const from = from0 + L.sgn * shift;
     const p0 = L.ns ? v.p([c, from]) : v.p([from, c]);
     const p1 = L.ns ? v.p([c, to]) : v.p([to, c]);
     const ang = Math.atan2(p1[1] - p0[1], p1[0] - p0[0]);
@@ -99,12 +115,12 @@ export function drawStair(st: StairInfo, v: View, texts: TextBox[], ty: Typograp
     let a = line(p0[0], p0[1], hx, hy, { stroke: color.stairArrow, 'stroke-width': stroke.stairArrow });
     a += `<path${attrs({ d: `M${f(p1[0])},${f(p1[1])}L${f(hx - Math.sin(ang) * aw)},${f(hy + Math.cos(ang) * aw)}L${f(hx + Math.sin(ang) * aw)},${f(hy - Math.cos(ang) * aw)}Z`, fill: color.stairArrow })}/>`;
     a += `<circle${attrs({ cx: p0[0], cy: p0[1], r: 1.6, fill: color.stairArrow })}/>`;
-    // Label just outside the start end of the flight.
+    // Label just outside the start end of the flight (or on its first treads).
     const size = ty.font.stairSize;
-    const out = v.len(Math.abs(from - L.start)) + 4 + size / 2;
+    const out = outside ? v.len(Math.abs(from - L.start)) + 4 + size / 2 : size / 2 + 3;
     const lx = p0[0] - Math.cos(ang) * out, ly = p0[1] - Math.sin(ang) * out;
     const w = textWidth(label, size);
-    a += `<text${attrs({ x: lx, y: ly + size * 0.36, 'text-anchor': 'middle', 'font-family': ty.font.cjk, 'font-size': size, fill: color.labelCn })}>${label}</text>`;
+    a += `<text${attrs({ x: lx, y: ly + size * 0.36, 'text-anchor': 'middle', 'font-family': ty.font.cjk, 'font-size': size, fill: color.labelCn, ...(outside ? {} : labelHalo) })}>${label}</text>`;
     texts.push({ x0: lx - w / 2, x1: lx + w / 2, y0: ly - size / 2, y1: ly + size / 2, text: label, kind: 'stair' });
     return a;
   };
@@ -123,10 +139,17 @@ export function drawStair(st: StairInfo, v: View, texts: TextBox[], ty: Typograp
     const size = ty.font.stairSize;
     const p0 = pts[0]!, p1 = pts[1]!;
     const dirA = Math.atan2(p1[1] - p0[1], p1[0] - p0[0]);
-    const out = v.len(Math.abs(from - L.start)) + 4 + size / 2;
-    const lx = p0[0] - Math.cos(dirA) * out, ly = p0[1] - Math.sin(dirA) * out;
+    let out = v.len(Math.abs(from - L.start)) + 4 + size / 2;
+    let lx = p0[0] - Math.cos(dirA) * out, ly = p0[1] - Math.sin(dirA) * out;
+    const inside = !inClipPx(lx, ly, size / 2);
+    if (inside) {
+      // Against a wall: on the first treads, beside the walking line's start.
+      out = -(size / 2 + 4);
+      lx = p0[0] - Math.cos(dirA) * out + Math.sin(dirA) * (size * 0.9);
+      ly = p0[1] - Math.sin(dirA) * out - Math.cos(dirA) * (size * 0.9);
+    }
     const tw = textWidth('下', size);
-    w += `<text${attrs({ x: lx, y: ly + size * 0.36, 'text-anchor': 'middle', 'font-family': ty.font.cjk, 'font-size': size, fill: color.labelCn })}>下</text>`;
+    w += `<text${attrs({ x: lx, y: ly + size * 0.36, 'text-anchor': 'middle', 'font-family': ty.font.cjk, 'font-size': size, fill: color.labelCn, ...(inside ? labelHalo : {}) })}>下</text>`;
     texts.push({ x0: lx - tw / 2, x1: lx + tw / 2, y0: ly - size / 2, y1: ly + size / 2, text: '下', kind: 'stair' });
     return w;
   };

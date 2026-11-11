@@ -4,6 +4,7 @@ import type { LevelPlan, SpaceInfo } from './analyse';
 import type { Pt, Rect } from './geom';
 import { Room } from './engine';
 import { furnishRoom } from './rules';
+import { crownRadius, plantFootprint, plantSite, type Plant } from './planting';
 import type { Placement } from './types';
 
 export type { FurnitureKind, Placement } from './types';
@@ -65,15 +66,36 @@ export function keepClearZones(plan: LevelPlan, sp: SpaceInfo): Rect[] {
   return zones;
 }
 
-const SKIP = new Set(['hall', 'stair', 'porch']);
+const SKIP = new Set(['stair', 'porch']);
+
+/** A plant of the shared site planting as a plan placement (crown size). */
+export function plantPlacement(p: Plant, n: number): Placement {
+  const kind = p.kind === 'bamboo' ? 'bamboo' : p.kind === 'grass' ? 'grass' : 'tree';
+  const dia = 2 * crownRadius(p);
+  return {
+    id: `${p.space ?? 'site'}:${kind}:${n}`, space: p.space ?? '', kind, x: p.x, y: p.y, w: dia, d: dia, facing: 'S',
+    // Plants are fixed by the site planting (the 3D scene shows the same): labels never remove them.
+    layer: 'plant', priority: 9, variant: p.kind,
+  };
+}
 
 export function furnishLevel(plan: LevelPlan): Placement[] {
   const out: Placement[] = [];
+  const plants = plantSite(plan.house).filter((p) => p.level === plan.level.id);
+  plants.forEach((p, i) => {
+    if (p.planter) {
+      const r = p.planter;
+      out.push({ id: `${p.space ?? 'site'}:planter:${i}`, space: p.space ?? '', kind: 'planter', x: (r.x0 + r.x1) / 2, y: (r.y0 + r.y1) / 2, w: r.x1 - r.x0, d: r.y1 - r.y0, facing: 'S', layer: 'plant', priority: 9 });
+    }
+    out.push(plantPlacement(p, i));
+  });
   for (const sp of plan.spaces) {
     if (SKIP.has(sp.type)) continue;
     if (sp.clear.x1 - sp.clear.x0 < 300 || sp.clear.y1 - sp.clear.y0 < 300) continue;
     const hard = [...plan.openings.flatMap((o) => (o.swing ? [o.swing.box] : [])), ...plan.gates.map((g) => g.zone)];
     const room = new Room(plan, sp, sp.clear, keepClearZones(plan, sp), hard);
+    // Furniture keeps clear of trunks, clumps and planters.
+    for (const p of plants) if (p.space === sp.id || !p.space) room.solids.push(plantFootprint(p));
     furnishRoom(room, sp);
     out.push(...room.items);
   }

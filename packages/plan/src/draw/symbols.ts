@@ -149,6 +149,12 @@ function body(p: Placement, W: number, D: number, k: number): string {
     case 'shrub':
     case 'pot-plant':
       return plant(p, W, k);
+    case 'bamboo':
+      return bamboo(p, W);
+    case 'grass':
+      return grass(p, W);
+    case 'planter':
+      return R(x0, y0, W, D, { fill: color.planterFill, stroke: color.furnitureLine, 'stroke-width': stroke.furniture, rx: m(30) });
     case 'car':
       return car(W, D, k);
     case 'parking-bay':
@@ -169,9 +175,53 @@ function lobes(r: number, n: number, depth: number, phase: number): string {
   return d + 'Z';
 }
 
+/** Small deterministic number from a placement id (symbol variation). */
+function idSeed(p: Placement): number {
+  let h = 7;
+  for (const ch of p.id) h = (h * 31 + ch.charCodeAt(0)) % 9973;
+  return h;
+}
+
+const TREE_TONES: Record<string, { fill: string; line: string; vein: string }> = {
+  ginkgo: { fill: color.ginkgoFill, line: color.ginkgoLine, vein: color.ginkgoVein },
+  'maple-red': { fill: color.mapleRedFill, line: color.mapleRedLine, vein: color.mapleRedVein },
+};
+
+/** Bamboo clump: a cluster of small leaf tufts. */
+function bamboo(p: Placement, W: number): string {
+  const seed = idSeed(p);
+  const r = W / 2;
+  let s = '';
+  for (let i = 0; i < 6; i++) {
+    const a = seed * 0.37 + (i * 2 * Math.PI) / 6;
+    const d = r * (i % 2 ? 0.48 : 0.36);
+    s += P(lobes(r * 0.42, 6, 0.3, a), { fill: color.bambooFill, stroke: color.treeLine, 'stroke-width': stroke.tree * 0.8, transform: `translate(${f(Math.cos(a) * d)},${f(Math.sin(a) * d)})` });
+  }
+  s += P(lobes(r * 0.4, 6, 0.3, seed), { fill: color.bambooFill, stroke: color.treeLine, 'stroke-width': stroke.tree * 0.8 });
+  for (let i = 0; i < 5; i++) {
+    const a = seed + i * 1.3;
+    s += C(Math.cos(a) * r * 0.22, Math.sin(a) * r * 0.22, Math.max(0.6, r * 0.06), { fill: color.treeLine });
+  }
+  return s;
+}
+
+/** Grass tuft: short strokes radiating from a point. */
+function grass(p: Placement, W: number): string {
+  const seed = idSeed(p);
+  const r = W / 2;
+  let d = '';
+  for (let i = 0; i < 9; i++) {
+    const a = seed * 0.21 + (i * 2 * Math.PI) / 9;
+    const l = r * (i % 2 ? 0.7 : 1);
+    d += `M0,0L${f(Math.cos(a) * l)},${f(Math.sin(a) * l)}`;
+  }
+  return P(d, { fill: 'none', stroke: color.grassLine, 'stroke-width': stroke.tree, 'stroke-linecap': 'round' });
+}
+
 function plant(p: Placement, W: number, k: number): string {
-  const seed = Number(p.variant ?? 0) || 0;
+  const seed = idSeed(p);
   const phase = (seed * 0.7) % (2 * Math.PI);
+  const tone = TREE_TONES[p.variant ?? ''] ?? { fill: color.treeFill, line: color.treeLine, vein: color.treeVein };
   if (p.kind === 'shrub') {
     const r = W / 2 / 1.12;
     return P(lobes(r, 8, 0.22, phase), { fill: color.shrubFill, stroke: color.treeLine, 'stroke-width': stroke.tree, opacity: 0.9 });
@@ -183,12 +233,12 @@ function plant(p: Placement, W: number, k: number): string {
     r = (W / 2 - 60 * k) / 1.14;
   }
   const n = 11;
-  s += P(lobes(r, n, 0.16, phase), { fill: color.treeFill, stroke: color.treeLine, 'stroke-width': stroke.tree });
+  s += P(lobes(r, n, 0.16, phase), { fill: tone.fill, stroke: tone.line, 'stroke-width': stroke.tree });
   for (let i = 0; i < n; i++) {
     const a = phase + ((i + 0.5) * 2 * Math.PI) / n;
-    s += L(Math.cos(a) * r * 0.18, Math.sin(a) * r * 0.18, Math.cos(a) * r * 0.78, Math.sin(a) * r * 0.78, { stroke: color.treeVein, 'stroke-width': stroke.tree * 0.8 });
+    s += L(Math.cos(a) * r * 0.18, Math.sin(a) * r * 0.18, Math.cos(a) * r * 0.78, Math.sin(a) * r * 0.78, { stroke: tone.vein, 'stroke-width': stroke.tree * 0.8 });
   }
-  s += C(0, 0, Math.max(1.2, r * 0.09), { fill: color.treeLine });
+  s += C(0, 0, Math.max(1.2, r * 0.09), { fill: tone.line });
   return s;
 }
 

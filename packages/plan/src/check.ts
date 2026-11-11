@@ -34,6 +34,8 @@ export function checkPlan(r: PlanReport): Overlap[] {
   }
   const solids = r.furniture.filter((p) => isSolid(p) || p.kind === 'counter');
   for (const p of solids) {
+    // Site planting is fixed (the 3D scene shows the same): crowns may overhang walls and fences.
+    if (p.layer === 'plant' && p.kind !== 'pot-plant') continue;
     const fp = footprint(p);
     const w = r.walls.find((x) => overlaps(x, fp, 1));
     if (w) out.push({ kind: 'furniture/wall', a: p.id, b: rectName(w) });
@@ -45,6 +47,8 @@ export function checkPlan(r: PlanReport): Overlap[] {
       const a = solids[i]!, b = solids[j]!;
       // Planting may cluster; counters carry tops; everything else must not touch.
       if (a.layer === 'plant' && b.layer === 'plant') continue;
+      // Tree crowns are overhead: furniture may stand under them (their trunks are kept clear).
+      if ((a.layer === 'plant' && a.kind !== 'pot-plant') || (b.layer === 'plant' && b.kind !== 'pot-plant')) continue;
       // Chairs tuck under their table (round tables: the boxes overlap at the corners).
       if (a.space === b.space && isSeating(a.kind) && isSeating(b.kind)) {
         const roundSet = a.kind === 'dining-table-round' || b.kind === 'dining-table-round' || (a.variant ?? '').startsWith('rot:') || (b.variant ?? '').startsWith('rot:');

@@ -74,15 +74,10 @@ export function buildHouseDetailed(house: ResolvedHouse, opts: BuildOptions = {}
 
   const covered = (x: number, y: number) =>
     ctx.house.roofs.some((r) => pointInRings(r.rings, x, y)) || ctx.levels.slice(1).some((l) => !!ctx.spaceAt(l.index, x, y));
-  // Furniture placements first: entourage people keep out of them, and pots
-  // give way to the entourage's own planters.
+  // Furniture placements first: entourage people keep out of them. Plants
+  // come from the shared site planting, which the furniture already avoids.
   const furnished = opts.furniture === false ? ctx.levels.map(() => []) : planFurniture(ctx);
   const entourage = placeEntourage(ctx, covered, (li, x, y, r) => inFurniture(furnished[li] ?? [], x, y, r));
-  for (const [li, pieces] of furnished.entries()) {
-    const z = ctx.levels[li]!.elev * MM;
-    furnished[li] = pieces.filter((p) => p.kind !== 'pot-plant' || !entourage.some((e) =>
-      e.kind !== 'car' && !e.kind.startsWith('person') && Math.abs(e.position[2] - z) < 1.2 && Math.hypot(e.position[0] - p.x * MM, e.position[1] - p.y * MM) < 1.2));
-  }
 
   // Massing faces, then pitched roof slabs. Wall tops in a doorway at an
   // upper floor are floor finish.
