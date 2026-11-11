@@ -27,6 +27,8 @@ export interface Solid {
   tag: string;
   /** The top lies on a roof underside: no top face (the roof covers it). */
   roofTop?: boolean;
+  /** Part that receives the up-facing top face instead of `part` (floor finish on a slab). */
+  topPart?: PartSpec;
 }
 
 export interface Void {
@@ -63,11 +65,17 @@ export interface MassingOptions {
   ground: number;
   /** True when a point lies inside the building (used to tag exterior faces). */
   inside: (x: number, y: number, z: number) => boolean;
+  /** Part for an up-facing top face at height z over plan point (x, y), overriding the solid's (e.g. floor finish in a doorway). */
+  topPart?: (solid: Solid, z: number, x: number, y: number) => PartSpec | undefined;
 }
+
+/** Column grid kept after `emit` for section queries. */
+interface Grid { xs: number[]; ys: number[]; segs: Seg[][] }
 
 export class Massing {
   readonly solids: Solid[] = [];
   readonly voids: Void[] = [];
+  private grid: Grid | null = null;
 
   add(s: Solid): void {
     if (s.x1 - s.x0 < 0.5 || s.y1 - s.y0 < 0.5) return;
@@ -110,14 +118,20 @@ export class Massing {
         segs[k] = columnSegments(solidLists[k]!.map((n) => this.solids[n]!), voidLists[k]!.map((n) => this.voids[n]!), cx, cy);
       }
     }
+    this.grid = { xs, ys, segs };
     const col = (i: number, j: number): Seg[] => (i < 0 || j < 0 || i >= nx || j >= ny ? [] : segs[i * ny + j]!);
 
     // ---- horizontal faces, merged into rectangles per (part, plane, side)
-    const hGroups = new Map<string, { solid: Solid; plane: Plane; up: boolean; cells: number[] }>();
+    const hGroups = new Map<string, { part: PartSpec; plane: Plane; up: boolean; cells: number[] }>();
     const addH = (solid: Solid, plane: Plane, up: boolean, cell: number) => {
-      const key = `${solid.part.id}|${up ? 'u' : 'd'}|${planeKey(plane)}`;
+      let part = up && solid.topPart ? solid.topPart : solid.part;
+      if (up && opts.topPart) {
+        const x = (xs[Math.floor(cell / ny)]! + xs[Math.floor(cell / ny) + 1]!) / 2, y = (ys[cell % ny]! + ys[(cell % ny) + 1]!) / 2;
+        part = opts.topPart(solid, evalPlane(plane, x, y), x, y) ?? part;
+      }
+      const key = `${part.id}|${up ? 'u' : 'd'}|${planeKey(plane)}`;
       let g = hGroups.get(key);
-      if (!g) hGroups.set(key, (g = { solid, plane, up, cells: [] }));
+      if (!g) hGroups.set(key, (g = { part, plane, up, cells: [] }));
       g.cells.push(cell);
     };
     for (let k = 0; k < nx * ny; k++) {
@@ -130,7 +144,7 @@ export class Massing {
       });
     }
     for (const g of hGroups.values()) {
-      const pb = parts.get(g.solid.part);
+      const pb = parts.get(g.part);
       for (const [i0, i1, j0, j1] of mergeRects(g.cells, ny)) {
         const x0 = xs[i0]!, x1 = xs[i1]!, y0 = ys[j0]!, y1 = ys[j1]!;
         const P = (x: number, y: number): V3 => [x, y, evalPlane(g.plane, x, y)];
@@ -183,6 +197,8 @@ export class Massing {
         };
         const z0a = pt(a, false), z0b = pt(b, false), z1a = pt(a, true), z1b = pt(b, true);
         if (z1a[2] - z0a[2] < 0.3 && z1b[2] - z0b[2] < 0.3) continue;
+        // Nothing below grade is ever seen (ground-floor finish slab).
+        if (z1a[2] <= opts.ground + 0.5 && z1b[2] <= opts.ground + 0.5) continue;
         // Counter-clockwise seen from the side the face looks at.
         const ccw = (g.axis === 'x') === (g.sign === 1);
         const quad = ccw ? [z0a, z0b, z1b, z1a] : [z0b, z0a, z1a, z1b];
@@ -193,6 +209,21 @@ export class Massing {
         pb.polygon(quad, ext);
       }
     }
+  }
+
+  /**
+   * Horizontal section at height z (after `emit`): plan rectangles of the
+   * columns where an accepted solid passes through z, merged.
+   */
+  section(z: number, accept: (s: Solid) => boolean): [number, number, number, number][] {
+    const g = this.grid;
+    if (!g) return [];
+    const ny = g.ys.length - 1;
+    const cells: number[] = [];
+    g.segs.forEach((list, k) => {
+      if (list.some((s) => s.bot.v < z - 0.5 && s.top.v > z + 0.5 && accept(s.solid))) cells.push(k);
+    });
+    return mergeRects(cells, ny).map(([i0, i1, j0, j1]) => [g.xs[i0]!, g.ys[j0]!, g.xs[i1]!, g.ys[j1]!]);
   }
 }
 

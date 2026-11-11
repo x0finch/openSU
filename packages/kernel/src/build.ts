@@ -2,7 +2,7 @@
 import type { PartSpec } from './mesh';
 import type { ResolvedEdge, ResolvedHouse } from '@opensu/model';
 import {
-  BAR_SIZE, BAR_SPACING, DECK, FLOOR_SLAB, KERB_HEIGHT, OUTDOOR_SLAB, OUTDOOR_SLAB_OUT, RAIL_BAR, RAIL_HEIGHT,
+  BAR_SIZE, BAR_SPACING, CUT_HEIGHT, DECK, DEFAULT_UTC_OFFSET, FLOOR_SLAB, GROUND_FLOOR, KERB_HEIGHT, OUTDOOR_SLAB, OUTDOOR_SLAB_OUT, RAIL_BAR, RAIL_HEIGHT,
 } from './constants';
 import { Ctx, type Rect, pointInRings } from './context';
 import { extractEdges } from './edges';
@@ -12,7 +12,8 @@ import { buildOpenings } from './openings';
 import { addRoofWalls, buildFlatRoofsAndCanopies, buildRoofSlabs, pitchedRoofs } from './roof';
 import { buildSite } from './site';
 import { buildStairs, type StairInfo } from './stairs';
-import type { HouseGeometry, Part } from './types';
+import type { PartSpec as Spec } from './mesh';
+import type { HouseGeometry, LevelSpan, Part } from './types';
 
 const MM = 0.001;
 
@@ -45,16 +46,20 @@ export function buildHouseDetailed(house: ResolvedHouse, opts: BuildOptions = {}
   }
   addRoofWalls(ctx, roofs);
 
-  // Floor slabs over interior cells, minus stairwells.
+  // Floor slabs over interior cells, minus stairwells; their top face is the
+  // floor finish. The ground floor gets a finish slab below grade.
   for (const lv of ctx.levels) {
-    if (lv.index === 0) continue;
     const holes = lv.level.slabOpenings.flatMap((o) => o.rings);
     const cells = ctx.cellsOf(lv.index, (s) => !s.outdoor).filter((k) => {
       const i = Math.floor(k / ctx.ny), j = k % ctx.ny;
       return !pointInRings(holes, (ctx.xs[i]! + ctx.xs[i + 1]!) / 2, (ctx.ys[j]! + ctx.ys[j + 1]!) / 2);
     });
-    const part = { id: `${lv.level.id}:slab`, level: lv.level.id, role: 'slab' as const, material: 'wall' as const };
-    for (const r of ctx.rects(cells)) ctx.massing.add({ x0: r[0], y0: r[1], x1: r[2], y1: r[3], z0: lv.elev - FLOOR_SLAB, top: flat(lv.elev), part, prio: 10, tag: 'house' });
+    // The ground-floor finish lies on grade: no edges of its own (wall bases
+    // already draw them), so elevations stay clean at the ground line.
+    const floor = floorSpec(lv.level.id, lv.index === 0);
+    const part: Spec = lv.index === 0 ? floor : { id: `${lv.level.id}:slab`, level: lv.level.id, role: 'slab', material: 'wall' };
+    const z0 = lv.elev - (lv.index === 0 ? GROUND_FLOOR : FLOOR_SLAB);
+    for (const r of ctx.rects(cells)) ctx.massing.add({ x0: r[0], y0: r[1], x1: r[2], y1: r[3], z0, top: flat(lv.elev), part, topPart: floor, prio: 10, tag: 'house' });
   }
 
   buildOutdoorLevels(ctx);
@@ -67,9 +72,16 @@ export function buildHouseDetailed(house: ResolvedHouse, opts: BuildOptions = {}
     ctx.house.roofs.some((r) => pointInRings(r.rings, x, y)) || ctx.levels.slice(1).some((l) => !!ctx.spaceAt(l.index, x, y));
   const entourage = placeEntourage(ctx, covered);
 
-  // Massing faces, then pitched roof slabs.
+  // Massing faces, then pitched roof slabs. Wall tops in a doorway at an
+  // upper floor are floor finish.
   ctx.massing.emit(ctx.parts, {
     ground: 0,
+    topPart: (solid, z, x, y) => {
+      if (solid.part.role !== 'wall') return undefined;
+      const lv = ctx.levels.find((l) => l.index > 0 && Math.abs(l.elev - z) < 0.5);
+      const s = lv && ctx.spaceAt(lv.index, x, y);
+      return lv && s && !s.outdoor ? floorSpec(lv.level.id, false) : undefined;
+    },
     inside: (x, y, z) => {
       const lv = ctx.levelAtZ(z);
       const s = ctx.spaceAt(lv.index, x, y);
@@ -85,6 +97,20 @@ export function buildHouseDetailed(house: ResolvedHouse, opts: BuildOptions = {}
   const loops = ctx.parts.list.filter((p) => p.spec.castsEdges !== false).flatMap((p) => p.loops);
   const ex = extractEdges(loops, { featureAngleDeg: opts.featureAngleDeg ?? 25, floorLevels: ctx.levels.slice(1).map((l) => l.elev) });
 
+  // Cutaway section caps: where house solids (except stairs) pass through
+  // each level's cut plane. Their outlines are extracted on their own (they lie inside solids).
+  const capFirst = ctx.parts.list.length;
+  for (const lv of ctx.levels) {
+    const z = lv.elev + CUT_HEIGHT;
+    const cap = ctx.parts.get({ id: `${lv.level.id}:cut`, level: lv.level.id, role: 'cut', material: 'cut' });
+    // Stairs stay whole in a cutaway (the renderer does not clip them).
+    for (const r of ctx.massing.section(z, (s) => s.part.level !== undefined && s.part.role !== 'stair')) {
+      cap.polygon([[r[0], r[1], z], [r[2], r[1], z], [r[2], r[3], z], [r[0], r[3], z]]);
+    }
+  }
+  const capEx = extractEdges(ctx.parts.list.slice(capFirst).flatMap((p) => p.loops), { featureAngleDeg: opts.featureAngleDeg ?? 25, floorLevels: [] });
+  for (const [k, v] of capEx.edges) ex.edges.set(k, v);
+
   const parts: Part[] = [];
   let triangles = 0;
   let edgeCount = 0;
@@ -93,8 +119,12 @@ export function buildHouseDetailed(house: ResolvedHouse, opts: BuildOptions = {}
   for (const p of ctx.parts.list) {
     if (p.idx.length === 0) continue;
     const positions = new Float32Array(p.pos.length);
+    // Floor finishes (partly below grade) and section caps lie inside the
+    // building: they do not count for the bounds.
+    const inner = p.spec.role === 'floor' || p.spec.role === 'cut';
     for (let i = 0; i < p.pos.length; i++) {
       positions[i] = p.pos[i]! * MM;
+      if (inner) continue;
       const a = i % 3;
       if (p.pos[i]! < min[a]!) min[a] = p.pos[i]!;
       if (p.pos[i]! > max[a]!) max[a] = p.pos[i]!;
@@ -116,14 +146,22 @@ export function buildHouseDetailed(house: ResolvedHouse, opts: BuildOptions = {}
     triangles += p.idx.length / 3;
     edgeCount += edges.length / 6;
   }
+  const site = ctx.house.site;
+  const levels: LevelSpan[] = ctx.levels.map((l) => ({ id: l.level.id, elevation: l.elev * MM, top: l.top * MM, cutZ: (l.elev + CUT_HEIGHT) * MM }));
   const geometry: HouseGeometry = {
     parts,
+    site: { latitude: site.latitude, longitude: site.longitude, northDeg: site.northDeg, utcOffsetHours: site.utcOffsetHours ?? DEFAULT_UTC_OFFSET },
+    levels,
     floorLines: new Float32Array(ex.floorLines.map((v) => v * MM)),
     entourage,
     bounds: { min: min.map((v) => v * MM) as [number, number, number], max: max.map((v) => v * MM) as [number, number, number] },
     stats: { triangles, edges: edgeCount },
   };
   return { geometry, ctx, stairs, overlaps: ex.overlaps };
+}
+
+function floorSpec(levelId: string, ground: boolean): Spec {
+  return { id: `${levelId}:floor`, level: levelId, role: 'floor', material: 'floor', ...(ground ? { castsEdges: false } : {}) };
 }
 
 /** Balconies and terraces: dark slab with a projecting edge, decking, kerb and rail. */

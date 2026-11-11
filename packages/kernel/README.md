@@ -13,15 +13,20 @@ pnpm shots                               # golden sample through the renderer
 
 ## Output (`src/types.ts`)
 
-`HouseGeometry { parts, floorLines, entourage, bounds, stats }`, metres,
-model axes (X east, Y north, Z up; the renderer converts once).
+`HouseGeometry { parts, site, levels, floorLines, entourage, bounds, stats }`,
+metres, model axes (X east, Y north, Z up; the renderer converts once).
 
 - `Part { id, level?, role, material, positions, indices, edges,
   edgeNormals, castsEdges }`. Ids derive from model ids (`L2:wall`,
   `roof-n:tile`, `canopy:canopy-entry`, `site:fence`). `material` is a
   semantic slot (`wall`, `roofTile`, `fascia`, `wood`, `deck`, `frame`,
   `glass`, `glassBacking`, `balustrade`, `slab`, `metal`, `paving`,
-  `gravel`, `soil`); the render package maps slots to style tokens.
+  `gravel`, `soil`, `floor`, `cut`); the render package maps slots to style
+  tokens. Parts of the house carry their `level`; site parts have none.
+- `site { latitude, longitude, northDeg, utcOffsetHours }` for the sun
+  study (`utcOffsetHours` defaults to 8).
+- `levels [{ id, elevation, top, cutZ }]`, bottom to top; `cutZ` is the
+  level's cutaway section plane (elevation + 1250 mm).
 - `edges` are the feature lines to draw; `edgeNormals` carry the two face
   normals per segment so the renderer can widen outer profiles.
 - `floorLines` mark each floor level on exterior walls.
@@ -60,6 +65,14 @@ model axes (X east, Y north, Z up; the renderer converts once).
 - **Balconies / terraces**: dark slab projecting 180 mm past the edge line,
   kerb, decking, and the edge treatment (glass balustrade with top rail,
   metal bars, parapet).
+- **Floor finishes**: every storey's interior floor is a `floor` part (the
+  slab's top face; on the ground floor a finish slab below grade whose top
+  is the floor, without edges of its own). Wall tops in a doorway at an
+  upper floor are floor finish too. Nothing below grade is emitted.
+- **Cutaway caps**: after the massing is emitted, each level gets a `cut`
+  part (role `cut`): horizontal section caps at `cutZ` wherever a house
+  solid other than a stair passes through the plane, with their own
+  outlines. The renderer shows them only in a cutaway of that level.
 - **Stairs** (`stairs.ts`): straight / U / L flights inferred from the
   stairwell (slab opening above) and the storey height, risers near 170 mm.
 - **Site** (`site.ts`): plot fence with coping (skipped where the house
