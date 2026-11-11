@@ -221,12 +221,15 @@ function bathroom(room: Room): void {
   const { R } = room;
   const short = Math.min(width(R), height(R));
   const sides = rankSides((x) => room.sideStats(x, 'low').longest - (room.sideStats(x, 'low').door ? 3000 : 0));
+  // Compact bathrooms (the basin is often outside, in a vanity nook) get a
+  // smaller shower and no vanity so the room keeps a readable floor.
+  const compact = width(R) * height(R) < 3.5e6;
   // Shower in a corner away from the door.
-  for (const s of short >= 1600 ? [900, 800, 750] : [800, 750]) {
-    if (room.place({ items: [{ kind: 'shower', u: 0, v: 0, w: s, d: s, priority: 8 }], W: s, D: s, clear: 0, back: 'low' }, sides, ['end', 'start'])) break;
+  for (const s of short >= 1600 && !compact ? [900, 800, 750] : [800, 750]) {
+    if (room.place({ items: [{ kind: 'shower', u: 0, v: 0, w: s, d: s, priority: 6 }], W: s, D: s, clear: 0, back: 'low' }, sides, ['end', 'start'])) break;
   }
   room.place({ items: [{ kind: 'toilet', u: 0, v: 0, w: 400, d: 680, priority: 8 }], W: 400, D: 680, clear: 450, back: 'low' }, sides, ['start', 'end']);
-  for (const vw of [800, 650, 550]) {
+  for (const vw of compact ? [] : [800, 650, 550]) {
     if (room.place({ items: [{ kind: 'vanity', u: 0, v: 0, w: vw, d: 480, priority: 7 }], W: vw, D: 480, clear: 500, back: 'low' }, sides, ['start', 'end', 'center'])) break;
   }
 }

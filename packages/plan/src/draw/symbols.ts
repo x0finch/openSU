@@ -82,9 +82,9 @@ function body(p: Placement, W: number, D: number, k: number): string {
     case 'chair':
     case 'desk-chair':
     case 'outdoor-chair': {
-      const a: A = p.kind === 'outdoor-chair' ? { ...wood, rx: m(70) } : { ...base, rx: m(80) };
-      return R(x0 + m(20), y0 + m(60), W - m(40), D - m(70), a)
-        + P(`M${f(x0 + m(10))},${f(y0 + m(110))}Q0,${f(y0 - m(30))} ${f(-x0 - m(10))},${f(y0 + m(110))}`, { fill: 'none', stroke: p.kind === 'outdoor-chair' ? color.woodLine : color.furnitureLine, 'stroke-width': stroke.furniture });
+      const a: A = p.kind === 'outdoor-chair' ? { ...wood, rx: m(80) } : { ...base, rx: m(90) };
+      const back: A = p.kind === 'outdoor-chair' ? { ...wood, rx: m(45) } : { ...base, rx: m(45) };
+      return R(x0 + m(25), y0 + m(70), W - m(50), D - m(70), a) + R(x0, y0, W, m(110), back);
     }
     case 'stool':
       return C(0, 0, Math.min(W, D) / 2, base);

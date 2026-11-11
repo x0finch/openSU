@@ -50,9 +50,11 @@ if (!playwright) {
 } else {
   const browser = await playwright.chromium.launch();
   try {
+    // One pixel ratio for all levels so they share a drawing scale (the widest is ~1600 px).
+    const base = 1600 / Math.max(...files.map((x) => x.w));
     for (const scale of hires ? [1, 2] : [1]) {
       for (const fl of files) {
-        const dpr = (1600 / fl.w) * scale;
+        const dpr = base * scale;
         const page = await browser.newPage({ deviceScaleFactor: dpr });
         await page.setViewportSize({ width: fl.w, height: fl.h });
         await page.setContent(`<!doctype html><html><body style="margin:0">${fl.svg}</body></html>`);

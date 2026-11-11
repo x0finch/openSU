@@ -4,8 +4,8 @@
 //
 // Line-weight hierarchy (VISUAL_SPEC): wall outline > furniture > dimensions.
 
-/** px per mm of the model. 15 m of plot -> 1200 px. */
-export const SCALE = 0.08;
+/** px per mm of the model. 15 m of plot -> 900 px (labels and numbers read like the reference sheets). */
+export const SCALE = 0.06;
 
 export const color = {
   page: '#FFFFFF',
@@ -86,6 +86,7 @@ export const font = {
   latin: 'Inter,"Helvetica Neue",Helvetica,Arial,"Liberation Sans",sans-serif',
   cnSize: 16,
   cnSizeSmall: 13,
+  cnSizeTiny: 10.5,
   enSize: 7.4,
   enSizeSmall: 6.4,
   enTracking: 0.14,

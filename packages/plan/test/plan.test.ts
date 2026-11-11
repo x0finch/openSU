@@ -65,6 +65,16 @@ describe('golden floor plans', () => {
     expect(chainPositions(l2, 'S')).toEqual([0, 3100, 5500, 9100, 13800]);
   });
 
+  it('stays collision-free at other drawing scales', () => {
+    for (const scale of [0.04, 0.05, 0.12]) {
+      for (const l of house.levels) {
+        const r = renderPlanDetailed(house, l.id, { scale });
+        expect(checkPlan(r), `${l.id} @ ${scale}`).toEqual([]);
+        expect(r.missingLabels, `${l.id} @ ${scale}`).toEqual([]);
+      }
+    }
+  });
+
   it('places furniture deterministically', () => {
     const a = furnishLevel(analyseLevel(house, 0));
     const b = furnishLevel(analyseLevel(house, 0));

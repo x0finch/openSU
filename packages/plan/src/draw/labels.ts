@@ -14,16 +14,24 @@ export interface TextBox extends Rect {
   space?: string;
 }
 
-interface Variant { cn: number; en: number | null }
+/** `vertical`: the Chinese name stacked one character per line (narrow rooms). */
+interface Variant { cn: number; en: number | null; vertical?: boolean }
 
 const VARIANTS: Variant[] = [
   { cn: font.cnSize, en: font.enSize },
   { cn: font.cnSizeSmall, en: font.enSizeSmall },
   { cn: font.cnSize, en: null },
   { cn: font.cnSizeSmall, en: null },
+  { cn: font.cnSizeTiny, en: null },
+  { cn: font.cnSizeSmall, en: null, vertical: true },
+  { cn: font.cnSizeTiny, en: null, vertical: true },
 ];
 
 function boxSize(sp: SpaceInfo, va: Variant) {
+  if (va.vertical) {
+    const n = [...sp.name].length;
+    return { w: va.cn, h: n * va.cn * 1.08, en: null, cnW: va.cn, enW: 0 };
+  }
   const cnW = textWidth(sp.name, va.cn);
   const en = va.en && sp.nameEn ? sp.nameEn.toUpperCase() : null;
   const enW = en ? textWidth(en, va.en!, font.enTracking) : 0;
@@ -63,28 +71,39 @@ export function placeLabels(plan: LevelPlan, v: View, items: Placement[], swings
       const r = v.rect(sp.clear);
       return [(r.x0 + r.x1) / 2, (r.y0 + r.y1) / 2] as [number, number];
     })();
-    let done = false;
-    for (let attempt = 0; attempt < 12 && !done; attempt++) {
-      const live = items.filter((p) => !removed.has(p.id));
+    const attemptWith = (gone: ReadonlySet<string>, variants: Variant[]): boolean => {
+      const live = items.filter((p) => !gone.has(p.id));
       const solids = live.filter((p) => isSolid(p) || p.kind === 'counter').map((p) => v.rect(footprint(p)));
       const softs = live.filter((p) => p.layer === 'floor').map((p) => v.rect(footprint(p)));
       const obstacles = [...solids, ...swingPx, ...stairs, ...wallPx, ...taken, ...boxes];
-      for (const va of VARIANTS) {
-        if (sp.outdoor && va.en === null && va.cn === font.cnSizeSmall && attempt > 0) continue;
+      for (const va of variants) {
+        // Outdoor labels are optional: only the full form. Stacked names only in niches.
+        if (sp.outdoor && va.en === null) continue;
+        if (va.vertical && Math.min(sp.clear.x1 - sp.clear.x0, sp.clear.y1 - sp.clear.y0) > 900) continue;
         const { w, h } = boxSize(sp, va);
         const best = bestSpot(parts, w + 2 * pad, h + 2 * pad, obstacles, softs, centroid);
-        if (best) {
-          const lb = boxSize(sp, va);
-          const cx = best[0], top = best[1] - h / 2;
-          svg += labelSvg(sp, va, cx, top);
-          boxes.push({ x0: cx - lb.w / 2, x1: cx + lb.w / 2, y0: top, y1: top + h, text: sp.name, kind: 'label', space: sp.id });
-          done = true;
-          break;
-        }
+        if (!best) continue;
+        const cx = best[0], top = best[1] - h / 2;
+        svg += labelSvg(sp, va, cx, top);
+        boxes.push({ x0: cx - w / 2, x1: cx + w / 2, y0: top, y1: top + h, text: sp.name, kind: 'label', space: sp.id });
+        return true;
       }
-      if (done) break;
-      // Furniture yields: drop the lowest-priority piece of this room that
-      // blocks the room centre, then retry.
+      return false;
+    };
+    // 1. The full label as things are. 2. The full label once this room's
+    // rugs give way (a rug is the cheapest thing to lose). 3. Smaller forms,
+    // then furniture yields piece by piece, lowest priority first.
+    let done = attemptWith(removed, VARIANTS.slice(0, 1));
+    if (!done) {
+      const rugs = items.filter((p) => p.space === sp.id && p.layer === 'floor' && p.priority <= 1);
+      if (rugs.length) {
+        const trial = new Set([...removed, ...rugs.map((p) => p.id)]);
+        if (attemptWith(trial, VARIANTS.slice(0, 1))) { for (const p of rugs) removed.add(p.id); done = true; }
+      }
+    }
+    for (let attempt = 0; attempt < 12 && !done; attempt++) {
+      if (attemptWith(removed, VARIANTS)) { done = true; break; }
+      const live = items.filter((p) => !removed.has(p.id));
       const mine = live.filter((p) => p.space === sp.id && p.layer !== 'top').sort((a, b) => a.priority - b.priority || dist(a, centroid, v) - dist(b, centroid, v));
       const victim = mine.find((p) => p.priority < 8);
       if (!victim) break;
@@ -128,6 +147,9 @@ function bestSpot(parts: Rect[], w: number, h: number, obstacles: Rect[], softs:
 
 function labelSvg(sp: SpaceInfo, va: Variant, cx: number, top: number): string {
   const lb = boxSize(sp, va);
+  if (va.vertical) {
+    return [...sp.name].map((ch, i) => `<text${attrs({ x: cx, y: top + va.cn * (1.08 * i + 0.88), 'text-anchor': 'middle', 'font-family': font.cjk, 'font-size': va.cn, fill: color.labelCn })}>${escapeXml(ch)}</text>`).join('');
+  }
   let s = `<text${attrs({ x: cx, y: top + va.cn * 0.88, 'text-anchor': 'middle', 'font-family': font.cjk, 'font-size': va.cn, fill: color.labelCn })}>${escapeXml(sp.name)}</text>`;
   if (lb.en && va.en) {
     const tr = font.enTracking * va.en;
