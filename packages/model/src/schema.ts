@@ -42,6 +42,8 @@ export const Site = z.strictObject({
   northDeg: z.number().finite(),
   latitude: z.number().min(-90).max(90),
   longitude: z.number().min(-180).max(180),
+  /** Local clock offset from UTC in hours (sun study); default 8 (China). */
+  utcOffsetHours: z.number().min(-12).max(14).optional(),
   fence: z.strictObject({ height: Length, gates: z.array(Gate) }).optional(),
 });
 export type Site = z.infer<typeof Site>;
