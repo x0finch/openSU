@@ -10,6 +10,7 @@ import { useStudio } from '../lib/store';
 import type { Derived } from './house-data';
 import type { PlanDrawing } from './plan-data';
 import { useWalkLevel, walkBridge } from './walk-bridge';
+import { SunTime, SunToggle } from './chrome';
 
 let planMod: Promise<typeof import('./plan-data')> | null = null;
 
@@ -257,4 +258,48 @@ export function MobileWalkHUD({ derived, top, bottom }: { derived: Derived | nul
       <Joystick className="absolute left-4 transition-[bottom] duration-300 ease-out-soft" style={{ bottom: bottom + 16 }} />
     </>
   );
+}
+
+/**
+ * Phone held sideways while walking: the room fills the screen. Exit and
+ * levels top-left, the mini-map top-right, the joystick bottom-left and the
+ * time of day bottom-right; nothing overlaps at 844 x 390.
+ */
+export function LandscapeWalkHUD({ derived }: { derived: Derived | null }) {
+  if (!derived) return null;
+  const left = 'max(12px, env(safe-area-inset-left))';
+  const right = 'max(12px, env(safe-area-inset-right))';
+  return (
+    <div className="pointer-events-none absolute inset-0" data-testid="walk-landscape">
+      <div className="absolute top-3 flex items-center gap-2" style={{ left }}>
+        <ExitWalk />
+        <div className="glass pointer-events-auto rounded-ui p-1">
+          <Levels derived={derived} />
+        </div>
+      </div>
+      <div className="glass pointer-events-auto absolute top-3 rounded-ui p-1" style={{ right }} data-testid="walk-hud">
+        <MiniMap derived={derived} width={124} />
+      </div>
+      <Joystick className="absolute bottom-3 size-[112px]!" style={{ left }} />
+      <div className="glass pointer-events-auto absolute bottom-3 flex w-[340px] items-center gap-2 rounded-ui py-1.5 pr-3 pl-1.5" style={{ right }}>
+        <SunToggle iconOnly />
+        <SunTime className="min-w-0 flex-1" />
+      </div>
+    </div>
+  );
+}
+
+/** Escape leaves walk mode (desktop keyboards), unless typing in a field. */
+export function useEscapeExitsWalk(): void {
+  useEffect(() => {
+    const on = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape' || e.defaultPrevented) return;
+      const t = e.target as HTMLElement | null;
+      if (t && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName))) return;
+      const s = useStudio.getState();
+      if (s.walk) s.setWalk(false);
+    };
+    window.addEventListener('keydown', on);
+    return () => window.removeEventListener('keydown', on);
+  }, []);
 }

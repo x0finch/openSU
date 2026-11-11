@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { clearSaved, savedHouse } from '../lib/autosave';
 import { useStudio } from '../lib/store';
 import type { Derived } from './house-data';
 
@@ -18,8 +19,20 @@ export function useDerived(): Derived | null {
     void loadHouseData().then((m) => {
       if (!alive) return;
       const h = useStudio.getState().house;
-      if (!h) useStudio.getState().setHouse(m.loadSample());
-      else setDerived(m.derive(h));
+      if (!h) {
+        // The autosaved house when there is one that still resolves, else the template.
+        const saved = savedHouse();
+        let ok = false;
+        if (saved) {
+          try {
+            m.derive(saved);
+            ok = true;
+          } catch {
+            clearSaved();
+          }
+        }
+        useStudio.getState().setHouse(ok && saved ? saved : m.loadSample());
+      } else setDerived(m.derive(h));
     });
     return () => {
       alive = false;

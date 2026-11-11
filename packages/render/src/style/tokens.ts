@@ -151,6 +151,17 @@ export const physical = {
    * sun's ground direction, so long low-sun shadows are not cut off.
    */
   shadowReach: 30,
+  /**
+   * Low sun: below `lowSunFromDeg` (fully at `lowSunFullDeg`) the long
+   * shadows on the ground fade out between `shadowFadeStart` and
+   * `shadowFadeEnd` metres outside the scene bounds, so they never cover
+   * the viewport, and shadows on the plot's paving, gravel and decks lift
+   * towards `shading.groundShadowTone` (whole house shown).
+   */
+  lowSunFromDeg: 15,
+  lowSunFullDeg: 4,
+  shadowFadeStart: 0.5,
+  shadowFadeEnd: 7,
 } as const;
 
 /**
@@ -270,6 +281,8 @@ export const walk = {
   fovDeg: 65,
   /** On portrait screens the vertical field grows until the horizontal one reaches this. */
   minHorizontalFovDeg: 58,
+  /** Cap on the vertical field (portrait phones), degrees. */
+  maxFovDeg: 78,
   /** Near plane, metres (the body keeps ~0.25 m from walls). */
   near: 0.05,
   far: 400,
@@ -284,6 +297,8 @@ export const walk = {
   stepUp: 0.45,
   /** Look sensitivity, degrees per CSS pixel of drag. */
   lookDegPerPx: 0.22,
+  /** Touch look: degrees turned by a swipe across the whole screen width. */
+  touchLookDegPerScreen: 200,
   /** Pitch limits (degrees): verticals stay close to vertical. */
   maxPitchDeg: 40,
   /** Seconds the eye takes to settle onto a new floor height (stairs). */

@@ -22,8 +22,9 @@ export function Tip({ label, side = 'left', children, className }: { label: Reac
   return (
     <span className={cx('group/tip relative inline-flex', className)}>
       {children}
+      {/* Visual only: the trigger already carries the same name (aria-label). */}
       <span
-        role="presentation"
+        aria-hidden="true"
         className={cx(
           'pointer-events-none absolute z-50 rounded-sm bg-ink px-2 py-1 text-xs whitespace-nowrap text-white opacity-0 shadow-float transition-opacity duration-150',
           'group-hover/tip:opacity-100 group-hover/tip:delay-300 group-has-[:focus-visible]/tip:opacity-100',
@@ -69,11 +70,13 @@ export interface Segment<T extends string> {
 export function Segmented<T extends string>({ value, onChange, segments, label, size = 'md', soft, className }: { value: T; onChange: (v: T) => void; segments: Segment<T>[]; label: string; size?: 'sm' | 'md' | 'lg'; soft?: boolean; className?: string }) {
   const ref = useRef<HTMLDivElement>(null);
   const enabled = segments.filter((s) => !s.disabled);
+  // Nothing chosen yet: the first segment takes the tab stop.
+  const tabValue = segments.some((s) => s.value === value) ? value : enabled[0]?.value;
   const onKey = (e: KeyboardEvent) => {
     const d = e.key === 'ArrowRight' || e.key === 'ArrowDown' ? 1 : e.key === 'ArrowLeft' || e.key === 'ArrowUp' ? -1 : 0;
     if (!d) return;
     e.preventDefault();
-    const i = enabled.findIndex((s) => s.value === value);
+    const i = Math.max(0, enabled.findIndex((s) => s.value === value));
     const next = enabled[(i + d + enabled.length) % enabled.length]!;
     onChange(next.value);
     ref.current?.querySelector<HTMLButtonElement>(`[data-value="${next.value}"]`)?.focus();
@@ -90,12 +93,12 @@ export function Segmented<T extends string>({ value, onChange, segments, label, 
             aria-checked={on}
             aria-disabled={s.disabled || undefined}
             disabled={s.disabled}
-            tabIndex={on ? 0 : -1}
+            tabIndex={s.value === tabValue ? 0 : -1}
             data-value={s.value}
             onClick={() => !s.disabled && onChange(s.value)}
             className={cx(
               'relative flex flex-1 items-center justify-center gap-1.5 font-medium whitespace-nowrap transition-colors duration-150',
-              size === 'lg' ? 'h-11 rounded-sm px-4 text-sm' : size === 'sm' ? 'h-7 rounded-[6px] px-2.5 text-xs' : 'h-8 rounded-sm px-3.5 text-sm',
+              size === 'lg' ? 'h-11 rounded-sm px-4 text-sm' : size === 'sm' ? 'h-8 rounded-[7px] px-2.5 text-xs' : 'h-8 rounded-sm px-3.5 text-sm',
               on ? (soft ? 'bg-wash text-ink' : 'bg-ink text-white') : s.disabled ? 'text-ink-3' : 'text-ink-2 hover:bg-wash hover:text-ink',
             )}
           >

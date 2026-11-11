@@ -6,7 +6,10 @@ cutaway and a sun study (time of day, date presets, play the day), as
 floor plans (`@opensu/plan`), and as a shareable sheet set (`图册`,
 `@opensu/sheet`, rendered in the browser). An AI assistant in the left rail
 edits the house through validated commands (`@opensu/agent`, see "AI
-assistant" below). No persistence yet. The studio opens with our own
+assistant" below). The house and the chat transcript are autosaved in the
+browser (`localStorage` key `opensu.autosave.v1`; quota errors are ignored)
+until "恢复为模板 / Reset to template" (title block, phone sheet) clears it;
+`?sample=` links never read or write the save. The studio opens with our own
 default house (template T1 白墙坡顶小院; `?sample=t2` / `t3` open the other
 templates); the golden reference house is internal (`?sample=golden`). The
 studio title, the sheets and `/s/$id` show the house's own name.
@@ -32,7 +35,11 @@ Workspace packages resolve to their TypeScript sources (Vite aliases and
 Studio deep links: `/studio?mode=plan&level=L2`, `/studio?view=axo-ne`,
 `?lang=en`, `?sample=golden`, sun study `?sun=winter|spring|summer|autumn|today&time=10:00`,
 cutaway `?cut=L1`, sheets `?mode=sheet`, phone controls expanded
-`?panel=open`, walk mode `?walk=1`.
+`?panel=open`, walk mode `?walk=1`, `?frame=full` (3D framed on the whole
+canvas, for comparison with the renderer's shots). The studio keeps mode,
+level, view, cutaway, sun study and walk in the URL as they change
+(`src/lib/url-state.ts`): a new history entry per change, the time of day
+replaces the current one, so reload and back / forward restore them.
 
 Besides screenshots, `shots` checks: walk mode (HUD shown, W moves the
 camera, a wall stops, the entrance door lets through, exit), the time slider changes the shadows
@@ -66,7 +73,11 @@ string formatting (well inside the 10 ms free-tier budget).
 - `src/studio/Studio.tsx` layout: full-bleed canvas, floating chrome on
   desktop, bottom sheet on phones (< 768 px).
 - `src/studio/engine.ts` (lazy chunk) three.js + kernel + viewer, orbit
-  controls, animated preset transitions (orbit morph between parallel views,
+  controls (never below the ground, zoom between ~0.55x and 5x of the
+  preset, eye level orbits outside the house, pan clamped near the plot),
+  framing inside the floating chrome (`setInsets`: the studio passes the
+  space of the mode switch, view rail, dock and the assistant rail or its
+  open panel; opening the panel re-frames with the preset transition), animated preset transitions (orbit morph between parallel views,
   short dissolve to / from the eye-level perspective; a cutaway clips at
   once and the camera tilts to the steeper cutaway axonometric), sun study
   (`setSun`), render on demand.

@@ -181,7 +181,7 @@ async function compareWithRenderShots() {
   const { ctx, page } = await open({ viewport: { width: 1600, height: 1200 }, deviceScaleFactor: 1 }, '/');
   for (const v of views) {
     // The renderer demo draws the golden reference house.
-    await page.goto(`${base}/studio?sample=golden&view=${v}`, { waitUntil: 'networkidle' });
+    await page.goto(`${base}/studio?sample=golden&frame=full&view=${v}`, { waitUntil: 'networkidle' });
     await page.waitForFunction(() => window.__studio?.ready3d === true, null, { timeout: 180000 });
     const ref = `data:image/png;base64,${readFileSync(resolve(shotsDir, `${v}.png`)).toString('base64')}`;
     const diff = await page.evaluate(async (src) => {

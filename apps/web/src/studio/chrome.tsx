@@ -1,15 +1,16 @@
 // Studio chrome: floating controls over the drawing (desktop) and their
 // bottom-sheet counterparts (phone).
 import { Link } from '@tanstack/react-router';
-import { type PointerEvent as RPointerEvent, useEffect, useRef, useState } from 'react';
+import { type PointerEvent as RPointerEvent, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import {
   CloseIcon, FitIcon, LayersIcon, Mark, MinusIcon, PauseIcon, PlayIcon, PlusIcon, ResetViewIcon, SparkIcon, SunIcon, ViewIcon,
 } from '../components/icons';
 import { Caption, cx, IconButton, LangToggle, Segmented, Tip } from '../components/ui';
 import { levelName, type MessageKey, useT } from '../lib/i18n';
 import { type Mode, SUN_DATES, type SunDateId, useStudio } from '../lib/store';
+import { resetToTemplate } from '../lib/autosave';
 import { compass, hhmm, hourTicks } from '../lib/sun';
-import { VIEW_GROUPS } from '../lib/views';
+import { presetById, VIEW_GROUPS } from '../lib/views';
 import type { Derived, LevelInfo } from './house-data';
 import { planCommands } from './PlanView';
 import { WalkButton } from './WalkHUD';
@@ -34,6 +35,44 @@ function projectTitle(t: ReturnType<typeof useT>, house: { name: string; style: 
   return t(key) || house?.style || '';
 }
 
+/**
+ * Starts over from the template house (two steps: the first click asks).
+ * Edits and the chat are autosaved in this browser until then.
+ */
+export function ResetHouse({ className }: { className?: string }) {
+  const t = useT();
+  const [ask, setAsk] = useState(false);
+  useEffect(() => {
+    if (!ask) return;
+    const id = window.setTimeout(() => setAsk(false), 4000);
+    return () => clearTimeout(id);
+  }, [ask]);
+  return (
+    <div className={cx('flex items-center gap-2 text-xs', className)}>
+      <button
+        type="button"
+        onClick={() => {
+          if (!ask) setAsk(true);
+          else {
+            setAsk(false);
+            void resetToTemplate();
+          }
+        }}
+        className={cx(
+          'inline-flex h-8 items-center gap-1.5 rounded-[7px] px-2 font-medium transition-colors',
+          ask ? 'bg-ink text-white' : '-ml-2 text-ink-2 hover:bg-wash hover:text-ink',
+        )}
+        data-testid="reset-house"
+        title={ask ? undefined : t('house.autosaved')}
+      >
+        <ResetViewIcon width={14} height={14} />
+        {ask ? t('house.resetConfirm') : t('house.reset')}
+      </button>
+
+    </div>
+  );
+}
+
 function Skeleton({ w }: { w: number }) {
   return <span className="inline-block h-3 rounded-sm bg-wash align-middle" style={{ width: w }} />;
 }
@@ -42,17 +81,32 @@ function Skeleton({ w }: { w: number }) {
 /* Desktop                                                             */
 /* ------------------------------------------------------------------ */
 
-export function TitleBlock({ derived }: { derived: Derived | null }) {
+export function TitleBlock({ derived, onRect }: { derived: Derived | null; onRect?: (r: { right: number; bottom: number }) => void }) {
   const t = useT();
+  const box = useRef<HTMLDivElement>(null);
+  // Reports the block's extent (the 3D view frames the house clear of it).
+  useEffect(() => {
+    const el = box.current;
+    if (!el || !onRect) return;
+    const report = () => {
+      const r = el.getBoundingClientRect();
+      onRect({ right: Math.round(r.right), bottom: Math.round(r.bottom) });
+    };
+    report();
+    const ro = new ResizeObserver(report);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [onRect]);
   const facts = useFacts(derived);
   const house = useStudio((s) => s.house);
+  const chatOpen = useStudio((s) => s.chatOpen);
   const rows: [MessageKey, string | undefined][] = [
     ['facts.plot', facts?.plot],
     ['facts.area', facts?.area],
     ['facts.storeys', facts?.storeys],
   ];
   return (
-    <div className="pointer-events-auto absolute top-5 left-6 w-[300px]">
+    <div ref={box} className="pointer-events-auto absolute top-5 left-6 max-w-[300px]">
       <Link to="/" className="inline-flex items-center gap-1.5 text-ink transition-opacity hover:opacity-70" aria-label="openSU">
         <Mark width={18} height={18} />
         <span className="text-[13px] font-semibold tracking-tight">openSU</span>
@@ -71,6 +125,8 @@ export function TitleBlock({ derived }: { derived: Derived | null }) {
           </div>
         ))}
       </dl>
+      {/* The assistant panel opens below the facts: the reset row makes way. */}
+      {!chatOpen && <ResetHouse className="mt-2" />}
     </div>
   );
 }
@@ -98,7 +154,8 @@ export function ModeSwitch({ size = 'md', className }: { size?: 'md' | 'lg'; cla
 export function ViewRail() {
   const t = useT();
   const walk = useStudio((s) => s.walk);
-  const view = useStudio((s) => (walk ? null : s.view));
+  // A preset shows as pressed only while the camera is still on it.
+  const view = useStudio((s) => (walk || s.viewMoved ? null : s.view));
   const setView = useStudio((s) => s.setView);
   return (
     <nav aria-label={t('views.label')} className="glass pointer-events-auto flex w-[52px] flex-col items-center rounded-ui py-2">
@@ -210,24 +267,23 @@ export function SunTime({ className }: { className?: string }) {
       </div>
       <div className="w-[46px] shrink-0 text-right">
         <p className={cx('tnum text-[15px] leading-5 font-medium tracking-tight', sun.on ? 'text-ink' : 'text-ink-2')}>{hhmm(value)}</p>
-        <p className="tnum truncate text-2xs text-ink-3">{info && sun.on ? `${compass(info.azimuth, lang)} ${Math.max(0, Math.round(info.elevation))}°` : t('sun.label')}</p>
+        <p className="tnum truncate text-2xs text-ink-2" aria-live="off">{info && sun.on ? `${compass(info.azimuth, lang)} ${Math.max(0, Math.round(info.elevation))}°` : t('sun.offShort')}</p>
       </div>
     </div>
   );
 }
 
-/** Date presets of the sun study. Picking one turns the sun study on. */
-export function SunDates({ className }: { className?: string }) {
+/** Date presets of the sun study. Picking one turns the sun study on; while off, none is marked. */
+export function SunDates({ className, size = 'sm' }: { className?: string; size?: 'sm' | 'lg' }) {
   const t = useT();
   const sun = useStudio((s) => s.sun);
   const setSun = useStudio((s) => s.setSun);
   return (
-    <Segmented<SunDateId>
+    <Segmented<SunDateId | ''>
       label={t('sun.dates')}
-      size="sm"
-      soft={!sun.on}
-      value={sun.dateId}
-      onChange={(dateId) => setSun({ dateId, on: true })}
+      size={size}
+      value={sun.on ? sun.dateId : ''}
+      onChange={(dateId) => dateId && setSun({ dateId, on: true })}
       className={className}
       segments={SUN_DATES.map((id) => ({ value: id, label: t(`sun.date.${id}`) }))}
     />
@@ -240,10 +296,13 @@ export function CutControl({ levels, size = 'sm', className }: { levels: LevelIn
   const lang = useStudio((s) => s.lang);
   const cut = useStudio((s) => s.cut);
   const setCut = useStudio((s) => s.setCut);
+  // Eye level and elevations show the whole house: the kept cut is marked softly.
+  const paused = useStudio((s) => !!s.cut && presetById(s.view).kind !== 'axo');
   return (
     <Segmented<string>
-      label={t('cut.label')}
+      label={paused ? `${t('cut.label')} · ${t('cut.paused')}` : t('cut.label')}
       size={size}
+      soft={paused}
       value={cut ?? 'all'}
       onChange={(v) => setCut(v === 'all' ? null : v)}
       className={className}
@@ -252,20 +311,45 @@ export function CutControl({ levels, size = 'sm', className }: { levels: LevelIn
   );
 }
 
+/** The sun study switch: "日照" with the sun icon, pressed while the physical sun is on. */
+export function SunToggle({ className, size = 'md', iconOnly }: { className?: string; size?: 'md' | 'lg'; iconOnly?: boolean }) {
+  const t = useT();
+  const on = useStudio((s) => s.sun.on);
+  const setSun = useStudio((s) => s.setSun);
+  return (
+    <button
+      type="button"
+      aria-pressed={on}
+      aria-label={iconOnly ? t('sun.study') : undefined}
+      title={iconOnly ? t('sun.study') : undefined}
+      onClick={() => setSun(on ? { on: false, playing: false } : { on: true })}
+      className={cx(
+        'inline-flex shrink-0 items-center justify-center gap-1.5 font-medium whitespace-nowrap transition-colors duration-150',
+        size === 'lg' ? 'h-11 rounded-sm text-sm' : 'h-8 rounded-[7px] text-[13px]',
+        iconOnly ? (size === 'lg' ? 'w-11' : 'w-8') : size === 'lg' ? 'px-4' : 'pr-3 pl-2.5',
+        on ? 'bg-accent text-ink hover:brightness-95' : 'bg-wash text-ink hover:bg-hairline',
+        className,
+      )}
+    >
+      <SunIcon width={size === 'lg' ? 20 : 17} height={size === 'lg' ? 20 : 17} />
+      {!iconOnly && t('sun.label')}
+    </button>
+  );
+}
+
 function ExitSun({ className, iconOnly }: { className?: string; iconOnly?: boolean }) {
   const t = useT();
   const on = useStudio((s) => s.sun.on);
   const setSun = useStudio((s) => s.setSun);
   const exit = () => setSun({ on: false, playing: false });
+  if (!on) return null;
   if (iconOnly) {
-    // Keeps its place when off, so the dock does not jump.
     return (
-      <IconButton label={t('sun.exit')} tipSide="top" onClick={exit} disabled={!on} className={cx('size-8', !on && 'invisible', className)}>
+      <IconButton label={t('sun.exit')} tipSide="top" onClick={exit} className={cx('size-8', className)}>
         <CloseIcon width={16} height={16} />
       </IconButton>
     );
   }
-  if (!on) return null;
   return (
     <button
       type="button"
@@ -291,20 +375,44 @@ function SunNote() {
 }
 
 /**
- * The 3D scene dock (desktop, bottom centre), one row: level cutaway, sun
- * study date, then the time of day. Wraps to two rows on narrow screens.
+ * The 3D scene dock (desktop, bottom centre), one row: level cutaway, the
+ * sun study switch, then (sun study on) its dates; the time of day with
+ * play, the sun's direction and height, and exit. Wraps on narrow screens.
  */
-export function SceneDock({ levels }: { levels: LevelInfo[] | null }) {
+export function SceneDock({ levels, onRect }: { levels: LevelInfo[] | null; onRect?: (r: { top: number }) => void }) {
   const t = useT();
   // No cutaway while walking: the dock keeps the sun study only.
   const walk = useStudio((s) => s.walk);
+  const sunOn = useStudio((s) => s.sun.on);
+  const dock = useRef<HTMLDivElement>(null);
+  const time = useRef<HTMLDivElement>(null);
+  // Narrow windows: the time of day wraps to its own row (no dangling divider).
+  const [wrapped, setWrapped] = useState(false);
+  useLayoutEffect(() => {
+    const el = dock.current;
+    const tm = time.current;
+    if (!el || !tm) return;
+    const check = () => {
+      const first = el.firstElementChild as HTMLElement | null;
+      setWrapped(!!first && tm.offsetTop > first.offsetTop + 4);
+      onRect?.({ top: Math.round(el.getBoundingClientRect().top) });
+    };
+    check();
+    const ro = new ResizeObserver(check);
+    ro.observe(el);
+    window.addEventListener('resize', check);
+    return () => {
+      ro.disconnect();
+      window.removeEventListener('resize', check);
+    };
+  }, [onRect, sunOn, walk]);
   return (
-    <div className="glass pointer-events-auto flex max-w-[calc(100vw-200px)] flex-wrap items-center justify-center gap-x-1 gap-y-2 rounded-ui py-2 pr-2 pl-2.5">
+    <div ref={dock} className="glass pointer-events-auto flex max-w-[calc(100vw-200px)] flex-wrap items-center justify-center gap-x-1 gap-y-2 rounded-ui py-2 pr-2 pl-2.5">
       {!walk && (
         <>
           <div className="flex items-center gap-1">
             <Tip label={t('cut.label')} side="top">
-              <span className="grid size-7 place-items-center text-ink-2" aria-hidden="true">
+              <span className="grid size-8 place-items-center text-ink-2" aria-hidden="true">
                 <LayersIcon width={18} height={18} />
               </span>
             </Tip>
@@ -313,16 +421,12 @@ export function SceneDock({ levels }: { levels: LevelInfo[] | null }) {
           <span className="mx-2 h-5 w-px bg-hairline" aria-hidden="true" />
         </>
       )}
-      <div className="flex items-center gap-1">
-        <Tip label={t('sun.study')} side="top">
-          <span className="grid size-7 place-items-center text-ink-2" aria-hidden="true">
-            <SunIcon width={18} height={18} />
-          </span>
-        </Tip>
-        <SunDates />
+      <div className="flex items-center gap-1.5" role="group" aria-label={t('sun.study')}>
+        <SunToggle />
+        {sunOn && <SunDates />}
       </div>
-      <span className="mx-2 h-5 w-px bg-hairline" aria-hidden="true" />
-      <div className="flex w-[400px] items-center gap-1">
+      <span className={cx('mx-2 h-5 w-px bg-hairline', wrapped && 'invisible w-0 mx-0')} aria-hidden="true" />
+      <div ref={time} className={cx('flex items-center gap-1', sunOn ? 'w-[400px]' : 'w-[320px]')}>
         <SunTime className="min-w-0 flex-1" />
         <ExitSun iconOnly />
       </div>
@@ -413,12 +517,18 @@ export function MobileHeader({ derived }: { derived: Derived | null }) {
   const house = useStudio((s) => s.house);
   const setChat = useStudio((s) => s.setChatOpen);
   return (
-    <header className="pointer-events-none absolute inset-x-0 top-0 bg-gradient-to-b from-white via-white/85 to-transparent px-4 pt-[max(4px,env(safe-area-inset-top))] pb-6">
+    <header className="pointer-events-none absolute inset-x-0 top-0 bg-gradient-to-b from-white via-white/85 to-transparent px-4 pt-[max(4px,env(safe-area-inset-top))] pb-6 land:pb-2">
       <div className="flex h-11 items-center justify-between">
-        <Link to="/" className="pointer-events-auto -ml-1 inline-flex h-11 items-center gap-1.5 px-1" aria-label="openSU">
-          <Mark width={16} height={16} />
-          <span className="text-xs font-semibold tracking-tight">openSU</span>
-        </Link>
+        <div className="flex min-w-0 items-center gap-3">
+          <Link to="/" className="pointer-events-auto -ml-1 inline-flex h-11 shrink-0 items-center gap-1.5 px-1" aria-label="openSU">
+            <Mark width={16} height={16} />
+            <span className="text-xs font-semibold tracking-tight">openSU</span>
+          </Link>
+          <p className="hidden min-w-0 truncate text-sm land:block">
+            <span className="font-semibold">{projectTitle(t, house)}</span>
+            <span className="tnum ml-2 text-xs text-ink-2">{facts ? `${facts.plot} · ${facts.area}` : ''}</span>
+          </p>
+        </div>
         <div className="pointer-events-auto -mr-1.5 flex items-center">
           <LangToggle size="lg" />
           <button type="button" onClick={() => setChat(true)} aria-label={t('chat.open')} className="grid size-11 place-items-center">
@@ -428,7 +538,7 @@ export function MobileHeader({ derived }: { derived: Derived | null }) {
           </button>
         </div>
       </div>
-      <div className="min-w-0">
+      <div className="min-w-0 land:hidden">
         <h1 className="truncate text-[17px] leading-6 font-semibold">{projectTitle(t, house)}</h1>
         <p className="tnum mt-0.5 truncate text-xs text-ink-2">
           {facts ? `${facts.plot} · ${facts.area} · ${facts.storeys}` : <Skeleton w={180} />}
@@ -445,7 +555,7 @@ export function MobileSheet({ derived, onHeight }: { derived: Derived | null; on
   const mode = useStudio((s) => s.mode);
   const open = useStudio((s) => s.sheetOpen);
   const setOpen = useStudio((s) => s.setSheetOpen);
-  const view = useStudio((s) => s.view);
+  const view = useStudio((s) => (s.viewMoved ? null : s.view));
   const setView = useStudio((s) => s.setView);
   const lang = useStudio((s) => s.lang);
   const level = useStudio((s) => s.level);
@@ -505,14 +615,33 @@ export function MobileSheet({ derived, onHeight }: { derived: Derived | null; on
         <span className="h-1 w-9 rounded-full bg-hairline" />
       </button>
       <div className="px-4">
-        <ModeSwitch size="lg" className="bg-wash" />
-        {mode === '3d' && <SunTime className="mt-3 h-11" />}
+        {/* Sideways: mode and time share one row. */}
+        <div className="land:flex land:items-center land:gap-4">
+          <ModeSwitch size="lg" className="bg-wash land:w-[300px] land:shrink-0" />
+          {mode === '3d' && (
+            <div className="mt-3 flex h-11 items-center gap-2 land:mt-0 land:min-w-0 land:flex-1">
+              <SunToggle size="lg" iconOnly />
+              <SunTime className="min-w-0 flex-1" />
+            </div>
+          )}
+        </div>
+        {/* Plan: the level switch stays reachable with the sheet folded. */}
+        {mode === 'plan' && derived && level && (
+          <Segmented
+            label={t('levels.label')}
+            size="lg"
+            value={level}
+            onChange={setLevel}
+            className="mt-2 bg-wash"
+            segments={derived.levels.map((l) => ({ value: l.id, label: levelName(lang, l.name, l.index, l.isAttic) }))}
+          />
+        )}
         <div className={cx('grid transition-[grid-template-rows] duration-300 ease-out-soft', open ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]')}>
           <div className="min-h-0 overflow-hidden" inert={!open}>
             {mode === '3d' && (
               <>
                 <div className="mt-3 flex items-center gap-2">
-                  <SunDates className="flex-1" />
+                  <SunDates size="lg" className="flex-1" />
                 </div>
                 <div className="mt-1.5 flex h-7 items-center justify-between gap-2">
                   <SunNote />
@@ -551,25 +680,9 @@ export function MobileSheet({ derived, onHeight }: { derived: Derived | null; on
                 </div>
               </>
             )}
-            {mode === 'plan' && (
-              <>
-                <Caption className="mt-4 tracking-normal normal-case">{t('levels.label')}</Caption>
-                <div className="mt-2">
-                  {derived && level && (
-                    <Segmented
-                      label={t('levels.label')}
-                      size="lg"
-                      value={level}
-                      onChange={setLevel}
-                      className="bg-wash"
-                      segments={derived.levels.map((l) => ({ value: l.id, label: levelName(lang, l.name, l.index, l.isAttic) }))}
-                    />
-                  )}
-                </div>
-                <p className="mt-3 mb-1 text-xs leading-5 text-ink-3">{t('plan.gesture')}</p>
-              </>
-            )}
+            {mode === 'plan' && <p className="mt-3 mb-1 text-xs leading-5 text-ink-3">{t('plan.gesture')}</p>}
             {mode === 'sheet' && <p className="mt-3 mb-1 text-xs leading-5 text-ink-3">{t('sheets.hint')}</p>}
+            <ResetHouse className="mt-3 mb-1 border-t border-hairline pt-2" />
           </div>
         </div>
       </div>
