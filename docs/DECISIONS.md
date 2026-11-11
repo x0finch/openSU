@@ -59,3 +59,18 @@ One line each. Change only with the lead's sign-off.
   public demo uses our own design.
 - Each task: spec with acceptance criteria -> implementer -> independent
   verifier -> lead reviews screenshots.
+
+## Regions
+- One product, region profiles; no fork. The core (model, kernel, render,
+  sun, walk, commands, AI path) stays region-neutral. Region-specific
+  things live in a profile: language, units, design rules in the prompt,
+  room vocabulary, templates, style preset, entourage, sheet format.
+- Order (owner's decision): finish the China version first (deploy,
+  real-model evaluation, sharing). Then an international metric / English
+  profile (Europe, UK, Australia). The US profile (imperial units,
+  timber-frame conventions) comes last.
+- Do now only what prevents rework: worldwide location and time zones
+  (with DST and the southern hemisphere), a display-only units layer, and
+  locale-aware labels on plans and sheets.
+- The name "openSU" refers to SketchUp, a Trimble trademark; confirm the
+  name (or choose another) before marketing outside China.

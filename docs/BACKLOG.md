@@ -82,3 +82,15 @@ Still error-prone for an LLM author:
   studio; the user's bubble scrolls under the chat header after a reply;
   zoomed plan slides under the project facts; "loading model" flashes when
   opening sheets; stair landing faces a blank wall for a second.
+
+## Internationalisation (see "Regions" in DECISIONS.md)
+Prevent-rework items, to do after task 013 merges:
+- Display-only units layer (model stays mm): metric now, imperial later;
+  plans' dimension chains, sheet facts and the studio read through it.
+- Plan and sheet labels follow the UI language (English-only in English;
+  sheet words like 自建房 / 宅基地 / 建筑面积 translated); floor naming
+  per locale.
+Later, per region profile: design rules and room types (garage,
+basement, mudroom, pantry ...), construction defaults, site conventions
+(no perimeter wall, driveway, porch), original templates, style presets,
+entourage, sheet formats (4:5, 2:3), privacy policy when accounts arrive.
