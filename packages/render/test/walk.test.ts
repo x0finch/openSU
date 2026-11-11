@@ -78,4 +78,16 @@ describe('walk world (golden sample)', () => {
     p = walk(p, 0, 4.0);
     expect(world.levelAt(p.z, levels)).toBe('L3');
   });
+
+  it('clearance measures open floor and openHeading turns away from a close wall', () => {
+    const p = start();
+    // Walk west until a wall stops the body: little room ahead, more behind.
+    const atWall = walk(p, 270, 8);
+    expect(world.clearance(atWall, 270)).toBeLessThan(1);
+    expect(world.clearance(atWall, 90)).toBeGreaterThan(1.5);
+    const h = world.openHeading(atWall, 270);
+    expect(world.clearance(atWall, h)).toBeGreaterThan(1.5);
+    // With open floor ahead the preferred bearing is kept.
+    expect(world.openHeading(atWall, 90, 1.5)).toBe(90);
+  });
 });

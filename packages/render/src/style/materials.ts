@@ -7,6 +7,8 @@ import {
   type Material,
   type Side,
   type Texture,
+  Vector2,
+  Vector4,
 } from 'three';
 import { LineMaterial } from 'three/addons/lines/LineMaterial.js';
 import { entourage, furniture as furnTokens, lines, materials as matTokens, shading } from './tokens.js';
@@ -31,6 +33,16 @@ export interface ShadedOptions {
   sunFullAt?: number;
   /** Override for N.L below which a face counts as turned away. */
   awayBelow?: number;
+  /**
+   * Faces looking up (ground, paving, decks) never take the turned-away
+   * band: under a low sun they stay white and show only cast shadows.
+   */
+  upLit?: boolean;
+  /**
+   * Received shadows fade out with distance from a rectangle (scene x/z),
+   * set with `setShadowFade` (the ground under long low-sun shadows).
+   */
+  shadowFade?: boolean;
   /** Overrides for the polygon offset. */
   polygonOffsetFactor?: number;
   polygonOffsetUnits?: number;
@@ -45,6 +57,12 @@ uniform float uAwayBelow;
 uniform int uShadowLight;
 uniform vec3 uCeilingTone;
 uniform float uCeilingMix;
+uniform float uUpLit;
+#ifdef ILL_SHADOW_FADE
+uniform vec4 uFadeRect;
+uniform vec2 uFadeRange;
+varying vec3 vIllWorld;
+#endif
 float gSunDot = -1.0;
 float gSunVis = 1.0;
 int gLightIndex = 0;
@@ -63,12 +81,20 @@ void RE_Direct_Illustration( const in IncidentLight directLight, const in vec3 g
 
 const ILLUSTRATION_OUT = /* glsl */ `
 {
+  vec3 worldNormal = inverseTransformDirection( normal, viewMatrix );
   float litBand = smoothstep( uAwayBelow, uSunFullAt, gSunDot );
+  // Ground-like surfaces: lit whatever the sun's height (only cast shadows show).
+  litBand = max( litBand, uUpLit * step( 0.9, worldNormal.y ) * step( 0.0, gSunDot ) );
+  #ifdef ILL_SHADOW_FADE
+  if ( uFadeRange.y > 0.0 ) {
+    vec2 d = max( max( uFadeRect.xy - vIllWorld.xz, vIllWorld.xz - uFadeRect.zw ), 0.0 );
+    gSunVis = mix( gSunVis, 1.0, smoothstep( uFadeRange.x, uFadeRange.y, length( d ) ) );
+  }
+  #endif
   vec3 sunBand = mix( uShadowTone, uSunTone, gSunVis );
   vec3 tone = mix( uAwayTone, sunBand, litBand );
-  // Ceilings (faces looking straight down) may take their own tone.
-  vec3 worldNormal = inverseTransformDirection( normal, viewMatrix );
-  tone = mix( tone, uCeilingTone, uCeilingMix * step( 0.9, - worldNormal.y ) );
+  // Ceilings (faces looking down, flat or under a pitched roof) may take their own tone.
+  tone = mix( tone, uCeilingTone, uCeilingMix * step( 0.3, - worldNormal.y ) );
   outgoingLight = diffuseColor.rgb * tone;
 }
 #include <envmap_fragment>
@@ -91,6 +117,23 @@ interface ToneUniforms {
 }
 
 const toneUniforms = new WeakMap<Material, ToneUniforms>();
+const fadeUniforms = new WeakMap<Material, { uFadeRect: { value: Vector4 }; uFadeRange: { value: Vector2 } }>();
+
+/**
+ * Received shadows of a `shadowFade` material fade out between `start` and
+ * `end` metres outside the rectangle (scene x/z: minX, minZ, maxX, maxZ);
+ * `null` switches the fade off.
+ */
+export function setShadowFade(mat: Material, rect: [number, number, number, number] | null, start = 0, end = 0): void {
+  const u = fadeUniforms.get(mat);
+  if (!u) return;
+  if (!rect) {
+    u.uFadeRange.value.set(0, 0);
+    return;
+  }
+  u.uFadeRect.value.set(...rect);
+  u.uFadeRange.value.set(start, Math.max(start + 1e-3, end));
+}
 const shadowLights = new WeakMap<Material, { value: number }>();
 
 /**
@@ -189,7 +232,21 @@ export function createShadedMaterial(color: string, opts: ShadedOptions = {}): M
     base,
   };
   toneUniforms.set(mat, uniforms);
+  const upLit = { value: opts.upLit ? 1 : 0 };
+  const fade = opts.shadowFade ? { uFadeRect: { value: new Vector4() }, uFadeRange: { value: new Vector2() } } : null;
+  if (fade) {
+    fadeUniforms.set(mat, fade);
+    mat.defines = { ...mat.defines, ILL_SHADOW_FADE: '' };
+  }
   mat.onBeforeCompile = function (this: Material, shader) {
+    shader.uniforms.uUpLit = upLit;
+    if (fade) {
+      shader.uniforms.uFadeRect = fade.uFadeRect;
+      shader.uniforms.uFadeRange = fade.uFadeRange;
+      shader.vertexShader = shader.vertexShader
+        .replace('#include <common>', '#include <common>\nvarying vec3 vIllWorld;')
+        .replace('#include <fog_vertex>', '#include <fog_vertex>\nvIllWorld = ( modelMatrix * vec4( transformed, 1.0 ) ).xyz;');
+    }
     // Shared uniform objects: tone overrides reach every twin without a recompile.
     shader.uniforms.uShadowLight = shadowLightUniform(this);
     shader.uniforms.uSunTone = uniforms.uSunTone;
@@ -203,7 +260,7 @@ export function createShadedMaterial(color: string, opts: ShadedOptions = {}): M
       .replace('#include <lights_lambert_pars_fragment>', `#include <lights_lambert_pars_fragment>\n${ILLUSTRATION_PARS}`)
       .replace('#include <envmap_fragment>', ILLUSTRATION_OUT);
   };
-  mat.customProgramCacheKey = () => `illustration:${tones.sun}:${tones.away}:${tones.shadow}:${sunFullAt}:${awayBelow}`;
+  mat.customProgramCacheKey = () => `illustration:${tones.sun}:${tones.away}:${tones.shadow}:${sunFullAt}:${awayBelow}${fade ? ':fade' : ''}`;
   return mat;
 }
 
@@ -307,14 +364,14 @@ export function createPalette() {
     roofTile: textured(roofTex),
     fascia: createShadedMaterial(matTokens.fascia),
     wood: textured(woodTex),
-    deck: textured(deckTex),
+    deck: createShadedMaterial(shading.neutralAlbedo, { map: deckTex, upLit: true }),
     frame: createShadedMaterial(matTokens.frame),
     glass: createGlassMaterial(matTokens.glass, matTokens.glassOpacity),
     balustrade: createGlassMaterial(matTokens.balustradeGlass, matTokens.balustradeOpacity),
     slab: createShadedMaterial(matTokens.slab),
     metal: createShadedMaterial(matTokens.metal, { side: DoubleSide }),
-    paving: createShadedMaterial(matTokens.paving),
-    gravel: createShadedMaterial(matTokens.gravel),
+    paving: createShadedMaterial(matTokens.paving, { upLit: true }),
+    gravel: createShadedMaterial(matTokens.gravel, { upLit: true }),
     floor: createShadedMaterial(matTokens.floor, { tones: { shadow: shading.floorShadowTone } }),
     cut: createFlatMaterial(matTokens.cut),
     furniture: createShadedMaterial(furnTokens.body),
@@ -333,7 +390,7 @@ export function createPalette() {
     tyre: createFlatMaterial(entourage.carTyre),
     planter: createShadedMaterial(entourage.planter),
     soil: createShadedMaterial(entourage.soil),
-    ground: createShadedMaterial(matTokens.wall, { tones: { shadow: shading.groundShadowTone }, polygonOffsetFactor: shading.groundPolygonOffsetFactor, polygonOffsetUnits: shading.groundPolygonOffsetUnits }),
+    ground: createShadedMaterial(matTokens.wall, { tones: { shadow: shading.groundShadowTone }, upLit: true, shadowFade: true, polygonOffsetFactor: shading.groundPolygonOffsetFactor, polygonOffsetUnits: shading.groundPolygonOffsetUnits }),
   };
 }
 

@@ -18,10 +18,10 @@ import {
 } from 'three';
 import type { LineMaterial } from 'three/addons/lines/LineMaterial.js';
 import { bakeScene, CLIP_GROUP } from './style/batch.js';
-import { applyLensShift, applyOrthoAspect, cameraForView, type ViewPreset } from './style/cameras.js';
+import { applyFrameInsets, applyLensShift, applyOrthoAspect, cameraForView, type FrameInsets, freeAspect, NO_INSETS, type ViewPreset } from './style/cameras.js';
 import { defaultLighting, type LightingMode, sunForView } from './style/lighting.js';
 import { createGround } from './style/ground.js';
-import { createLineMaterial, createPalette, type Palette, setToneFactors, toneFactor, toneToward } from './style/materials.js';
+import { createLineMaterial, createPalette, type Palette, setShadowFade, setToneFactors, toneFactor, toneToward } from './style/materials.js';
 import { Sun } from './style/sun.js';
 import { cutaway as cutTokens, cutawayLight, lines, materials as matTokens, physical as physTokens, shading, stage, walk as walkTokens, walkLight } from './style/tokens.js';
 import { type StudySite, studySun, type StudySun } from './sun/study.js';
@@ -90,6 +90,7 @@ export class IllustrationViewer {
   private pending = false;
   private preset: ViewPreset | null = null;
   private lighting: LightingMode = defaultLighting;
+  private insets: FrameInsets = { ...NO_INSETS };
   private readonly fixedPixelRatio: number | undefined;
   private groups = new Map<string, Object3D[]>();
   private clipMaterials: Material[] = [];
@@ -304,7 +305,7 @@ export class IllustrationViewer {
   private applyInteriorTones(mode: 'cutaway' | 'walk' | null): void {
     const p = this.palette;
     const furniture = [p.furniture, p.furnitureWood, p.textile, p.fixture, p.furnitureDark];
-    for (const m of [p.floor, p.wall, p.paving, p.gravel, p.deck, ...furniture]) setToneFactors(m, null);
+    for (const m of [p.floor, p.wall, p.fascia, p.paving, p.gravel, p.deck, ...furniture]) setToneFactors(m, null);
     for (const [m, o] of [[p.glass, matTokens.glassOpacity], [p.balustrade, matTokens.balustradeOpacity]] as const) m.opacity = mode === 'walk' ? (m === p.glass ? walkTokens.glassOpacity : walkTokens.balustradeOpacity) : o;
     if (!mode) return;
     const sun = toneToward(matTokens.floor, cutawayLight.floorSunBase).multiply(toneFactor(cutawayLight.floorSunTint));
@@ -322,6 +323,8 @@ export class IllustrationViewer {
     setToneFactors(p.floor, { sun, away: shade, shadow: shade });
     const white = { away: toneFactor(walkLight.wallShade), shadow: toneFactor(walkLight.wallShadow) };
     setToneFactors(p.wall, { ...white, ceiling: toneFactor(walkLight.ceiling) });
+    // Under a pitched roof the ceiling is the underside of the roof boards.
+    setToneFactors(p.fascia, { ceiling: toneToward(matTokens.fascia, walkLight.ceiling) });
     for (const m of furniture) setToneFactors(m, white);
   }
 
@@ -358,7 +361,10 @@ export class IllustrationViewer {
     if (!this.beforeWalk) this.beforeWalk = { cut: this.cutLevel, preset: this.preset };
     this.cutLevel = null;
     let at = { x: pos[0], y: pos[1], z: lv?.elevation ?? 0, headingDeg: opts.headingDeg ?? base.headingDeg };
-    if (!world.settle(at.x, at.y, at.z)) {
+    const settled = world.settle(at.x, at.y, at.z);
+    // Start facing into the room, not at a wall (unless a heading was asked for).
+    if (settled && opts.headingDeg === undefined) at.headingDeg = world.openHeading(settled, at.headingDeg);
+    if (!settled) {
       // Nowhere to stand there (a removed room, a bad position): the entrance.
       const s = data.start;
       at = { x: s.position[0], y: s.position[1], z: this.levels.find((l) => l.id === s.level)?.elevation ?? 0, headingDeg: s.headingDeg };
@@ -460,10 +466,35 @@ export class IllustrationViewer {
       this.applyCutaway();
     }
     this.preset = preset;
-    const { width, height } = this.size();
-    this.camera = cameraForView(preset, this.viewPoints(), width / height);
+    this.camera = this.cameraFor(preset);
     this.applySun();
     this.requestRender();
+  }
+
+  /** The camera of a preset for the current canvas, framed inside the free area. */
+  cameraFor(preset: ViewPreset): Camera {
+    const { width, height } = this.size();
+    const cam = cameraForView(preset, this.viewPoints(), freeAspect(this.insets, width, height));
+    applyFrameInsets(cam, this.insets, width, height);
+    return cam;
+  }
+
+  /**
+   * Keeps presets framed inside the canvas minus these insets (CSS px), e.g.
+   * the space under floating UI. Re-frames the current preset.
+   */
+  setFrameInsets(insets: FrameInsets, reframe = true): void {
+    const i = { top: Math.max(0, insets.top), right: Math.max(0, insets.right), bottom: Math.max(0, insets.bottom), left: Math.max(0, insets.left) };
+    const { width, height } = this.size();
+    // Never leave less than a third of the canvas free.
+    if (width - i.left - i.right < width / 3) i.left = i.right = 0;
+    if (height - i.top - i.bottom < height / 3) i.top = i.bottom = 0;
+    this.insets = i;
+    if (reframe && this.preset && !this.walker) this.setView(this.preset);
+  }
+
+  get frameInsets(): FrameInsets {
+    return this.insets;
   }
 
   /** Framing points: in a cutaway, only what stays below the cut plane. */
@@ -515,6 +546,9 @@ export class IllustrationViewer {
     const physical = mode.mode === 'physical';
     this.sun.setDirection(s.azimuthDeg, s.elevationDeg);
     this.sun.fit(this.bounds, physical ? physTokens.shadowReach : 0);
+    // Low sun: ground shadows fade out a few metres beyond the scene.
+    const b = this.bounds;
+    setShadowFade(this.palette.ground, physical && !b.isEmpty() ? [b.min.x, b.min.z, b.max.x, b.max.z] : null, physTokens.shadowFadeStart, physTokens.shadowFadeEnd);
     // Glass passes sunlight in the sun study: its flat backing stops casting.
     for (const o of this.content?.children ?? []) {
       if (o.userData.paletteMaterial === this.palette.glassBacking) (o as Mesh).castShadow = !physical;

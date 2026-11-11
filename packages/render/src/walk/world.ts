@@ -127,6 +127,41 @@ export class WalkWorld {
     return null;
   }
 
+  /**
+   * How far (metres, up to `max`) a body can walk from `p` straight along a
+   * bearing (degrees, 0 = north) on the same floor.
+   */
+  clearance(p: WalkPose, headingDeg: number, max = 6): number {
+    const a = (headingDeg * Math.PI) / 180;
+    const dx = Math.sin(a), dy = Math.cos(a);
+    const step = 0.1;
+    for (let d = step; d <= max; d += step) {
+      const z = this.standAt(p.x + dx * d, p.y + dy * d, p.z);
+      if (z === null || Math.abs(z - p.z) > 0.05) return d - step;
+    }
+    return max;
+  }
+
+  /**
+   * A bearing that looks into the room from `p`: `preferredDeg` when there
+   * is open floor ahead, else the most open direction (nearest to the
+   * preferred one among equals).
+   */
+  openHeading(p: WalkPose, preferredDeg: number, enough = 3): number {
+    if (this.clearance(p, preferredDeg) >= enough) return preferredDeg;
+    let best = preferredDeg, bestScore = -Infinity;
+    for (let k = 0; k < 24; k++) {
+      const h = preferredDeg + k * 15;
+      const off = Math.min(k, 24 - k) * 15;
+      const score = Math.min(this.clearance(p, h), enough + 1) - off / 360;
+      if (score > bestScore) {
+        bestScore = score;
+        best = h;
+      }
+    }
+    return ((best % 360) + 360) % 360;
+  }
+
   /** Storey a body with feet at z is on (highest level floor at or below z + a margin). */
   levelAt(z: number, levels: readonly { id: string; elevation: number }[]): string | null {
     let id: string | null = null;

@@ -116,12 +116,29 @@ renders a single view with debug switches.
   (1.6 m eye, 65 deg vertical field, wider on portrait screens), keyboard
   (WASD / arrows, Q/E or arrows to turn, Shift to run), drag to look, and
   `setMove(forward, strafe)` for a touch joystick. It renders every frame
-  only while something moves. While walking: interior tones from
-  `walkLight` (light shade, lighter ceilings, warm sun patches), window
+  only while something moves. The vertical field is capped at
+  `walk.maxFovDeg` (portrait phones are not stretched); a finger turns by
+  `walk.touchLookDegPerScreen` per screen width, a mouse by `lookDegPerPx`.
+  Without an explicit heading, entering a level (and `teleport(..., {
+  faceRoom: true })`) looks towards open floor (`WalkWorld.openHeading`),
+  never into a wall close ahead. While walking: interior tones from
+  `walkLight` (light shade, lighter ceilings - also the underside of
+  pitched roof boards, never the fascia brown - warm sun patches), window
   glass at `walk.glassOpacity` so the garden shows, people silhouettes
   hidden, the presentation sun fixed at entry (turning never redraws
   shadows), billboard turns do not redraw shadows either.
 - `src/style/ground.ts` - invisible ground that only shows received shadows.
+  Ground-like materials (ground, paving, gravel, decks: `upLit`) never take
+  the turned-away band on faces looking up, so a low sun never greys the
+  page or the plot; only cast shadows show. In the sun study the ground's
+  received shadows fade out between `physical.shadowFadeStart` and
+  `shadowFadeEnd` metres outside the scene bounds (`setShadowFade`), so
+  sunrise / sunset shadows never run off the viewport.
+- Framing around floating UI: `viewer.setFrameInsets({ top, right, bottom,
+  left })` (CSS px) frames every preset inside the canvas minus those
+  insets (the frustum is fitted to the free area, then grown to the whole
+  canvas: `applyFrameInsets`, `freeAspect` in `style/cameras.ts`);
+  `viewer.cameraFor(preset)` gives that camera without applying it.
 - `src/style/cameras.ts` - presets: parallel axonometric, eye-level two-point
   perspective (horizontal view axis + lens shift), straight elevation.
 - `src/entourage/` - ginkgo, Japanese maple (red/green), bamboo, grass tufts,
