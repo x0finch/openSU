@@ -1,0 +1,12 @@
+// Public API of @opensu/agent: the house-design assistant (prompt, tools,
+// turn controller) and the built-in starting points. No DOM; the network is
+// whatever adapter the caller passes in.
+export { SYSTEM_PROMPT, houseContext } from './prompt';
+export { createHouseTools, editHouseInputSchema, type AppliedBatch, type ToolHooks } from './tools';
+export {
+  HouseSession, runTurn, pastMessages, classifyError, MAX_REPAIRS, HISTORY_TURNS,
+  type AgentEvent, type PastTurn, type TurnError, type TurnOptions, type TurnResult, type TurnStatus,
+} from './turn';
+export { describeDiff } from './diff';
+export { createRelayAdapter, DEFAULT_MODEL, type RelayOptions } from './provider';
+export { blankHouse, starterHouse, STARTER_COMMANDS, type BlankOptions } from './starter';

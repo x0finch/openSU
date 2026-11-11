@@ -180,7 +180,8 @@ async function compareWithRenderShots() {
   }
   const { ctx, page } = await open({ viewport: { width: 1600, height: 1200 }, deviceScaleFactor: 1 }, '/');
   for (const v of views) {
-    await page.goto(`${base}/studio?view=${v}`, { waitUntil: 'networkidle' });
+    // The renderer demo draws the golden reference house.
+    await page.goto(`${base}/studio?sample=golden&view=${v}`, { waitUntil: 'networkidle' });
     await page.waitForFunction(() => window.__studio?.ready3d === true, null, { timeout: 180000 });
     const ref = `data:image/png;base64,${readFileSync(resolve(shotsDir, `${v}.png`)).toString('base64')}`;
     const diff = await page.evaluate(async (src) => {
@@ -297,7 +298,7 @@ async function walkTo(page, x, y, heading) {
 /** Walk mode in the app: HUD, mini-map, moving, walls stop, doors let through. */
 async function walkChecks() {
   if (!wanted('check-walk')) return;
-  const { ctx, page } = await open(DESKTOP, '/studio?walk=1');
+  const { ctx, page } = await open(DESKTOP, '/studio?sample=golden&walk=1');
   await page.waitForFunction(() => window.__studio?.ready3d === true, null, { timeout: 180000 });
   await page.waitForFunction(() => window.__studio?.engine?.viewer?.walking === true, null, { timeout: 60000 });
   check(await page.locator('[data-testid=walk-hud]').count() === 1, 'walk HUD with mini-map is shown');
@@ -358,8 +359,9 @@ async function sheets(opts, name) {
   console.log(`  sheet set rendered in ${(res.ms / 1000).toFixed(1)} s (page open to done ${((Date.now() - t0) / 1000).toFixed(1)} s)`);
   check(!res.error, `${name}: no render error`);
   check(
-    res.files.length === 4 && res.files.every((f) => f && f.w === 1500 && f.h === 2000 && f.type === 'image/png' && f.bytes > 100000),
-    `${name}: 4 PNG blobs of 1500x2000 (${res.files.map((f) => f && `${f.w}x${f.h} ${(f.bytes / 1e6).toFixed(2)} MB`).join(', ')})`,
+    // One sheet per level plus the axonometric (starter: 3, golden: 4).
+    res.files.length >= 3 && res.files.every((f) => f && f.w === 1500 && f.h === 2000 && f.type === 'image/png' && f.bytes > 100000),
+    `${name}: ${res.files.length} PNG blobs of 1500x2000 (${res.files.map((f) => f && `${f.w}x${f.h} ${(f.bytes / 1e6).toFixed(2)} MB`).join(', ')})`,
   );
   await page.waitForTimeout(500);
   await noHorizontalScroll(page, name);
@@ -392,7 +394,8 @@ try {
     });
     await studio3d(DESKTOP, 'studio-3d-desktop-en', '?lang=en&view=axo-ne');
     await studioPlan(DESKTOP, 'studio-plan-desktop-l2', '&level=L2');
-    await studioPlan(PHONE, 'studio-plan-phone-attic', '&level=L3');
+    await studioPlan(PHONE, 'studio-plan-phone-attic', '&sample=golden&level=L3');
+    await studio3d(DESKTOP, 'studio-golden-desktop', '?sample=golden');
     await studio3d(PHONE, 'studio-3d-phone-expanded', '', async (p) => {
       await p.getByRole('button', { name: '展开控制面板' }).click();
       await p.waitForTimeout(450);
@@ -409,9 +412,14 @@ try {
       await p.getByRole('button', { name: '打开 AI 助手' }).click();
       await p.waitForTimeout(250);
     });
-    await studio3d(DESKTOP, 'studio-walk-desktop', '?walk=1&sun=winter&time=10:00', (p) => walkTo(p, 13.2, 6.3, 212));
-    await studio3d(PHONE, 'studio-walk-phone', '?walk=1&sun=winter&time=10:00', (p) => walkTo(p, 12.6, 2.4, 285));
-    await studio3d(DESKTOP, 'studio-walk-desktop-en', '?walk=1&lang=en', (p) => walkTo(p, 7.3, 8.6, 180));
+    await studio3d(DESKTOP, 'studio-walk-desktop', '?sample=golden&walk=1&sun=winter&time=10:00', (p) => walkTo(p, 13.2, 6.3, 212));
+    await studio3d(PHONE, 'studio-walk-phone', '?sample=golden&walk=1&sun=winter&time=10:00', (p) => walkTo(p, 12.6, 2.4, 285));
+    await studio3d(DESKTOP, 'studio-walk-desktop-en', '?sample=golden&walk=1&lang=en', (p) => walkTo(p, 7.3, 8.6, 180));
+    // The starter house (the studio's default), from its own entrance.
+    await studio3d(DESKTOP, 'studio-walk-starter-desktop', '?walk=1&sun=winter&time=10:00', async (p) => {
+      await p.waitForFunction(() => window.__studio?.engine?.viewer?.walking === true, null, { timeout: 60000 });
+      await p.waitForTimeout(500);
+    });
     await compareWithRenderShots();
   }
   await walkChecks();

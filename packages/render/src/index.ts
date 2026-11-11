@@ -5,6 +5,7 @@ export { featureEdgePositions } from './style/edges.js';
 export { Sun, sunDirection } from './style/sun.js';
 export { createGround } from './style/ground.js';
 export { cameraForView, fitParallelCamera, fitEyeLevelCamera, type ViewPreset, type ViewKind } from './style/cameras.js';
+export { growHeight, GROW_DURATION, type GrowLevel, type GrowOptions } from './grow.js';
 export { IllustrationViewer, type SceneStats, type ViewerOptions, type ViewerLevel, type WalkOptions } from './viewer.js';
 export { WalkController, type WalkState } from './walk/controller.js';
 export { WalkWorld, type WalkPose } from './walk/world.js';

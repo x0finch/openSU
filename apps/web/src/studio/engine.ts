@@ -1,6 +1,6 @@
 // Lazy chunk: three.js, the kernel and the illustration viewer. Nothing in
 // here may be imported statically from the route modules.
-import { OrthographicCamera, Vector3 } from 'three';
+import { type Mesh, OrthographicCamera, Vector3 } from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { buildHouse } from '@opensu/kernel';
 import type { ResolvedHouse } from '@opensu/model';
@@ -25,6 +25,13 @@ export interface Engine {
   /** The site's sun for a date and time (no change to the view). */
   sunAt(date: string, minutes: number): StudySun;
   resize(): void;
+  /**
+   * Replaces the house (after an edit) and keeps the camera: the preset
+   * framing follows the new house unless the user has orbited away.
+   */
+  setHouse(resolved: ResolvedHouse): void;
+  /** The "grow" transition: levels from `fromLevel` up rise in sequence (~1.5 s). */
+  playGrow(fromLevel?: number): Promise<void>;
   /** Renders a frame now and returns the share of non-white pixels (0..1). */
   inkCoverage(): number;
   stats(): SceneStats;
@@ -129,23 +136,30 @@ export function createEngine(container: HTMLElement, resolved: ResolvedHouse, op
   canvas.style.touchAction = 'none';
   canvas.style.outline = 'none';
 
-  const geometry = buildHouse(resolved);
-  const house = createHouseObject(geometry, viewer.palette);
-  viewer.setContent(house.root, house.framePoints);
-  const site = house.root.userData.site as StudySite;
+  let site: StudySite;
   /** Current lighting: presentation, or the physical sun by date and time. */
   let lighting: LightingMode = defaultLighting;
-
-  const points = house.framePoints;
-  const min = new Vector3(Infinity, Infinity, Infinity);
-  const max = new Vector3(-Infinity, -Infinity, -Infinity);
-  for (const p of points) {
-    min.min(p);
-    max.max(p);
-  }
-  const sceneCenter = min.clone().add(max).multiplyScalar(0.5);
+  const sceneCenter = new Vector3();
   let radius = 0;
-  for (const p of points) radius = Math.max(radius, p.distanceTo(sceneCenter));
+
+  /** Builds and shows a house; frees the geometry of the previous one. */
+  function load(r: ResolvedHouse): void {
+    const old = viewer.scene.getObjectByName('baked');
+    old?.traverse((o) => (o as Mesh).geometry?.dispose());
+    const house = createHouseObject(buildHouse(r), viewer.palette);
+    viewer.setContent(house.root, house.framePoints);
+    site = house.root.userData.site as StudySite;
+    const min = new Vector3(Infinity, Infinity, Infinity);
+    const max = new Vector3(-Infinity, -Infinity, -Infinity);
+    for (const p of house.framePoints) {
+      min.min(p);
+      max.max(p);
+    }
+    sceneCenter.copy(min).add(max).multiplyScalar(0.5);
+    radius = 0;
+    for (const p of house.framePoints) radius = Math.max(radius, p.distanceTo(sceneCenter));
+  }
+  load(resolved);
 
   let controls: OrbitControls | null = null;
   let anim = 0;
@@ -330,8 +344,7 @@ export function createEngine(container: HTMLElement, resolved: ResolvedHouse, op
     },
     walkToLevel(levelId) {
       const w = viewer.walk;
-      const data = (house.root.userData.walk as { arrivals: { level: string; position: [number, number]; headingDeg: number }[] } | undefined);
-      const a = data?.arrivals.find((x) => x.level === levelId);
+      const a = viewer.walkArrivals.find((x) => x.level === levelId);
       const lv = viewer.levelList.find((l) => l.id === levelId);
       if (!w || !a || !lv) return;
       dissolve(() => w.teleport(a.position[0], a.position[1], lv.elevation, a.headingDeg));
@@ -344,6 +357,26 @@ export function createEngine(container: HTMLElement, resolved: ResolvedHouse, op
     },
     sunAt: (date, minutes) => studySun(site, date, minutes),
     resize,
+    setHouse(r) {
+      stop();
+      const cam = viewer.camera;
+      load(r);
+      if (viewer.walking) {
+        // The viewer keeps walking in the new house (same spot when free):
+        // listen to its new walker.
+        const w = viewer.walk!;
+        w.onChange = (st) => emitWalk(st);
+        emitWalk(w.state);
+      } else if (moved) {
+        // Keep the user's camera (the controls still drive it).
+        viewer.camera = cam;
+        viewer.requestRender();
+      } else {
+        attachControls();
+      }
+    },
+    // No grow while walking: the clip plane would sweep through the room around you.
+    playGrow: (fromLevel = 0) => (viewer.walking ? Promise.resolve() : viewer.playGrow({ fromLevel })),
     inkCoverage() {
       viewer.renderNow();
       const gl = viewer.renderer.getContext();

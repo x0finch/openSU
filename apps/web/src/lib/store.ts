@@ -50,6 +50,8 @@ export interface StudioState {
   chatOpen: boolean;
   sheetOpen: boolean;
   house: House | null;
+  /** How the 3D view should show the next house change (set with `setHouse`). */
+  grow: GrowHint | null;
   setLang: (lang: Lang) => void;
   setMode: (mode: Mode) => void;
   setView: (view: ViewId) => void;
@@ -61,7 +63,14 @@ export interface StudioState {
   setWalk: (on: boolean) => void;
   setChatOpen: (open: boolean) => void;
   setSheetOpen: (open: boolean) => void;
-  setHouse: (house: House) => void;
+  /** Replaces the house; `grow` asks the 3D view to play the grow transition. */
+  setHouse: (house: House, grow?: Omit<GrowHint, 'nonce'>) => void;
+}
+
+/** A requested grow transition: levels from `fromLevel` up rise in sequence. */
+export interface GrowHint {
+  fromLevel: number;
+  nonce: number;
 }
 
 const LANG_KEY = 'opensu.lang';
@@ -92,6 +101,7 @@ export const useStudio = create<StudioState>((set) => ({
   // Phones start with the drawing large and the controls collapsed.
   sheetOpen: false,
   house: null,
+  grow: null,
   setLang: (lang) => {
     try {
       globalThis.localStorage?.setItem(LANG_KEY, lang);
@@ -108,10 +118,17 @@ export const useStudio = create<StudioState>((set) => ({
   setCut: (cut) => set((s) => (cut && !isAxo(s.view) ? { cut, view: DEFAULT_VIEW, viewNonce: s.viewNonce + 1, walk: false } : { cut, walk: false })),
   setSun: (patch) => set((s) => ({ sun: { ...s.sun, ...patch } })),
   setSunInfo: (sunInfo) => set({ sunInfo }),
-  setWalk: (walk) => set(walk ? { walk, mode: '3d' } : { walk }),
-  setChatOpen: (chatOpen) => set({ chatOpen }),
+  // Walking and the assistant panel take turns: entering walk mode tucks the chat away.
+  setWalk: (walk) => set(walk ? { walk, mode: '3d', chatOpen: false } : { walk }),
+  setChatOpen: (chatOpen) => set(chatOpen ? { chatOpen, walk: false } : { chatOpen }),
   setSheetOpen: (sheetOpen) => set({ sheetOpen }),
-  setHouse: (house) => set((s) => ({ house, level: s.level ?? house.levels[0]?.id ?? null })),
+  setHouse: (house, grow) =>
+    set((s) => ({
+      house,
+      level: s.level && house.levels.some((l) => l.id === s.level) ? s.level : house.levels[0]?.id ?? null,
+      cut: s.cut && !house.levels.some((l) => l.id === s.cut) ? null : s.cut,
+      grow: grow ? { ...grow, nonce: (s.grow?.nonce ?? 0) + 1 } : s.grow,
+    })),
 }));
 
 /** Applies a stored language preference after hydration. */

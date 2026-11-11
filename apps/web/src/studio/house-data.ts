@@ -1,4 +1,5 @@
-// Lazy chunk: the model package (schema, resolver, golden sample).
+// Lazy chunk: the model package (schema, resolver, samples).
+import { starterHouse } from '@opensu/agent/starter';
 import { golden, resolve, type House, type ResolvedHouse } from '@opensu/model';
 
 export interface LevelInfo {
@@ -22,8 +23,13 @@ export interface Derived {
 /** Below this storey height (mm) a top level under a pitched roof reads as an attic. */
 const ATTIC_HEIGHT = 2200;
 
+/**
+ * The house the studio opens with: our own starter design. The golden
+ * reference house is an internal benchmark, reachable with `?sample=golden`.
+ */
 export function loadSample(): House {
-  return golden;
+  const q = typeof location === 'undefined' ? null : new URLSearchParams(location.search).get('sample');
+  return q === 'golden' ? golden : starterHouse();
 }
 
 export function derive(house: House): Derived {

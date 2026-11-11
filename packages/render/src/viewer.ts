@@ -39,6 +39,7 @@ export interface WalkOptions {
   headingDeg?: number;
   pitchDeg?: number;
 }
+import { GROW_DURATION, growHeight, type GrowOptions } from './grow.js';
 
 /** A storey as the kernel reports it (metres). */
 export interface ViewerLevel {
@@ -106,6 +107,10 @@ export class IllustrationViewer {
   private beforeWalk: { cut: string | null; preset: ViewPreset | null } | null = null;
   /** Presentation sun bearing while walking (fixed at entry, so turning never moves shadows). */
   private walkSunAzimuth = 0;
+  /** Height of the grow clip plane while `playGrow` runs (scene metres). */
+  private growZ: number | null = null;
+  private growFrame = 0;
+  private growDone: (() => void) | null = null;
   /** Called after every frame (stats, UI). */
   onAfterRender: ((stats: SceneStats) => void) | null = null;
   lastStats: SceneStats = { triangles: 0, drawCalls: 0, drawCallsWithShadows: 0, trianglesWithShadows: 0 };
@@ -147,7 +152,14 @@ export class IllustrationViewer {
     const site = root.userData.site as StudySite | undefined;
     if (site) this.site = site;
     this.walkData = (root.userData.walk as WalkData | undefined) ?? null;
-    if (this.walker) this.exitWalk();
+    // Walking through a house that changes (an edit, a new house): keep
+    // walking in the new one from the same spot when it is still free,
+    // else from its entrance. The walker is replaced (`walk` changes).
+    const resume = this.walker ? this.walker.state : null;
+    if (this.walker) {
+      this.walker.dispose();
+      this.walker = null;
+    }
     for (const m of this.clipLineMaterials) m.resolution.copy(this.edgeMaterial.resolution);
     // The outdoor sun never sees what a cutaway hides: clippable meshes clip
     // their shadow-depth pass for that light only.
@@ -192,10 +204,26 @@ export class IllustrationViewer {
     });
     const ground = createGround(this.bounds, this.palette.ground);
     baked.group.add(ground);
+    if (resume && this.walkData) {
+      const lv = this.levels.find((l) => l.id === resume.level);
+      this.enterWalk({ ...(lv ? { level: lv.id, position: [resume.x, resume.y] as [number, number] } : {}), headingDeg: resume.headingDeg, pitchDeg: resume.pitchDeg });
+      return;
+    }
+    if (resume && this.beforeWalk) {
+      // The new content cannot be walked: back to the view shown before.
+      this.cutLevel = this.beforeWalk.cut;
+      this.preset = this.beforeWalk.preset;
+      this.beforeWalk = null;
+    }
     this.applyCutaway();
     this.applySun();
     if (this.preset) this.setView(this.preset);
     this.requestRender();
+  }
+
+  /** Per level, the walk's arrival point (stair top; the entrance on the ground floor). */
+  get walkArrivals(): WalkData['arrivals'] {
+    return this.walkData?.arrivals ?? [];
   }
 
   /** Site of the sun study (taken from the content when it carries one). */
@@ -237,18 +265,26 @@ export class IllustrationViewer {
   private applyCutaway(): void {
     const li = this.cutLevel ? this.levels.findIndex((l) => l.id === this.cutLevel) : -1;
     const level = li >= 0 ? this.levels[li]! : null;
-    if (level) this.clipPlane.constant = level.cutZ + cutTokens.clipAbove;
+    // The grow transition clips with the same plane, at the lower of the two heights.
+    const growZ = this.growZ;
+    const cutZ = level ? level.cutZ + cutTokens.clipAbove : Infinity;
+    const clipZ = Math.min(cutZ, growZ ?? Infinity);
+    const clipped = Number.isFinite(clipZ);
+    if (clipped) this.clipPlane.constant = clipZ;
     const physical = this.lighting.mode === 'physical';
     for (const m of this.clipMaterials) {
-      const planes = level ? [this.clipPlane] : null;
+      const planes = clipped ? [this.clipPlane] : null;
       if ((m.clippingPlanes?.length ?? 0) !== (planes?.length ?? 0) || m.clipShadows !== !physical) m.needsUpdate = true;
       m.clippingPlanes = planes;
       m.clipShadows = !physical;
     }
     for (const [name, objs] of this.groups) {
       let visible = true;
-      if (name.startsWith('cut:')) visible = !!level && name === `cut:${level.id}`;
-      else if (name.startsWith('level:')) visible = !level || this.levels.findIndex((l) => l.id === name.slice(6)) <= li;
+      if (name.startsWith('cut:')) visible = !!level && name === `cut:${level.id}` && (growZ === null || growZ >= cutZ);
+      else if (name.startsWith('level:')) {
+        const idx = this.levels.findIndex((l) => l.id === name.slice(6));
+        visible = (!level || idx <= li) && (growZ === null || (this.levels[idx]?.elevation ?? 0) < growZ);
+      }
       // People are flat silhouettes for the views from outside; at eye
       // level, close up, they would read as cardboard: hidden while walking.
       for (const o of objs) o.visible = visible && !(this.walker && o.userData.billboard);
@@ -321,9 +357,13 @@ export class IllustrationViewer {
     const world = new WalkWorld(data, { radius: walkTokens.bodyRadius, stepUp: walkTokens.stepUp });
     if (!this.beforeWalk) this.beforeWalk = { cut: this.cutLevel, preset: this.preset };
     this.cutLevel = null;
-    const walker = new WalkController({ renderNow: () => this.renderNow(), requestRender: () => this.requestRender(), levels: this.levels }, world, {
-      x: pos[0], y: pos[1], z: lv?.elevation ?? 0, headingDeg: opts.headingDeg ?? base.headingDeg, pitchDeg: opts.pitchDeg ?? 0,
-    });
+    let at = { x: pos[0], y: pos[1], z: lv?.elevation ?? 0, headingDeg: opts.headingDeg ?? base.headingDeg };
+    if (!world.settle(at.x, at.y, at.z)) {
+      // Nowhere to stand there (a removed room, a bad position): the entrance.
+      const s = data.start;
+      at = { x: s.position[0], y: s.position[1], z: this.levels.find((l) => l.id === s.level)?.elevation ?? 0, headingDeg: s.headingDeg };
+    }
+    const walker = new WalkController({ renderNow: () => this.renderNow(), requestRender: () => this.requestRender(), levels: this.levels }, world, { ...at, pitchDeg: opts.pitchDeg ?? 0 });
     this.walker = walker;
     this.preset = null;
     this.walkSunAzimuth = ((walker.state.headingDeg + 180) % 360);
@@ -355,6 +395,54 @@ export class IllustrationViewer {
   /** The walker's state (null unless walking). */
   get walkState(): WalkState | null {
     return this.walker?.state ?? null;
+  }
+
+  /**
+   * The "grow" transition after the content changed: levels rise in
+   * sequence (a clip plane sweeps up from the floor of `fromLevel` past the
+   * roof, ~1.5 s), then the viewer is back to render on demand. Respects
+   * a level cutaway (the sweep stops at its cut) and reduced motion (no
+   * animation). Resolves when done or cancelled by a newer call.
+   */
+  playGrow(opts: GrowOptions = {}): Promise<void> {
+    this.stopGrow();
+    const reduce = typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
+    if (reduce || !this.levels.length) return Promise.resolve();
+    const duration = opts.duration ?? GROW_DURATION;
+    const ceiling = this.bounds.isEmpty() ? this.levels[this.levels.length - 1]!.top : this.bounds.max.y + 0.01;
+    const t0 = performance.now();
+    return new Promise<void>((done) => {
+      this.growDone = done;
+      const step = (now: number) => {
+        const t = Math.min(1, (now - t0) / duration);
+        this.growZ = t < 1 ? growHeight(this.levels, ceiling, t, opts.fromLevel) : null;
+        this.applyCutaway();
+        this.renderNow();
+        if (t < 1) this.growFrame = requestAnimationFrame(step);
+        else this.stopGrow();
+      };
+      this.growZ = growHeight(this.levels, ceiling, 0, opts.fromLevel);
+      this.applyCutaway();
+      this.growFrame = requestAnimationFrame(step);
+    });
+  }
+
+  /** Ends a running grow at once (the house shows whole). */
+  stopGrow(): void {
+    cancelAnimationFrame(this.growFrame);
+    this.growFrame = 0;
+    const done = this.growDone;
+    this.growDone = null;
+    if (this.growZ !== null) {
+      this.growZ = null;
+      this.applyCutaway();
+      this.requestRender();
+    }
+    done?.();
+  }
+
+  get growing(): boolean {
+    return this.growDone !== null;
   }
 
   /** Re-render the shadow map with the next frame (after external scene edits). */
@@ -549,6 +637,7 @@ export class IllustrationViewer {
   dispose(): void {
     this.walker?.dispose();
     this.walker = null;
+    this.stopGrow();
     this.renderer.dispose();
     this.renderer.domElement.remove();
   }
