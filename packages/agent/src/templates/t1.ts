@@ -8,7 +8,7 @@
 // takes the south-east corner and shelters the front door.
 //
 //   X: 0=0  1=900  2=4500  2h=5700  3=9000  9=12000
-//   Y: A=0  B=1500 C=3900  Ca=5100 D=6300  Da=8100  E=10200  F=12900  Z=14000
+//   Y: A=0  Bc=1500  B=2700  C=3900  Ca=5100  D=6300  Da=8100  E=10200  F=12900  Z=14000
 import { c, gridLines, span, start } from './helpers';
 
 export const T1_COMMANDS: readonly unknown[] = [
@@ -18,7 +18,7 @@ export const T1_COMMANDS: readonly unknown[] = [
     { id: 'gate-garden', side: 'S', at: start(5400), width: 1200, kind: 'swing' },
   ] } },
   ...gridLines('x', [['1', 900], ['2', 4500], ['2h', 5700], ['3', 9000]]),
-  ...gridLines('y', [['B', 1500], ['C', 3900], ['Ca', 5100], ['D', 6300], ['Da', 8100], ['E', 10200], ['F', 12900]]),
+  ...gridLines('y', [['Bc', 1500], ['B', 2700], ['C', 3900], ['Ca', 5100], ['D', 6300], ['Da', 8100], ['E', 10200], ['F', 12900]]),
   { op: 'update_level', level: 'L1', name: '一层', height: 3300 },
   { op: 'add_level', id: 'L2', name: '二层', height: 3000 },
 
@@ -81,5 +81,5 @@ export const T1_COMMANDS: readonly unknown[] = [
   // the carport and the front door.
   { op: 'add_roof', id: 'roof-main', kind: 'gable', cells: [c('1', '3', 'D', 'F')], onLevel: 'L2', ridge: 'EW', pitchDeg: 27, overhang: 500 },
   { op: 'add_roof', id: 'roof-east', kind: 'gable', cells: [c('3', '9', 'D', 'F')], onLevel: 'L2', ridge: 'NS', pitchDeg: 45, overhang: 400 },
-  { op: 'add_roof', id: 'canopy-carport', kind: 'canopy', cells: [c('3', '9', 'B', 'D')], onLevel: 'L1', height: 2900, overhang: 150 },
+  { op: 'add_roof', id: 'canopy-carport', kind: 'canopy', cells: [c('3', '9', 'Bc', 'D')], onLevel: 'L1', height: 2900, overhang: 150 },
 ];

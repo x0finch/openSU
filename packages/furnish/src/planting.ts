@@ -205,7 +205,9 @@ function computePlants(house: ResolvedHouse): Plant[] {
     const fenceDist = (x: number, y: number) => Math.min(x, y, site.width - x, site.depth - y);
     const sunny = ([[r[0], r[1], 1, 1], [r[2], r[1], -1, 1], [r[2], r[3], -1, -1], [r[0], r[3], 1, -1]] as const)
       .filter((c) => (mainSide === 'S' ? c[1] === r[1] : c[1] === r[3]));
-    const score = (c: readonly number[]) => fenceDist(c[0]!, c[1]!) * 10 + Math.abs(c[0]! - houseMidX) * 1e-3;
+    // Last tie-break: the east corner (the eye-level hero view looks from the
+    // south-west, so the tree stands to the side of the facade's centre).
+    const score = (c: readonly number[]) => fenceDist(c[0]!, c[1]!) * 10 + Math.abs(c[0]! - houseMidX) * 1e-3 + c[0]! * 1e-7;
     const corner = sunny.reduce((m, c) => (score(c) > score(m) ? c : m));
     const inset = Math.min(900, 0.3 * Math.min(r[2] - r[0], r[3] - r[1]));
     bigTree = [corner[0] + corner[2] * inset, corner[1] + corner[3] * inset];
