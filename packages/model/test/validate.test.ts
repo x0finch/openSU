@@ -156,7 +156,7 @@ describe('validate: one deliberately broken house per rule', () => {
   it('opening-off-edge: offset beyond the side', () => {
     const issues = broken((h) => { L(h, 0).openings.find((o) => o.id === 'w-bed')!.at = { from: 'start', offset: 3000 }; });
     const i = issues.find((x) => x.code === 'opening-off-edge')!;
-    expect(i.message).toMatch(/Available S edges: y=0 from 4000 to 8000/);
+    expect(i.message).toMatch(/runs past its span b-c on the S side of "bed" \(4000\.\.8000, 4000 mm long\)\. For width 1500 the offset must be between 0 and 2500/);
   });
 
   it('opening-no-wall: door between open-plan spaces', () => {
