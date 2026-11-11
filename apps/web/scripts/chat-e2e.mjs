@@ -179,6 +179,8 @@ try {
     await shot(page, 'chat-empty-desktop');
 
     const area0 = await shownArea(page);
+    // Opening the panel re-frames the house (~0.4 s): wait until the camera has settled.
+    await page.waitForTimeout(900);
     await settle(page);
     const px0 = await canvasPixels(page);
 

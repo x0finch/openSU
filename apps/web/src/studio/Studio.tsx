@@ -51,7 +51,7 @@ const NO_INSETS = { top: 0, right: 0, bottom: 0, left: 0 };
  * below or from its side, whichever shows the house larger.
  */
 function desktopInsets(column: boolean, info: { right: number; bottom: number } | null, dockTop: number | null) {
-  const base = { top: 72, right: 32, left: 32, bottom: dockTop === null ? 140 : Math.max(96, window.innerHeight - dockTop + 16) };
+  const base = { top: 72, right: 32, left: 32, bottom: dockTop === null ? 140 : Math.max(96, window.innerHeight - dockTop + 28) };
   if (column) return [{ ...base, left: LEFT_COLUMN + 16 }];
   if (!info) return [base];
   return [
