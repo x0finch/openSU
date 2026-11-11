@@ -1,16 +1,25 @@
+// The studio layout the owner chose (task 015). The house is never covered
+// or squeezed by controls (only the translucent recent strip, opened on
+// purpose, may lie over it). Desktop: house name top-left, 3D / 平面 / 图册
+// top centre, the toolbar top-right with its panel hanging under it, one
+// input bottom centre. Phone: name and mode on one row; at the bottom the
+// toolbar, the input, and the sheets (PhoneDock). The 3D canvas keeps its
+// size; the house re-frames into what the controls leave free.
 import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import type { FrameInsets } from '@opensu/render';
 import { cx } from '../components/ui';
 import { useT } from '../lib/i18n';
-import { DesktopChat, MobileChat, PromptBar } from '../chat/ChatPanel';
+import { ChangeToast, ChatInput, PinnedColumn, RecentStrip, SettingsHost } from '../chat/ChatPanel';
 import { useChat } from '../chat/chat-store';
 import { useAutosave } from '../lib/autosave';
 import { restoreLang, useStudio } from '../lib/store';
 import { applyParams, useUrlState } from '../lib/url-state';
-import { ActionRow, Hints, ModeSwitch, TitleMenu, TrayHost, useSunPlayer } from './chrome';
+import { Hints, ModeSwitch, TitleMenu, useSunPlayer } from './chrome';
 import type { Derived } from './house-data';
 import { Loading } from './Loading';
+import { type DockExtent, PhoneDock, SHEET_MS } from './PhoneDock';
 import { PlanView } from './PlanView';
-import { SitePanelHost } from './SitePanels';
+import { PanelCard, TRAY_ID, Toolbar } from './tools';
 import { useDerived } from './useDerived';
 import { Viewer3D } from './Viewer3D';
 import { LandscapeWalkHUD, MobileWalkHUD, useEscapeExitsWalk, WalkHUD } from './WalkHUD';
@@ -18,15 +27,18 @@ import { LandscapeWalkHUD, MobileWalkHUD, useEscapeExitsWalk, WalkHUD } from './
 // The gallery pulls in @opensu/sheet (and with it three.js): its own lazy chunk.
 const SheetGallery = lazy(() => (import.meta.env.SSR ? new Promise<never>(() => {}) : import('./SheetGallery')));
 
-/** Height of the phone header (title + facts, mode switch), CSS px. */
-const PHONE_HEADER = 'calc(max(6px, env(safe-area-inset-top)) + 58px)';
-/** Sideways the header is one row. */
-const PHONE_HEADER_LANDSCAPE = 'calc(max(4px, env(safe-area-inset-top)) + 46px)';
-
 /** Desktop chrome needs room in both directions; a phone held sideways keeps the phone layout. */
 const DESKTOP_QUERY = '(min-width: 768px) and (min-height: 520px)';
 // Same condition as the `land` CSS variant (styles.css).
 const LANDSCAPE_QUERY = '(orientation: landscape) and (max-height: 519px)';
+
+/** Width of the pinned conversation column (desktop), CSS px. */
+const PIN_COLUMN = 360;
+/** Space kept between a control and the framed house, CSS px (the renderer adds its own white margin). */
+const GAP_DESKTOP = 12;
+const GAP_PHONE = 6;
+/** The renderer's white margin, scaled: the insets already keep the house clear of the controls. */
+const FRAME_MARGIN = { desktop: 0.4, phone: 0.35 };
 
 function useMedia(query: string): boolean {
   const [on, setOn] = useState(() => typeof matchMedia === 'function' && matchMedia(query).matches);
@@ -40,54 +52,22 @@ function useMedia(query: string): boolean {
   return on;
 }
 
-/** Width of the left column (assistant or site panel) including its margin, CSS px. */
-const LEFT_COLUMN = 404;
-const NO_INSETS = { top: 0, right: 0, bottom: 0, left: 0 };
-
-/**
- * The 3D framing on desktop: clear of the mode switch on top, the dock at
- * the bottom (its real top, tray included) and the left column when open.
- * The title sits in the top-left corner: the house keeps clear of it from
- * below or from its side, whichever shows the house larger.
- */
-function desktopInsets(column: boolean, info: { right: number; bottom: number } | null, dockTop: number | null) {
-  const base = { top: 72, right: 32, left: 32, bottom: dockTop === null ? 140 : Math.max(96, window.innerHeight - dockTop + 28) };
-  if (column) return [{ ...base, left: LEFT_COLUMN + 16 }];
-  if (!info) return [base];
-  return [
-    { ...base, top: Math.max(base.top, info.bottom + 12) },
-    { ...base, left: Math.max(base.left, info.right + 16) },
-  ];
-}
-
-/**
- * Deep-link state from the query string: ?mode=plan&level=L2&view=axo-ne,
- * sun study ?sun=winter&time=10:00, cutaway ?cut=L1, ?mode=sheet.
- */
-function useInitialParams(): void {
-  useEffect(() => {
-    // Test hooks (screenshot scripts): the stores.
-    window.__studio = { ...window.__studio, store: useStudio, chat: useChat };
-    restoreLang();
-    const q = new URLSearchParams(location.search);
-    applyParams(q, true);
-    if (q.get('panel') === 'open') useStudio.getState().setChatOpen(true);
-    const lang = q.get('lang');
-    if (lang === 'en' || lang === 'zh') useStudio.getState().setLang(lang);
-  }, []);
-}
-
-/** The bottom of the 3D / plan chrome: open tray, first-visit hints, the secondary row and the prompt bar. */
-function Dock({ derived, desktop, landscape, onRect }: { derived: Derived | null; desktop: boolean; landscape: boolean; onRect: (r: { top: number; barTop: number }) => void }) {
-  const ref = useRef<HTMLDivElement>(null);
-  const bar = useRef<HTMLDivElement>(null);
-  const chatOpen = useStudio((s) => s.chatOpen);
-  const walk = useStudio((s) => s.walk);
-  const column = useStudio((s) => s.chatOpen || !!s.sitePanel);
+/** Reports an element's settled box (offset geometry: transforms of entry animations ignored). */
+function useBox(ref: React.RefObject<HTMLElement | null>, on: (r: { top: number; bottom: number; left: number; right: number } | null) => void, deps: unknown[] = []): void {
   useLayoutEffect(() => {
     const el = ref.current;
-    if (!el) return;
-    const report = () => onRect({ top: Math.round(el.getBoundingClientRect().top), barTop: Math.round((bar.current ?? el).getBoundingClientRect().top) });
+    if (!el) {
+      on(null);
+      return;
+    }
+    const report = () => {
+      let top = 0, left = 0;
+      for (let e: HTMLElement | null = el; e; e = e.offsetParent as HTMLElement | null) {
+        top += e.offsetTop;
+        left += e.offsetLeft;
+      }
+      on({ top, left, bottom: top + el.offsetHeight, right: left + el.offsetWidth });
+    };
     report();
     const ro = new ResizeObserver(report);
     ro.observe(el);
@@ -96,60 +76,124 @@ function Dock({ derived, desktop, landscape, onRect }: { derived: Derived | null
       ro.disconnect();
       window.removeEventListener('resize', report);
     };
-  }, [onRect]);
-  const levels = derived?.levels ?? null;
-  if (desktop) {
-    return (
-      <div
-        ref={ref}
-        className="pointer-events-none absolute bottom-6 flex -translate-x-1/2 flex-col items-center gap-2.5 transition-[left] duration-300 ease-out-soft"
-        // Centred in the drawing that is left beside the open column.
-        style={{ left: column ? `calc(${LEFT_COLUMN}px + (100% - ${LEFT_COLUMN}px) / 2)` : '50%' }}
-        data-testid="dock"
-      >
-        <TrayHost levels={levels} />
-        <Hints />
-        <ActionRow levels={levels} />
-        {!chatOpen && (
-          <div ref={bar} className={cx(walk ? 'w-[min(420px,calc(100vw-620px))]' : 'w-[min(600px,calc(100vw-64px))]', 'min-w-[340px]')}>
-            <PromptBar />
-          </div>
-        )}
-      </div>
-    );
-  }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, deps);
+}
+
+type Box = { top: number; bottom: number; left: number; right: number };
+const sameBox = (a: Box | null, b: Box | null) => (a && b ? a.top === b.top && a.bottom === b.bottom && a.left === b.left && a.right === b.right : a === b);
+function useBoxState(): [Box | null, (b: Box | null) => void] {
+  const [box, setBox] = useState<Box | null>(null);
+  const set = useCallback((b: Box | null) => setBox((c) => (sameBox(c, b) ? c : b)), []);
+  return [box, set];
+}
+
+/**
+ * Desktop framing: clear of the top row (mode switch, toolbar), the input
+ * (and the hints above it) and the open panel card. The title sits in the
+ * top-left corner and the card in the top-right: the house keeps clear of
+ * each from below or from the side, whichever shows it larger.
+ */
+function desktopInsets(W: number, H: number, left: number, o: { title: Box | null; top: number; dock: Box | null; panel: { left: number; bottom: number } | null }): FrameInsets[] {
+  const g = GAP_DESKTOP;
+  const base = { top: o.top + g, right: 24, left: 24, bottom: o.dock ? H - o.dock.top + g : 24 };
+  const tops = [base];
+  if (o.title) tops.push({ ...base, top: Math.max(base.top, o.title.bottom + g) }, { ...base, left: Math.max(base.left, o.title.right - left + 16) });
+  const out = o.title ? tops.slice(1) : tops;
+  if (!o.panel) return out;
+  const all = out.flatMap((i) => [
+    { ...i, right: Math.max(i.right, W - (o.panel!.left - left) + g) },
+    { ...i, top: Math.max(i.top, o.panel!.bottom + g) },
+  ]);
+  // The renderer ignores insets that leave less than a third free (and then
+  // frames on the whole canvas): such a candidate must not compete.
+  const fits = all.filter((i) => W - i.left - i.right >= W / 3 && H - i.top - i.bottom >= H / 3);
+  return fits.length ? fits : [base];
+}
+
+/**
+ * Deep-link state from the query string: ?mode=plan&level=L2&view=axo-ne,
+ * sun study ?sun=winter&time=10:00, cutaway ?cut=L1, ?mode=sheet; the
+ * conversation: ?panel=open (the recent strip), ?panel=pin (pinned).
+ */
+function useInitialParams(): void {
+  useEffect(() => {
+    // Test hooks (screenshot scripts): the stores.
+    window.__studio = { ...window.__studio, store: useStudio, chat: useChat };
+    restoreLang();
+    const q = new URLSearchParams(location.search);
+    applyParams(q, true);
+    if (q.get('panel') === 'open') useStudio.getState().setRecent(true);
+    if (q.get('panel') === 'pin') useStudio.setState({ pinned: true, recent: false });
+    const lang = q.get('lang');
+    if (lang === 'en' || lang === 'zh') useStudio.getState().setLang(lang);
+  }, []);
+}
+
+/**
+ * Escape closes one thing at a time: a site panel (back to the sun panel
+ * when it came from there), the open tool panel (focus back to its tool),
+ * the recent strip; walking is left by the walk HUD's own handler after.
+ */
+function useEscapeCloses(): void {
+  useEffect(() => {
+    const on = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape' || e.defaultPrevented) return;
+      const s = useStudio.getState();
+      if (useChat.getState().settingsOpen) {
+        useChat.getState().setSettingsOpen(false);
+      } else if (s.sitePanel) {
+        s.setSitePanel(null);
+      } else if (s.tray) {
+        const trig = document.querySelector<HTMLElement>(`[aria-controls="${TRAY_ID[s.tray]}"]`);
+        s.setTray(null);
+        trig?.focus({ preventScroll: true });
+      } else if (s.recent) {
+        s.setRecent(false);
+        document.querySelector<HTMLElement>('[data-testid=chat-history]')?.focus({ preventScroll: true });
+      } else return;
+      e.preventDefault();
+    };
+    window.addEventListener('keydown', on);
+    return () => window.removeEventListener('keydown', on);
+  }, []);
+}
+
+/** A click (not a drag) on the drawing closes the open tool panel and the recent strip. */
+function useClickAwayFromDrawing(ref: React.RefObject<HTMLElement | null>): void {
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    let at: { x: number; y: number } | null = null;
+    const down = (e: PointerEvent) => (at = { x: e.clientX, y: e.clientY });
+    const up = (e: PointerEvent) => {
+      if (!at || Math.hypot(e.clientX - at.x, e.clientY - at.y) > 6) return;
+      at = null;
+      const s = useStudio.getState();
+      if (s.tray || s.sitePanel) s.setTray(null);
+      if (s.recent) s.setRecent(false);
+    };
+    el.addEventListener('pointerdown', down);
+    el.addEventListener('pointerup', up);
+    return () => {
+      el.removeEventListener('pointerdown', down);
+      el.removeEventListener('pointerup', up);
+    };
+  }, [ref]);
+}
+
+/** Desktop bottom centre: the input, the recent strip and the after-turn note above it, the first-visit hints. */
+function DesktopDock({ onBox }: { onBox: (b: Box | null) => void }) {
+  const recent = useStudio((s) => s.recent);
+  const ref = useRef<HTMLDivElement>(null);
+  useBox(ref, onBox);
   return (
-    <div
-      ref={ref}
-      className={cx('pointer-events-none absolute inset-x-3 bottom-[max(10px,env(safe-area-inset-bottom))] flex flex-col items-stretch gap-2', chatOpen ? 'z-40' : 'z-20')}
-      style={landscape ? { left: 'max(12px, env(safe-area-inset-left))', right: 'max(12px, env(safe-area-inset-right))' } : undefined}
-      data-testid="dock"
-    >
-      {!chatOpen && <TrayHost levels={levels} compact />}
-      {!chatOpen && (
-        <div className="flex justify-center">
-          <Hints compact />
-        </div>
-      )}
-      {landscape ? (
-        <div className="flex items-end gap-2">
-          {!chatOpen && (
-            <div className="w-[340px] shrink-0">
-              <ActionRow levels={levels} compact />
-            </div>
-          )}
-          <div ref={bar} className="min-w-0 flex-1">
-            <PromptBar compact />
-          </div>
-        </div>
-      ) : (
-        <>
-          {!chatOpen && <ActionRow levels={levels} compact />}
-          <div ref={bar}>
-            <PromptBar compact />
-          </div>
-        </>
-      )}
+    <div ref={ref} className="pointer-events-none absolute bottom-6 left-1/2 flex w-[min(600px,calc(100%-48px))] -translate-x-1/2 flex-col items-center gap-2.5" data-testid="dock">
+      <Hints />
+      <div className="relative w-full">
+        {recent ? <RecentStrip className="absolute inset-x-0 bottom-full mb-2" /> : <ChangeToast className="absolute bottom-full left-1/2 mb-3 -translate-x-1/2" />}
+        <ChatInput />
+      </div>
     </div>
   );
 }
@@ -168,27 +212,61 @@ export function Studio() {
   useUrlState();
   useAutosave();
   useSunPlayer();
+  useEscapeCloses();
   useEscapeExitsWalk();
   const t = useT();
   const derived = useDerived();
   const mode = useStudio((s) => s.mode);
   const level = useStudio((s) => s.level);
   const walk = useStudio((s) => s.walk) && mode === '3d';
+  const pinnedState = useStudio((s) => s.pinned);
+  const panelOpen = useStudio((s) => mode !== 'sheet' && (!!s.sitePanel || (!!s.tray && (mode === '3d' || s.tray === 'levels'))));
   const desktop = useMedia(DESKTOP_QUERY);
   const landscape = useMedia(LANDSCAPE_QUERY) && !desktop;
-  const column = useStudio((s) => s.chatOpen || !!s.sitePanel);
   // `?frame=full` frames on the whole canvas (comparison with the renderer's shots).
   const [fullFrame] = useState(() => typeof location !== 'undefined' && new URLSearchParams(location.search).get('frame') === 'full');
-  const [info, setInfo] = useState<{ right: number; bottom: number } | null>(null);
-  const onInfoRect = useCallback((r: { right: number; bottom: number }) => setInfo((c) => (c && c.right === r.right && c.bottom === r.bottom ? c : r)), []);
-  const [dock, setDock] = useState<{ top: number; barTop: number } | null>(null);
-  const onDockRect = useCallback((r: { top: number; barTop: number }) => setDock((c) => (c && c.top === r.top && c.barTop === r.barTop ? c : r)), []);
-  const insets = useMemo(
-    () => (desktop && !fullFrame ? desktopInsets(column && mode !== 'sheet', info, mode === '3d' ? dock?.top ?? null : null) : [NO_INSETS]),
-    [desktop, column, fullFrame, info, dock, mode],
-  );
-  // A phone held sideways while walking: the room fills the screen, with its own HUD.
+  // Desktop: the pinned conversation is a column; the canvas resizes beside it.
+  const column = desktop && pinnedState && mode !== 'sheet';
+  const canvasLeft = column ? PIN_COLUMN : 0;
   const walkLandscape = walk && landscape;
+
+  const main = useRef<HTMLElement>(null);
+  useClickAwayFromDrawing(main);
+
+  // Boxes of the controls the house keeps clear of.
+  const [title, setTitle] = useBoxState();
+  const [modeBox, setModeBox] = useBoxState();
+  const [dockBox, setDockBox] = useBoxState();
+  const [header, setHeader] = useBoxState();
+  const [panel, setPanel] = useState<{ left: number; bottom: number } | null>(null);
+  const onPanel = useCallback((r: { left: number; bottom: number } | null) => setPanel((c) => (c && r && c.left === r.left && c.bottom === r.bottom ? c : r)), []);
+  const [extent, setExtent] = useState<DockExtent | null>(null);
+  const onExtent = useCallback((e: DockExtent) => setExtent((c) => (c && c.bottom === e.bottom && c.left === e.left ? c : e)), []);
+  const titleRef = useRef<HTMLDivElement>(null);
+  const modeRef = useRef<HTMLDivElement>(null);
+  const headerRef = useRef<HTMLElement>(null);
+  useBox(titleRef, setTitle, [column, desktop]);
+  useBox(modeRef, setModeBox, [column, desktop]);
+  useBox(headerRef, setHeader, [desktop, landscape, walkLandscape]);
+  const [vp, setVp] = useState(() => (typeof window === 'undefined' ? { w: 1440, h: 900 } : { w: window.innerWidth, h: window.innerHeight }));
+  useEffect(() => {
+    const on = () => setVp({ w: window.innerWidth, h: window.innerHeight });
+    window.addEventListener('resize', on);
+    return () => window.removeEventListener('resize', on);
+  }, []);
+
+  const insets = useMemo((): FrameInsets[] => {
+    if (fullFrame) return [{ top: 0, right: 0, bottom: 0, left: 0 }];
+    if (desktop) {
+      const top = Math.max(modeBox?.bottom ?? 56, 60);
+      return desktopInsets(vp.w - canvasLeft, vp.h, canvasLeft, { title: column ? null : title, top, dock: mode === '3d' && !column ? dockBox : null, panel: panelOpen ? panel : null });
+    }
+    const g = GAP_PHONE;
+    const top = (header?.bottom ?? 58) + g;
+    const bottom = (extent?.bottom ?? 130) + g;
+    return [{ top, bottom, left: extent?.left ? extent.left + 12 : 0, right: 0 }];
+  }, [fullFrame, desktop, modeBox, vp, canvasLeft, column, title, mode, dockBox, panelOpen, panel, header, extent]);
+
   // The 3D viewer is created the first time 3D is shown and kept afterwards.
   const [want3d, setWant3d] = useState(mode === '3d');
   useEffect(() => {
@@ -196,25 +274,27 @@ export function Studio() {
   }, [mode]);
 
   const levelId = derived && level && derived.levels.some((l) => l.id === level) ? level : derived?.levels[0]?.id;
-  const header = landscape ? PHONE_HEADER_LANDSCAPE : PHONE_HEADER;
-  // Phones: the drawing sits between the header and the dock.
-  const vh = typeof window === 'undefined' ? 0 : window.innerHeight;
-  const phoneBottom = dock && mode !== 'sheet' ? Math.max(0, vh - dock.top + 8) : 0;
+  const titleNode = <TitleMenu derived={derived} />;
+  // Plan fitting: the same obstacles, as plain insets of the plan's box.
+  const planInsets = desktop
+    ? { top: 84, bottom: dockBox ? vp.h - dockBox.top + GAP_DESKTOP : 120, right: panelOpen && panel ? vp.w - panel.left + GAP_DESKTOP : 40, left: 40 }
+    : { top: (header?.bottom ?? 58) + 8, bottom: (extent?.bottom ?? 130) + 8, right: 12, left: extent?.left ? extent.left + 24 : 12 };
 
   return (
     <div className="fixed inset-0 overflow-hidden bg-page text-ink">
       <main
-        className="absolute inset-x-0 transition-[bottom] duration-300 ease-out-soft"
-        style={{ top: !desktop && mode !== 'sheet' && !walkLandscape ? header : 0, bottom: desktop || walkLandscape ? 0 : phoneBottom }}
+        ref={main}
+        className="absolute inset-y-0 right-0"
+        style={{ left: canvasLeft }}
         aria-label={mode === '3d' ? t('mode.3d') : mode === 'plan' ? t('mode.plan') : t('mode.sheet')}
       >
         {!derived && <Loading label={t('loading')} />}
         {derived && want3d && (
           <div className={mode === '3d' ? 'contents' : 'invisible'}>
-            <Viewer3D resolved={derived.resolved} active={mode === '3d'} insets={insets} compact={!desktop} />
+            <Viewer3D resolved={derived.resolved} active={mode === '3d'} insets={insets} insetMs={desktop ? undefined : SHEET_MS} compact={!desktop} wide={!fullFrame} margin={fullFrame ? 1 : desktop ? FRAME_MARGIN.desktop : FRAME_MARGIN.phone} />
           </div>
         )}
-        {derived && levelId && mode === 'plan' && <PlanView resolved={derived.resolved} levelId={levelId} active insetLeft={desktop && column ? LEFT_COLUMN : 0} insetBottom={desktop ? 136 : 0} />}
+        {derived && levelId && mode === 'plan' && <PlanView resolved={derived.resolved} levelId={levelId} active insets={planInsets} />}
         {derived && mode === 'sheet' && (
           <Suspense fallback={<QuietLoading label={t('loading.sheets')} />}>
             <SheetGallery derived={derived} desktop={desktop} />
@@ -224,38 +304,46 @@ export function Studio() {
 
       {desktop ? (
         <div className="pointer-events-none absolute inset-0">
-          {/* A zoomed plan fades out under the title instead of sliding beneath it. */}
-          {mode === 'plan' && <div className="absolute inset-x-0 top-0 h-28 bg-gradient-to-b from-white via-white/90 to-transparent" aria-hidden="true" />}
-          {mode === 'plan' && <div className="absolute inset-x-0 bottom-0 h-36 bg-gradient-to-t from-white via-white/85 to-transparent" aria-hidden="true" />}
-          {/* Over a walk-through room the title needs a backdrop to stay readable. */}
-          <div className={cx('absolute top-4 left-6 max-w-[min(340px,calc(50vw-180px))]', walk && 'glass -mt-1 -ml-2 rounded-ui py-1 pr-3 pl-2')}>
-            <TitleMenu derived={derived} onRect={onInfoRect} />
+          {/* A zoomed plan fades out under the top row instead of sliding beneath it. */}
+          {mode === 'plan' && <div className="absolute top-0 right-0 h-24 bg-gradient-to-b from-white via-white/90 to-transparent" style={{ left: canvasLeft }} aria-hidden="true" />}
+          {column ? (
+            <PinnedColumn title={titleNode} />
+          ) : (
+            <div ref={titleRef} className={cx('absolute top-4 left-6 w-max max-w-[min(360px,calc(50vw-180px))]', walk && 'glass -mt-1 -ml-2 rounded-ui py-1 pr-3 pl-2')}>
+              {titleNode}
+            </div>
+          )}
+          <div
+            ref={modeRef}
+            className="absolute top-4 -translate-x-1/2"
+            // Centred over the drawing; beside a pinned column on a narrow screen it moves left of the toolbar.
+            style={{ left: column && vp.w < 1180 ? canvasLeft + 24 + 83 : canvasLeft + (vp.w - canvasLeft) / 2 }}
+          >
+            <ModeSwitch className="glass pointer-events-auto rounded-[12px]" />
           </div>
-          <div className="absolute top-4 left-1/2 -translate-x-1/2">
-            <ModeSwitch className="glass pointer-events-auto" />
-          </div>
-          {mode !== 'sheet' && <DesktopChat />}
-          {mode !== 'sheet' && <SitePanelHost desktop />}
-          {walk && <WalkHUD derived={derived} />}
-          {mode !== 'sheet' && <Dock derived={derived} desktop landscape={false} onRect={onDockRect} />}
+          {mode !== 'sheet' && <Toolbar derived={derived} className="absolute top-4 right-4" />}
+          {mode !== 'sheet' && <PanelCard derived={derived} onRect={onPanel} />}
+          {walk && <WalkHUD derived={derived} left={canvasLeft} />}
+          {mode !== 'sheet' && !column && <DesktopDock onBox={setDockBox} />}
+          <SettingsHost />
         </div>
       ) : walkLandscape ? (
         <LandscapeWalkHUD derived={derived} />
       ) : (
         <>
           <header
-            className="pointer-events-none absolute inset-x-0 top-0 z-10 flex items-start justify-between gap-3 bg-gradient-to-b from-white via-white/90 to-transparent px-3 pt-[max(6px,env(safe-area-inset-top))] pb-3 land:items-center land:pt-[max(4px,env(safe-area-inset-top))] land:pb-1"
-            style={landscape ? { paddingLeft: 'max(12px, env(safe-area-inset-left))', paddingRight: 'max(12px, env(safe-area-inset-right))' } : undefined}
+            ref={headerRef}
+            className="pointer-events-none absolute inset-x-0 top-0 z-10 flex items-start justify-between gap-2.5 pt-[max(10px,env(safe-area-inset-top))] pr-3 pl-4 land:items-center land:pt-[max(6px,env(safe-area-inset-top))]"
+            style={landscape ? { paddingLeft: 'max(16px, env(safe-area-inset-left))', paddingRight: 'max(12px, env(safe-area-inset-right))' } : undefined}
           >
-            <div className="min-w-0 pl-1">
+            <div className="min-w-0 pt-0.5">
               <TitleMenu derived={derived} compact />
             </div>
-            <ModeSwitch size="sm" className="glass pointer-events-auto mt-0.5 shrink-0 rounded-[11px] p-0.5! land:mt-0" />
+            <ModeSwitch size="sm" className="glass pointer-events-auto shrink-0 rounded-[12px]" />
           </header>
-          {walk && <MobileWalkHUD derived={derived} top={header} bottom={phoneBottom} />}
-          {mode !== 'sheet' && <Dock derived={derived} desktop={false} landscape={landscape} onRect={onDockRect} />}
-          {mode !== 'sheet' && <MobileChat top={`calc(${header} + 4px)`} bottom={dock ? vh - dock.barTop + 8 : 80} />}
-          <SitePanelHost desktop={false} />
+          {walk && <MobileWalkHUD derived={derived} top={`${header?.bottom ?? 58}px`} bottom={extent?.bottom ?? 130} />}
+          {mode !== 'sheet' && <PhoneDock derived={derived} landscape={landscape} onExtent={onExtent} />}
+          <SettingsHost phone />
         </>
       )}
     </div>

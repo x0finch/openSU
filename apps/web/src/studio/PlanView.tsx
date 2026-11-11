@@ -7,14 +7,15 @@ import type { PlanDrawing } from './plan-data';
 /** Smallest room-name size on screen at the fitted zoom (CSS px). */
 const MIN_LABEL_PX = { desktop: 12, mobile: 10 };
 
-/** Space kept free for floating chrome when fitting (px): title and mode switch on top, the dock below, an open left column. */
-interface Free {
-  left: number;
+/** Space kept free for floating chrome when fitting (px from each edge of the plan's box): the top row, the input or the phone's toolbar, an open panel. */
+export interface Free {
+  top: number;
+  right: number;
   bottom: number;
+  left: number;
 }
 
-function fitArea(W: number, H: number, free: Free) {
-  const ins = W >= 768 ? { top: 84, right: 40, bottom: Math.max(28, free.bottom), left: Math.max(40, free.left + 16) } : { top: 8, right: 12, bottom: 8, left: 12 };
+function fitArea(W: number, H: number, ins: Free) {
   return { ins, aw: Math.max(80, W - ins.left - ins.right), ah: Math.max(80, H - ins.top - ins.bottom) };
 }
 
@@ -29,9 +30,9 @@ export const planCommands: { zoom: (factor: number) => void; fit: () => void } =
 
 let planMod: Promise<typeof import('./plan-data')> | null = null;
 
-export function PlanView({ resolved, levelId, active, insetLeft = 0, insetBottom = 0 }: { resolved: ResolvedHouse; levelId: string; active: boolean; insetLeft?: number; insetBottom?: number }) {
-  const free = useRef<Free>({ left: insetLeft, bottom: insetBottom });
-  free.current = { left: insetLeft, bottom: insetBottom };
+export function PlanView({ resolved, levelId, active, insets }: { resolved: ResolvedHouse; levelId: string; active: boolean; insets: Free }) {
+  const free = useRef<Free>(insets);
+  free.current = insets;
   const t = useT();
   const box = useRef<HTMLDivElement>(null);
   const sheet = useRef<HTMLDivElement>(null);
@@ -86,10 +87,11 @@ export function PlanView({ resolved, levelId, active, insetLeft = 0, insetBottom
   );
 
   useLayoutEffect(fit, [fit]);
-  // The free area changed (assistant opened, dock grew): fit again.
+  // The free area changed (a panel opened, a sheet rose): fit again.
+  const key = `${insets.top},${insets.right},${insets.bottom},${insets.left}`;
   useEffect(() => {
     fit();
-  }, [insetLeft, insetBottom, fit]);
+  }, [key, fit]);
 
   useEffect(() => {
     const b = box.current;

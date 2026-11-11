@@ -98,3 +98,33 @@ export function ChevronUpIcon(p: P) {
     </Svg>
   );
 }
+
+/** The conversation history: lines with a plus (the input's history button). */
+export function HistoryIcon(p: P) {
+  return (
+    <Svg {...p}>
+      <path d="M5 6.5h14M5 11.5h10M5 16.5h7" />
+      <path d="M17 14.5v5M14.5 17h5" />
+    </Svg>
+  );
+}
+
+/** Pin the conversation (a column on the left, a sheet on phones). */
+export function DockIcon(p: P) {
+  return (
+    <Svg {...p}>
+      <rect x={3.5} y={4.5} width={17} height={15} rx={2.5} />
+      <path d="M9.5 4.5v15" />
+    </Svg>
+  );
+}
+
+/** Unpin the conversation. */
+export function UndockIcon(p: P) {
+  return (
+    <Svg {...p}>
+      <rect x={3.5} y={4.5} width={17} height={15} rx={2.5} />
+      <path d="M9.5 4.5v15M15.5 10l-2 2 2 2" />
+    </Svg>
+  );
+}

@@ -39,13 +39,15 @@ export interface SunInfo {
   utcOffsetHours: number;
 }
 
-/** The quiet trays of the 3D / plan chrome: one open at a time. */
+/** The tool panels of the toolbar (視角 / 楼层 / 日照): one open at a time. */
 export type Tray = 'views' | 'levels' | 'sun';
-/** Site panels (left column on desktop, a sheet on phones). */
+/** Site panels: shown in the tool panel's place (desktop card, phone sheet). */
 export interface SitePanel {
   kind: 'location' | 'orientation';
   /** Opened right after a new house: "where is it?" with a skip. */
   intro?: boolean;
+  /** Opened from the sun panel's "location and orientation" rows: back returns there. */
+  fromSun?: boolean;
 }
 
 export interface StudioState {
@@ -64,7 +66,10 @@ export interface StudioState {
   sunInfo: SunInfo | null;
   /** First-person walk through the 3D view. */
   walk: boolean;
-  chatOpen: boolean;
+  /** The translucent "recent" strip above the input (the last exchange). */
+  recent: boolean;
+  /** The conversation pinned: a column on the left (desktop), a half-height sheet (phone). Persisted. */
+  pinned: boolean;
   tray: Tray | null;
   sitePanel: SitePanel | null;
   house: House | null;
@@ -80,8 +85,9 @@ export interface StudioState {
   setSun: (patch: Partial<SunState>) => void;
   setSunInfo: (info: SunInfo | null) => void;
   setWalk: (on: boolean) => void;
-  setChatOpen: (open: boolean) => void;
-  /** Opens a tray (closing any other), or closes it with null. */
+  setRecent: (open: boolean) => void;
+  setPinned: (pinned: boolean) => void;
+  /** Opens a tool panel (closing any other), or closes it with null. */
   setTray: (tray: Tray | null) => void;
   setSitePanel: (panel: SitePanel | null) => void;
   /** Replaces the house; `grow` asks the 3D view to play the grow transition. */
@@ -95,6 +101,15 @@ export interface GrowHint {
 }
 
 const LANG_KEY = 'opensu.lang';
+const PIN_KEY = 'opensu.chat.pinned.v1';
+
+function storedPin(): boolean {
+  try {
+    return globalThis.localStorage?.getItem(PIN_KEY) === '1';
+  } catch {
+    return false;
+  }
+}
 
 function storedLang(): Lang | null {
   try {
@@ -116,7 +131,8 @@ export const useStudio = create<StudioState>((set) => ({
   sun: { on: false, dateId: 'winter', minutes: 10 * 60, playing: false },
   sunInfo: null,
   walk: false,
-  chatOpen: false,
+  recent: false,
+  pinned: storedPin(),
   tray: null,
   sitePanel: null,
   house: null,
@@ -141,12 +157,21 @@ export const useStudio = create<StudioState>((set) => ({
   setCut: (cut) => set((s) => (cut && !isAxo(s.view) ? { cut, view: DEFAULT_VIEW, viewNonce: s.viewNonce + 1, viewMoved: false, walk: false } : { cut, walk: false })),
   setSun: (patch) => set((s) => ({ sun: { ...s.sun, ...patch } })),
   setSunInfo: (sunInfo) => set({ sunInfo }),
-  // Walking and the assistant panel take turns: entering walk mode tucks the chat away.
-  // Entering walk closes the panels, so the room fills the screen; the sun tray may stay.
-  setWalk: (walk) => set((s) => (walk ? { walk, mode: '3d', chatOpen: false, sitePanel: null, tray: s.tray === 'sun' ? 'sun' : null } : { walk })),
-  setChatOpen: (chatOpen) => set(chatOpen ? { chatOpen, walk: false, tray: null, sitePanel: null } : { chatOpen }),
-  setTray: (tray) => set(tray ? { tray, chatOpen: false } : { tray }),
-  setSitePanel: (sitePanel) => set(sitePanel ? { sitePanel, chatOpen: false } : { sitePanel }),
+  // Entering walk closes the panels and the recent strip, so the room fills the screen; the sun panel may stay.
+  setWalk: (walk) => set((s) => (walk ? { walk, mode: '3d', recent: false, sitePanel: null, tray: s.tray === 'sun' ? 'sun' : null } : { walk })),
+  setRecent: (recent) => set(recent ? { recent, pinned: false } : { recent }),
+  setPinned: (pinned) => {
+    try {
+      if (pinned) globalThis.localStorage?.setItem(PIN_KEY, '1');
+      else globalThis.localStorage?.removeItem(PIN_KEY);
+    } catch {
+      /* private mode: this page only */
+    }
+    set(pinned ? { pinned, recent: false } : { pinned });
+  },
+  setTray: (tray) => set(tray ? { tray, sitePanel: null } : { tray, sitePanel: null }),
+  // A site panel opened from the sun panel keeps the sun tool active (back returns to it).
+  setSitePanel: (sitePanel) => set((s) => (sitePanel ? { sitePanel, tray: sitePanel.fromSun ? s.tray : null } : { sitePanel })),
   setHouse: (house, grow) =>
     set((s) => ({
       house,

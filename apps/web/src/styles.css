@@ -2,6 +2,13 @@
 @import "@fontsource-variable/inter/wght.css";
 
 /*
+ * Never generated from words in comments or prose: the bare `transition`
+ * utility (its property list names the backdrop filter) and the backdrop
+ * filter utilities. Nothing in the studio blurs the canvas (task 014/015).
+ */
+@source not inline("transition backdrop-filter backdrop-blur");
+
+/*
  * UI tokens: the only place the app chrome defines colours, radii, shadows
  * and type. (Drawing colours live in packages/render and packages/plan.)
  * Tailwind exposes each one as a utility, e.g. text-ink, bg-surface,
@@ -28,11 +35,18 @@
   --color-accent-ink: #8a7400;
   --color-transparent: transparent;
   --color-white: #ffffff;
+  /* Only as a low alpha (hairlines, scrims). */
+  --color-black: #000000;
 
   --radius-ui: 10px;
   --radius-sm: 7px;
   --shadow-float: 0 6px 24px rgba(0, 0, 0, 0.08);
-  --shadow-hair: 0 0 0 1px rgba(0, 0, 0, 0.04);
+  --shadow-hair: 0 0 0 1px rgba(0, 0, 0, 0.05);
+  /* The translucent "recent" strip over the drawing: plain alpha, never a blur (task 015). */
+  --color-veil: rgba(255, 255, 255, 0.8);
+  /* The AI input while the assistant works: a light travelling round its rim (our palette). */
+  --color-glow-warm: #fff4c2;
+  --color-glow-red: rgba(232, 100, 60, 0.55);
 
   --font-sans: "Inter Variable", Inter, "PingFang SC", "Hiragino Sans GB", "Noto Sans SC", "Noto Sans CJK SC",
     "Source Han Sans SC", "Microsoft YaHei", "WenQuanYi Zen Hei", system-ui, sans-serif;
@@ -124,13 +138,13 @@
   &::-webkit-slider-thumb {
     -webkit-appearance: none;
     appearance: none;
-    width: 16px;
-    height: 16px;
-    margin-top: -7px;
+    width: 18px;
+    height: 18px;
+    margin-top: -8px;
     border-radius: 999px;
     background: var(--color-accent);
     border: 2px solid var(--color-white);
-    box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.18), 0 2px 6px rgba(0, 0, 0, 0.12);
+    box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.18), 0 0 0 6px color-mix(in srgb, var(--color-accent) 22%, transparent);
   }
   &::-moz-range-thumb {
     width: 12px;
@@ -139,6 +153,23 @@
     background: var(--color-accent);
     border: 2px solid var(--color-white);
     box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.18), 0 2px 6px rgba(0, 0, 0, 0.12);
+  }
+}
+
+/*
+ * Phones: a control that looks smaller than 44 px still takes a 44 px touch
+ * target (an invisible extension around it).
+ */
+@utility hit {
+  position: relative;
+  &::after {
+    content: "";
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    width: max(100%, 44px);
+    height: max(100%, 44px);
+    transform: translate(-50%, -50%);
   }
 }
 
@@ -173,5 +204,129 @@
 @keyframes caret {
   50% {
     opacity: 0;
+  }
+}
+
+/*
+ * Toolbar label: hidden beside the icon by default; shown on hover, keyboard
+ * focus and while the tool is in use (data-show). The label's column grows
+ * from 0fr to 1fr, so the button widens to the label's real width; the
+ * group is anchored at its right edge and grows to the left.
+ */
+.tool-label {
+  display: grid;
+  grid-template-columns: 0fr;
+  opacity: 0;
+  margin-left: 0;
+  transition: grid-template-columns 180ms ease, opacity 140ms ease, margin-left 180ms ease;
+}
+.tool-label > span {
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+}
+.tool:hover .tool-label,
+.tool:focus-visible .tool-label,
+.tool[data-show] .tool-label,
+.tools[data-labels] .tool-label {
+  grid-template-columns: 1fr;
+  opacity: 1;
+  margin-left: 6px;
+}
+
+/*
+ * The AI input. Working: one rotating conic gradient behind a 2 px rim and
+ * one breathing shadow (transform / opacity only, on two small layers).
+ * Reduced motion: the same light, still.
+ */
+.ai-input {
+  position: relative;
+  border-radius: 26px;
+}
+.ai-input > .ai-halo {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--color-accent) 45%, transparent), 0 8px 30px color-mix(in srgb, var(--color-accent) 40%, transparent), 0 0 18px rgba(232, 100, 60, 0.12);
+  opacity: 0;
+  transition: opacity 400ms;
+  pointer-events: none;
+}
+.ai-input > .ai-rim {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  overflow: hidden;
+  background: var(--color-hairline);
+  box-shadow: var(--shadow-float), 0 0 0 1px rgba(0, 0, 0, 0.06);
+  pointer-events: none;
+}
+.ai-input .ai-spin {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: var(--d, 640px);
+  height: var(--d, 640px);
+  margin: calc(var(--d, 640px) / -2) 0 0 calc(var(--d, 640px) / -2);
+  opacity: 0;
+  transition: opacity 400ms;
+  background: conic-gradient(from 0deg, rgba(255, 250, 232, 0) 0deg, rgba(255, 246, 214, 0.9) 40deg, var(--color-accent) 95deg, var(--color-glow-warm) 140deg, var(--color-glow-red) 165deg, rgba(255, 250, 232, 0) 200deg, rgba(255, 250, 232, 0) 360deg);
+}
+.ai-input > .ai-face {
+  position: relative;
+  margin: 1px;
+  border-radius: 25px;
+  background: var(--color-white);
+}
+.ai-input[data-working] > .ai-face {
+  margin: 2px;
+  border-radius: 24px;
+}
+.ai-input[data-working] > .ai-halo {
+  opacity: 1;
+  animation: ai-breathe 2.4s ease-in-out infinite;
+}
+.ai-input[data-working] .ai-spin {
+  opacity: 1;
+  animation: ai-spin 2.8s linear infinite;
+}
+@keyframes ai-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@keyframes ai-breathe {
+  0%,
+  100% {
+    opacity: 0.45;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ai-input[data-working] > .ai-halo,
+  .ai-input[data-working] .ai-spin {
+    animation: none;
+  }
+  .ai-input[data-working] .ai-spin {
+    transform: rotate(60deg);
+  }
+  .tool-label {
+    transition: none;
+  }
+}
+
+@keyframes panel-drop {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+}
+
+@keyframes strip-rise {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
   }
 }

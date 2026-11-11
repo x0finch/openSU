@@ -53,10 +53,12 @@ export interface Engine {
   walkToLevel(levelId: string): void;
   /**
    * Screen space (CSS px) taken by floating UI: presets frame the house in
-   * what is left. Re-frames the current preset (animated) unless the user
-   * has moved the camera.
+   * what is left. Re-frames the current preset (animated, `durationMs` or
+   * ~400 ms, so it can keep pace with a sliding sheet) unless the user has
+   * moved the camera. A change during a running preset transition re-aims
+   * that transition at the new framing.
    */
-  setInsets(insets: FrameInsets | readonly FrameInsets[], instant?: boolean): void;
+  setInsets(insets: FrameInsets | readonly FrameInsets[], instant?: boolean, durationMs?: number): void;
   /** Frames on the house with its entourage (phones) or on the architecture alone. */
   setWideFrame(on: boolean): void;
   /** Called with true when the user orbits / zooms / pans away from the preset, false when a preset is applied. */
@@ -316,7 +318,7 @@ export function createEngine(container: HTMLElement, resolved: ResolvedHouse, op
   /** The preset the camera is on or moving to (a house swapped in mid-move lands there). */
   let goal: ViewPreset | null = null;
 
-  function setView(requested: ViewPreset, cut: string | null = viewer.cutaway, instant = false): void {
+  function setView(requested: ViewPreset, cut: string | null = viewer.cutaway, instant = false, duration = DURATION): void {
     stop();
     const preset = eyeSide(requested);
     goal = preset;
@@ -368,7 +370,7 @@ export function createEngine(container: HTMLElement, resolved: ResolvedHouse, op
     const t0 = performance.now();
     const step = (now: number) => {
       if (disposed) return;
-      const t = Math.min(1, (now - t0) / DURATION);
+      const t = Math.min(1, (now - t0) / duration);
       const k = easeInOut(t);
       applyOrthoPose(
         cam,
@@ -455,14 +457,17 @@ export function createEngine(container: HTMLElement, resolved: ResolvedHouse, op
       if (!w || !a || !lv) return;
       dissolve(() => w.teleport(a.position[0], a.position[1], lv.elevation, a.headingDeg, { faceRoom: true }));
     },
-    setView,
-    setInsets(insets, instant = false) {
+    setView: (preset, cut, instant) => setView(preset, cut, instant),
+    setInsets(insets, instant = false, duration = DURATION) {
       const list = Array.isArray(insets) ? insets : [insets];
       if (JSON.stringify(viewer.frameInsets) === JSON.stringify(list)) return;
-      const view = viewer.currentView;
-      const reframe = !movedFlag && !viewer.walking && !!view && !anim && !fadeTimer;
       viewer.setFrameInsets(list, false);
-      if (reframe && view) setView(view, viewer.cutaway, instant);
+      if (movedFlag || viewer.walking || fadeTimer) return;
+      // A morph under way (another preset, or the previous inset change) is
+      // re-aimed from where the camera is now at the new framing.
+      const view = anim && goal ? goal : viewer.currentView;
+      // Eye level cannot morph: a re-frame there is instant rather than a dissolve.
+      if (view) setView(view, viewer.cutaway, instant || !(viewer.camera instanceof OrthographicCamera), duration);
     },
     onMoved(cb) {
       onMovedCb = cb;
