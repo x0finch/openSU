@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>openSU sheets</title>
+    <style>
+      html, body { margin: 0; background: #f4f4f2; font: 13px/1.4 system-ui, sans-serif; color: #333; }
+      header { display: flex; gap: 12px; align-items: center; padding: 12px 16px; }
+      #live { width: 360px; height: 240px; background: #fff; border: 1px solid #ddd; }
+      button { border: 1px solid #bbb; background: #fff; padding: 6px 12px; border-radius: 3px; cursor: pointer; }
+      #status { color: #777; }
+      #sheets { display: flex; flex-wrap: wrap; gap: 16px; padding: 0 16px 16px; }
+      #sheets img { width: 360px; background: #fff; box-shadow: 0 1px 4px rgba(0, 0, 0, 0.15); }
+    </style>
+  </head>
+  <body>
+    <header>
+      <div id="live"></div>
+      <div>
+        <p>The live viewer stays interactive while sheets render offscreen.</p>
+        <button id="export">Export sheet set</button>
+        <button id="export2x">Export @2x</button>
+        <p id="status"></p>
+      </div>
+    </header>
+    <div id="sheets"></div>
+    <script type="module" src="./main.ts"></script>
+  </body>
+</html>
