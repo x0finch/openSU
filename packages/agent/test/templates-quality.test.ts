@@ -38,6 +38,12 @@ describe.each(houses)('%s', (_id, house) => {
         expect(checkPlan(p), `${lv.id} @${textScale}`).toEqual([]);
         expect(p.missingLabels, `${lv.id} @${textScale}`).toEqual([]);
       }
+      // Phone plans (no dimension chains), at the text sizes the app picks there.
+      for (const textScale of [1.5, 1.75]) {
+        const p = renderPlanDetailed(r, lv.id, { textScale, compact: true });
+        expect(checkPlan(p), `${lv.id} compact @${textScale}`).toEqual([]);
+        expect(p.missingLabels, `${lv.id} compact @${textScale}`).toEqual([]);
+      }
     }
   });
 

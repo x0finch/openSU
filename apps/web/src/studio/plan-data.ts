@@ -27,16 +27,16 @@ function minRoomLabel(svg: string): number {
 
 const cache = new WeakMap<ResolvedHouse, Map<string, Drawn>>();
 
-function draw(house: ResolvedHouse, levelId: string, textScale: number): Drawn {
+function draw(house: ResolvedHouse, levelId: string, textScale: number, compact = false): Drawn {
   let byLevel = cache.get(house);
   if (!byLevel) cache.set(house, (byLevel = new Map()));
-  const key = `${levelId}@${textScale.toFixed(2)}`;
+  const key = `${levelId}@${textScale.toFixed(2)}${compact ? 'c' : ''}`;
   let d = byLevel.get(key);
   if (!d) {
-    const r = renderPlanDetailed(house, levelId, textScale === 1 ? {} : { textScale });
+    const r = renderPlanDetailed(house, levelId, { ...(textScale === 1 ? {} : { textScale }), ...(compact ? { compact } : {}) });
     const v = r.view;
     // Larger text must still fit: no overlaps, every room labelled.
-    const clean = textScale === 1 || (checkPlan(r).length === 0 && r.missingLabels.length === 0);
+    const clean = (textScale === 1 && !compact) || (checkPlan(r).length === 0 && r.missingLabels.length === 0);
     d = { svg: r.svg, width: r.width, height: r.height, textScale, clean, minLabel: minRoomLabel(r.svg), px: (x, y) => [v.x(x), v.y(y)] };
     byLevel.set(key, d);
   }
@@ -60,10 +60,11 @@ const SCALES = [1, 1.25, 1.5, 1.75, 2, 2.25, 2.5, 2.75, MAX_TEXT_SCALE];
  * `textScale`), with the plan free of overlaps and every room labelled.
  * Narrow rooms fall back to smaller names as text grows, so the result is
  * not monotonic: the smallest text size that works wins, else the one that
- * comes closest.
+ * comes closest. `compact` (phones) drops the dimension chains and the
+ * title, which leaves more of the screen to the rooms.
  */
-export function planForViewport(house: ResolvedHouse, levelId: string, fit: (w: number, h: number) => number, minLabelPx: number): PlanDrawing {
-  const base = draw(house, levelId, 1);
+export function planForViewport(house: ResolvedHouse, levelId: string, fit: (w: number, h: number) => number, minLabelPx: number, compact = false): PlanDrawing {
+  const base = draw(house, levelId, 1, compact);
   const shown = (d: Drawn) => d.minLabel * fit(d.width, d.height);
   if (shown(base) >= minLabelPx - 0.05) return base;
   // No smaller text size can work: names are at most cnSize x textScale.
@@ -71,7 +72,7 @@ export function planForViewport(house: ResolvedHouse, levelId: string, fit: (w: 
   let best = base;
   for (const k of SCALES) {
     if (k <= 1 || k < lower - 0.25) continue;
-    const d = draw(house, levelId, k);
+    const d = draw(house, levelId, k, compact);
     if (!d.clean) continue;
     if (shown(d) >= minLabelPx - 0.05) return d;
     if (shown(d) > shown(best) + 0.05) best = d;

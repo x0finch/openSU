@@ -24,7 +24,11 @@ pnpm --filter @opensu/plan shots     # artifacts/plans/<level>.svg + .png (~1600
   Options: `scale` (px per mm), `furniture`, `title`, `subtitle`,
   `textScale` (text relative to the screen plan; labels, dimension figures
   and tiers, title and north arrow grow together, the white space around
-  the drawing at half the rate; `@opensu/sheet` uses 1.7). The overlap
+  the drawing at half the rate; `@opensu/sheet` uses 1.7), `compact`
+  (small screens: no dimension chains and no title, a narrow margin with
+  the north arrow above the drawing, Chinese room names only, furniture
+  yielding before a name is set smaller, outdoor names only at full size;
+  the app uses it below 768 px, sheets never). The overlap
   rules hold at any text scale: labels fall back to smaller forms (the
   English line goes first), furniture yields, and only then do the screen
   plan's own sizes serve as a last resort.

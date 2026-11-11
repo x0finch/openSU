@@ -47,7 +47,8 @@ export function PlanView({ resolved, levelId, active }: { resolved: ResolvedHous
       if (!alive) return;
       const { aw, ah } = fitArea(size.w, size.h);
       const minPx = size.w >= 768 ? MIN_LABEL_PX.desktop : MIN_LABEL_PX.mobile;
-      setPlan(m.planForViewport(resolved, levelId, (w, h) => Math.min(aw / w, ah / h), minPx));
+      // Phones: no dimension chains or title (unreadable at that size; the level is named in the UI).
+      setPlan(m.planForViewport(resolved, levelId, (w, h) => Math.min(aw / w, ah / h), minPx, size.w < 768));
       window.__studio = { ...window.__studio, planReady: true };
     });
     return () => {
