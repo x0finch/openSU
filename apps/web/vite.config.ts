@@ -18,6 +18,7 @@ export default defineConfig({
       // Solar position and date presets only (no three.js), for the time bar.
       '@opensu/render/sun': fileURLToPath(new URL('../../packages/render/src/sun/study.ts', import.meta.url)),
       '@opensu/model': src('model'),
+      '@opensu/furnish': src('furnish'),
       '@opensu/kernel': src('kernel'),
       '@opensu/render': src('render'),
       '@opensu/plan': src('plan'),

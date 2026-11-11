@@ -6,7 +6,7 @@ import type {
 import {
   bboxOfPoints, cellRectsIn, largestRectIn, rect, type Pt, type Rect,
 } from './geom';
-import { mm } from './tokens';
+import { planDims as mm } from './dims';
 
 export interface SpaceInfo {
   id: string;

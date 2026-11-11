@@ -17,6 +17,9 @@ importers:
       '@fontsource-variable/inter':
         specifier: 5.3.0
         version: 5.3.0
+      '@opensu/furnish':
+        specifier: workspace:*
+        version: link:../../packages/furnish
       '@opensu/kernel':
         specifier: workspace:*
         version: link:../../packages/kernel
@@ -85,8 +88,30 @@ importers:
         specifier: 4.160.0
         version: 4.160.0(@types/node@22.20.5)
 
+  packages/furnish:
+    dependencies:
+      '@opensu/model':
+        specifier: workspace:*
+        version: link:../model
+    devDependencies:
+      '@types/node':
+        specifier: 22.20.5
+        version: 22.20.5
+      typescript:
+        specifier: 5.9.3
+        version: 5.9.3
+      vite:
+        specifier: 8.3.5
+        version: 8.3.5(@types/node@22.20.5)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.15)
+      vitest:
+        specifier: 5.1.0
+        version: 5.1.0(@types/node@22.20.5)(vite@8.3.5(@types/node@22.20.5)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.15))
+
   packages/kernel:
     dependencies:
+      '@opensu/furnish':
+        specifier: workspace:*
+        version: link:../furnish
       '@opensu/model':
         specifier: workspace:*
         version: link:../model
@@ -128,6 +153,9 @@ importers:
 
   packages/plan:
     dependencies:
+      '@opensu/furnish':
+        specifier: workspace:*
+        version: link:../furnish
       '@opensu/model':
         specifier: workspace:*
         version: link:../model
@@ -150,6 +178,9 @@ importers:
 
   packages/render:
     dependencies:
+      '@opensu/furnish':
+        specifier: workspace:*
+        version: link:../furnish
       '@opensu/kernel':
         specifier: workspace:*
         version: link:../kernel
@@ -175,6 +206,9 @@ importers:
 
   packages/sheet:
     dependencies:
+      '@opensu/furnish':
+        specifier: workspace:*
+        version: link:../furnish
       '@opensu/kernel':
         specifier: workspace:*
         version: link:../kernel

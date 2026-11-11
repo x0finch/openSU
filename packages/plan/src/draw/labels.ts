@@ -1,9 +1,9 @@
 // Room labels: Chinese name over small tracked uppercase English, placed at
 // the most open spot of the room (largest clearance from furniture, door
 // swings, stairs, walls and other text). Furniture yields when nothing fits.
-import type { LevelPlan, SpaceInfo } from '../analyse';
-import { footprint, isSolid, type Placement } from '../furnish/types';
-import { contains, overlaps, type Rect } from '../geom';
+import type { LevelPlan, SpaceInfo } from '@opensu/furnish';
+import { footprint, isSolid, type Placement } from '@opensu/furnish';
+import { contains, overlaps, type Rect } from '@opensu/furnish';
 import { attrs, f, type View } from '../svg';
 import { escapeXml, textWidth } from '../text';
 import { color, font as baseFont, type Typography, typography } from '../tokens';

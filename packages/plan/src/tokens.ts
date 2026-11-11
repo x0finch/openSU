@@ -3,6 +3,7 @@
 // drawing size (1 px = 1 / SCALE mm on paper); model lengths stay in mm.
 //
 // Line-weight hierarchy (VISUAL_SPEC): wall outline > furniture > dimensions.
+import { planDims } from '@opensu/furnish';
 
 /** px per mm of the model. 15 m of plot -> 900 px (labels and numbers read like the reference sheets). */
 export const SCALE = 0.06;
@@ -132,10 +133,12 @@ export const layout = {
 
 /** Plan-space sizes in mm (drawn things that live in the building). */
 export const mm = {
-  fence: 140,
-  parapet: 120,
-  railInset: 50,
-  glassRail: 50,
+  // Shared with the furniture placement (`@opensu/furnish`), which keeps
+  // pieces clear of fences and rails.
+  fence: planDims.fence,
+  parapet: planDims.parapet,
+  railInset: planDims.railInset,
+  glassRail: planDims.glassRail,
   metalRail: 40,
   doorLeaf: 40,
   slidingPanel: 40,

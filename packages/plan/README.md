@@ -32,8 +32,9 @@ pnpm --filter @opensu/plan shots     # artifacts/plans/<level>.svg + .png (~1600
   text/furniture, text/door swing, furniture/wall, furniture/door swing,
   furniture/furniture. Empty means clean.
 - `furnishLevel(analyseLevel(house, index))` - furniture placements as plain
-  data (`Placement`: kind, centre, width, depth, facing, layer). Independent
-  of SVG so the 3D interior can reuse it.
+  data (`Placement`: kind, centre, width, depth, facing, layer), re-exported
+  from `@opensu/furnish`, which holds the level analysis and the placement
+  rules so the 3D interior uses the very same furniture.
 - `chainPositions(plan, side)` - the grid positions a dimension chain uses.
 - `tokens` - all colours, stroke widths, font sizes and spacing
   (`src/tokens.ts`; no literals elsewhere).
@@ -60,7 +61,7 @@ swing arcs, labels, dimensions, north arrow, title.
   outer end is visible from that side (a ray towards the side meets no other
   wall run); tier 2 is the overall. The ground floor adds the plot edges, and
   carport boundaries are dimensioned like walls (parking bay size).
-- Furniture rules (`src/furnish/`) are per space type and size; pieces are
+- Furniture rules (`@opensu/furnish`) are per space type and size; pieces are
   tried against walls in a fixed order and the first collision-free spot
   wins. They keep out of door swings and the approach zone of each door,
   sliding-door and floor-window fronts, stairs and stairwells, a walking

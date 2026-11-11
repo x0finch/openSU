@@ -4,7 +4,7 @@
     "noEmit": true,
     "lib": ["ES2022"],
     "types": ["node"],
-    "paths": { "@opensu/model": ["../model/src/index.ts"] }
+    "paths": { "@opensu/model": ["../model/src/index.ts"], "@opensu/furnish": ["../furnish/src/index.ts"] }
   },
   "include": ["src", "test", "scripts", "vitest.config.ts"]
 }

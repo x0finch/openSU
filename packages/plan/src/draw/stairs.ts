@@ -1,6 +1,6 @@
 // Stairs: treads, central rail, break line, direction arrows and 上 / 下.
-import type { StairInfo } from '../analyse';
-import { intersection, rectUnionRings, type Rect } from '../geom';
+import type { StairInfo } from '@opensu/furnish';
+import { intersection, rectUnionRings, type Rect } from '@opensu/furnish';
 import { attrs, f, line, pathOfRings, rectEl, type View } from '../svg';
 import { textWidth } from '../text';
 import { color, mm, stroke, type Typography, typography } from '../tokens';

@@ -18,6 +18,7 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@opensu/furnish": "workspace:*",
     "@opensu/model": "workspace:*"
   },
   "devDependencies": {

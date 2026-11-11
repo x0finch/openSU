@@ -20,6 +20,7 @@
     "shots": "node scripts/shots.mjs"
   },
   "dependencies": {
+    "@opensu/furnish": "workspace:*",
     "@opensu/kernel": "workspace:*",
     "@opensu/model": "workspace:*",
     "@opensu/plan": "workspace:*",

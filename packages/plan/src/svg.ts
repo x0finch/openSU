@@ -1,5 +1,5 @@
 // SVG string helpers and the mm -> px view transform.
-import type { Pt, Rect } from './geom';
+import type { Pt, Rect } from '@opensu/furnish';
 
 export const f = (n: number) => {
   const r = Math.round(n * 100) / 100;

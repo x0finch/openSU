@@ -6,6 +6,7 @@ const src = (pkg) => fileURLToPath(new URL(`../../${pkg}/src/index.ts`, import.m
 
 export const workspaceAliases = {
   '@opensu/model': src('model'),
+  '@opensu/furnish': src('furnish'),
   '@opensu/kernel': src('kernel'),
   '@opensu/plan': src('plan'),
   '@opensu/render': src('render'),
