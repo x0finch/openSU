@@ -6,9 +6,18 @@ import type { PlanDrawing } from './plan-data';
 
 /** Space kept free for floating chrome when fitting (px). */
 const INSETS = {
-  desktop: { top: 84, right: 104, bottom: 88, left: 104 },
+  // Plan mode has no bottom dock (only the zoom buttons in the corner).
+  desktop: { top: 84, right: 104, bottom: 28, left: 104 },
   mobile: { top: 76, right: 12, bottom: 12, left: 12 },
 };
+
+/** Smallest room-name size on screen at the fitted zoom (CSS px). */
+const MIN_LABEL_PX = { desktop: 12, mobile: 10 };
+
+function fitArea(W: number, H: number) {
+  const ins = W >= 768 ? INSETS.desktop : INSETS.mobile;
+  return { ins, aw: Math.max(80, W - ins.left - ins.right), ah: Math.max(80, H - ins.top - ins.bottom) };
+}
 
 interface Xf {
   s: number;
@@ -28,19 +37,23 @@ export function PlanView({ resolved, levelId, active }: { resolved: ResolvedHous
   const [plan, setPlan] = useState<PlanDrawing | null>(null);
   const xf = useRef<Xf>({ s: 1, x: 0, y: 0 });
   const fitScale = useRef(1);
+  // Viewport size, rounded: the plan's text size follows it.
+  const [size, setSize] = useState<{ w: number; h: number } | null>(null);
 
   useEffect(() => {
     let alive = true;
-    if (import.meta.env.SSR) return;
+    if (import.meta.env.SSR || !size) return;
     void (planMod ??= import('./plan-data')).then((m) => {
       if (!alive) return;
-      setPlan(m.planDrawing(resolved, levelId));
+      const { aw, ah } = fitArea(size.w, size.h);
+      const minPx = size.w >= 768 ? MIN_LABEL_PX.desktop : MIN_LABEL_PX.mobile;
+      setPlan(m.planForViewport(resolved, levelId, (w, h) => Math.min(aw / w, ah / h), minPx));
       window.__studio = { ...window.__studio, planReady: true };
     });
     return () => {
       alive = false;
     };
-  }, [resolved, levelId]);
+  }, [resolved, levelId, size]);
 
   const apply = useCallback(() => {
     const el = sheet.current;
@@ -52,11 +65,7 @@ export function PlanView({ resolved, levelId, active }: { resolved: ResolvedHous
   const fit = useCallback(() => {
     const b = box.current;
     if (!b || !plan) return;
-    const W = b.clientWidth;
-    const H = b.clientHeight;
-    const ins = W >= 768 ? INSETS.desktop : INSETS.mobile;
-    const aw = Math.max(80, W - ins.left - ins.right);
-    const ah = Math.max(80, H - ins.top - ins.bottom);
+    const { ins, aw, ah } = fitArea(b.clientWidth, b.clientHeight);
     const s = Math.min(aw / plan.width, ah / plan.height);
     fitScale.current = s;
     xf.current = { s, x: ins.left + (aw - plan.width * s) / 2, y: ins.top + (ah - plan.height * s) / 2 };
@@ -80,9 +89,11 @@ export function PlanView({ resolved, levelId, active }: { resolved: ResolvedHous
     const b = box.current;
     if (!b) return;
     let last = { w: b.clientWidth, h: b.clientHeight };
+    setSize((cur) => cur ?? { w: last.w, h: last.h });
     const ro = new ResizeObserver(() => {
       if (b.clientWidth !== last.w || b.clientHeight !== last.h) {
         last = { w: b.clientWidth, h: b.clientHeight };
+        setSize({ w: last.w, h: last.h });
         fit();
       }
     });
@@ -171,6 +182,7 @@ export function PlanView({ resolved, levelId, active }: { resolved: ResolvedHous
         <div
           key={levelId}
           ref={sheet}
+          data-text-scale={plan.textScale}
           className="absolute top-0 left-0 origin-top-left animate-[fade-in_220ms_ease-out] [&>svg]:block [&>svg]:h-full [&>svg]:w-full"
           style={{ width: plan.width, height: plan.height }}
           dangerouslySetInnerHTML={{ __html: plan.svg }}
