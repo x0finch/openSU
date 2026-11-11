@@ -1,0 +1,4 @@
+.reference/
+artifacts/
+node_modules/
+dist/
