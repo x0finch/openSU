@@ -253,7 +253,7 @@ export class IllustrationViewer {
   }
 
   /** Framing points: in a cutaway, only what stays below the cut plane. */
-  private viewPoints(): Vector3[] {
+  viewPoints(): Vector3[] {
     let pts = this.framePoints;
     const level = this.levels.find((l) => l.id === this.cutLevel);
     if (level) {

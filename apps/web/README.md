@@ -1,8 +1,10 @@
 # @opensu/web
 
 The openSU web app: a TanStack Start app deployed to Cloudflare Workers.
-The studio shows the house model in 3D (`@opensu/render`) and as floor
-plans (`@opensu/plan`). No AI and no persistence yet.
+The studio shows the house model in 3D (`@opensu/render`) with a level
+cutaway and a sun study (time of day, date presets, play the day), as
+floor plans (`@opensu/plan`), and as a shareable sheet set (`图册`,
+`@opensu/sheet`, rendered in the browser). No AI and no persistence yet.
 
 ## Run
 
@@ -13,15 +15,23 @@ pnpm install
 pnpm dev                                # vite dev with the Cloudflare plugin (workerd) on :5173
 pnpm build                              # all packages, then this app + the bundle size report
 pnpm --filter @opensu/web preview       # the built app in the local Workers runtime (workerd)
-pnpm --filter @opensu/web shots         # smoke checks + screenshots -> artifacts/web/*.png
-pnpm --filter @opensu/web test          # the smoke checks only (needs a build)
+pnpm --filter @opensu/web shots         # checks + screenshots -> artifacts/web/*.png
+pnpm --filter @opensu/web test          # the checks with a minimal set of shots (needs a build)
+node scripts/shots.mjs --only studio-sheets,check-sun   # just some shots / checks (name prefixes)
 ```
 
 Workspace packages resolve to their TypeScript sources (Vite aliases and
 `tsconfig` paths), so `pnpm dev` needs no prior package build.
 
 Studio deep links: `/studio?mode=plan&level=L2`, `/studio?view=axo-ne`,
-`?lang=en`.
+`?lang=en`, sun study `?sun=winter|spring|summer|autumn|today&time=10:00`,
+cutaway `?cut=L1`, sheets `?mode=sheet`, phone controls expanded
+`?panel=open`.
+
+Besides screenshots, `shots` checks: the time slider changes the shadows
+(pixel diff 10:00 vs 15:00) and drives the physical sun, a cutaway hides
+the roof, leaving the sun study returns to presentation light, and the
+sheet set yields 4 PNG blobs of 1500 x 2000.
 
 `shots` needs the preinstalled Playwright + Chromium (headless WebGL via
 SwiftShader). When `artifacts/shots/*.png` from `pnpm shots` exist it also
@@ -48,7 +58,18 @@ string formatting (well inside the 10 ms free-tier budget).
   desktop, bottom sheet on phones (< 768 px).
 - `src/studio/engine.ts` (lazy chunk) three.js + kernel + viewer, orbit
   controls, animated preset transitions (orbit morph between parallel views,
-  short dissolve to / from the eye-level perspective). Render on demand.
+  short dissolve to / from the eye-level perspective; a cutaway clips at
+  once and the camera tilts to the steeper cutaway axonometric), sun study
+  (`setSun`), render on demand.
+- `src/studio/chrome.tsx` the scene dock (cutaway levels, sun study dates,
+  time of day with play) on desktop, the same controls in the phone bottom
+  sheet (collapsed by default: mode switch and time only); `useSunPlayer`
+  sweeps sunrise..sunset in 8 s.
+- `src/studio/SheetGallery.tsx` + `sheet-data.ts` (lazy chunk) the sheet
+  set: thumbnails as each sheet is ready, large preview (arrows, swipe),
+  download one or all, Web Share API with files where available.
+- `src/lib/sun.ts` date presets and time formatting; `@opensu/render/sun`
+  is the renderer's solar module alone (no three.js).
 - `src/studio/house-data.ts` (lazy chunk) model, resolver, golden sample,
   derived facts; `plan-data.ts` (lazy chunk) SVG plans.
 - `src/studio/PlanView.tsx` plan fitted to the free viewport, pan (drag),
@@ -65,7 +86,11 @@ string formatting (well inside the 10 ms free-tier budget).
 ## Size budgets
 
 `pnpm build` prints gzip sizes and fails when a budget is exceeded:
-initial JS for `/studio` < 200 KB, the lazy viewer chunk < 300 KB.
+initial JS for `/studio` < 200 KB, the lazy viewer chunk < 300 KB. It also
+reports the Worker bundle (`dist/server`) and fails if it contains
+three.js: the lazy imports of the studio are guarded with
+`import.meta.env.SSR`, so the server build never emits the viewer, model,
+plan or sheet chunks.
 
 ## Deployment (not done yet)
 

@@ -15,10 +15,13 @@ export default defineConfig({
     alias: {
       // Style tokens only (no three.js), for drawings outside the viewer.
       '@opensu/render/tokens': fileURLToPath(new URL('../../packages/render/src/style/tokens.ts', import.meta.url)),
+      // Solar position and date presets only (no three.js), for the time bar.
+      '@opensu/render/sun': fileURLToPath(new URL('../../packages/render/src/sun/study.ts', import.meta.url)),
       '@opensu/model': src('model'),
       '@opensu/kernel': src('kernel'),
       '@opensu/render': src('render'),
       '@opensu/plan': src('plan'),
+      '@opensu/sheet': src('sheet'),
     },
   },
   build: {

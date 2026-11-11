@@ -95,7 +95,7 @@
   &::-webkit-slider-runnable-track {
     height: 2px;
     border-radius: 2px;
-    background: linear-gradient(to right, var(--color-ink) 0 var(--fill, 0%), var(--color-hairline) var(--fill, 0%) 100%);
+    background: linear-gradient(to right, var(--range-fill, var(--color-ink)) 0 var(--fill, 0%), var(--color-hairline) var(--fill, 0%) 100%);
   }
   &::-moz-range-track {
     height: 2px;
@@ -104,7 +104,7 @@
   }
   &::-moz-range-progress {
     height: 2px;
-    background: var(--color-ink);
+    background: var(--range-fill, var(--color-ink));
   }
   &::-webkit-slider-thumb {
     -webkit-appearance: none;
@@ -125,6 +125,11 @@
     border: 2px solid var(--color-white);
     box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.18), 0 2px 6px rgba(0, 0, 0, 0.12);
   }
+}
+
+/* A range whose value is not in effect yet (sun study off): quieter fill. */
+@utility range-idle {
+  --range-fill: var(--color-ink-3);
 }
 
 @keyframes fade-in {

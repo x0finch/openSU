@@ -59,18 +59,48 @@ function report(label, files, budget) {
 
 const landing = pageEntries(join(client, 'index.html'));
 const studio = pageEntries(join(client, 'studio.html'));
-const engine = [...gz.keys()].find((f) => /^engine-.*\.js$/.test(f));
-const viewer = new Set([...closure([engine])].filter((f) => !studio.js.has(f)));
-const model = [...gz.keys()].filter((f) => /^(house-data|src)-.*\.js$/.test(f) && !studio.js.has(f));
-const plan = [...gz.keys()].filter((f) => /^plan-data-.*\.js$/.test(f));
+const entry = (re) => [...gz.keys()].find((f) => re.test(f));
+const lazy = (re, ...exclude) => {
+  const f = entry(re);
+  const skip = new Set([...studio.js, ...exclude.flatMap((x) => [...x])]);
+  return new Set(f ? [...closure([f])].filter((x) => !skip.has(x)) : []);
+};
+const viewer = lazy(/^engine-.*\.js$/);
+const model = lazy(/^house-data-.*\.js$/);
+const plan = lazy(/^plan-data-.*\.js$/, model);
+// The sheet chunk shares three.js, the kernel and the plans with the others.
+const sheets = lazy(/^SheetGallery-.*\.js$/, viewer, model, plan);
 
 console.log('\nBundle size report (gzip -9)\n');
 report('/ initial JS', landing.js);
 report('/studio initial JS', studio.js, BUDGET.studioInitial);
 report('viewer chunk (lazy, 3D)', viewer, BUDGET.viewer);
-report('model chunk (lazy)', new Set(model));
-report('plan chunk (lazy)', new Set(plan));
+report('model chunk (lazy)', model);
+report('plan chunk (lazy)', plan);
+report('sheet chunk (lazy, on top)', sheets);
 report('CSS', studio.css);
+// The Worker (dist/server) must stay small and never carry viewer code.
+const server = join(root, 'dist/server');
+const serverJs = [];
+const walk = (d) => {
+  for (const e of readdirSync(d, { withFileTypes: true })) {
+    if (e.isDirectory()) walk(join(d, e.name));
+    else if (e.name.endsWith('.js')) serverJs.push(join(d, e.name));
+  }
+};
+walk(server);
+let serverBytes = 0;
+let serverGz = 0;
+const withThree = [];
+for (const f of serverJs) {
+  const src = readFileSync(f);
+  serverBytes += src.length;
+  serverGz += gzipSync(src, { level: 9 }).length;
+  if (/WebGLRenderer|ShaderChunk/.test(src.toString())) withThree.push(f.slice(server.length + 1));
+}
+if (withThree.length) failed = true;
+rows.push(`Worker bundle (dist/server JS)  ${kb(serverBytes)} raw, ${kb(serverGz).trim()} gzip, ${serverJs.length} files`);
+rows.push(withThree.length ? `    contains three.js: ${withThree.join(', ')}  FAIL` : '    no three.js  ok');
 console.log(rows.join('\n'));
 console.log(failed ? '\nSize budget exceeded.' : '\nAll size budgets met.');
 process.exit(failed ? 1 : 0);

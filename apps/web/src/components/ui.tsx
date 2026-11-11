@@ -62,7 +62,11 @@ export interface Segment<T extends string> {
 }
 
 /** Radio-group segmented control with arrow-key navigation. */
-export function Segmented<T extends string>({ value, onChange, segments, label, size = 'md', className }: { value: T; onChange: (v: T) => void; segments: Segment<T>[]; label: string; size?: 'md' | 'lg'; className?: string }) {
+/**
+ * `size` sm is a chip row (secondary choices); `soft` marks the choice
+ * without the strong dark fill (a setting that is not in effect yet).
+ */
+export function Segmented<T extends string>({ value, onChange, segments, label, size = 'md', soft, className }: { value: T; onChange: (v: T) => void; segments: Segment<T>[]; label: string; size?: 'sm' | 'md' | 'lg'; soft?: boolean; className?: string }) {
   const ref = useRef<HTMLDivElement>(null);
   const enabled = segments.filter((s) => !s.disabled);
   const onKey = (e: KeyboardEvent) => {
@@ -75,7 +79,7 @@ export function Segmented<T extends string>({ value, onChange, segments, label, 
     ref.current?.querySelector<HTMLButtonElement>(`[data-value="${next.value}"]`)?.focus();
   };
   return (
-    <div ref={ref} role="radiogroup" aria-label={label} onKeyDown={onKey} className={cx('flex gap-0.5 rounded-ui p-1', className)}>
+    <div ref={ref} role="radiogroup" aria-label={label} onKeyDown={onKey} className={cx('flex gap-0.5', size === 'sm' ? 'rounded-sm' : 'rounded-ui p-1', className)}>
       {segments.map((s) => {
         const on = s.value === value;
         const btn = (
@@ -90,9 +94,9 @@ export function Segmented<T extends string>({ value, onChange, segments, label, 
             data-value={s.value}
             onClick={() => !s.disabled && onChange(s.value)}
             className={cx(
-              'relative flex flex-1 items-center justify-center gap-1.5 rounded-sm font-medium whitespace-nowrap transition-colors duration-150',
-              size === 'lg' ? 'h-11 px-4 text-sm' : 'h-8 px-3.5 text-sm',
-              on ? 'bg-ink text-white' : s.disabled ? 'text-ink-3' : 'text-ink-2 hover:bg-wash hover:text-ink',
+              'relative flex flex-1 items-center justify-center gap-1.5 font-medium whitespace-nowrap transition-colors duration-150',
+              size === 'lg' ? 'h-11 rounded-sm px-4 text-sm' : size === 'sm' ? 'h-7 rounded-[6px] px-2.5 text-xs' : 'h-8 rounded-sm px-3.5 text-sm',
+              on ? (soft ? 'bg-wash text-ink' : 'bg-ink text-white') : s.disabled ? 'text-ink-3' : 'text-ink-2 hover:bg-wash hover:text-ink',
             )}
           >
             {s.label}

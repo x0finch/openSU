@@ -1,8 +1,9 @@
 import type { ResolvedHouse } from '@opensu/model';
 import { useEffect, useRef, useState } from 'react';
 import { useT } from '../lib/i18n';
-import { useStudio } from '../lib/store';
-import { presetById } from '../lib/views';
+import { type StudioState, useStudio } from '../lib/store';
+import { sunDate } from '../lib/sun';
+import { cutawayPreset, presetById } from '../lib/views';
 import type { Engine } from './engine';
 import { Loading } from './Loading';
 
@@ -21,6 +22,28 @@ function hasWebGL2(): boolean {
   }
 }
 
+function scenePreset(s: StudioState) {
+  const p = presetById(s.view);
+  return s.cut ? cutawayPreset(p) : p;
+}
+
+/** Applies the store's sun study to the engine and reports the sun back (for the time bar). */
+function applySun(e: Engine, s: StudioState): void {
+  const date = sunDate(s.sun.dateId);
+  e.setSun(s.sun.on ? { date, minutes: s.sun.minutes } : null);
+  const sun = e.sunAt(date, s.sun.minutes);
+  const info = {
+    date,
+    sunrise: sun.times.sunrise ?? 0,
+    sunset: sun.times.sunset ?? 1439,
+    minutes: sun.minutes,
+    azimuth: sun.trueAzimuthDeg,
+    elevation: sun.trueElevationDeg,
+  };
+  const cur = s.sunInfo;
+  if (!cur || (Object.keys(info) as (keyof typeof info)[]).some((k) => info[k] !== cur[k])) s.setSunInfo(info);
+}
+
 export function Viewer3D({ resolved, active }: { resolved: ResolvedHouse; active: boolean }) {
   const t = useT();
   const ref = useRef<HTMLDivElement>(null);
@@ -33,6 +56,7 @@ export function Viewer3D({ resolved, active }: { resolved: ResolvedHouse; active
   };
   const view = useStudio((s) => s.view);
   const nonce = useStudio((s) => s.viewNonce);
+  const cut = useStudio((s) => s.cut);
   const [status, setStatus] = useState<'loading' | 'ready' | 'error'>('loading');
 
   useEffect(() => {
@@ -41,6 +65,8 @@ export function Viewer3D({ resolved, active }: { resolved: ResolvedHouse; active
       return;
     }
     let alive = true;
+    // Never on the server: keeps three.js out of the Worker bundle.
+    if (import.meta.env.SSR) return;
     void import('./engine').then((m) => {
       if (!alive || !ref.current) return;
       try {
@@ -52,7 +78,9 @@ export function Viewer3D({ resolved, active }: { resolved: ResolvedHouse; active
             if (needle.current) needle.current.style.transform = `rotate(${deg.toFixed(1)}deg)`;
           },
         });
-        e.setView(presetById(useStudio.getState().view), true);
+        const st = useStudio.getState();
+        e.setView(scenePreset(st), st.cut, true);
+        applySun(e, st);
         engine.current = e;
         window.__studio = { ...window.__studio, engine: e, ready3d: true };
         setStatus('ready');
@@ -70,8 +98,18 @@ export function Viewer3D({ resolved, active }: { resolved: ResolvedHouse; active
   }, [resolved]);
 
   useEffect(() => {
-    engine.current?.setView(presetById(view));
-  }, [view, nonce]);
+    const st = useStudio.getState();
+    engine.current?.setView(scenePreset(st), st.cut);
+  }, [view, nonce, cut]);
+
+  // Sun study: straight from the store to the engine (no React render per slider step).
+  useEffect(
+    () =>
+      useStudio.subscribe((s, prev) => {
+        if (engine.current && (s.sun !== prev.sun || s.house !== prev.house)) applySun(engine.current, s);
+      }),
+    [],
+  );
 
   useEffect(() => {
     const el = ref.current;

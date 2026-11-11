@@ -2,10 +2,13 @@
 // bottom-sheet counterparts (phone).
 import { Link } from '@tanstack/react-router';
 import { type PointerEvent as RPointerEvent, useEffect, useRef, useState } from 'react';
-import { ChevronRightIcon, CloseIcon, FitIcon, Mark, MinusIcon, PlusIcon, ResetViewIcon, SendIcon, SparkIcon, SunIcon, ViewIcon } from '../components/icons';
+import {
+  ChevronRightIcon, CloseIcon, FitIcon, LayersIcon, Mark, MinusIcon, PauseIcon, PlayIcon, PlusIcon, ResetViewIcon, SendIcon, SparkIcon, SunIcon, ViewIcon,
+} from '../components/icons';
 import { Caption, cx, IconButton, LangToggle, Segmented, Tip } from '../components/ui';
 import { levelName, type MessageKey, useT } from '../lib/i18n';
-import { type Mode, useStudio } from '../lib/store';
+import { type Mode, SUN_DATES, type SunDateId, useStudio } from '../lib/store';
+import { compass, hhmm, hourTicks } from '../lib/sun';
 import { VIEW_GROUPS } from '../lib/views';
 import type { Derived, LevelInfo } from './house-data';
 import { planCommands } from './PlanView';
@@ -74,16 +77,16 @@ export function ModeSwitch({ size = 'md', className }: { size?: 'md' | 'lg'; cla
   const mode = useStudio((s) => s.mode);
   const setMode = useStudio((s) => s.setMode);
   return (
-    <Segmented<Mode | 'sheet'>
+    <Segmented<Mode>
       label={t('mode.label')}
       size={size}
       value={mode}
-      onChange={(v) => v !== 'sheet' && setMode(v)}
+      onChange={setMode}
       className={className}
       segments={[
         { value: '3d', label: t('mode.3d') },
         { value: 'plan', label: t('mode.plan') },
-        { value: 'sheet', label: t('mode.sheet'), disabled: true, hint: t('soon') },
+        { value: 'sheet', label: t('mode.sheet') },
       ]}
     />
   );
@@ -143,46 +146,216 @@ export function LevelRail({ levels }: { levels: LevelInfo[] }) {
   );
 }
 
-export function SunBar({ className, compact }: { className?: string; compact?: boolean }) {
+/** Time of day on a sunrise..sunset track, with a play button (the sun study). */
+export function SunTime({ className }: { className?: string }) {
   const t = useT();
-  const value = 10.5;
-  const fill = ((value - 6) / 12) * 100;
-  const time = `${Math.floor(value)}:${String(Math.round((value % 1) * 60)).padStart(2, '0')}`;
+  const lang = useStudio((s) => s.lang);
+  const sun = useStudio((s) => s.sun);
+  const info = useStudio((s) => s.sunInfo);
+  const setSun = useStudio((s) => s.setSun);
+  const lo = Math.ceil(info?.sunrise ?? 360);
+  const hi = Math.floor(info?.sunset ?? 1080);
+  const value = Math.min(hi, Math.max(lo, sun.minutes));
+  const fill = ((value - lo) / Math.max(1, hi - lo)) * 100;
+  const play = () => {
+    if (sun.playing) setSun({ playing: false });
+    else setSun({ on: true, playing: true, minutes: value >= hi - 5 ? lo : value });
+  };
   return (
     <div className={cx('flex items-center gap-3', className)}>
-      <span className="flex items-center gap-1.5 text-sm text-ink-2">
-        <SunIcon width={18} height={18} />
-        {!compact && <span>{t('sun.label')}</span>}
-      </span>
-      <div className="relative min-w-0 flex-1 pb-3">
+      <button
+        type="button"
+        onClick={play}
+        aria-label={sun.playing ? t('sun.pause') : t('sun.play')}
+        aria-pressed={sun.playing}
+        className={cx(
+          'grid size-9 shrink-0 place-items-center rounded-full transition-colors duration-150',
+          sun.on ? 'bg-accent text-ink hover:brightness-95' : 'bg-wash text-ink hover:bg-accent',
+        )}
+      >
+        {sun.playing ? <PauseIcon width={16} height={16} /> : <PlayIcon width={16} height={16} className="translate-x-px" />}
+      </button>
+      <div className="relative min-w-0 flex-1 pb-3.5">
         <input
           type="range"
-          className="range block w-full opacity-60"
-          min={6}
-          max={18}
-          step={0.25}
+          className={cx('range block w-full', !sun.on && 'range-idle')}
+          min={lo}
+          max={hi}
+          step={1}
           value={value}
-          disabled
-          readOnly
-          aria-label={t('sun.label')}
-          aria-describedby="sun-hint"
+          onChange={(e) => setSun({ on: true, playing: false, minutes: Number(e.target.value) })}
+          aria-label={t('sun.time')}
+          aria-valuetext={hhmm(value)}
           style={{ ['--fill' as string]: `${fill}%` }}
         />
-        <div className="tnum pointer-events-none absolute inset-x-[8px] bottom-0 flex justify-between text-[10px] leading-none text-ink-3" aria-hidden="true">
-          {[6, 9, 12, 15, 18].map((h) => (
-            <span key={h} className="w-0 text-center whitespace-nowrap">
-              <span className="inline-block -translate-x-1/2">{h}</span>
-            </span>
-          ))}
+        <div className="tnum pointer-events-none absolute inset-x-[8px] bottom-0 h-2.5 text-[10px] leading-none text-ink-3" aria-hidden="true">
+          <span className="absolute top-0 left-[-8px] text-ink-2">{hhmm(lo)}</span>
+          {hourTicks(lo, hi)
+            .filter((h) => h * 60 - lo > 70 && hi - h * 60 > 70)
+            .map((h) => (
+              <span key={h} className="absolute top-0 -translate-x-1/2 whitespace-nowrap" style={{ left: `${((h * 60 - lo) / (hi - lo)) * 100}%` }}>
+                {h}
+              </span>
+            ))}
+          <span className="absolute top-0 right-[-8px] text-ink-2">{hhmm(hi)}</span>
         </div>
       </div>
-      <span className="tnum w-10 text-right text-sm text-ink">{time}</span>
-      <span id="sun-hint" className="rounded-[5px] bg-wash px-1.5 py-0.5 text-2xs whitespace-nowrap text-ink-2">
-        {t('soon')}
-      </span>
+      <div className="w-[46px] shrink-0 text-right">
+        <p className={cx('tnum text-[15px] leading-5 font-medium tracking-tight', sun.on ? 'text-ink' : 'text-ink-2')}>{hhmm(value)}</p>
+        <p className="tnum truncate text-2xs text-ink-3">{info && sun.on ? `${compass(info.azimuth, lang)} ${Math.max(0, Math.round(info.elevation))}°` : t('sun.label')}</p>
+      </div>
     </div>
   );
 }
+
+/** Date presets of the sun study. Picking one turns the sun study on. */
+export function SunDates({ className }: { className?: string }) {
+  const t = useT();
+  const sun = useStudio((s) => s.sun);
+  const setSun = useStudio((s) => s.setSun);
+  return (
+    <Segmented<SunDateId>
+      label={t('sun.dates')}
+      size="sm"
+      soft={!sun.on}
+      value={sun.dateId}
+      onChange={(dateId) => setSun({ dateId, on: true })}
+      className={className}
+      segments={SUN_DATES.map((id) => ({ value: id, label: t(`sun.date.${id}`) }))}
+    />
+  );
+}
+
+/** Level cutaway of the 3D view: whole house or cut above a level. */
+export function CutControl({ levels, size = 'sm', className }: { levels: LevelInfo[]; size?: 'sm' | 'lg'; className?: string }) {
+  const t = useT();
+  const lang = useStudio((s) => s.lang);
+  const cut = useStudio((s) => s.cut);
+  const setCut = useStudio((s) => s.setCut);
+  return (
+    <Segmented<string>
+      label={t('cut.label')}
+      size={size}
+      value={cut ?? 'all'}
+      onChange={(v) => setCut(v === 'all' ? null : v)}
+      className={className}
+      segments={[{ value: 'all', label: t('cut.all') }, ...levels.map((l) => ({ value: l.id, label: levelName(lang, l.name, l.index, l.isAttic) }))]}
+    />
+  );
+}
+
+function ExitSun({ className, iconOnly }: { className?: string; iconOnly?: boolean }) {
+  const t = useT();
+  const on = useStudio((s) => s.sun.on);
+  const setSun = useStudio((s) => s.setSun);
+  const exit = () => setSun({ on: false, playing: false });
+  if (iconOnly) {
+    // Keeps its place when off, so the dock does not jump.
+    return (
+      <IconButton label={t('sun.exit')} tipSide="top" onClick={exit} disabled={!on} className={cx('size-8', !on && 'invisible', className)}>
+        <CloseIcon width={16} height={16} />
+      </IconButton>
+    );
+  }
+  if (!on) return null;
+  return (
+    <button
+      type="button"
+      onClick={exit}
+      className={cx('inline-flex h-7 items-center gap-1 rounded-[6px] pr-2 pl-1.5 text-xs whitespace-nowrap text-ink-2 transition-colors hover:bg-wash hover:text-ink', className)}
+    >
+      <CloseIcon width={14} height={14} />
+      {t('sun.exit')}
+    </button>
+  );
+}
+
+/** One-line sun facts under the controls: date span or the hint. */
+function SunNote() {
+  const t = useT();
+  const on = useStudio((s) => s.sun.on);
+  const info = useStudio((s) => s.sunInfo);
+  return (
+    <p className="tnum truncate text-2xs text-ink-3">
+      {on && info ? t('sun.span', { rise: hhmm(info.sunrise), set: hhmm(info.sunset) }) : t('sun.hint')}
+    </p>
+  );
+}
+
+/**
+ * The 3D scene dock (desktop, bottom centre), one row: level cutaway, sun
+ * study date, then the time of day. Wraps to two rows on narrow screens.
+ */
+export function SceneDock({ levels }: { levels: LevelInfo[] | null }) {
+  const t = useT();
+  return (
+    <div className="glass pointer-events-auto flex max-w-[calc(100vw-200px)] flex-wrap items-center justify-center gap-x-1 gap-y-2 rounded-ui py-2 pr-2 pl-2.5">
+      <div className="flex items-center gap-1">
+        <Tip label={t('cut.label')} side="top">
+          <span className="grid size-7 place-items-center text-ink-2" aria-hidden="true">
+            <LayersIcon width={18} height={18} />
+          </span>
+        </Tip>
+        {levels ? <CutControl levels={levels} /> : <Skeleton w={160} />}
+      </div>
+      <span className="mx-2 h-5 w-px bg-hairline" aria-hidden="true" />
+      <div className="flex items-center gap-1">
+        <Tip label={t('sun.study')} side="top">
+          <span className="grid size-7 place-items-center text-ink-2" aria-hidden="true">
+            <SunIcon width={18} height={18} />
+          </span>
+        </Tip>
+        <SunDates />
+      </div>
+      <span className="mx-2 h-5 w-px bg-hairline" aria-hidden="true" />
+      <div className="flex w-[400px] items-center gap-1">
+        <SunTime className="min-w-0 flex-1" />
+        <ExitSun iconOnly />
+      </div>
+    </div>
+  );
+}
+
+/** Sweeps the day in ~8 s while `sun.playing` (one loop for the whole studio). */
+export function useSunPlayer(): void {
+  useEffect(() => {
+    let raf = 0;
+    let last = 0;
+    const tick = (now: number) => {
+      const s = useStudio.getState();
+      if (!s.sun.playing) {
+        raf = 0;
+        return;
+      }
+      const info = s.sunInfo;
+      if (info) {
+        const dt = last ? Math.min(100, now - last) : 0;
+        const m = Math.max(s.sun.minutes, info.sunrise) + ((info.sunset - info.sunrise) * dt) / PLAY_MS;
+        if (m >= info.sunset) {
+          s.setSun({ minutes: info.sunset, playing: false });
+          raf = 0;
+          return;
+        }
+        s.setSun({ minutes: m });
+      }
+      last = now;
+      raf = requestAnimationFrame(tick);
+    };
+    const unsub = useStudio.subscribe((s, p) => {
+      if (s.sun.playing && !p.sun.playing && !raf) {
+        last = 0;
+        raf = requestAnimationFrame(tick);
+      }
+    });
+    return () => {
+      unsub();
+      cancelAnimationFrame(raf);
+    };
+  }, []);
+}
+
+/** Duration of one sunrise..sunset sweep. */
+const PLAY_MS = 8000;
 
 export function ZoomCluster({ className, size = 'md' }: { className?: string; size?: 'md' | 'lg' }) {
   const t = useT();
@@ -378,12 +551,22 @@ export function MobileSheet({ derived, onHeight }: { derived: Derived | null; on
       </button>
       <div className="px-4">
         <ModeSwitch size="lg" className="bg-wash" />
+        {mode === '3d' && <SunTime className="mt-3 h-11" />}
         <div className={cx('grid transition-[grid-template-rows] duration-300 ease-out-soft', open ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]')}>
           <div className="min-h-0 overflow-hidden" inert={!open}>
-            {mode === '3d' ? (
+            {mode === '3d' && (
               <>
+                <div className="mt-3 flex items-center gap-2">
+                  <SunDates className="flex-1" />
+                </div>
+                <div className="mt-1.5 flex h-7 items-center justify-between gap-2">
+                  <SunNote />
+                  <ExitSun className="-mr-2 shrink-0" />
+                </div>
+                <Caption className="mt-3 tracking-normal normal-case">{t('cut.label')}</Caption>
+                <div className="mt-2">{derived ? <CutControl levels={derived.levels} size="lg" className="bg-wash p-1" /> : <Skeleton w={200} />}</div>
                 <Caption className="mt-4 tracking-normal normal-case">{t('views.label')}</Caption>
-                <div className="mt-2 grid grid-cols-5 gap-1.5" role="group" aria-label={t('views.label')}>
+                <div className="mt-2 mb-1 grid grid-cols-5 gap-1.5" role="group" aria-label={t('views.label')}>
                   {views.map((id) => (
                     <button
                       key={id}
@@ -410,9 +593,9 @@ export function MobileSheet({ derived, onHeight }: { derived: Derived | null; on
                     <span className="text-2xs text-ink-2">{t('view.resetShort')}</span>
                   </button>
                 </div>
-                <SunBar compact className="mt-4 mb-1 h-11" />
               </>
-            ) : (
+            )}
+            {mode === 'plan' && (
               <>
                 <Caption className="mt-4 tracking-normal normal-case">{t('levels.label')}</Caption>
                 <div className="mt-2">
@@ -430,6 +613,7 @@ export function MobileSheet({ derived, onHeight }: { derived: Derived | null; on
                 <p className="mt-3 mb-1 text-xs leading-5 text-ink-3">{t('plan.gesture')}</p>
               </>
             )}
+            {mode === 'sheet' && <p className="mt-3 mb-1 text-xs leading-5 text-ink-3">{t('sheets.hint')}</p>}
           </div>
         </div>
       </div>

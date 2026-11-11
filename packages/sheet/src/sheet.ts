@@ -43,7 +43,17 @@ export type SheetOptions =
 export interface SheetSetOptions {
   title?: string;
   scale?: number;
+  /** Called as each sheet is ready (index, count, PNG), e.g. to show thumbnails progressively. */
+  onSheet?: (index: number, count: number, png: Blob) => void;
 }
+
+/** Lets the page paint between heavy steps (the export runs on the main thread). */
+const breathe = () => new Promise<void>((ok) => {
+  if (typeof requestAnimationFrame !== 'function') return ok();
+  // rAF pauses in hidden tabs: a timer keeps the export going there.
+  const t = setTimeout(ok, 50);
+  requestAnimationFrame(() => setTimeout(() => { clearTimeout(t); ok(); }, 0));
+});
 
 function isResolved(h: House | ResolvedHouse): h is ResolvedHouse {
   return 'interiorArea' in h;
@@ -303,11 +313,13 @@ async function composeSheet(ctx: SheetContext, o: SheetOptions): Promise<Blob> {
     const dividerY = Math.round(page.height * layout.dividerLevel);
     drawView(g, ctx, presetOf(o.view ?? LEVEL_HERO_VIEWS[0]!), { x0, y0: heroTop, x1, y1: dividerY - layout.gapAboveDivider }, layout.heroMaxWidth, 'bottom', keepout);
     drawDivider(g, s, dividerY);
+    await breathe();
     await drawPlan(g, ctx, o.levelId, planRegion(dividerY));
   } else {
     const dividerY = Math.round(page.height * layout.dividerViews);
     drawView(g, ctx, presetOf(o.views[0]), { x0, y0: heroTop, x1, y1: dividerY - layout.gapAboveDivider }, layout.heroMaxWidth, 'bottom', keepout);
     drawDivider(g, s, dividerY);
+    await breathe();
     drawView(g, ctx, presetOf(o.views[1]), { x0, y0: dividerY + layout.gapBelowDivider, x1, y1: layout.bottom }, layout.lowerViewMaxWidth, 'center');
   }
   header(g, s, title, facts, true);
@@ -342,11 +354,18 @@ export async function renderSheetSet(house: House | ResolvedHouse, options: Shee
     const fits = await Promise.all(ctx.house.levels.map(async (l) => placeDrawing((await ctx.plan(l.id)).mask, region, { centerX: page.width / 2, alignY: 'center' }).scale));
     ctx.planScale = Math.min(...fits);
     const out: Blob[] = [];
+    const count = ctx.house.levels.length + 1;
+    const done = (png: Blob) => {
+      out.push(png);
+      options.onSheet?.(out.length - 1, count, png);
+    };
     for (const [i, level] of ctx.house.levels.entries()) {
+      await breathe();
       const view = LEVEL_HERO_VIEWS[i % LEVEL_HERO_VIEWS.length]!;
-      out.push(await composeSheet(ctx, { kind: 'level', levelId: level.id, view, title: options.title, facts: i === 0 }));
+      done(await composeSheet(ctx, { kind: 'level', levelId: level.id, view, title: options.title, facts: i === 0 }));
     }
-    out.push(await composeSheet(ctx, { kind: 'views', views: VIEWS_SHEET_VIEWS, title: options.title, facts: false }));
+    await breathe();
+    done(await composeSheet(ctx, { kind: 'views', views: VIEWS_SHEET_VIEWS, title: options.title, facts: false }));
     return out;
   } finally {
     ctx.dispose();
