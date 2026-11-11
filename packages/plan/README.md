@@ -49,13 +49,20 @@ clean by construction), windows and sliding doors, the heavy outer line
 (building mass and plot fence, interrupted at openings), gates, doors with
 swing arcs, labels, dimensions, north arrow, title.
 
+- Planting is the shared site planting of `@opensu/furnish` (the 3D scene
+  shows the same): tree crowns tinted by species (ginkgo, red maple, green
+  maple), bamboo clumps, grass tufts, the terrace planter; drawn inside the
+  plot and clipped out of the rooms. Crowns may overhang walls and
+  furniture (the overlap check ignores them; trunks are kept clear).
 - Door swings come from the model (`ResolvedOpening.swing`, authored or
   inferred by `resolve`); the plan infers one itself only for older models.
 - Labels: Chinese name over tracked uppercase English, placed at the spot
   with the most clearance from furniture, door swings, stairs, walls and
   other text, preferring the room centre. Fallbacks: smaller size, then name
   only, then the lowest-priority furniture of that room yields (rugs, side
-  tables, nightstands, ...). Stairs are labelled by their 上 / 下 arrows;
+  tables, nightstands, ...). Stairs are labelled by their 上 / 下 arrows (just outside the
+  start of the flight, or on its first treads, with a halo, where the
+  flight starts against a wall);
   narrow planters are not labelled.
 - Dimension chains: tier 1 uses the grid lines of wall (or rail) runs whose
   outer end is visible from that side (a ray towards the side meets no other

@@ -7,7 +7,9 @@ floor plans (`@opensu/plan`), and as a shareable sheet set (`图册`,
 `@opensu/sheet`, rendered in the browser). An AI assistant in the left rail
 edits the house through validated commands (`@opensu/agent`, see "AI
 assistant" below). No persistence yet. The studio opens with our own
-starter house; the golden reference house is internal (`?sample=golden`).
+default house (template T1 白墙坡顶小院; `?sample=t2` / `t3` open the other
+templates); the golden reference house is internal (`?sample=golden`). The
+studio title, the sheets and `/s/$id` show the house's own name.
 
 ## Run
 
@@ -99,9 +101,11 @@ string formatting (well inside the 10 ms free-tier budget).
 - `src/lib/i18n.ts` zh (default) and en dictionaries.
 - `src/styles.css` UI tokens (the only place chrome colours, radius,
   shadow and type are defined) + Tailwind v4.
-- `src/components/HouseSketch.tsx` the landing illustration, drawn as SVG
-  from the renderer's style tokens (`@opensu/render/tokens` alias, no
-  three.js).
+- `public/hero-t1.webp`, `public/og-default.png` the landing hero and the
+  default link preview: real renders of the default house (T1), made by
+  `pnpm --filter @opensu/web hero` (`scripts/hero.mjs`); re-run and commit
+  them when the default house or the renderer's style changes. Set
+  `VITE_SITE_URL` at build time for absolute `og:image` URLs on the landing.
 
 ## Size budgets
 

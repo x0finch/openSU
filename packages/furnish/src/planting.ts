@@ -224,7 +224,15 @@ function computePlants(house: ResolvedHouse): Plant[] {
     for (const gd of outdoor.filter((o) => o.type === 'garden')) {
       const r = adjacentCells(g.cellsOf(0, gd.id), pc) ? g.largestRect(0, gd.id) : null;
       if (!r) continue;
-      const cx = (r[0] + r[2]) / 2, cy = (r[1] + r[3]) / 2;
+      let cx = (r[0] + r[2]) / 2, cy = (r[1] + r[3]) / 2;
+      // In a large garden, at the end nearest the porch (beside the way in,
+      // not in front of the main rooms' glazing).
+      const pr = g.largestRect(0, porch.id);
+      if (pr && Math.min(r[2] - r[0], r[3] - r[1]) >= 2500) {
+        const px = (pr[0] + pr[2]) / 2, py = (pr[1] + pr[3]) / 2;
+        if (r[2] - r[0] >= r[3] - r[1]) cx = Math.abs(px - r[0]) < Math.abs(px - r[2]) ? r[0] + 1200 : r[2] - 1200;
+        else cy = Math.abs(py - r[1]) < Math.abs(py - r[3]) ? r[1] + 1200 : r[3] - 1200;
+      }
       if (!covered(cx, cy)) put('maple-green', gf.id, gd, cx, cy, 3.4);
     }
   }

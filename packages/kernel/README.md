@@ -98,17 +98,16 @@ metres, model axes (X east, Y north, Z up; the renderer converts once).
   supporting line; coplanar continuations of the same material cancel;
   what remains (free edges, folds over 25 degrees, material changes) is
   drawn. Wall faces continuing across a floor level give the floor lines.
-- **Entourage** (`entourage.ts`), seeded from the house: a large ginkgo in
-  the most open courtyard / garden, at its sunny-side corner away from the
-  fence; a green maple in a garden beside the porch; bamboo along fences in strips up to
-  2 m deep (not on the sunny side, clear of gates, pier and doors), grass on
-  the sunny side, a red maple in front of large glazing; a planter with a
-  small tree and a runner on the largest terrace; a person at the main
-  entrance, in the open; a car in each carport. People are placed where no
-  tree crown is around or in front of them in the fixed presentation views.
-  Plants carry a clip box: the renderer drops low foliage outside the fence
-  (or terrace rails), so no stray leaves show on fence faces. Explicit model `entourage` replaces the
-  rules.
+- **Entourage** (`entourage.ts`): plants come from the shared site
+  planting of `@opensu/furnish` (`plantSite`), so the floor plan shows the
+  same trees, bamboo and grass; the kernel sets their height above the
+  ground finish, deck or terrace planter (whose box it builds) and their
+  clip boxes. It adds a person at the main entrance, in the open, a person
+  on the largest terrace and a car in each carport. People are placed where
+  no tree crown is around or in front of them in the fixed presentation
+  views. Plants carry a clip box: the renderer drops low foliage outside
+  the fence (or terrace rails), so no stray leaves show on fence faces.
+  Explicit model `entourage` replaces the rules.
 
 - **Furniture** (`furniture.ts`): the placements of `@opensu/furnish` (the
   plan's furniture) built from simple recipes per kind in a local frame
