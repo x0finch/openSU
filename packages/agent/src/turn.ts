@@ -99,8 +99,9 @@ export function pastMessages(past: readonly PastTurn[]): ModelMessage[] {
 /** Maps an error from the provider call to what the UI tells the user. */
 export function classifyError(err: unknown): TurnError {
   const e = err as { status?: number; code?: string; message?: string; error?: { code?: string; message?: string } } | undefined;
-  const status = typeof e?.status === 'number' ? e.status : undefined;
   const code = e?.error?.code ?? e?.code;
+  // Errors inside a 200 stream carry the HTTP-like status as their code (OpenRouter).
+  const status = typeof e?.status === 'number' ? e.status : Number(code) >= 400 && Number(code) < 600 ? Number(code) : undefined;
   const message = e?.error?.message ?? e?.message ?? String(err);
   if (code === 'no_key' || /no_key/.test(message)) return { kind: 'no-key', message, status };
   if (status === 401 || status === 403) return { kind: 'auth', message, status };

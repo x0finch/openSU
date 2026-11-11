@@ -36,7 +36,8 @@ export function blankHouse(opts: BlankOptions = {}): House {
   };
 }
 
-const snap = (mm: number) => Math.max(3000, Math.round(mm / 300) * 300);
+/** Plot sizes are surveyed, not modular: round to 100 mm. */
+const snap = (mm: number) => Math.max(3000, Math.round(mm / 100) * 100);
 
 const c = (x0: string, x1: string, y0: string, y1: string): CellRect => ({ x0, x1, y0, y1 });
 const start = (offset: number) => ({ from: 'start' as const, offset });

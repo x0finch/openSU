@@ -16,11 +16,11 @@ describe('starter house', () => {
     expect(h.grid).not.toEqual(golden.grid);
   });
 
-  it('blank plot validates and snaps to the 300 mm module', () => {
+  it('blank plot validates; sizes round to 100 mm', () => {
     const b = blankHouse({ width: 12100, depth: 20000 });
     expect(validate(b).filter((i) => i.severity === 'error')).toEqual([]);
-    expect(b.site.width).toBe(12000);
-    expect(b.site.depth).toBe(20100);
+    expect(b.site.width).toBe(12100);
+    expect(b.site.depth).toBe(20000);
   });
 });
 

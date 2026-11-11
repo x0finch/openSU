@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { type House } from '@opensu/model';
-import { type AgentEvent, HouseSession, MAX_REPAIRS, runTurn, starterHouse } from '../src/index';
+import { type AgentEvent, createRelayAdapter, HouseSession, MAX_REPAIRS, runTurn, starterHouse } from '../src/index';
 import { scripted } from './scripted';
 
 const widen = { summary: '客厅向东加宽 600 mm', commands: [{ op: 'move_grid_line', line: '2', by: 600 }] };
@@ -141,6 +141,20 @@ describe('runTurn', () => {
     expect(r.error?.kind).toBe(kind);
     expect(session.house).toBe(before);
     expect(r.committed).toBe(false);
+  });
+
+  it('treats an error chunk inside a 200 stream (OpenRouter mid-stream error) as an upstream error', async () => {
+    const session = new HouseSession(starterHouse());
+    const before = session.house;
+    const body = [
+      { id: 'x', object: 'chat.completion.chunk', created: 1, model: 'm', choices: [{ index: 0, delta: { content: '好的' } }] },
+      { id: 'x', object: 'chat.completion.chunk', created: 1, model: 'm', error: { code: 502, message: 'Provider disconnected' }, choices: [{ index: 0, delta: { content: '' }, finish_reason: 'error' }] },
+    ].map((c) => `data: ${JSON.stringify(c)}\n\n`).join('');
+    const adapter = createRelayAdapter({ endpoint: '/api/chat', fetch: (async () => new Response(body, { headers: { 'content-type': 'text/event-stream' } })) as unknown as typeof fetch });
+    const r = await runTurn({ adapter, session, text: '你好' });
+    expect(session.house).toBe(before);
+    expect(r.status).toBe('error');
+    expect(r.error).toMatchObject({ kind: 'upstream', status: 502 });
   });
 
   it('passes per-request headers (bring-your-own key) to the relay', async () => {
