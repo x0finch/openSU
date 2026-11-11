@@ -62,7 +62,13 @@ metres, model axes (X east, Y north, Z up; the renderer converts once).
   The underside at the eave wall line is the level top plus `eaveOffset`.
   Eaves overhang by `overhang`, verges by 300 (when the roof has
   overhangs); an edge against a higher roof or a taller storey is clipped
-  to the wall face. Skylights sit on the tiles. Flat roofs and canopies are
+  to the wall face. Two gable / hip roofs on the same level with the same
+  eave height whose footprints share a whole edge, where the higher one's
+  ridge runs along that edge, are joined: the lower roof runs on into the
+  higher one's footprint until it dies into its slope, so they meet in
+  valley lines (one roof, no gable wall or gap at the junction); the walls
+  under the extension rise to it. Mono roofs never join (the golden
+  sample's stepped mono roofs are unchanged). Skylights sit on the tiles. Flat roofs and canopies are
   massing slabs; canopy edges along an exterior wall stop at its face,
   free-standing canopies get slim posts.
 - **Openings** (`openings.ts`) cut the wall through its thickness. Exterior

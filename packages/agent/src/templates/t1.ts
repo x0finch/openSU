@@ -80,6 +80,6 @@ export const T1_COMMANDS: readonly unknown[] = [
   // gable over the east bay (its gable end faces the street), a canopy over
   // the carport and the front door.
   { op: 'add_roof', id: 'roof-main', kind: 'gable', cells: [c('1', '3', 'D', 'F')], onLevel: 'L2', ridge: 'EW', pitchDeg: 27, overhang: 500 },
-  { op: 'add_roof', id: 'roof-east', kind: 'gable', cells: [c('3', '9', 'D', 'F')], onLevel: 'L2', ridge: 'NS', pitchDeg: 45, overhang: 400 },
+  { op: 'add_roof', id: 'roof-east', kind: 'gable', cells: [c('3', '9', 'D', 'F')], onLevel: 'L2', ridge: 'NS', pitchDeg: 50, overhang: 400 },
   { op: 'add_roof', id: 'canopy-carport', kind: 'canopy', cells: [c('3', '9', 'Bc', 'D')], onLevel: 'L1', height: 2900, overhang: 150 },
 ];

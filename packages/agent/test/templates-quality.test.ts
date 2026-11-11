@@ -60,6 +60,23 @@ describe.each(houses)('%s', (_id, house) => {
   });
 });
 
+describe('roof junctions', () => {
+  it('T1: the main gable runs on into the east gable and meets it in valleys', () => {
+    const geo = buildHouse(resolve(templateHouse('t1')));
+    const xs = (id: string) => {
+      const p = geo.parts.find((q) => q.id === id)!;
+      const out: number[] = [];
+      for (let i = 0; i < p.positions.length; i += 3) out.push(p.positions[i]!);
+      return out;
+    };
+    // Main roof tiles reach past the shared wall (x = 9.0 m) up to near the east ridge (10.5 m)...
+    expect(Math.max(...xs('roof-main:tile'))).toBeGreaterThan(10);
+    expect(Math.max(...xs('roof-main:tile'))).toBeLessThan(10.5);
+    // ...and the east roof has no overhang back over the main block.
+    expect(Math.min(...xs('roof-east:tile'))).toBeGreaterThanOrEqual(9 - 1e-6);
+  });
+});
+
 describe('planting', () => {
   it('the templates are planted: a large tree, and people and a car where there is a carport', () => {
     for (const id of TEMPLATE_IDS) {
