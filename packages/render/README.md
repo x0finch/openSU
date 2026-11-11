@@ -36,6 +36,11 @@ renders a single view with debug switches.
   adjacency across primitives so the line shader can detect profiles.
 - `src/style/batch.ts` - bakes a scene description into one merged mesh per
   material, one feature-edge object and one floor-line object.
+- `src/style/lighting.ts` - lighting modes. `presentation` (default): the
+  sun is placed relative to the camera (behind the viewer, 40 deg to the side
+  of the main facade, 60 deg high for axonometrics, 45 deg otherwise) so one
+  visible face is sunlit and the other turned away. `physical`: an explicit
+  sun position (for a later sun study); `viewer.setLighting(...)`.
 - `src/style/sun.ts` - one directional sun; the shadow frustum is fitted to
   the scene bounds.
 - `src/style/ground.ts` - invisible ground that only shows received shadows.

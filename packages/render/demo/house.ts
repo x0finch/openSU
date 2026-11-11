@@ -15,9 +15,9 @@ export function buildHouse(pal: Palette): Group {
 
   // ---------------------------------------------------------------- roofs
   const roofS: RoofSpec = { x0: 3100, y0: 1800, x1: 9100, y1: 6900, fall: 'S', zHigh: 8100 + 5100 * T20, slopeDeg: 20, overhang: { n: 0, s: 600, e: 600, w: 600 } };
-  const roofN: RoofSpec = { x0: 0, y0: 6900, x1: 9100, y1: 10500, fall: 'N', zHigh: 11000, slopeDeg: 20, overhang: { n: 600, s: 600, e: 400, w: 400 } };
-  const sTop = (y: number) => roofUnderside(roofS, y);
-  const nTop = (y: number) => roofUnderside(roofN, y);
+  const roofN: RoofSpec = { x0: 0, y0: 6900, x1: 9100, y1: 10500, fall: 'N', zHigh: 11000, slopeDeg: 20, overhang: { n: 600, s: 600, e: 0, w: 0 } };
+  const sTop = (y: number) => roofUnderside(roofS, 0, y);
+  const nTop = (y: number) => roofUnderside(roofN, 0, y);
 
   // ------------------------------------------------------------- block N
   // x 0..9100, y 6900..10500, high edge on the south wall.
@@ -130,7 +130,7 @@ export function buildHouse(pal: Palette): Group {
     ],
   });
   const sRoof = monoRoof(b, roofS);
-  skylight(b, roofS, 6100, 4200, 1900, 1100, 3, sRoof.topAt);
+  skylight(b, 6100, 4200, 1900, 1100, 3, sRoof.topAt);
 
   // ------------------------------------------------------------- block E
   // x 9100..13800, y 1800..6900, two storeys, roof terrace.
@@ -205,14 +205,15 @@ export function buildHouse(pal: Palette): Group {
   // Perimeter fence (1300 high, 200 thick, dark coping).
   const FH = 1300;
   const sq = (a: number) => ({ a0: a, a1: a + 320, z0: 650, z1: 970 });
-  fenceWall(b, 0, 0, 3300, 0, FH, 200);
-  fenceWall(b, 5300, 0, 15000, 0, FH, 200, [sq(6700), sq(7400), sq(8100)]);
-  fenceWall(b, 15000, 200, 15000, 11800, FH, 200, [sq(7000), sq(7700), sq(8400)]);
-  fenceWall(b, 15000, 12000, 13800, 12000, FH, 200);
-  fenceWall(b, 9500, 12000, 9100, 12000, FH, 200);
-  fenceWall(b, 5500, 12000, 0, 12000, FH, 200);
-  fenceWall(b, 0, 11800, 0, 10500, FH, 200);
-  fenceWall(b, 0, 6900, 0, 200, FH, 200);
+  // Corners belong to the west and east runs; south/north runs join them.
+  fenceWall(b, 200, 0, 3300, 0, FH, 200, [], [false, true], [200, 0]);
+  fenceWall(b, 5300, 0, 14800, 0, FH, 200, [sq(6700), sq(7400), sq(8100)], [true, false], [0, 200]);
+  fenceWall(b, 15000, 0, 15000, 12000, FH, 200, [sq(7200), sq(7900), sq(8600)], [false, false], [0, 0], [200, 200]);
+  fenceWall(b, 14800, 12000, 13800, 12000, FH, 200, [], [false, true], [200, 0]);
+  fenceWall(b, 9500, 12000, 9100, 12000, FH, 200, [], [false, false]);
+  fenceWall(b, 5500, 12000, 200, 12000, FH, 200, [], [false, false], [0, 200]);
+  fenceWall(b, 0, 12000, 0, 10500, FH, 200, [], [false, false], [0, 0], [200, 0]);
+  fenceWall(b, 0, 6900, 0, 0, FH, 200, [], [false, false], [0, 0], [0, 200]);
   // Entrance pier and vehicle gate.
   b.box(9500, 11550, 0, 10100, 12000, 3000, pal.wall);
   b.box(9800 - 260, 12000, 1500, 9800 + 260, 12030, 1700, pal.wood);

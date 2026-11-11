@@ -11,3 +11,4 @@ export { createGinkgo, createMaple, createBamboo, createGrassTuft, type TreeMate
 export { createPerson, type PersonPose } from './entourage/person.js';
 export { createCar, type CarMaterials } from './entourage/car.js';
 export { createRand, type Rand } from './entourage/random.js';
+export { presentationSun, sunForView, defaultLighting, type LightingMode, type SunPosition } from './style/lighting.js';

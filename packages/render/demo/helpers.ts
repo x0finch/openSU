@@ -70,10 +70,8 @@ export interface Opening {
   /** Split horizontally into this many equal glass cells. */
   cols?: number;
   reveal?: number;
-  /** No glazing, frames or interior (through-holes in fence walls). */
-  through?: boolean;
-  /** Interior room depth behind the glazing (mm). */
-  room?: number;
+  /** Blind recess of this depth (mm) with a flat back: small wall openings. */
+  recess?: number;
 }
 
 export interface FaceSpec {
@@ -86,8 +84,6 @@ export interface FaceSpec {
   openings?: Opening[];
   floorLevels?: number[];
   material?: Material;
-  /** Wall thickness for through-openings. */
-  thickness?: number;
 }
 
 const FRAME_W = 50;
@@ -107,25 +103,6 @@ function scanline(outline: readonly V2[], z: number): [number, number][] {
   const out: [number, number][] = [];
   for (let i = 0; i + 1 < xs.length; i += 2) out.push([xs[i]!, xs[i + 1]!]);
   return out;
-}
-
-/** Lowest top of the outline over the horizontal range [u0, u1]. */
-function topOver(outline: readonly V2[], u0: number, u1: number): number {
-  let top = Infinity;
-  for (let k = 0; k <= 8; k++) {
-    const u = u0 + ((u1 - u0) * k) / 8;
-    let best = -Infinity;
-    for (let i = 0; i < outline.length; i++) {
-      const a = outline[i]!;
-      const b = outline[(i + 1) % outline.length]!;
-      if ((a[0] <= u && b[0] >= u) || (b[0] <= u && a[0] >= u)) {
-        const z = a[0] === b[0] ? Math.max(a[1], b[1]) : a[1] + ((u - a[0]) / (b[0] - a[0])) * (b[1] - a[1]);
-        best = Math.max(best, z);
-      }
-    }
-    top = Math.min(top, best);
-  }
-  return top;
 }
 
 function subtract(intervals: [number, number][], cuts: [number, number][]): [number, number][] {
@@ -177,24 +154,35 @@ export function face(b: Builder, spec: FaceSpec): void {
       floorLines.push(p.x, p.y, p.z, q.x, q.y, q.z);
     }
   }
-  b.add(polygonWithHoles(O, U, V, outlineM, holes), spec.material ?? b.pal.wall, { floorLines });
+  // Feature edges of a planar face are exactly its outline and hole loops;
+  // emitting them analytically avoids spurious lines from triangulation.
+  const loopLines: number[] = [];
+  const loop = (pts: readonly V2[]) => {
+    for (let i = 0; i < pts.length; i++) {
+      const p = F(pts[i]![0] / MM, pts[i]![1] / MM);
+      const q = F(pts[(i + 1) % pts.length]![0] / MM, pts[(i + 1) % pts.length]![1] / MM);
+      loopLines.push(p.x, p.y, p.z, q.x, q.y, q.z);
+    }
+  };
+  loop(outlineM);
+  holes.forEach(loop);
+  b.add(polygonWithHoles(O, U, V, outlineM, holes), spec.material ?? b.pal.wall, { floorLines, edges: false, lines: loopLines });
 
-  const zMax = Math.max(...spec.outline.map((p) => p[1]));
-  const zMin = Math.min(...spec.outline.map((p) => p[1]));
-  const uMax = Math.max(...spec.outline.map((p) => p[0]));
-  const uMin = Math.min(...spec.outline.map((p) => p[0]));
 
   for (const o of openings) {
-    const rd = o.through ? (spec.thickness ?? 200) : (o.reveal ?? 140);
+    const rd = o.recess ?? o.reveal ?? 140;
     const wallMat = spec.material ?? b.pal.wall;
     const reveal = (pts: Vector3[], desired: Vector3) => b.add(polygons([oriented(pts, desired)]), wallMat);
     // Reveals stop at the frame's outer face so the two never overlap (no z-fighting).
-    const rv = o.through ? rd : rd - FRAME_D / 2;
+    const rv = o.recess ? rd : rd - FRAME_D / 2;
     if (!isNotch(o)) reveal([F(o.u0, o.z0), F(o.u1, o.z0), F(o.u1, o.z0, rv), F(o.u0, o.z0, rv)], V);
     reveal([F(o.u0, o.z1), F(o.u1, o.z1), F(o.u1, o.z1, rv), F(o.u0, o.z1, rv)], V.clone().negate());
     reveal([F(o.u0, o.z0), F(o.u0, o.z1), F(o.u0, o.z1, rv), F(o.u0, o.z0, rv)], U);
     reveal([F(o.u1, o.z0), F(o.u1, o.z1), F(o.u1, o.z1, rv), F(o.u1, o.z0, rv)], U.clone().negate());
-    if (o.through) continue;
+    if (o.recess) {
+      b.add(polygons([oriented([F(o.u0, o.z0, rd), F(o.u1, o.z0, rd), F(o.u1, o.z1, rd), F(o.u0, o.z1, rd)], N)]), b.pal.recess, { edges: false });
+      continue;
+    }
 
     const w = o.u1 - o.u0;
     const h = o.z1 - o.z0;
@@ -215,74 +203,68 @@ export function face(b: Builder, spec: FaceSpec): void {
       b.add(extrude(frameOrigin, U, V, ring, FRAME_D * MM, [hole]), b.pal.frame);
       if (c.type === 'glass' || c.type === 'door') {
         b.add(polygons([[F(u0 + fw, z0 + fw, rd), F(u1 - fw, z0 + fw, rd), F(u1 - fw, z1 - fw, rd), F(u0 + fw, z1 - fw, rd)]]), b.pal.glass, { edges: false, cast: false, receive: false });
+        // Flat backing just behind the pane: glazing reads as one flat grey,
+        // and it closes the hollow massing for the shadow pass.
+        const bd = rd + FRAME_D / 2 - 5;
+        b.add(polygons([oriented([F(u0 + fw, z0 + fw, bd), F(u1 - fw, z0 + fw, bd), F(u1 - fw, z1 - fw, bd), F(u0 + fw, z1 - fw, bd)], N)]), b.pal.glassBacking, { edges: false, cast: true, receive: false });
       } else if (c.type === 'wood') {
         const woodOrigin = F(0, 0, rd + 20);
         b.add(extrude(woodOrigin, U, V, hole, 40 * MM), b.pal.wood);
       }
     }
-    // Interior behind the glazing.
-    const depth = o.room ?? 1100;
-    const m = 450;
-    const ru0 = Math.max(uMin + 120, o.u0 - m);
-    const ru1 = Math.min(uMax - 120, o.u1 + m);
-    const rz0 = Math.max(zMin + 0, o.z0 - m);
-    const rz1 = Math.min(zMax - 120, o.z1 + m, topOver(spec.outline, ru0, ru1) - 250);
-    const d0 = rd;
-    const d1 = rd + depth;
-    const inner = (pts: Vector3[], desired: Vector3, mat: Material) => b.add(polygons([oriented(pts, desired)]), mat, { cast: true });
-    inner([F(ru0, rz0, d1), F(ru1, rz0, d1), F(ru1, rz1, d1), F(ru0, rz1, d1)], N, b.pal.interior);
-    inner([F(ru0, rz0, d0), F(ru0, rz1, d0), F(ru0, rz1, d1), F(ru0, rz0, d1)], U, b.pal.interior);
-    inner([F(ru1, rz0, d0), F(ru1, rz1, d0), F(ru1, rz1, d1), F(ru1, rz0, d1)], U.clone().negate(), b.pal.interior);
-    inner([F(ru0, rz1, d0), F(ru1, rz1, d0), F(ru1, rz1, d1), F(ru0, rz1, d1)], V.clone().negate(), b.pal.interior);
-    const fz = Math.max(o.z0, 15);
-    inner([F(ru0, fz, d0), F(ru1, fz, d0), F(ru1, fz, d1), F(ru0, fz, d1)], V, b.pal.interiorFloor);
-    // Close the gaps between the hole and the larger room box.
-    const ring: Vector3[][] = [];
-    const front = (pts: Vector3[]) => ring.push(oriented(pts, N.clone().negate()));
-    if (ru0 < o.u0) front([F(ru0, rz0, d0), F(o.u0, rz0, d0), F(o.u0, rz1, d0), F(ru0, rz1, d0)]);
-    if (ru1 > o.u1) front([F(o.u1, rz0, d0), F(ru1, rz0, d0), F(ru1, rz1, d0), F(o.u1, rz1, d0)]);
-    if (rz1 > o.z1) front([F(o.u0, o.z1, d0), F(o.u1, o.z1, d0), F(o.u1, rz1, d0), F(o.u0, rz1, d0)]);
-    if (ring.length) b.add(polygons(ring), b.pal.interior, { cast: true, edges: false });
   }
 }
 
-/** Mono-pitch roof: wood body (fascia/soffit) with a thin tile layer on top. */
+/**
+ * Mono-pitch roof. The roof is a sloped slab of constant vertical depth:
+ * its top is the tiled plane, its edges are fascia (eave and high edge) and
+ * barge boards (gable sides) that follow the slope with constant depth, and
+ * its underside is the soffit under the overhangs. Nothing hangs below the
+ * soffit plane. Works for any fall direction, pitch and overhangs.
+ */
 export interface RoofSpec {
+  /** Wall footprint the roof sits on (mm). */
   x0: number;
   y0: number;
   x1: number;
   y1: number;
   /** Direction the roof falls towards. */
-  fall: 'N' | 'S';
-  /** Underside height at the high wall line (mm). */
+  fall: 'N' | 'S' | 'E' | 'W';
+  /** Underside (soffit) height at the high wall line (mm). */
   zHigh: number;
   slopeDeg: number;
   overhang: { n: number; s: number; e: number; w: number };
-  woodT?: number;
-  tileT?: number;
+  /** Total vertical depth of fascia / barge boards (mm). */
+  depth?: number;
+  /** Top part of that depth shown as the tile edge (mm). */
+  tileEdge?: number;
 }
 
-export function roofUnderside(r: RoofSpec, y: number): number {
+/** Height of the roof underside (soffit plane) at a plan point. */
+export function roofUnderside(r: RoofSpec, x: number, y: number): number {
   const t = Math.tan((r.slopeDeg * Math.PI) / 180);
-  return r.fall === 'S' ? r.zHigh - (r.y1 - y) * t : r.zHigh - (y - r.y0) * t;
+  const run = r.fall === 'N' ? y - r.y0 : r.fall === 'S' ? r.y1 - y : r.fall === 'E' ? x - r.x0 : r.x1 - x;
+  return r.zHigh - run * t;
 }
 
-export function monoRoof(b: Builder, r: RoofSpec): { topAt: (y: number) => number } {
-  const woodT = r.woodT ?? 200;
-  const tileT = r.tileT ?? 70;
+export function monoRoof(b: Builder, r: RoofSpec): { topAt: (x: number, y: number) => number } {
+  const depth = r.depth ?? 200;
+  const tileEdge = Math.min(r.tileEdge ?? 45, depth);
   const xa = r.x0 - r.overhang.w, xb = r.x1 + r.overhang.e, ya = r.y0 - r.overhang.s, yb = r.y1 + r.overhang.n;
+  // Counter-clockwise seen from above.
   const corners: [number, number][] = [[xa, ya], [xb, ya], [xb, yb], [xa, yb]];
-  const ring = (dz: number) => corners.map(([x, y]) => P(x, y, roofUnderside(r, y) + dz));
-  b.add(hexahedron(ring(0), ring(woodT)), b.pal.fascia);
-  b.add(hexahedron(ring(woodT), ring(woodT + tileT)), b.pal.roofTile);
-  return { topAt: (y: number) => roofUnderside(r, y) + woodT + tileT };
+  const ring = (dz: number) => corners.map(([x, y]) => P(x, y, roofUnderside(r, x, y) + dz));
+  // Board zone (fascia, barge boards, soffit) and the tiled top with its edge.
+  b.add(hexahedron(ring(0), ring(depth - tileEdge)), b.pal.fascia);
+  b.add(hexahedron(ring(depth - tileEdge), ring(depth)), b.pal.roofTile);
+  return { topAt: (x: number, y: number) => roofUnderside(r, x, y) + depth };
 }
 
 /** Flat skylight lying on a roof plane (three panes). */
-export function skylight(b: Builder, r: RoofSpec, xc: number, yc: number, w: number, d: number, panes: number, topAt: (y: number) => number): void {
+export function skylight(b: Builder, xc: number, yc: number, w: number, d: number, panes: number, topAt: (x: number, y: number) => number): void {
   const t = 40;
   const ring = (x0: number, x1: number, y0: number, y1: number, dz: number) =>
-    [[x0, y0], [x1, y0], [x1, y1], [x0, y1]].map(([x, y]) => P(x!, y!, topAt(y!) + dz));
+    [[x0, y0], [x1, y0], [x1, y1], [x0, y1]].map(([x, y]) => P(x!, y!, topAt(x!, y!) + dz));
   b.add(hexahedron(ring(xc - w / 2, xc + w / 2, yc - d / 2, yc + d / 2, -10), ring(xc - w / 2, xc + w / 2, yc - d / 2, yc + d / 2, t)), b.pal.frame);
   const pw = (w - 60 * (panes + 1)) / panes;
   for (let i = 0; i < panes; i++) {
@@ -346,38 +328,52 @@ function railBox(b: Builder, x0: number, y0: number, x1: number, y1: number, z0:
  * left side of the run direction, with optional through-openings and a
  * dark coping.
  */
-export function fenceWall(b: Builder, x0: number, y0: number, x1: number, y1: number, height: number, thickness: number, holes: { a0: number; a1: number; z0: number; z1: number }[] = [], coping = true): void {
+export function fenceWall(
+  b: Builder,
+  x0: number,
+  y0: number,
+  x1: number,
+  y1: number,
+  height: number,
+  thickness: number,
+  holes: { a0: number; a1: number; z0: number; z1: number }[] = [],
+  /** Draw the end faces (false where the run abuts a building or another run). */
+  ends: [boolean, boolean] = [true, true],
+  /**
+   * Corner joints: extend the outer face over the neighbouring run's end by
+   * this much (mm) at the start / end, so a corner reads as one continuous
+   * face, and shorten the coping to meet the neighbour's coping.
+   */
+  corner: [number, number] = [0, 0],
+  /** Shorten the inner face at the start / end where another run joins at a corner (mm). */
+  innerTrim: [number, number] = [0, 0],
+): void {
   const len = Math.hypot(x1 - x0, y1 - y0);
   const ux = (x1 - x0) / len, uy = (y1 - y0) / len;
   // Left normal of the run direction.
   const lx = -uy, ly = ux;
   const ox = x0 + lx * thickness, oy = y0 + ly * thickness;
-  const outline: V2[] = [[0, 0], [len, 0], [len, height], [0, height]];
+  const [cs, ce] = corner;
+  const outer: V2[] = [[0, 0], [len + cs + ce, 0], [len + cs + ce, height], [0, height]];
   // Outer face: seen from the right side (outside), U runs x0 -> x1.
-  face(b, { origin: [x0, y0], dir: [ux, uy], outline, thickness, openings: holes.map((h) => ({ u0: h.a0, u1: h.a1, z0: h.z0, z1: h.z1, through: true })) });
+  face(b, { origin: [x0 - ux * cs, y0 - uy * cs], dir: [ux, uy], outline: outer, openings: holes.map((h) => ({ u0: h.a0 + cs, u1: h.a1 + cs, z0: h.z0, z1: h.z1, recess: thickness / 2 })) });
   // Inner face: seen from the left, U runs x1 -> x0.
-  face(b, {
-    origin: [ox + ux * len, oy + uy * len],
-    dir: [-ux, -uy],
-    outline,
-    thickness: 0,
-    openings: holes.map((h) => ({ u0: len - h.a1, u1: len - h.a0, z0: h.z0, z1: h.z1, through: true })),
-  });
+  const [ts, te] = innerTrim;
+  const innerLen = len - ts - te;
+  face(b, { origin: [ox + ux * (len - te), oy + uy * (len - te)], dir: [-ux, -uy], outline: [[0, 0], [innerLen, 0], [innerLen, height], [0, height]] });
   const q = (s: number, t: number, z: number) => P(x0 + ux * s + lx * t, y0 + uy * s + ly * t, z);
-  const ends: Vector3[][] = [
-    oriented([q(0, 0, 0), q(0, thickness, 0), q(0, thickness, height), q(0, 0, height)], new Vector3(-ux, 0, uy)),
-    oriented([q(len, 0, 0), q(len, thickness, 0), q(len, thickness, height), q(len, 0, height)], new Vector3(ux, 0, -uy)),
-  ];
-  if (!coping) ends.push(oriented([q(0, 0, height), q(len, 0, height), q(len, thickness, height), q(0, thickness, height)], new Vector3(0, 1, 0)));
-  b.add(polygons(ends), b.pal.wall);
-  if (coping) {
-    const e = 25;
-    const ring = (z: number) => {
-      const pts = [q(-e * 0, -e, z), q(len, -e, z), q(len, thickness + e, z), q(0, thickness + e, z)];
-      return polygonNormal(pts).y > 0 ? pts : [pts[0]!, pts[3]!, pts[2]!, pts[1]!];
-    };
-    b.add(hexahedron(ring(height), ring(height + 60)), b.pal.slab);
-  }
+  const endFaces: Vector3[][] = [];
+  if (ends[0]) endFaces.push(oriented([q(0, 0, 0), q(0, thickness, 0), q(0, thickness, height), q(0, 0, height)], new Vector3(-ux, 0, uy)));
+  if (ends[1]) endFaces.push(oriented([q(len, 0, 0), q(len, thickness, 0), q(len, thickness, height), q(len, 0, height)], new Vector3(ux, 0, -uy)));
+  if (endFaces.length) b.add(polygons(endFaces), b.pal.wall);
+  const e = 25;
+  const ring = (z: number) => {
+    const s0 = cs ? e : 0;
+    const s1 = ce ? len - e : len;
+    const pts = [q(s0, -e, z), q(s1, -e, z), q(s1, thickness + e, z), q(s0, thickness + e, z)];
+    return polygonNormal(pts).y > 0 ? pts : [pts[0]!, pts[3]!, pts[2]!, pts[1]!];
+  };
+  b.add(hexahedron(ring(height), ring(height + 60)), b.pal.slab);
 }
 
 /** Wooden slat gate between two points. */

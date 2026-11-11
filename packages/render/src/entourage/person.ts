@@ -18,22 +18,22 @@ interface Pose {
 
 const POSES: Record<PersonPose, Pose> = {
   run: {
-    head: [0.07, 1.6],
-    neck: [0.04, 1.44],
-    hip: [-0.02, 0.95],
+    head: [0.1, 1.6],
+    neck: [0.06, 1.44],
+    hip: [-0.02, 0.93],
     limbs: [
-      // legs: hip-knee-ankle-toe
-      [[-0.02, 0.95], [0.22, 0.6], 0.075, 0.055],
-      [[0.22, 0.6], [0.14, 0.12], 0.055, 0.04],
-      [[0.14, 0.12], [0.3, 0.06], 0.04, 0.03],
-      [[-0.02, 0.95], [-0.16, 0.56], 0.075, 0.055],
-      [[-0.16, 0.56], [-0.48, 0.4], 0.055, 0.04],
-      [[-0.48, 0.4], [-0.5, 0.25], 0.04, 0.03],
-      // arms: shoulder-elbow-hand
-      [[0.05, 1.38], [0.3, 1.24], 0.045, 0.038],
-      [[0.3, 1.24], [0.5, 1.4], 0.038, 0.03],
-      [[0.0, 1.38], [-0.22, 1.2], 0.045, 0.038],
-      [[-0.22, 1.2], [-0.42, 1.08], 0.038, 0.03],
+      // legs: hip-knee-ankle-toe (front leg reaching forward, back leg kicked up)
+      [[-0.02, 0.93], [0.3, 0.6], 0.09, 0.07],
+      [[0.3, 0.6], [0.26, 0.1], 0.07, 0.05],
+      [[0.26, 0.1], [0.44, 0.05], 0.05, 0.04],
+      [[-0.02, 0.93], [-0.24, 0.55], 0.09, 0.07],
+      [[-0.24, 0.55], [-0.62, 0.48], 0.07, 0.05],
+      [[-0.62, 0.48], [-0.66, 0.3], 0.05, 0.04],
+      // arms: shoulder-elbow-hand, swung wide
+      [[0.08, 1.38], [0.36, 1.24], 0.055, 0.045],
+      [[0.36, 1.24], [0.58, 1.42], 0.045, 0.035],
+      [[0.0, 1.38], [-0.26, 1.18], 0.055, 0.045],
+      [[-0.26, 1.18], [-0.5, 1.02], 0.045, 0.035],
     ],
   },
   walk: {
@@ -82,15 +82,15 @@ function limb(a: J, b: J, wa: number, wb: number): Vector3[] {
 export function createPerson(material: Material, pose: PersonPose = 'run', height = 1.72, mirror = false): Group {
   const p = POSES[pose];
   const faces: Vector3[][] = [];
-  faces.push(disc(p.head, 0.105, 12));
+  faces.push(disc(p.head, 0.12, 12));
   // Torso.
   faces.push([
-    new Vector3(p.hip[0] - 0.12, p.hip[1] - 0.04, 0),
-    new Vector3(p.hip[0] + 0.12, p.hip[1] - 0.04, 0),
-    new Vector3(p.neck[0] + 0.15, p.neck[1] - 0.08, 0),
-    new Vector3(p.neck[0] + 0.05, p.neck[1] + 0.02, 0),
-    new Vector3(p.neck[0] - 0.05, p.neck[1] + 0.02, 0),
-    new Vector3(p.neck[0] - 0.15, p.neck[1] - 0.08, 0),
+    new Vector3(p.hip[0] - 0.14, p.hip[1] - 0.05, 0),
+    new Vector3(p.hip[0] + 0.14, p.hip[1] - 0.05, 0),
+    new Vector3(p.neck[0] + 0.18, p.neck[1] - 0.08, 0),
+    new Vector3(p.neck[0] + 0.06, p.neck[1] + 0.03, 0),
+    new Vector3(p.neck[0] - 0.06, p.neck[1] + 0.03, 0),
+    new Vector3(p.neck[0] - 0.18, p.neck[1] - 0.08, 0),
   ]);
   for (const [a, b, wa, wb] of p.limbs) {
     faces.push(limb(a, b, wa, wb));

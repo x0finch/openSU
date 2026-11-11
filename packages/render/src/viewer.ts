@@ -15,7 +15,8 @@ import {
 } from 'three';
 import type { LineMaterial } from 'three/addons/lines/LineMaterial.js';
 import { bakeScene } from './style/batch.js';
-import { applyLensShift, applyOrthoAspect, cameraForView, sunElevationFor, type ViewPreset } from './style/cameras.js';
+import { applyLensShift, applyOrthoAspect, cameraForView, type ViewPreset } from './style/cameras.js';
+import { defaultLighting, type LightingMode, sunForView } from './style/lighting.js';
 import { createGround } from './style/ground.js';
 import { createLineMaterial, createPalette, type Palette } from './style/materials.js';
 import { Sun } from './style/sun.js';
@@ -61,6 +62,7 @@ export class IllustrationViewer {
   private bounds = new Box3();
   private pending = false;
   private preset: ViewPreset | null = null;
+  private lighting: LightingMode = defaultLighting;
   private readonly fixedPixelRatio: number | undefined;
   /** Called after every frame (stats, UI). */
   onAfterRender: ((stats: SceneStats) => void) | null = null;
@@ -127,8 +129,7 @@ export class IllustrationViewer {
     this.preset = preset;
     const { width, height } = this.size();
     this.camera = cameraForView(preset, this.framePoints.length ? this.framePoints : [new Vector3(-1, 0, -1), new Vector3(1, 1, 1)], width / height);
-    this.sun.setDirection(preset.sun.azimuthDeg, sunElevationFor(preset));
-    this.sun.fit(this.bounds);
+    this.applySun();
     this.requestRender();
   }
 
@@ -138,6 +139,21 @@ export class IllustrationViewer {
     const dir = this.camera.getWorldDirection(new Vector3());
     const pos = this.camera.getWorldPosition(new Vector3());
     return pos.clone().addScaledVector(dir, dir.dot(center.sub(pos)));
+  }
+
+  /** Switch between presentation lighting (default) and an explicit physical sun. */
+  setLighting(mode: LightingMode): void {
+    this.lighting = mode;
+    this.applySun();
+  }
+
+  private applySun(): void {
+    const kind = this.preset?.kind ?? 'axo';
+    const az = this.preset?.azimuthDeg ?? 135;
+    const s = sunForView(this.lighting, kind, az);
+    this.sun.setDirection(s.azimuthDeg, s.elevationDeg);
+    this.sun.fit(this.bounds);
+    this.requestRender();
   }
 
   get currentView(): ViewPreset | null {

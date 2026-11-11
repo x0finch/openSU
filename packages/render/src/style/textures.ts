@@ -1,12 +1,14 @@
 import { CanvasTexture, LinearMipmapLinearFilter, RepeatWrapping, SRGBColorSpace } from 'three';
-import { materials as m } from './tokens.js';
+import { materials as m, patterns } from './tokens.js';
 
 /**
  * Procedural, low-contrast surface patterns. Every texture covers 1 m x 1 m
  * of surface; geometry carries UVs in metres so patterns keep a true scale.
  */
 
-const SIZE = 512;
+const SIZE = patterns.textureSize;
+const T = patterns.roofTile;
+const W = patterns.wood;
 
 function makeCanvas(): [HTMLCanvasElement | OffscreenCanvas, CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D] {
   const canvas: HTMLCanvasElement | OffscreenCanvas =
@@ -21,7 +23,7 @@ function finish(canvas: HTMLCanvasElement | OffscreenCanvas): CanvasTexture {
   tex.wrapT = RepeatWrapping;
   tex.colorSpace = SRGBColorSpace;
   tex.minFilter = LinearMipmapLinearFilter;
-  tex.anisotropy = 8;
+  tex.anisotropy = patterns.anisotropy;
   tex.generateMipmaps = true;
   return tex;
 }
@@ -41,8 +43,8 @@ function rng(seed: number): () => number {
  */
 export function createRoofTileTexture(): CanvasTexture {
   const [canvas, ctx] = makeCanvas();
-  const rows = 6;
-  const cols = 6;
+  const rows = T.rows;
+  const cols = T.cols;
   const rowH = SIZE / rows;
   const colW = SIZE / cols;
   ctx.fillStyle = m.roofTileLine;
@@ -55,11 +57,11 @@ export function createRoofTileTexture(): CanvasTexture {
     return h - Math.floor(h);
   };
   const tile = (x0: number, y0: number, fill: string) => {
-    const g = 3;
-    const r = colW * 0.42;
+    const g = T.gap;
+    const r = colW * T.cornerRadius;
     const x1 = x0 + colW - g;
     const xa = x0 + g;
-    const y1 = y0 + rowH * 1.18;
+    const y1 = y0 + rowH * T.length;
     ctx.beginPath();
     ctx.moveTo(xa, y0);
     ctx.lineTo(x1, y0);
@@ -74,11 +76,11 @@ export function createRoofTileTexture(): CanvasTexture {
     ctx.save();
     ctx.clip();
     ctx.fillStyle = m.roofTileHighlight;
-    ctx.globalAlpha = 0.7;
-    ctx.fillRect(xa, y0 + rowH * 0.55, colW, rowH * 0.45);
+    ctx.globalAlpha = T.highlightAlpha;
+    ctx.fillRect(xa, y0 + rowH * T.highlightFrom, colW, rowH * (T.length - T.highlightFrom));
     ctx.restore();
     ctx.strokeStyle = m.roofTileLine;
-    ctx.lineWidth = 5;
+    ctx.lineWidth = T.outlineWidth;
     ctx.stroke();
   };
   // Upper rows overlap the row below them: paint from the bottom row up.
@@ -87,7 +89,7 @@ export function createRoofTileTexture(): CanvasTexture {
     const shift = (((r % 2) + 2) % 2) * colW * 0.5;
     for (let c = -1; c <= cols; c++) {
       const v = shadeOf(r, c);
-      tile(c * colW + shift, y0, v > 0.75 ? m.roofTileShade : m.roofTile);
+      tile(c * colW + shift, y0, v > 1 - T.shadeShare ? m.roofTileShade : m.roofTile);
     }
   }
   return finish(canvas);
@@ -102,28 +104,28 @@ export function createWoodTexture(deck: boolean): CanvasTexture {
   ctx.fillStyle = m.wood;
   ctx.fillRect(0, 0, SIZE, SIZE);
   const rand = rng(deck ? 11 : 5);
-  const boards = deck ? 8 : 5;
+  const boards = deck ? W.deckBoards : W.panelBoards;
   const bw = SIZE / boards;
   for (let i = 0; i < boards; i++) {
     ctx.fillStyle = rand() > 0.5 ? m.woodHighlight : m.wood;
-    ctx.globalAlpha = 0.5;
+    ctx.globalAlpha = W.boardAlpha;
     ctx.fillRect(0, i * bw, SIZE, bw);
     ctx.globalAlpha = 1;
     // Grain streaks.
     ctx.strokeStyle = m.woodLine;
-    ctx.globalAlpha = 0.25;
-    ctx.lineWidth = 2;
-    for (let g = 0; g < 4; g++) {
+    ctx.globalAlpha = W.grainAlpha;
+    ctx.lineWidth = W.grainWidth;
+    for (let g = 0; g < W.grainPerBoard; g++) {
       const y = i * bw + rand() * bw;
       ctx.beginPath();
       ctx.moveTo(0, y);
-      ctx.bezierCurveTo(SIZE * 0.3, y + (rand() - 0.5) * 8, SIZE * 0.6, y + (rand() - 0.5) * 8, SIZE, y);
+      ctx.bezierCurveTo(SIZE * 0.3, y + (rand() - 0.5) * W.grainWave, SIZE * 0.6, y + (rand() - 0.5) * W.grainWave, SIZE, y);
       ctx.stroke();
     }
     ctx.globalAlpha = 1;
     if (deck) {
       ctx.fillStyle = m.woodLine;
-      ctx.fillRect(0, i * bw, SIZE, 5);
+      ctx.fillRect(0, i * bw, SIZE, W.jointWidth);
     }
   }
   return finish(canvas);

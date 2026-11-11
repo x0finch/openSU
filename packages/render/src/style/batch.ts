@@ -73,7 +73,7 @@ export function bakeScene(root: Object3D, edgeMaterial: LineMaterial, floorMater
     }
     const g = prepare(geo, material);
     g.applyMatrix4(obj.matrixWorld);
-    if (obj.userData.edges !== false && !material.transparent) adjacency.addGeometry(g);
+    if ((obj.userData.edges !== false || lines) && !material.transparent) adjacency.addGeometry(g);
     bucket.geos.push(g);
   });
 

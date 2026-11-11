@@ -28,6 +28,8 @@ export interface ShadedOptions {
   vertexColors?: boolean;
   /** Override for N.L at which a face counts as fully lit. */
   sunFullAt?: number;
+  /** Override for N.L below which a face counts as turned away. */
+  awayBelow?: number;
 }
 
 const ILLUSTRATION_PARS = /* glsl */ `
@@ -35,6 +37,7 @@ uniform float uSunTone;
 uniform float uAwayTone;
 uniform float uShadowTone;
 uniform float uSunFullAt;
+uniform float uAwayBelow;
 float gSunDot = -1.0;
 float gSunVis = 1.0;
 void RE_Direct_Illustration( const in IncidentLight directLight, const in vec3 geometryPosition, const in vec3 geometryNormal, const in vec3 geometryViewDir, const in vec3 geometryClearcoatNormal, const in LambertMaterial material, inout ReflectedLight reflectedLight ) {
@@ -47,7 +50,7 @@ void RE_Direct_Illustration( const in IncidentLight directLight, const in vec3 g
 
 const ILLUSTRATION_OUT = /* glsl */ `
 {
-  float litBand = smoothstep( 0.0, uSunFullAt, gSunDot );
+  float litBand = smoothstep( uAwayBelow, uSunFullAt, gSunDot );
   float sunBand = mix( uShadowTone, uSunTone, gSunVis );
   float tone = mix( uAwayTone, sunBand, litBand );
   outgoingLight = diffuseColor.rgb * tone;
@@ -88,28 +91,32 @@ export function createShadedMaterial(color: string, opts: ShadedOptions = {}): M
     shadow: opts.tones?.shadow ?? shading.shadowTone,
   };
   const sunFullAt = opts.sunFullAt ?? shading.sunFullAt;
+  const awayBelow = opts.awayBelow ?? shading.awayBelow;
   mat.onBeforeCompile = (shader) => {
     shader.uniforms.uSunTone = { value: linearGrey(tones.sun) };
     shader.uniforms.uAwayTone = { value: linearGrey(tones.away) };
     shader.uniforms.uShadowTone = { value: linearGrey(tones.shadow) };
     shader.uniforms.uSunFullAt = { value: sunFullAt };
+    shader.uniforms.uAwayBelow = { value: awayBelow };
     shader.fragmentShader = shader.fragmentShader
       .replace('#include <lights_lambert_pars_fragment>', `#include <lights_lambert_pars_fragment>\n${ILLUSTRATION_PARS}`)
       .replace('#include <envmap_fragment>', ILLUSTRATION_OUT);
   };
-  mat.customProgramCacheKey = () => `illustration:${tones.sun}:${tones.away}:${tones.shadow}:${sunFullAt}`;
+  mat.customProgramCacheKey = () => `illustration:${tones.sun}:${tones.away}:${tones.shadow}:${sunFullAt}:${awayBelow}`;
   return mat;
 }
 
 /** Unlit flat colour (silhouettes, car glass). */
 export function createFlatMaterial(color: string, side: Side = FrontSide): MeshBasicMaterial {
-  return new MeshBasicMaterial({
+  const mat = new MeshBasicMaterial({
     color: new Color(color),
     side,
     polygonOffset: true,
     polygonOffsetFactor: shading.polygonOffsetFactor,
     polygonOffsetUnits: shading.polygonOffsetUnits,
   });
+  mat.shadowSide = DoubleSide;
+  return mat;
 }
 
 function createGlassMaterial(color: string, opacity: number): MeshBasicMaterial {
@@ -192,10 +199,10 @@ export function createPalette() {
     metal: createShadedMaterial(matTokens.metal, { side: DoubleSide }),
     paving: createShadedMaterial(matTokens.paving),
     gravel: createShadedMaterial(matTokens.gravel),
-    interior: createShadedMaterial(matTokens.interior, { side: DoubleSide }),
-    interiorFloor: createShadedMaterial(matTokens.interiorFloor),
+    glassBacking: createFlatMaterial(matTokens.glassBacking),
+    recess: createFlatMaterial(matTokens.recess),
     trunk: createShadedMaterial(entourage.trunk),
-    leaves: createShadedMaterial(shading.neutralAlbedo, { side: DoubleSide, vertexColors: true, tones: foliageTones, sunFullAt: shading.foliage.sunFullAt }),
+    leaves: createShadedMaterial(shading.neutralAlbedo, { side: DoubleSide, vertexColors: true, tones: foliageTones, sunFullAt: shading.foliage.sunFullAt, awayBelow: shading.foliage.awayBelow }),
     stalk: createShadedMaterial(entourage.bambooStalk, { tones: foliageTones }),
     person: createFlatMaterial(entourage.person, DoubleSide),
     carBody: createShadedMaterial(entourage.carBody),

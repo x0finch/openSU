@@ -27,20 +27,32 @@ export const shading = {
   /** Tone of sun-facing faces that lie in a cast shadow. */
   shadowTone: '#A6A6A6',
   /** Tone of cast shadows on the (otherwise invisible) ground. */
-  groundShadowTone: '#AEAEAE',
+  groundShadowTone: '#D6D6D6',
   /**
    * N.L at which a face counts as fully sunlit. Faces between 0 and this
    * value blend from the "away" tone to the sun tone, which keeps grazing
    * faces from flickering between bands.
    */
-  sunFullAt: 0.1,
+  sunFullAt: 0.12,
+  /** N.L below which a face counts as turned away (grazing faces read as shaded). */
+  awayBelow: 0.06,
   /** Neutral albedo for textured and vertex-coloured materials. */
   neutralAlbedo: '#FFFFFF',
   /** Lighter tone bands for foliage so leaves stay saturated. */
-  foliage: { sun: '#FFFFFF', away: '#D4D4D4', shadow: '#B4B4B4', sunFullAt: 0.05 },
+  foliage: { sun: '#FFFFFF', away: '#D4D4D4', shadow: '#B4B4B4', awayBelow: 0.0, sunFullAt: 0.05 },
   /** Polygon offset that pushes faces behind their own edge lines. */
   polygonOffsetFactor: 1,
   polygonOffsetUnits: 2,
+} as const;
+
+/** Presentation lighting rule (sun relative to the camera). */
+export const lighting = {
+  /** Sun bearing offset from the camera bearing (behind the viewer, to one side). */
+  presentationOffsetDeg: 40,
+  /** Sun elevation for axonometric views. */
+  presentationAxoElevationDeg: 60,
+  /** Sun elevation for eye-level views and elevations. */
+  presentationLowElevationDeg: 45,
 } as const;
 
 export const sun = {
@@ -100,10 +112,48 @@ export const materials = {
   balustradeOpacity: 0.45,
   metal: '#2E3033',
   paving: '#E9E7E3',
-  /** Interior surfaces seen through glazing. */
-  interior: '#8F8F8D',
-  interiorFloor: '#7F7B75',
+  /** Flat backing behind glazing: glass reads as one flat grey. */
+  glassBacking: '#5E6266',
+  /** Back of blind recesses (small wall openings). */
+  recess: '#6F7376',
   gravel: '#DCDAD5',
+} as const;
+
+/**
+ * Procedural surface patterns. Canvas units: one texture covers 1 m x 1 m
+ * on a 512 px canvas.
+ */
+export const patterns = {
+  textureSize: 512,
+  anisotropy: 8,
+  roofTile: {
+    rows: 6,
+    cols: 6,
+    /** Gap between neighbouring tiles (px). */
+    gap: 3,
+    /** Corner radius of the rounded tile end, as a fraction of the tile width. */
+    cornerRadius: 0.42,
+    /** Tile length as a fraction of the row height (overlap onto the row below). */
+    length: 1.18,
+    /** Lighter exposed lower part: start (fraction of row) and opacity. */
+    highlightFrom: 0.55,
+    highlightAlpha: 0.7,
+    /** Fraction of tiles drawn in the shade colour. */
+    shadeShare: 0.25,
+    outlineWidth: 5,
+  },
+  wood: {
+    panelBoards: 5,
+    deckBoards: 8,
+    boardAlpha: 0.3,
+    grainAlpha: 0.12,
+    grainWidth: 2,
+    grainPerBoard: 4,
+    /** Grain waviness (px). */
+    grainWave: 8,
+    /** Deck joint width (px). */
+    jointWidth: 5,
+  },
 } as const;
 
 /** Entourage: trees, people, cars. */
@@ -133,11 +183,13 @@ export const entourage = {
 export const cameras = {
   /** Axonometric elevation angle, degrees. */
   axoElevationDeg: 35,
+  /** Eye-level camera height, metres. */
+  eyeHeight: 1.6,
   /** Eye-level vertical field of view, degrees. */
   eyeFovDeg: 35,
   /** Fraction of the frame left as white margin around the subject. */
   margin: 0.12,
 } as const;
 
-export const tokens = { stage, shading, sun, lines, materials, entourage, cameras } as const;
+export const tokens = { stage, shading, lighting, sun, lines, materials, patterns, entourage, cameras } as const;
 export type Tokens = typeof tokens;

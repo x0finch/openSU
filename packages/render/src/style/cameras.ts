@@ -1,5 +1,5 @@
 import { type Camera, Matrix4, OrthographicCamera, PerspectiveCamera, Vector3 } from 'three';
-import { cameras as camTokens, sun as sunTokens } from './tokens.js';
+import { cameras as camTokens } from './tokens.js';
 
 export type ViewKind = 'axo' | 'eye' | 'elevation';
 
@@ -15,8 +15,6 @@ export interface ViewPreset {
   eyeHeight?: number;
   /** Eye-level vertical field of view (defaults to the token value). */
   fovDeg?: number;
-  /** Sun for this view: compass bearing towards the sun and elevation. */
-  sun: { azimuthDeg: number; elevationDeg?: number };
   /** White margin as a fraction of the frame. */
   margin?: number;
 }
@@ -152,10 +150,6 @@ export function cameraForView(preset: ViewPreset, points: readonly Vector3[], as
     case 'elevation':
       return fitParallelCamera(points, preset.azimuthDeg, 0, aspect, margin);
     case 'eye':
-      return fitEyeLevelCamera(points, preset.azimuthDeg, preset.eyeHeight ?? 1.6, preset.fovDeg ?? camTokens.eyeFovDeg, aspect, margin);
+      return fitEyeLevelCamera(points, preset.azimuthDeg, preset.eyeHeight ?? camTokens.eyeHeight, preset.fovDeg ?? camTokens.eyeFovDeg, aspect, margin);
   }
-}
-
-export function sunElevationFor(preset: ViewPreset): number {
-  return preset.sun.elevationDeg ?? sunTokens.elevationDeg;
 }

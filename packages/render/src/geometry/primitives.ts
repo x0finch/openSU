@@ -112,7 +112,7 @@ export function polygonWithHoles(origin: Vector3, uAxis: Vector3, vAxis: Vector3
   g.applyMatrix4(m);
   const ng = g.toNonIndexed();
   g.dispose();
-  return ng;
+  return dropDegenerate(ng);
 }
 
 /**
@@ -215,5 +215,35 @@ export function mergeSimple(parts: readonly BufferGeometry[]): BufferGeometry {
     }
     out.setAttribute(name, new Float32BufferAttribute(arr, sizes[name]));
   }
+  return out;
+}
+
+/**
+ * Removes zero-area triangles (earcut emits them when hole edges are
+ * collinear). They have no normal, so edge extraction would otherwise draw
+ * spurious lines across flat faces.
+ */
+export function dropDegenerate(geo: BufferGeometry, minArea = 1e-10): BufferGeometry {
+  const pos = geo.getAttribute('position');
+  const keep: number[] = [];
+  const a = new Vector3(), b = new Vector3(), c = new Vector3();
+  for (let i = 0; i < pos.count; i += 3) {
+    a.fromBufferAttribute(pos, i);
+    b.fromBufferAttribute(pos, i + 1);
+    c.fromBufferAttribute(pos, i + 2);
+    if (b.sub(a).cross(c.sub(a)).lengthSq() > minArea) keep.push(i);
+  }
+  if (keep.length * 3 === pos.count) return geo;
+  const out = new BufferGeometry();
+  for (const name of Object.keys(geo.attributes)) {
+    const attr = geo.getAttribute(name);
+    const size = attr.itemSize;
+    const arr = new Float32Array(keep.length * 3 * size);
+    keep.forEach((t, k) => {
+      for (let v = 0; v < 3; v++) for (let j = 0; j < size; j++) arr[(k * 3 + v) * size + j] = attr.getComponent(t + v, j);
+    });
+    out.setAttribute(name, new Float32BufferAttribute(arr, size));
+  }
+  geo.dispose();
   return out;
 }
