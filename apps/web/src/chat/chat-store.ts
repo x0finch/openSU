@@ -216,6 +216,30 @@ export function retry(id: string): void {
   void send(item.prompt);
 }
 
+/**
+ * Puts a saved transcript back (after a reload). The undo history did not
+ * survive, so its changes cards read as kept; the model gets the earlier
+ * turns as text memory again.
+ */
+export function restoreItems(items: ChatItem[]): void {
+  if (useChat.getState().items.length) return;
+  past.clear();
+  const restored = items.map((it): ChatItem => ({
+    ...it,
+    phase: it.role === 'assistant' ? 'done' : it.phase,
+    undo: it.undo === 'can-undo' || it.undo === 'can-redo' ? 'kept' : it.undo,
+  }));
+  for (let i = 1; i < restored.length; i++) {
+    const a = restored[i]!, u = restored[i - 1]!;
+    if (a.role === 'assistant' && u.role === 'user' && a.phase === 'done' && !a.error) {
+      past.set(a.id, { user: u.text, assistant: a.text, changes: a.undo === 'undone' ? [] : (a.changes ?? []).map((c) => c.summary) });
+    }
+  }
+  // New ids continue after the restored ones.
+  for (const it of restored) seq = Math.max(seq, Number(it.id.slice(1)) || 0);
+  useChat.setState({ items: restored });
+}
+
 /** Clears the conversation (the house and its undo history stay). */
 export function newChat(): void {
   if (useChat.getState().running) stop();

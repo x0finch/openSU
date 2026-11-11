@@ -141,6 +141,49 @@ export function applyOrthoAspect(cam: OrthographicCamera, aspect: number): void 
   cam.updateProjectionMatrix();
 }
 
+/** Screen space (CSS px) kept free of the subject on each side, e.g. under floating UI. */
+export interface FrameInsets {
+  top: number;
+  right: number;
+  bottom: number;
+  left: number;
+}
+
+export const NO_INSETS: FrameInsets = { top: 0, right: 0, bottom: 0, left: 0 };
+
+/** The aspect of the free area inside a `width` x `height` canvas. */
+export function freeAspect(insets: FrameInsets, width: number, height: number): number {
+  return Math.max(1, width - insets.left - insets.right) / Math.max(1, height - insets.top - insets.bottom);
+}
+
+/**
+ * A camera framed for the free area (built with `freeAspect`) grows its
+ * frustum to the whole canvas: the subject stays inside the free area.
+ */
+export function applyFrameInsets(cam: Camera, insets: FrameInsets, width: number, height: number): void {
+  const { top: t, right: r, bottom: b, left: l } = insets;
+  if (!t && !r && !b && !l) return;
+  const fh = Math.max(1, height - t - b);
+  if (cam instanceof OrthographicCamera) {
+    const k = (cam.top - cam.bottom) / cam.zoom / fh;
+    cam.left -= l * k;
+    cam.right += r * k;
+    cam.top += t * k;
+    cam.bottom -= b * k;
+    cam.updateProjectionMatrix();
+    return;
+  }
+  if (cam instanceof PerspectiveCamera && cam.userData.lensShift) {
+    const fw = Math.max(1, width - l - r);
+    const { cx, cy, hh } = cam.userData.lensShift as { cx: number; cy: number; hh: number };
+    const k = (2 * hh) / fh;
+    const x0 = cx - (hh * fw) / fh - l * k, x1 = cx + (hh * fw) / fh + r * k;
+    const y0 = cy - hh - b * k, y1 = cy + hh + t * k;
+    cam.userData.lensShift = { cx: (x0 + x1) / 2, cy: (y0 + y1) / 2, hh: (y1 - y0) / 2 };
+    applyLensShift(cam, width / Math.max(1, height));
+  }
+}
+
 /** Builds the camera for a preset, framing the given world-space points. */
 export function cameraForView(preset: ViewPreset, points: readonly Vector3[], aspect: number): Camera {
   const margin = preset.margin ?? camTokens.margin;

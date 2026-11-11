@@ -1,9 +1,11 @@
 import type { ResolvedHouse } from '@opensu/model';
+import type { FrameInsets } from '@opensu/render';
+import { cameras as camTokens } from '@opensu/render/tokens';
 import { useEffect, useRef, useState } from 'react';
 import { useT } from '../lib/i18n';
 import { type StudioState, useStudio } from '../lib/store';
 import { sunDate } from '../lib/sun';
-import { cutawayPreset, presetById } from '../lib/views';
+import { cutawayPreset, presetById, shownCut } from '../lib/views';
 import type { Engine } from './engine';
 import { Loading } from './Loading';
 import { walkBridge } from './walk-bridge';
@@ -11,7 +13,7 @@ import { walkBridge } from './walk-bridge';
 declare global {
   interface Window {
     /** Test hooks for the smoke test / screenshot script. */
-    __studio?: { ready3d?: boolean; engine?: Engine; planReady?: boolean; growing?: boolean };
+    __studio?: { ready3d?: boolean; engine?: Engine; planReady?: boolean; growing?: boolean; store?: unknown; chat?: unknown };
   }
 }
 
@@ -23,9 +25,13 @@ function hasWebGL2(): boolean {
   }
 }
 
+/** Phones: the drawing is narrow, so the white margin around the house is smaller (trees may stand outside the architecture: not less). */
+let compactFraming = false;
+
 function scenePreset(s: StudioState) {
-  const p = presetById(s.view);
-  return s.cut ? cutawayPreset(p) : p;
+  const p0 = presetById(s.view);
+  const p = shownCut(s) ? cutawayPreset(p0) : p0;
+  return compactFraming ? { ...p, margin: (p.margin ?? camTokens.margin) * 0.7 } : p;
 }
 
 /** Applies the store's sun study to the engine and reports the sun back (for the time bar). */
@@ -45,7 +51,8 @@ function applySun(e: Engine, s: StudioState): void {
   if (!cur || (Object.keys(info) as (keyof typeof info)[]).some((k) => info[k] !== cur[k])) s.setSunInfo(info);
 }
 
-export function Viewer3D({ resolved, active }: { resolved: ResolvedHouse; active: boolean }) {
+export function Viewer3D({ resolved, active, insets, compact = false }: { resolved: ResolvedHouse; active: boolean; insets: readonly FrameInsets[]; compact?: boolean }) {
+  compactFraming = compact;
   const t = useT();
   const ref = useRef<HTMLDivElement>(null);
   const engine = useRef<Engine | null>(null);
@@ -64,6 +71,8 @@ export function Viewer3D({ resolved, active }: { resolved: ResolvedHouse; active
   latest.current = resolved;
   const shown = useRef<ResolvedHouse | null>(null);
   const grown = useRef(useStudio.getState().grow?.nonce ?? 0);
+  const insetsRef = useRef(insets);
+  insetsRef.current = insets;
 
   useEffect(() => {
     if (!hasWebGL2()) {
@@ -85,7 +94,9 @@ export function Viewer3D({ resolved, active }: { resolved: ResolvedHouse; active
           },
         });
         const st = useStudio.getState();
-        e.setView(scenePreset(st), st.cut, true);
+        e.setInsets(insetsRef.current, true);
+        e.onMoved((m) => useStudio.getState().setViewMoved(m));
+        e.setView(scenePreset(st), shownCut(st), true);
         applySun(e, st);
         engine.current = e;
         shown.current = latest.current;
@@ -125,8 +136,14 @@ export function Viewer3D({ resolved, active }: { resolved: ResolvedHouse; active
 
   useEffect(() => {
     const st = useStudio.getState();
-    engine.current?.setView(scenePreset(st), st.cut);
-  }, [view, nonce, cut]);
+    engine.current?.setView(scenePreset(st), shownCut(st));
+  }, [view, nonce, cut, compact]);
+
+  // Floating UI changed (chat panel opened / closed, resize): re-frame around it.
+  const insetKey = JSON.stringify(insets);
+  useEffect(() => {
+    engine.current?.setInsets(insetsRef.current);
+  }, [insetKey]);
 
   // Walk mode on / off.
   const walk = useStudio((s) => s.walk);
@@ -159,11 +176,11 @@ export function Viewer3D({ resolved, active }: { resolved: ResolvedHouse; active
       <div ref={ref} className="absolute inset-0 [&>canvas]:h-full! [&>canvas]:w-full!" data-testid="viewer" />
       {status === 'ready' && active && !walk && (
         <div
-          className="glass pointer-events-none absolute bottom-6 left-6 hidden size-12 place-items-center rounded-full md:grid"
+          className="glass pointer-events-none absolute bottom-3 left-3 grid size-10 place-items-center rounded-full md:bottom-6 md:left-6 md:size-12"
           role="img"
           aria-label={t('north')}
         >
-          <svg ref={setNeedle} viewBox="0 0 32 32" className="size-9" aria-hidden="true">
+          <svg ref={setNeedle} viewBox="0 0 32 32" className="size-8 md:size-9" aria-hidden="true">
             <text x="16" y="8.5" textAnchor="middle" fontSize="8" fontWeight="600" fill="currentColor">
               N
             </text>

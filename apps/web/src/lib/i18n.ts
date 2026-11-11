@@ -63,8 +63,12 @@ const zh = {
   'view.resetShort': '复位',
 
   'sun.label': '日照',
+  'sun.offShort': '未开启',
+  'house.reset': '恢复为模板',
+  'house.resetConfirm': '确认恢复？当前修改和对话会清除',
+  'house.autosaved': '修改自动保存在这个浏览器',
   'sun.study': '日照分析',
-  'sun.hint': '拖动时间，看阳光扫过房间',
+  'sun.hint': '打开日照，或拖动时间，看阳光扫过房间',
   'sun.time': '时间',
   'sun.play': '播放一天',
   'sun.pause': '暂停',
@@ -80,6 +84,7 @@ const zh = {
 
   'cut.label': '剖切',
   'cut.all': '全部',
+  'cut.paused': '仅在轴测图中显示',
 
   'walk.enter': '漫游',
   'walk.enterLong': '进入室内漫游',
@@ -190,8 +195,12 @@ const en: Record<MessageKey, string> = {
   'view.resetShort': 'Reset',
 
   'sun.label': 'Sun',
+  'sun.offShort': 'Off',
+  'house.reset': 'Reset to template',
+  'house.resetConfirm': 'Reset? Your edits and the chat are cleared',
+  'house.autosaved': 'Edits are saved in this browser',
   'sun.study': 'Sun study',
-  'sun.hint': 'Drag the time and watch sunlight sweep the rooms',
+  'sun.hint': 'Turn on the sun study or drag the time to watch sunlight sweep the rooms',
   'sun.time': 'Time',
   'sun.play': 'Play the day',
   'sun.pause': 'Pause',
@@ -207,6 +216,7 @@ const en: Record<MessageKey, string> = {
 
   'cut.label': 'Cutaway',
   'cut.all': 'All',
+  'cut.paused': 'shown in axonometric views',
 
   'walk.enter': 'Walk',
   'walk.enterLong': 'Walk through the house',

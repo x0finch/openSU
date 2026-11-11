@@ -49,7 +49,7 @@ export class WalkController {
   private raf = 0;
   private last = 0;
   private dom: HTMLElement | null = null;
-  private drag: { id: number; x: number; y: number } | null = null;
+  private drag: { id: number; x: number; y: number; touch: boolean } | null = null;
   private readonly cleanup: (() => void)[] = [];
   /** Called whenever the position, heading or level changes. */
   onChange: ((s: WalkState) => void) | null = null;
@@ -72,18 +72,23 @@ export class WalkController {
   setAspect(aspect: number): void {
     const minH = MathUtils.degToRad(walkTokens.minHorizontalFovDeg);
     const vForH = MathUtils.radToDeg(2 * Math.atan(Math.tan(minH / 2) / aspect));
-    this.camera.fov = Math.min(90, Math.max(walkTokens.fovDeg, vForH));
+    // Portrait screens widen the view, up to a cap so it never looks stretched.
+    this.camera.fov = Math.min(walkTokens.maxFovDeg, Math.max(walkTokens.fovDeg, vForH));
     this.camera.aspect = aspect;
     this.camera.updateProjectionMatrix();
   }
 
-  /** Puts the walker somewhere (snapped to a free spot nearby). */
-  teleport(x: number, y: number, z: number, headingDeg?: number): void {
+  /**
+   * Puts the walker somewhere (snapped to a free spot nearby). With
+   * `faceRoom`, the heading turns towards open floor if a wall is close ahead.
+   */
+  teleport(x: number, y: number, z: number, headingDeg?: number, opts: { faceRoom?: boolean } = {}): void {
     const p = this.world.settle(x, y, z);
     if (!p) return;
     this.pose = p;
     this.eyeZ = p.z + walkTokens.eyeHeight;
-    if (headingDeg !== undefined) this.heading = headingDeg;
+    if (headingDeg !== undefined) this.heading = opts.faceRoom ? this.world.openHeading(p, headingDeg) : headingDeg;
+    if (opts.faceRoom) this.pitch = 0;
     this.updateCamera();
     this.changed();
     this.host.renderNow();
@@ -147,7 +152,7 @@ export class WalkController {
     on(window, 'blur', () => this.keys.clear());
     on(dom, 'pointerdown', (e: PointerEvent) => {
       if (this.drag) return;
-      this.drag = { id: e.pointerId, x: e.clientX, y: e.clientY };
+      this.drag = { id: e.pointerId, x: e.clientX, y: e.clientY, touch: e.pointerType === 'touch' };
       dom.setPointerCapture?.(e.pointerId);
     });
     on(dom, 'pointermove', (e: PointerEvent) => {
@@ -155,8 +160,10 @@ export class WalkController {
       const dx = e.clientX - this.drag.x, dy = e.clientY - this.drag.y;
       this.drag.x = e.clientX;
       this.drag.y = e.clientY;
-      // Drag the view: the scene follows the pointer.
-      this.look(-dx * walkTokens.lookDegPerPx, dy * walkTokens.lookDegPerPx);
+      // Drag the view: the scene follows the pointer. A finger turns by a
+      // share of the screen width, so a swipe feels like a mouse drag.
+      const k = this.drag.touch ? walkTokens.touchLookDegPerScreen / Math.max(200, dom.clientWidth) : walkTokens.lookDegPerPx;
+      this.look(-dx * k, dy * k);
     });
     const end = (e: PointerEvent) => {
       if (this.drag && e.pointerId === this.drag.id) this.drag = null;

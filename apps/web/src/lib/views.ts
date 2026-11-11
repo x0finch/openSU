@@ -41,3 +41,12 @@ export function cutawayPreset(p: ViewPreset): ViewPreset {
 export function isViewId(s: unknown): s is ViewId {
   return VIEW_PRESETS.some((v) => v.id === s);
 }
+
+/**
+ * The cutaway shown in 3D: axonometrics show the chosen cut; eye-level and
+ * elevations show the whole house while the choice is kept for the next
+ * axonometric (it is never reset silently).
+ */
+export function shownCut(s: { view: ViewId; cut: string | null }): string | null {
+  return s.cut && presetById(s.view).kind === 'axo' ? s.cut : null;
+}

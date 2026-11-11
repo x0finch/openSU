@@ -1,11 +1,11 @@
 // Lazy chunk: three.js, the kernel and the illustration viewer. Nothing in
 // here may be imported statically from the route modules.
-import { type Mesh, OrthographicCamera, Vector3 } from 'three';
+import { Box3, type Mesh, OrthographicCamera, PerspectiveCamera, Vector3 } from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { buildHouse } from '@opensu/kernel';
 import type { ResolvedHouse } from '@opensu/model';
 import {
-  cameraForView, createHouseObject, defaultLighting, IllustrationViewer, type LightingMode, type SceneStats, type StudySite, studySun, type StudySun, sunForView,
+  createHouseObject, defaultLighting, type FrameInsets, IllustrationViewer, type LightingMode, type SceneStats, type StudySite, studySun, type StudySun, sunForView,
   type ViewPreset, type WalkState,
 } from '@opensu/render';
 
@@ -49,6 +49,14 @@ export interface Engine {
   walkMove(forward: number, strafe: number): void;
   /** Jump to a level's stair arrival point while walking. */
   walkToLevel(levelId: string): void;
+  /**
+   * Screen space (CSS px) taken by floating UI: presets frame the house in
+   * what is left. Re-frames the current preset (animated) unless the user
+   * has moved the camera.
+   */
+  setInsets(insets: FrameInsets | readonly FrameInsets[], instant?: boolean): void;
+  /** Called with true when the user orbits / zooms / pans away from the preset, false when a preset is applied. */
+  onMoved(cb: (moved: boolean) => void): void;
   /** The underlying viewer (tests and debugging). */
   readonly viewer: IllustrationViewer;
   dispose(): void;
@@ -166,12 +174,31 @@ export function createEngine(container: HTMLElement, resolved: ResolvedHouse, op
   let fadeTimer = 0;
   let disposed = false;
   /** True once the user orbits / zooms away from the preset framing. */
-  let moved = false;
+  let movedFlag = false;
+  let onMovedCb: ((m: boolean) => void) | null = null;
+  const setMoved = (m: boolean) => {
+    if (m === movedFlag) return;
+    movedFlag = m;
+    onMovedCb?.(m);
+  };
+  /** Where the orbit target may go: the scene bounds plus a little (pan stays near the plot). */
+  const panBox = new Box3();
+
+  /**
+   * Disposes the orbit controls. OrbitControls resets the canvas'
+   * touch-action to 'auto' on dispose; without 'none' a finger dragging in
+   * walk mode would pan the page and the browser cancels the look gesture.
+   */
+  function dropControls(): void {
+    controls?.dispose();
+    controls = null;
+    canvas.style.touchAction = 'none';
+  }
 
   const aspect = () => Math.max(1, container.clientWidth) / Math.max(1, container.clientHeight);
 
   function attachControls(): void {
-    controls?.dispose();
+    dropControls();
     // Read the focus first: OrbitControls' constructor already calls update()
     // with its default target (the origin), which re-aims the camera.
     const focus = viewer.focusPoint();
@@ -181,24 +208,55 @@ export function createEngine(container: HTMLElement, resolved: ResolvedHouse, op
     viewer.camera.updateMatrixWorld();
     controls.target.copy(focus);
     controls.enableDamping = false;
-    controls.zoomToCursor = true;
+    const cam = viewer.camera;
+    // Never below the ground: at most a level look (elevations are exactly level).
+    controls.maxPolarAngle = Math.PI / 2;
+    if (cam instanceof OrthographicCamera) {
+      // Between "the house fills the screen" and "a small house with room around it".
+      controls.zoomToCursor = true;
+      controls.minZoom = cam.zoom * 0.55;
+      controls.maxZoom = cam.zoom * 5;
+    } else if (cam instanceof PerspectiveCamera) {
+      // Eye level: orbit around the house, never into it.
+      controls.zoomToCursor = false;
+      const d = cam.position.distanceTo(focus);
+      controls.minDistance = Math.min(d, Math.max(radius * 1.05, d * 0.45));
+      controls.maxDistance = d * 2.2;
+    }
+    panBox.setFromPoints([sceneCenter]).expandByScalar(radius * 0.9);
+    panBox.min.y = 0;
     controls.update();
-    controls.addEventListener('change', () => viewer.requestRender());
-    controls.addEventListener('start', () => (moved = true));
+    const c = controls;
+    let interacting = false;
+    controls.addEventListener('start', () => (interacting = true));
+    controls.addEventListener('end', () => (interacting = false));
+    controls.addEventListener('change', () => {
+      if (interacting) setMoved(true);
+      // Pan stays near the plot: clamp the target, moving the camera with it.
+      const t = c.target;
+      const clamped = t.clone().clamp(panBox.min, panBox.max);
+      if (!clamped.equals(t)) {
+        const d = clamped.sub(t);
+        t.add(d);
+        c.object.position.add(d);
+        c.object.updateMatrixWorld();
+      }
+      viewer.requestRender();
+    });
   }
 
   function snap(preset: ViewPreset): void {
     viewer.setLighting(lighting);
     viewer.setView(preset);
     attachControls();
-    moved = false;
+    setMoved(false);
   }
 
   /** Keeps the preset framing on resize until the user takes over the camera. */
   function resize(): void {
     viewer.resize();
     const view = viewer.currentView;
-    if (!moved && !anim && !fadeTimer && view && !viewer.walking) {
+    if (!movedFlag && !anim && !fadeTimer && view && !viewer.walking) {
       viewer.setView(view);
       attachControls();
     }
@@ -236,10 +294,10 @@ export function createEngine(container: HTMLElement, resolved: ResolvedHouse, op
       snap(preset);
       return;
     }
-    const target = cameraForView(preset, viewer.viewPoints(), aspect());
+    const target = viewer.cameraFor(preset);
     if (!(from instanceof OrthographicCamera) || !(target instanceof OrthographicCamera)) {
       // Perspective <-> parallel: a short dissolve instead of a morph.
-      controls?.dispose();
+      dropControls();
       controls = null;
       canvas.style.opacity = '0';
       fadeTimer = window.setTimeout(() => {
@@ -249,7 +307,7 @@ export function createEngine(container: HTMLElement, resolved: ResolvedHouse, op
       }, FADE);
       return;
     }
-    controls?.dispose();
+    dropControls();
     controls = null;
     const a = orthoPose(from, sceneCenter);
     const b = orthoPose(target, sceneCenter);
@@ -309,7 +367,7 @@ export function createEngine(container: HTMLElement, resolved: ResolvedHouse, op
 
   function enterWalk(opts: { level?: string } = {}): void {
     dissolve(() => {
-      controls?.dispose();
+      dropControls();
       controls = null;
       viewer.setLighting(lighting);
       const w = viewer.enterWalk(opts.level ? { level: opts.level } : {});
@@ -347,9 +405,20 @@ export function createEngine(container: HTMLElement, resolved: ResolvedHouse, op
       const a = viewer.walkArrivals.find((x) => x.level === levelId);
       const lv = viewer.levelList.find((l) => l.id === levelId);
       if (!w || !a || !lv) return;
-      dissolve(() => w.teleport(a.position[0], a.position[1], lv.elevation, a.headingDeg));
+      dissolve(() => w.teleport(a.position[0], a.position[1], lv.elevation, a.headingDeg, { faceRoom: true }));
     },
     setView,
+    setInsets(insets, instant = false) {
+      const list = Array.isArray(insets) ? insets : [insets];
+      if (JSON.stringify(viewer.frameInsets) === JSON.stringify(list)) return;
+      const view = viewer.currentView;
+      const reframe = !movedFlag && !viewer.walking && !!view && !anim && !fadeTimer;
+      viewer.setFrameInsets(list, false);
+      if (reframe && view) setView(view, viewer.cutaway, instant);
+    },
+    onMoved(cb) {
+      onMovedCb = cb;
+    },
     setSun(sun) {
       lighting = sun ? { mode: 'physical', date: sun.date, minutes: sun.minutes } : defaultLighting;
       // Mid-transition the presentation sun is interpolated; the last frame applies `lighting`.
@@ -367,7 +436,7 @@ export function createEngine(container: HTMLElement, resolved: ResolvedHouse, op
         const w = viewer.walk!;
         w.onChange = (st) => emitWalk(st);
         emitWalk(w.state);
-      } else if (moved) {
+      } else if (movedFlag) {
         // Keep the user's camera (the controls still drive it).
         viewer.camera = cam;
         viewer.requestRender();
@@ -397,7 +466,7 @@ export function createEngine(container: HTMLElement, resolved: ResolvedHouse, op
       disposed = true;
       walkListeners.clear();
       stop();
-      controls?.dispose();
+      dropControls();
       viewer.dispose();
     },
   };
