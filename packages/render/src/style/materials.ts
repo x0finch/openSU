@@ -4,6 +4,7 @@ import {
   FrontSide,
   MeshBasicMaterial,
   MeshLambertMaterial,
+  type Material,
   type Side,
   type Texture,
 } from 'three';
@@ -30,6 +31,9 @@ export interface ShadedOptions {
   sunFullAt?: number;
   /** Override for N.L below which a face counts as turned away. */
   awayBelow?: number;
+  /** Overrides for the polygon offset. */
+  polygonOffsetFactor?: number;
+  polygonOffsetUnits?: number;
 }
 
 const ILLUSTRATION_PARS = /* glsl */ `
@@ -78,8 +82,8 @@ export function createShadedMaterial(color: string, opts: ShadedOptions = {}): M
     depthWrite: opts.depthWrite ?? true,
     vertexColors: opts.vertexColors ?? false,
     polygonOffset: true,
-    polygonOffsetFactor: shading.polygonOffsetFactor,
-    polygonOffsetUnits: shading.polygonOffsetUnits,
+    polygonOffsetFactor: opts.polygonOffsetFactor ?? shading.polygonOffsetFactor,
+    polygonOffsetUnits: opts.polygonOffsetUnits ?? shading.polygonOffsetUnits,
   });
   if (opts.map) mat.map = opts.map;
   // Both sides cast: single-sided facade pieces then never leave light leaks
@@ -174,6 +178,19 @@ export function createLineMaterial(color: string = lines.color, width: number = 
   return mat;
 }
 
+/**
+ * A copy of a style material (shaded, flat or line) that can take its own
+ * clipping planes. The shader patch and its cache key are carried over, so
+ * the twin renders exactly like the original.
+ */
+export function twinMaterial<T extends Material>(m: T): T {
+  const t = m.clone() as T;
+  t.onBeforeCompile = m.onBeforeCompile;
+  t.customProgramCacheKey = m.customProgramCacheKey;
+  t.name = m.name ? `${m.name}:clip` : 'clip';
+  return t;
+}
+
 /** Tone bands used for foliage: lighter shading keeps leaves saturated. */
 const foliageTones: ToneBands = { sun: shading.foliage.sun, away: shading.foliage.away, shadow: shading.foliage.shadow };
 
@@ -199,6 +216,8 @@ export function createPalette() {
     metal: createShadedMaterial(matTokens.metal, { side: DoubleSide }),
     paving: createShadedMaterial(matTokens.paving),
     gravel: createShadedMaterial(matTokens.gravel),
+    floor: createShadedMaterial(matTokens.floor, { tones: { shadow: shading.floorShadowTone } }),
+    cut: createFlatMaterial(matTokens.cut),
     glassBacking: createFlatMaterial(matTokens.glassBacking),
     recess: createFlatMaterial(matTokens.recess),
     trunk: createShadedMaterial(entourage.trunk),
@@ -210,7 +229,7 @@ export function createPalette() {
     tyre: createFlatMaterial(entourage.carTyre),
     planter: createShadedMaterial(entourage.planter),
     soil: createShadedMaterial(entourage.soil),
-    ground: createShadedMaterial(matTokens.wall, { tones: { shadow: shading.groundShadowTone } }),
+    ground: createShadedMaterial(matTokens.wall, { tones: { shadow: shading.groundShadowTone }, polygonOffsetFactor: shading.groundPolygonOffsetFactor, polygonOffsetUnits: shading.groundPolygonOffsetUnits }),
   };
 }
 

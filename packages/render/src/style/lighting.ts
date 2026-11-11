@@ -1,4 +1,5 @@
 import type { ViewKind } from './cameras.js';
+import type { SolarDate } from '../sun/solar.js';
 import { lighting as lightTokens } from './tokens.js';
 
 /** Sun position as compass bearing towards the sun and elevation, degrees. */
@@ -11,8 +12,9 @@ export interface SunPosition {
  * Lighting modes (docs/DECISIONS.md, "Two lighting modes").
  * - presentation: art-directed sun placed relative to the camera so that one
  *   main visible face is sunlit and the other is turned away (stills, sheets).
- * - physical: the sun is given explicitly (e.g. computed from latitude, date
- *   and time by a sun-study module).
+ * - physical: the real sun of the site for a local date and clock time
+ *   (`date`, `minutes`; clamped to sunrise..sunset), or an explicit sun
+ *   position in model bearings (`sun`).
  */
 export type LightingMode =
   | {
@@ -22,7 +24,8 @@ export type LightingMode =
       /** Which side of the viewer the sun comes from; 'auto' lights the facade facing the camera most. */
       side?: 'auto' | 'left' | 'right';
     }
-  | { mode: 'physical'; sun: SunPosition };
+  | { mode: 'physical'; sun: SunPosition }
+  | { mode: 'physical'; date: SolarDate; minutes: number };
 
 export const defaultLighting: LightingMode = { mode: 'presentation' };
 
@@ -53,7 +56,12 @@ export function presentationSun(kind: ViewKind, cameraAzimuthDeg: number, facade
   return { azimuthDeg: (((cameraAzimuthDeg + sign * offset) % 360) + 360) % 360, elevationDeg };
 }
 
-export function sunForView(mode: LightingMode, kind: ViewKind, cameraAzimuthDeg: number): SunPosition {
-  if (mode.mode === 'physical') return mode.sun;
+/** Sun for a view. A physical sun given by date and time needs `physical` (the computed position). */
+export function sunForView(mode: LightingMode, kind: ViewKind, cameraAzimuthDeg: number, physical?: SunPosition): SunPosition {
+  if (mode.mode === 'physical') {
+    if ('sun' in mode) return mode.sun;
+    if (!physical) throw new Error('sunForView: a physical sun by date needs the computed sun position');
+    return physical;
+  }
   return presentationSun(kind, cameraAzimuthDeg, mode.facadeAxisDeg, mode.side);
 }
