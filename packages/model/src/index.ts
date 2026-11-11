@@ -13,3 +13,10 @@ export { validate } from './validate';
 export * from './constants';
 export { debugSvg } from './debug-svg';
 export { golden } from './samples/golden';
+export { applyCommands, nearestIds, type ApplyResult, type AppliedCommand } from './commands';
+export {
+  Command, COMMAND_OPS, EditHouseInput, EDIT_HOUSE_DESCRIPTION, commandsJsonSchema, editHouseTool,
+  type CommandOp,
+} from './command-schema';
+export { History } from './history';
+export { describeHouse } from './describe';

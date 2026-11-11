@@ -38,7 +38,8 @@ export function validate(input: unknown): Issue[] {
  * An opening that cannot be placed is left out, so its spaces may look
  * windowless or unreachable. While any opening fails to place, drop
  * `unreachable` (it cascades through doors and stairs) and drop
- * `no-exterior-window` for the spaces that opening would serve.
+ * `no-exterior-window` for the spaces an unplaced window / sliding door
+ * would serve.
  */
 function suppressUnplacedNoise(an: Analysis, issues: Issue[]): Issue[] {
   const unplaced = new Set(an.problems.map((p) => p.where.opening).filter((id): id is string => id !== undefined));
@@ -46,7 +47,7 @@ function suppressUnplacedNoise(an: Analysis, issues: Issue[]): Issue[] {
   const served = new Set<string>();
   for (const ctx of an.ctxs) {
     for (const o of ctx.level.openings) {
-      if (!unplaced.has(o.id)) continue;
+      if (!unplaced.has(o.id) || (o.kind !== 'window' && o.kind !== 'sliding-door')) continue;
       for (const s of 'space' in o.host ? [o.host.space] : o.host.between) served.add(`${ctx.level.id}\u0000${s}`);
     }
   }
