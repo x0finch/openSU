@@ -1,0 +1,402 @@
+<!doctype html>
+<!-- Studio layout prototype (task 015), approved by the owner in round 3. A static reference for look and behaviour, not app code. Open index.html directly; it runs offline. ?d=phone&s=sun picks a preset state. The font is Inter (SIL Open Font License 1.1, see inter-OFL.txt). -->
+<html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><style>@font-face{font-family:Inter;src:url(inter.woff2) format("woff2");font-weight:100 900}</style><title>openSU 布局原型</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+
+<style>
+/* Layout: a thin control bar, then the studio mock as the hero (desktop 1440x900 scaled, phone 390x844 in a frame, or full screen on a real phone). */
+:root {
+  --bg: #f1f1ef; --fg: #2a2a2a; --fg-2: #66665f; --line: #deded9; --chip: #ffffff; --chip-on: #2a2a2a; --chip-on-fg: #ffffff; --act: #f2d40f; --act-fg: #2a2a2a;
+  --font: Inter, "PingFang SC", "Noto Sans SC", "Microsoft YaHei", "WenQuanYi Zen Hei", system-ui, sans-serif;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --bg: #1d1d1b; --fg: #ecece8; --fg-2: #a6a69e; --line: #3a3a36; --chip: #2a2a27; --chip-on: #ecece8; --chip-on-fg: #1d1d1b; color-scheme: dark } }
+:root[data-theme="dark"] { --bg: #1d1d1b; --fg: #ecece8; --fg-2: #a6a69e; --line: #3a3a36; --chip: #2a2a27; --chip-on: #ecece8; --chip-on-fg: #1d1d1b; color-scheme: dark }
+html, body { height: 100%; }
+body { background: var(--bg); color: var(--fg); font-family: var(--font); -webkit-font-smoothing: antialiased; margin: 0; }
+.page { padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 12px 20px; display: flex; flex-direction: column; gap: 10px; }
+.bar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; }
+.bar h1 { font-size: 15px; font-weight: 600; margin: 0 4px 0 0; white-space: nowrap; }
+.grp { display: inline-flex; background: var(--chip); border: 1px solid var(--line); border-radius: 9px; padding: 2px; gap: 2px; }
+.grp button, .act { font: inherit; font-size: 13px; border: 0; background: transparent; color: var(--fg); padding: 5px 10px; border-radius: 7px; cursor: pointer; white-space: nowrap; }
+.grp button[aria-pressed="true"] { background: var(--chip-on); color: var(--chip-on-fg); }
+.act { background: var(--act); color: var(--act-fg); font-weight: 500; padding: 7px 12px; }
+.act:disabled { opacity: .55; cursor: default; }
+select { font: inherit; font-size: 13px; padding: 5px 8px; border-radius: 8px; border: 1px solid var(--line); background: var(--chip); color: var(--fg); }
+.chk { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: var(--fg-2); }
+.legend { font-size: 12.5px; line-height: 19px; color: var(--fg-2); max-width: 1000px; }
+.legend summary { cursor: pointer; }
+.page button:focus-visible, select:focus-visible, .chk input:focus-visible { outline: 2px solid var(--act); outline-offset: 2px; }
+.wrap { position: relative; margin: 0 auto; }
+.phoneframe { border-radius: 36px; box-shadow: 0 0 0 8px #fff, 0 0 0 9px #cfcfca, 0 20px 50px rgba(0,0,0,.18); overflow: hidden; }
+.deskframe { border-radius: 10px; box-shadow: 0 0 0 1px rgba(0,0,0,.08), 0 16px 48px rgba(0,0,0,.12); overflow: hidden; }
+body.bare .page { padding: 0; } body.bare .bar, body.bare .legend { display: none; } body.bare .wrap { margin: 0; box-shadow: none; border-radius: 0; }
+body.real .page { padding: 0; gap: 0; } body.real .bar { padding: 8px max(12px, env(safe-area-inset-left, 0px)); gap: 6px 8px; } body.real .bar h1, body.real #gD { display: none; }
+body.real .legend { padding: 0 12px 8px; } body.real .wrap { margin: 0; box-shadow: none; border-radius: 0; }
+
+/* ---- the mock studio: always light, it is the product (a white drawing) ---- */
+.stage { position: absolute; left: 0; top: 0; transform-origin: 0 0; background: #fff; color: #2a2a2a; overflow: hidden; font-size: 14px; line-height: 20px; font-feature-settings: "cv11", "ss01"; touch-action: manipulation; }
+.stage * { box-sizing: border-box; }
+.ab { position: absolute; }
+.house { position: absolute; transition: left .34s cubic-bezier(.22,.8,.24,1), top .34s cubic-bezier(.22,.8,.24,1), width .34s cubic-bezier(.22,.8,.24,1), height .34s cubic-bezier(.22,.8,.24,1); }
+.solid { background: rgba(255,255,255,.97); box-shadow: 0 6px 24px rgba(0,0,0,.08), 0 0 0 1px rgba(0,0,0,.05); }
+.ride { transition: top .32s cubic-bezier(.22,.8,.24,1), opacity .2s; }
+svg.i { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; flex: none; display: block; }
+svg.s14 { width: 14px; height: 14px; } svg.s16 { width: 16px; height: 16px; } svg.s20 { width: 20px; height: 20px; }
+.ttl { display: flex; align-items: center; gap: 7px; font-size: 18px; line-height: 24px; white-space: nowrap; }
+.sub { font-size: 12px; color: #606060; margin-top: 5px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.ph .ttl { font-size: 16px; gap: 6px; } .ph .sub { font-size: 11.5px; margin-top: 3px; }
+.seg { display: inline-flex; padding: 4px; border-radius: 12px; gap: 2px; }
+.seg span { height: 32px; padding: 0 13px; display: inline-flex; align-items: center; justify-content: center; border-radius: 8px; font-size: 13px; color: #606060; }
+.seg span.on { background: #2a2a2a; color: #fff; font-weight: 500; }
+.tight .seg.sm span { padding: 0 8px; } .tight .lv2 { display: none; } .tight .ph .ttl { font-size: 15px; }
+.seg.sm { padding: 3px; } .seg.sm span { height: 30px; padding: 0 11px; }
+.seg.lt { background: #f4f4f3; } .seg.lt span { cursor: pointer; } .seg.lt span.on { background: #fff; color: #2a2a2a; box-shadow: 0 1px 2px rgba(0,0,0,.08), 0 0 0 1px rgba(0,0,0,.04); }
+/* toolbar: icons; a label slides out to the right of the icon on hover / focus / active; the group is anchored at its right edge */
+.tb { display: flex; align-items: center; gap: 2px; padding: 4px; border-radius: 12px; }
+.t { display: inline-flex; align-items: center; justify-content: center; height: 36px; min-width: 36px; padding: 0 9px; border: 0; border-radius: 9px; background: transparent; font: inherit; font-size: 13px; color: #2a2a2a; cursor: pointer; white-space: nowrap; font-variant-numeric: tabular-nums; transition: background-color .15s; }
+.t .lb { display: inline-block; max-width: 0; opacity: 0; overflow: hidden; margin-left: 0; transition: max-width .18s ease, opacity .14s ease, margin-left .18s ease; }
+.t:hover .lb, .t:focus-visible .lb, .t.hov .lb, .t.show .lb, .lab .t .lb { max-width: 72px; opacity: 1; margin-left: 6px; }
+.t:hover, .t.hov { background: #f4f4f3; } .t.set { background: #f4f4f3; } .t.on, .t.on:hover { background: #2a2a2a; color: #fff; }
+.t:focus-visible { outline: 2px solid #f2d40f; outline-offset: 1px; }
+.tb .dv { width: 1px; height: 20px; background: #e6e6e6; margin: 0 3px; flex: none; }
+.pb { display: flex; padding: 5px; border-radius: 16px; gap: 2px; }
+.pb .t { flex: 1 1 auto; height: 42px; padding: 0 6px; border-radius: 11px; min-width: 0; }
+/* panels and sheets */
+.card { border-radius: 14px; }
+.card .in, .sheet .in { padding: 14px 16px 16px; display: flex; flex-direction: column; gap: 12px; }
+.card .in { animation: drop .24s cubic-bezier(.22,.8,.24,1); }
+@keyframes drop { from { transform: translateY(-10px); opacity: 0 } to { transform: none; opacity: 1 } }
+.sheet { background: #fff; border-radius: 18px 18px 0 0; box-shadow: 0 -4px 24px rgba(0,0,0,.08), 0 0 0 1px rgba(0,0,0,.05); display: flex; flex-direction: column; z-index: 5; transition: top .32s cubic-bezier(.22,.8,.24,1); }
+.sheet.enter { animation: rise .32s cubic-bezier(.22,.8,.24,1); }
+@keyframes rise { from { transform: translateY(100%) } to { transform: none } }
+.sheet .scroll { overflow-y: auto; flex: 1; min-height: 0; }
+.grab { touch-action: none; cursor: grab; padding: 8px 0 2px; flex: none; }
+.handle { width: 36px; height: 4px; border-radius: 4px; background: #d8d8d8; margin: 0 auto; }
+.hd { display: flex; align-items: center; justify-content: space-between; font-size: 14px; font-weight: 500; }
+.x { width: 30px; height: 30px; border-radius: 8px; display: inline-flex; align-items: center; justify-content: center; color: #606060; cursor: pointer; border: 0; background: transparent; }
+.x:hover { background: #f4f4f3; }
+.lab2 { font-size: 11.5px; color: #707070; letter-spacing: .04em; }
+.vg { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; }
+.vg span { height: 50px; border-radius: 8px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; font-size: 11.5px; color: #606060; cursor: pointer; }
+.vg span:hover { background: #f4f4f3; } .vg span.on { background: #2a2a2a; color: #fff; } .vg span.na { opacity: .35; cursor: default; } .vg span.n { border: 1px dashed #cfcfcf; margin: 8px 12px; height: 34px; cursor: default; }
+.lv { display: flex; flex-direction: column; gap: 2px; }
+.lv span { height: 40px; border-radius: 8px; display: flex; align-items: center; gap: 10px; padding: 0 12px; font-size: 13px; cursor: pointer; }
+.lv span:hover { background: #f4f4f3; } .lv span.on { background: #f4f4f3; font-weight: 500; } .lv span em { font-style: normal; margin-left: auto; font-size: 11.5px; color: #707070; font-variant-numeric: tabular-nums; }
+.chip { display: inline-flex; align-items: center; gap: 6px; height: 32px; padding: 0 12px; border-radius: 999px; background: #f4f4f3; font-size: 12.5px; white-space: nowrap; cursor: pointer; }
+.fld { display: flex; align-items: center; gap: 10px; min-height: 44px; padding: 6px 12px; border-radius: 10px; background: #f4f4f3; font-size: 13px; cursor: pointer; }
+.fld .v { flex: 1; min-width: 0; } .fld .m { color: #707070; font-size: 12px; }
+.play { width: 36px; height: 36px; border-radius: 99px; background: #f2d40f; display: inline-flex; align-items: center; justify-content: center; flex: none; }
+.big { font-size: 26px; line-height: 30px; font-weight: 500; font-variant-numeric: tabular-nums; }
+.az { font-size: 11.5px; color: #606060; font-variant-numeric: tabular-nums; }
+input[type=range].rg { -webkit-appearance: none; appearance: none; width: 100%; height: 24px; background: transparent; margin: 0; cursor: pointer; }
+.rg::-webkit-slider-runnable-track { height: 2px; border-radius: 2px; background: linear-gradient(90deg, #2a2a2a 0 var(--f), #e6e6e6 var(--f) 100%); }
+.rg::-webkit-slider-thumb { -webkit-appearance: none; width: 18px; height: 18px; margin-top: -8px; border-radius: 99px; background: #f2d40f; border: 2px solid #fff; box-shadow: 0 0 0 1px rgba(0,0,0,.18), 0 0 0 6px rgba(242,212,15,.22); }
+.rg::-moz-range-track { height: 2px; background: #e6e6e6; } .rg::-moz-range-progress { height: 2px; background: #2a2a2a; }
+.rg::-moz-range-thumb { width: 14px; height: 14px; border-radius: 99px; background: #f2d40f; border: 2px solid #fff; }
+.ticks { display: flex; justify-content: space-between; font-size: 10.5px; color: #707070; margin-top: -2px; font-variant-numeric: tabular-nums; }
+/* input + working glow: one rotating gradient behind a 2 px rim, one breathing shadow; no backdrop-filter anywhere */
+.inp { border-radius: 999px; z-index: 6; }
+.inp .halo { position: absolute; inset: 0; border-radius: inherit; box-shadow: 0 0 0 1px rgba(242,212,15,.45), 0 8px 30px rgba(242,212,15,.40), 0 0 18px rgba(232,100,60,.12); opacity: 0; transition: opacity .4s; }
+.inp .rim { position: absolute; inset: 0; border-radius: inherit; overflow: hidden; box-shadow: 0 6px 24px rgba(0,0,0,.08), 0 0 0 1px rgba(0,0,0,.06); }
+.inp .spin { position: absolute; left: 50%; top: 50%; width: var(--d); height: var(--d); margin: calc(var(--d) / -2) 0 0 calc(var(--d) / -2); opacity: 0; transition: opacity .4s;
+  background: conic-gradient(from 0deg, rgba(255,250,232,0) 0deg, rgba(255,246,214,.9) 40deg, #f2d40f 95deg, #fff4c2 140deg, rgba(232,100,60,.55) 165deg, rgba(255,250,232,0) 200deg, rgba(255,250,232,0) 360deg); }
+.inp .face { position: absolute; inset: 2px; border-radius: inherit; background: #fff; display: flex; align-items: center; gap: 8px; padding: 0 7px; color: #707070; }
+.inp.work .halo { opacity: 1; animation: breathe 2.4s ease-in-out infinite; } .inp.work .spin { opacity: 1; animation: spin 2.8s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg) } } @keyframes breathe { 0%, 100% { opacity: .45 } 50% { opacity: 1 } }
+.inp .txt { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 14px; }
+.inp .txt.st { color: #2a2a2a; } .inp .txt.st i { font-style: normal; color: #8a7400; } .inp .txt.st q { color: #707070; quotes: "“" "”"; }
+.ib { width: 34px; height: 34px; border-radius: 99px; display: inline-flex; align-items: center; justify-content: center; color: #606060; cursor: pointer; flex: none; position: relative; border: 0; background: transparent; }
+.ib:hover { background: #f4f4f3; } .ib.on { background: #2a2a2a; color: #fff; } .ib.send { background: #f4f4f3; } .ib.stop { background: #2a2a2a; color: #fff; }
+.ib .dot { position: absolute; right: 5px; top: 5px; width: 7px; height: 7px; border-radius: 9px; background: #f2d40f; box-shadow: 0 0 0 2px #fff; }
+/* conversation */
+.strip { border-radius: 16px; background: rgba(255,255,255,.80); box-shadow: 0 8px 30px rgba(0,0,0,.08), 0 0 0 1px rgba(0,0,0,.07); display: flex; flex-direction: column; overflow: hidden; z-index: 4; animation: drop .22s cubic-bezier(.22,.8,.24,1); }
+.strip .hh { display: flex; align-items: center; gap: 6px; height: 42px; padding: 0 6px 0 16px; font-size: 13px; font-weight: 500; flex: none; }
+.msgs { display: flex; flex-direction: column; gap: 12px; padding: 2px 16px 12px; overflow-y: auto; }
+.lnk { display: inline-flex; align-items: center; gap: 5px; font-size: 12.5px; color: #2a2a2a; padding: 5px 8px; border-radius: 7px; cursor: pointer; border: 0; background: transparent; font-family: inherit; }
+.lnk:hover { background: rgba(0,0,0,.05); }
+.mu { align-self: flex-end; background: #2a2a2a; color: #fff; padding: 7px 12px; border-radius: 12px 12px 4px 12px; font-size: 13.5px; max-width: 86%; }
+.ma { font-size: 13.5px; line-height: 22px; } .ma b { font-weight: 600; }
+.cc { border: 1px solid rgba(0,0,0,.10); border-radius: 10px; overflow: hidden; margin-top: 6px; background: rgba(255,255,255,.6); }
+.cc .h { display: flex; align-items: center; gap: 8px; height: 36px; padding: 0 8px 0 12px; font-size: 12px; color: #606060; border-bottom: 1px solid rgba(0,0,0,.07); }
+.cc .h .u { margin-left: auto; display: inline-flex; align-items: center; gap: 4px; color: #2a2a2a; font-size: 12.5px; height: 26px; padding: 0 9px; border-radius: 6px; background: #fff; box-shadow: inset 0 0 0 1px #e2e2e2; cursor: pointer; }
+.cc .r { display: flex; align-items: center; gap: 8px; padding: 8px 12px; font-size: 13px; } .cc .r i { width: 6px; height: 6px; border-radius: 9px; background: #f2d40f; flex: none; } .cc .r em { font-style: normal; margin-left: auto; color: #707070; font-size: 12px; font-variant-numeric: tabular-nums; }
+.cc.undone .r { text-decoration: line-through; color: #9a9a9a; } .cc.undone .r i { background: #ccc; }
+.col { background: #fff; border-right: 1px solid #e6e6e6; display: flex; flex-direction: column; animation: slide .3s cubic-bezier(.22,.8,.24,1); }
+@keyframes slide { from { transform: translateX(-16px); opacity: 0 } to { transform: none; opacity: 1 } }
+.toast { display: flex; align-items: center; gap: 10px; height: 38px; padding: 0 6px 0 14px; border-radius: 999px; font-size: 13px; background: rgba(255,255,255,.97); box-shadow: 0 6px 24px rgba(0,0,0,.08), 0 0 0 1px rgba(0,0,0,.06); white-space: nowrap; z-index: 7; animation: drop .3s; }
+.hint { display: flex; align-items: center; gap: 8px; height: 34px; padding: 0 14px; border-radius: 999px; font-size: 12.5px; background: rgba(255,255,255,.95); box-shadow: 0 6px 24px rgba(0,0,0,.10); white-space: nowrap; }
+@media (prefers-reduced-motion: reduce) { .stage *, .stage *::before { animation: none !important; transition: none !important; } }
+</style>
+
+<div class="page">
+  <div class="bar">
+    <h1>openSU 布局原型 · 第三轮</h1>
+    <div class="grp" id="gD"><button data-d="desk">桌面</button><button data-d="phone">手机</button></div>
+    <select id="sel" aria-label="预设状态"></select>
+    <button class="act" id="sim">模拟 AI 工作</button>
+    <label class="chk"><input type="checkbox" id="alt">手机：打开面板时隐藏输入框（备选）</label>
+  </div>
+  <details class="legend" id="lg" open><summary>可以试的操作</summary>桌面：鼠标移到右上角图标上，文字从图标右侧展开；点 视角 / 楼层 / 日照 打开浮动面板，房子会让开但画布不变。点输入框左侧的按钮展开“最近一次”，再点“固定到左侧”看完整对话。“模拟 AI 工作”播放输入框边缘光和状态文字约 4 秒，然后追加回复和修改卡片。手机：工具条在最下方，点工具后面板从底部升起，工具条贴着面板一起上移，可直接点另一个工具切换；再点当前工具或向下拖动面板顶部关闭。图片是真实渲染，拖动时间只改读数。</details>
+  <div class="wrap" id="wrap"><div class="stage" id="st"><img class="house" id="house" alt="T1 白墙坡顶小院"></div></div>
+</div>
+
+<script>
+const IMG = { 'r-axo-se': [1500, 1098], 'r-axo-sw': [1500, 1288], 'r-axo-ne': [1500, 1104], 'r-axo-nw': [1500, 1097], 'r-elev-s': [1500, 963], 'r-axo-se-sun': [1500, 1269], 'r-cut-L1': [1500, 1144], 'r-cut-L2': [1500, 1197], 'r-cut-L1-sun': [1500, 1176], 'r-walk': [1600, 1200] };
+const Q = new URLSearchParams(location.search);
+const REAL = !Q.has('bare') && Math.min(innerWidth, screen.width || innerWidth) < 640;
+const S = { d: Q.get('d') || (REAL ? 'phone' : 'desk'), pw: +(Q.get('w') || 390), ph: +(Q.get('h') || 844), alt: false };
+const MSG0 = [
+  { u: '客厅再亮一点' },
+  { a: '把客厅南窗从 2.4 m 加宽到 <b>3.6 m</b>，窗台降到 0.45 m。冬至中午阳光能照进客厅一半进深。', c: ['客厅南窗加宽 1200 mm', '+0.0 m²'] },
+  { u: '把北侧房间加深 600' },
+  { a: '好的，北墙所在的轴线 F 外移 600 mm，厨房、楼梯、洗衣房和二楼主卫一起变深。厨房现在 <b>3.6 × 3.3 m</b>；建筑面积增加约 <b>13.3 m²</b>。', c: ['北侧房间加深 600 mm', '+13.3 m²'] },
+];
+let MSG = [];
+const PRE = { desk: [['idle', '空闲'], ['hover', '悬停：图标展开文字'], ['work', 'AI 工作中'], ['hist', '展开“最近一次”'], ['pin', '对话固定在左侧'], ['sun', '日照面板 · 一层剖切'], ['view', '视角面板'], ['level', '楼层面板'], ['walk', '走进去']],
+  phone: [['idle', '空闲'], ['work', 'AI 工作中'], ['hist', '展开“最近一次”'], ['pin', '对话固定（半屏）'], ['level', '楼层面板'], ['view', '视角面板'], ['sun', '日照面板'], ['sunalt', '备选：面板打开时隐藏输入框'], ['walk', '走进去']] };
+function preset(k) {
+  Object.assign(S, { hist: false, pin: false, panel: null, work: false, level: '全部', view: '东南', sun: false, min: 600, date: '冬至', walk: false, toast: null, hov: null, n: 2, alt: k === 'sunalt' });
+  MSG = MSG0.map((m) => ({ ...m }));
+  if (k === 'hover') S.hov = 'sun';
+  if (k === 'work') { S.work = true; MSG.push({ u: '厨房的窗能再大一点吗？' }); }
+  if (k === 'hist') S.hist = true;
+  if (k === 'pin') S.pin = true;
+  if (k === 'sun' || k === 'sunalt') { S.panel = 'sun'; S.sun = true; S.level = '一层'; }
+  if (k === 'view') { S.panel = 'view'; S.view = '西南'; }
+  if (k === 'level') { S.panel = 'level'; S.level = '二层'; }
+  if (k === 'walk') S.walk = true;
+  const a = document.getElementById('alt'); if (a) a.checked = S.alt;
+}
+const I = {
+  cube: '<path d="M12 3l8 4.5v9L12 21l-8-4.5v-9z"/><path d="M4 7.5l8 4.5 8-4.5M12 12v9"/>', layers: '<path d="M12 4l8 4-8 4-8-4z"/><path d="M4 12l8 4 8-4"/><path d="M4 16l8 4 8-4"/>',
+  sun: '<circle cx="12" cy="12" r="3.6"/><path d="M12 3v2M12 19v2M3 12h2M19 12h2M5.6 5.6l1.4 1.4M17 17l1.4 1.4M5.6 18.4L7 17M17 7l1.4-1.4"/>',
+  walk: '<circle cx="13.5" cy="4.6" r="1.6"/><path d="M12.6 8.6l-1.2 6.2M11.4 14.8l-2.2 6M11.4 14.8l2.6 2.4.6 3.8M12.6 8.6l-3.4 1.8-1 3.2M12.6 8.6l2 3.2 3 1"/>',
+  pin: '<path d="M12 21s-6.5-5.6-6.5-10.5a6.5 6.5 0 1113 0C18.5 15.4 12 21 12 21z"/><circle cx="12" cy="10.5" r="2.2"/>', x: '<path d="M6 6l12 12M18 6L6 18"/>',
+  undo: '<path d="M8.5 6.5L5 10l3.5 3.5"/><path d="M5 10h9.5a4.5 4.5 0 010 9H11"/>', up: '<path d="M12 19V5M6.5 10.5L12 5l5.5 5.5"/>', down: '<path d="M7 10l5 5 5-5"/>', chevr: '<path d="M10 7l5 5-5 5"/>',
+  hist: '<path d="M5 6.5h14M5 11.5h10M5 16.5h7"/><path d="M17 14.5v5M14.5 17h5"/>', dock: '<rect x="3.5" y="4.5" width="17" height="15" rx="2.5"/><path d="M9.5 4.5v15"/>',
+  undock: '<rect x="3.5" y="4.5" width="17" height="15" rx="2.5"/><path d="M9.5 4.5v15M15.5 10l-2 2 2 2"/>', eye: '<path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12z"/><circle cx="12" cy="12" r="2.8"/>',
+  reset: '<path d="M4.5 12a7.5 7.5 0 102.2-5.3"/><path d="M4.5 4.5v4h4"/>', check: '<path d="M5.5 12.5l4 4 9-9"/>', play: '<path d="M8.5 6.2v11.6L18 12z" fill="currentColor"/>', stop: '<rect x="8" y="8" width="8" height="8" rx="1.5" fill="currentColor" stroke="none"/>',
+};
+const ic = (n, c = '') => `<svg class="i ${c}" viewBox="0 0 24 24" aria-hidden="true">${I[n]}</svg>`;
+const spark = (s = 18) => `<svg viewBox="0 0 24 24" style="width:${s}px;height:${s}px;flex:none" aria-hidden="true"><path d="M10 3.5c.7 4.6 2.6 6.6 7.2 7.3-4.6.7-6.5 2.6-7.2 7.2-.7-4.6-2.6-6.5-7.2-7.2 4.6-.7 6.5-2.7 7.2-7.3z" fill="#F2D40F" stroke="#2a2a2a" stroke-width="1.4" stroke-linejoin="round"/><path d="M18.5 15.5c.3 1.8 1 2.5 2.8 2.8-1.8.3-2.5 1-2.8 2.8-.3-1.8-1-2.5-2.8-2.8 1.8-.3 2.5-1 2.8-2.8z" fill="#2a2a2a"/></svg>`;
+const hicon = `<svg viewBox="0 0 24 24" style="width:18px;height:18px;flex:none"><path d="M10 19.5v-5h4v5" fill="#F2D40F"/><path d="M4 11l8-6.5 8 6.5M6.2 9.4V19.5h11.6V9.4" fill="none" stroke="#2a2a2a" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+const hhmm = (m) => `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`;
+const dial = () => `<svg viewBox="0 0 40 40" style="width:30px;height:30px;flex:none"><circle cx="20" cy="20" r="18" fill="#fff" stroke="#d6d6d6"/><path d="M20 8l3.5 12h-7z" fill="#F2D40F" stroke="#2a2a2a" stroke-width="1" stroke-linejoin="round"/><path d="M20 32l3.5-12h-7z" fill="#2a2a2a"/></svg>`;
+
+function image() {
+  if (S.walk) return 'r-walk';
+  if (S.level === '一层') return S.sun ? 'r-cut-L1-sun' : 'r-cut-L1';
+  if (S.level === '二层') return 'r-cut-L2';
+  if (S.sun && S.view === '东南') return 'r-axo-se-sun';
+  return { 东南: 'r-axo-se', 西南: 'r-axo-sw', 东北: 'r-axo-ne', 西北: 'r-axo-nw', 南立面: 'r-elev-s' }[S.view] || 'r-axo-se';
+}
+function msgsHTML(list) {
+  return list.map((m) => { const i = MSG.indexOf(m); return m.u ? `<div class="mu">${m.u}</div>` : `<div class="ma">${m.a}${m.c ? `<div class="cc ${m.undone ? 'undone' : ''}"><div class="h">${ic('check', 's14')}<span>${m.undone ? '已撤销' : '已修改 1 处'}</span>${m.undone ? '' : `<span class="u" data-undo="${i}" role="button">${ic('undo', 's14')}撤销</span>`}</div><div class="r"><i></i>${m.c[0]}<em>${m.c[1]}</em></div></div>` : ''}</div>`; }).join('')
+    + (S.work ? `<div class="ma" style="display:flex;gap:8px;align-items:center;color:#707070">${spark(14)}正在修改房子…</div>` : '');
+}
+function tools(phone) {
+  const val = { view: S.view !== '东南' ? S.view : '视角', level: S.level !== '全部' ? S.level : '楼层', sun: S.sun ? hhmm(S.min) : '日照', walk: '走进去' };
+  const icon = { view: 'cube', level: 'layers', sun: 'sun', walk: 'walk' };
+  return ['view', 'level', 'sun', 'walk'].map((k) => {
+    const on = S.panel === k || (k === 'walk' && S.walk), set = !on && ((k === 'sun' && S.sun) || (k === 'level' && S.level !== '全部') || (k === 'view' && S.view !== '东南'));
+    const show = on || set;
+    return `${k === 'walk' && !phone ? '<span class="dv"></span>' : ''}<button class="t ${on ? 'on' : ''} ${set ? 'set' : ''} ${show ? 'show' : ''} ${S.hov === k ? 'hov' : ''}" data-tool="${k}" aria-label="${val[k]}" aria-pressed="${on}">${ic(icon[k], 's16')}<span class="lb">${val[k]}${k === 'walk' && S.walk ? ' ×' : ''}</span></button>`;
+  }).join('');
+}
+function panelHTML() {
+  const head = (t) => `<div class="hd"><span>${t}</span><button class="x" data-close aria-label="关闭">${ic('x', 's16')}</button></div>`;
+  if (S.panel === 'view') {
+    const cells = [['西北', 'M10 10h8v8h-8z M4 4l4.5 4.5'], ['北立面', 'M8 11h8v8H8z M12 3v5.5'], ['东北', 'M6 10h8v8H6z M20 4l-4.5 4.5'], ['西立面', 'M11 8h8v8h-8z M3 12h5.5'], ['N', ''], ['东立面', 'M5 8h8v8H5z M21 12h-5.5'], ['西南', 'M10 6h8v8h-8z M4 20l4.5-4.5'], ['南立面', 'M8 5h8v8H8z M12 21v-5.5'], ['东南', 'M6 6h8v8H6z M20 20l-4.5-4.5']];
+    const ok = ['西北', '东北', '西南', '东南', '南立面'];
+    return head('视角') + `<div class="vg">${cells.map(([l, p]) => l === 'N' ? '<span class="n">N ↑</span>' : `<span class="${S.view === l ? 'on' : ''} ${ok.includes(l) ? '' : 'na'}" data-view="${l}" role="button"><svg class="i s20" viewBox="0 0 24 24"><path d="${p}"/></svg>${l}</span>`).join('')}</div>
+      <div style="display:flex;gap:6px"><span class="chip" style="flex:1;justify-content:center">${ic('eye', 's14')}人视</span><span class="chip" style="flex:1;justify-content:center" data-view="东南" role="button">${ic('reset', 's14')}复位</span></div>`;
+  }
+  if (S.panel === 'level') return head('楼层') + `<div class="lv">${[['全部', '整栋'], ['二层', '+3.30 m'], ['一层', '±0.00']].map(([l, m]) => `<span class="${S.level === l ? 'on' : ''}" data-level="${l}" role="button">${S.level === l ? ic('check', 's16') : '<b style="width:16px"></b>'}${l}<em>${m}</em></span>`).join('')}</div><div class="lab2" style="letter-spacing:0">剖切高度：楼面以上 1.25 m</div>`;
+  const f = ((S.min - 412) / 610 * 100).toFixed(1) + '%';
+  return `<div style="display:flex;align-items:center;gap:12px"><span class="play">${ic('play', 's16')}</span><div style="flex:1"><div class="big" id="bigt">${hhmm(S.min)}</div><div class="az">${S.date} · 太阳在东南 29°，高 24°</div></div><button class="x" data-close aria-label="关闭">${ic('x', 's16')}</button></div>
+    <div><input type="range" class="rg" id="rg" min="412" max="1022" value="${S.min}" style="--f:${f}" aria-label="时间"><div class="ticks"><span>06:52</span><span>10</span><span>12</span><span>14</span><span>17:02</span></div></div>
+    <div class="seg lt" style="display:flex;padding:3px">${['冬至', '春分', '夏至', '秋分', '今天'].map((d) => `<span class="${S.date === d ? 'on' : ''}" data-date="${d}" style="flex:1;height:30px;padding:0">${d}</span>`).join('')}</div>
+    <div class="lab2">位置与朝向</div>
+    <div class="fld" data-todo>${ic('pin', 's16')}<span class="v">杭州附近<span style="color:#707070">（默认）</span></span><span class="m">30.3°N</span>${ic('chevr', 's14')}</div>
+    <div class="fld" data-todo>${dial()}<span class="v">大门朝正南</span><span class="m">拖动表盘</span>${ic('chevr', 's14')}</div>
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:8px"><span class="az">${S.d === 'phone' ? '正午 11:57' : '日出 06:52 · 正午 11:57 · 日落 17:02'}</span><button class="lnk" data-sunoff style="flex:none">${ic('x', 's14')}关闭日照</button></div>`;
+}
+function inputHTML(w, h, phone) {
+  const lastU = [...MSG].reverse().find((m) => m.u);
+  const txt = S.work ? `<span class="txt st">正在修改房子<i>…</i>${phone ? '' : ` <q>${lastU.u}</q>`}</span>` : `<span class="txt">说一句话，改房子</span>`;
+  const hb = S.pin ? `<span style="width:4px"></span>${spark(16)}` : `<button class="ib ${S.hist ? 'on' : ''}" data-hist aria-label="最近一次对话">${ic('hist', 's16')}${S.hist ? '' : '<span class="dot"></span>'}</button>`;
+  return `<div class="halo"></div><div class="rim" style="--d:${Math.ceil(Math.hypot(w, h)) + 4}px"><div class="spin"></div><div class="face">${hb}${txt}${S.work ? `<button class="ib stop" aria-label="停止">${ic('stop', 's16')}</button>` : `<button class="ib send" aria-label="发送">${ic('up', 's16')}</button>`}</div></div>`;
+}
+function stripHTML() {
+  const last = MSG.length - 1 - [...MSG].reverse().findIndex((m) => m.u);
+  return `<div class="hh">最近一次<span style="flex:1"></span><button class="lnk" data-pin>${ic('dock', 's14')}固定到左侧</button><button class="x" data-hist aria-label="收起">${ic('down', 's16')}</button></div><div class="msgs">${msgsHTML(MSG.slice(last))}</div><div style="padding:0 10px 10px"><button class="lnk" data-pin>查看全部 ${MSG.filter((m) => m.u).length} 轮对话 ${ic('chevr', 's14')}</button></div>`;
+}
+
+let seen, obs;
+const st = document.getElementById('st');
+function put(k, cls, css, html) {
+  let e = document.getElementById('k-' + k), fresh = false;
+  if (!e) { e = document.createElement('div'); e.id = 'k-' + k; st.appendChild(e); fresh = true; }
+  e.className = 'ab ' + cls;
+  if (e._css !== css) { e.style.cssText = css; e._css = css; }
+  if (e._h !== html) { e.innerHTML = html; e._h = html; }
+  seen.add(e.id); return e;
+}
+const ob = (x, y, w, h) => obs.push([x, y, w, h]);
+
+function layout() {
+  const P = S.d === 'phone', W = P ? S.pw : 1440, H = P ? S.ph : 900;
+  st.style.width = W + 'px'; st.style.height = H + 'px';
+  seen = new Set(['house']); obs = [];
+  const title = `<div class="ttl">${hicon}<span>白墙坡顶小院</span>${ic('down', 's14')}</div><div class="sub">12 × 14 m · ${S.n > 2 ? '173.4' : '172.8'} m²<span class="lv2"> · 2 层</span></div>`;
+  const mode = (sm) => `<div class="seg ${sm ? 'sm' : ''} solid">${['3D', '平面', '图册'].map((m, i) => `<span class="${i ? '' : 'on'}">${m}</span>`).join('')}</div>`;
+  let m = {};
+  if (!P) {
+    const colW = S.pin ? 360 : 0, cw = W - colW;
+    if (S.pin) {
+      const e = put('col', 'col', `left:0;top:0;width:${colW}px;height:${H}px;z-index:3`, `<div style="padding:20px 24px 14px">${title}</div><div style="display:flex;align-items:center;gap:6px;height:44px;padding:0 8px 0 24px;border-block:1px solid #e6e6e6">${spark(15)}<span style="font-size:13px;font-weight:500">AI 设计助手</span><span style="flex:1"></span><button class="lnk" data-unpin>${ic('undock', 's16')}取消固定</button></div><div class="msgs" style="flex:1;padding:16px 24px">${msgsHTML(MSG)}</div><div style="height:84px;flex:none"></div>`);
+      e.querySelector('.msgs').scrollTop = 1e5; ob(0, 0, colW, H);
+    } else { const t = put('title', 'ttlb', 'left:24px;top:20px', title); ob(24, 20, t.offsetWidth, t.offsetHeight); }
+    const md = put('mode', '', `left:${colW + cw / 2 - 83}px;top:16px`, mode(false)); ob(colW + cw / 2 - 83, 16, md.offsetWidth, md.offsetHeight);
+    const tb = put('tb', 'tb solid', 'right:16px;top:16px;z-index:6', tools(false));
+    ob(W - 16 - tb.offsetWidth - (S.hov ? 0 : 0), 16, tb.offsetWidth, 44);
+    if (S.panel && !S.walk) { const p = put('panel', 'card solid', `right:16px;top:68px;width:300px;z-index:5`, `<div class="in">${panelHTML()}</div>`); ob(W - 316, 68, 300, p.offsetHeight); }
+    const iw = Math.min(600, cw - 48), ih = 52, ix = Math.round(colW + (cw - iw) / 2), iy = H - 24 - ih;
+    const inX = S.pin ? 16 : ix, inW = S.pin ? colW - 32 : iw;
+    put('inp', 'inp' + (S.work ? ' work' : ''), `left:${inX}px;top:${iy}px;width:${inW}px;height:${ih}px`, inputHTML(inW, ih, false)); ob(inX, iy, inW, ih);
+    if (S.hist && !S.pin) { const s = put('strip', 'strip', `left:${ix}px;width:${iw}px;top:0;visibility:hidden`, stripHTML()); s.style.top = (iy - 8 - s.offsetHeight) + 'px'; s.style.visibility = ''; s._css = null; m.strip = s; }
+    if (S.toast) put('toast', 'toast', `left:${ix + iw / 2}px;top:${iy - 50}px;transform:translateX(-50%)`, S.toast);
+    if (S.walk) put('hint', 'hint', `left:${colW + cw / 2}px;top:76px;transform:translateX(-50%);z-index:6`, `漫游中 · 一层 · 方向键移动，拖动环顾 · Esc 或点“走进去 ×”退出`);
+  } else {
+    // phone: top row = name + mode; bottom, from the bottom up: [sheet] toolbar, input, house
+    st.classList.remove('tight');
+    const t = put('title', 'ttlb ph', 'left:16px;top:12px', title), md = put('mode', '', 'right:12px;top:10px', mode(true));
+    m.topFit = { need: 16 + t.offsetWidth + 10 + md.offsetWidth + 12, W };
+    st.classList.toggle('tight', m.topFit.need > W);
+    if (m.topFit.need > W) m.topFit.tight = 16 + t.offsetWidth + 10 + md.offsetWidth + 12;
+    ob(16, 12, t.offsetWidth, t.offsetHeight); ob(W - 12 - md.offsetWidth, 10, md.offsetWidth, md.offsetHeight);
+    const sheetKind = S.walk ? null : S.panel ? 'tool' : S.pin ? 'chat' : null;
+    let sheetTop = H;
+    if (sheetKind) {
+      const cap = Math.round(H * (sheetKind === 'chat' ? .5 : .45));
+      const inner = sheetKind === 'tool' ? `<div class="grab" data-grab><div class="handle"></div></div><div class="scroll"><div class="in" style="padding-top:6px">${panelHTML()}</div></div>`
+        : `<div class="grab" data-grab><div class="handle"></div></div><div style="display:flex;align-items:center;gap:6px;height:40px;padding:0 8px 0 16px;flex:none">${spark(15)}<span style="font-size:13px;font-weight:500">AI 设计助手</span><span style="flex:1"></span><button class="lnk" data-unpin>${ic('undock', 's16')}取消固定</button></div><div class="msgs scroll">${msgsHTML(MSG)}</div><div style="height:66px;flex:none"></div>`;
+      const sh = put('sheet', 'sheet', `left:0;width:${W}px;top:${H}px;${sheetKind === 'chat' ? `height:${cap}px` : `max-height:${cap}px`}`, inner);
+      const hgt = Math.min(sh.offsetHeight, cap); sheetTop = H - hgt;
+      sh.style.top = sheetTop + 'px'; sh._css = null; ob(0, sheetTop, W, hgt);
+      if (sheetKind === 'chat') { const ms = sh.querySelector('.msgs'); ms.scrollTop = 1e5; }
+    }
+    const tbH = 52, tbY = sheetKind ? sheetTop - 8 - tbH : H - 12 - tbH;
+    const tb = put('tb', 'pb solid ride', `left:12px;width:${W - 24}px;top:${tbY}px;height:${tbH}px;z-index:6`, tools(true));
+    // label rule: do all four labels fit beside their icons at this width?
+    const need = [...tb.querySelectorAll('.t')].map((b) => { const lb = b.querySelector('.lb'); return 12 + 16 + 6 + measure(lb.textContent); });
+    const avail = W - 24 - 10 - 6; m.labels = { need: need.map(Math.ceil), sum: Math.ceil(need.reduce((a, b) => a + b, 0)), avail, fits: need.reduce((a, b) => a + b, 0) <= avail };
+    tb.classList.toggle('lab', m.labels.fits); ob(12, tbY, W - 24, tbH);
+    const ih = 50, hideInp = sheetKind === 'tool' && S.alt, inChat = sheetKind === 'chat';
+    const iy = inChat ? H - 12 - ih : tbY - 8 - ih;
+    const ie = put('inp', 'inp ride' + (S.work ? ' work' : ''), `left:12px;top:${iy}px;width:${W - 24}px;height:${ih}px;${hideInp ? 'opacity:0;pointer-events:none;' : ''}${inChat ? 'z-index:6' : ''}`, inputHTML(W - 24, ih, true));
+    if (!hideInp) ob(12, iy, W - 24, ih);
+    const topOfStack = hideInp ? tbY : iy;
+    if (S.hist && !S.pin && !sheetKind) { const s = put('strip', 'strip', `left:12px;width:${W - 24}px;top:0;visibility:hidden;max-height:${Math.round(H * .42)}px`, stripHTML()); s.style.top = (topOfStack - 8 - s.offsetHeight) + 'px'; s.style.visibility = ''; s._css = null; m.strip = s; }
+    if (S.toast) put('toast', 'toast', `left:${W / 2}px;top:${topOfStack - 48}px;transform:translateX(-50%)`, S.toast);
+    if (S.walk) put('hint', 'hint', `left:${W / 2}px;top:66px;transform:translateX(-50%);z-index:6`, `漫游中 · 拖动环顾 · 点“走进去 ×”退出`);
+  }
+  for (const e of [...st.children]) if (!seen.has(e.id)) e.remove();
+  const rg = document.getElementById('rg');
+  if (rg) rg.oninput = () => { S.min = +rg.value; rg.style.setProperty('--f', ((S.min - 412) / 610 * 100).toFixed(1) + '%'); document.getElementById('bigt').textContent = hhmm(S.min); const lb = st.querySelector('[data-tool="sun"] .lb'); if (lb) lb.textContent = hhmm(S.min); };
+  fitHouse(W, H, m);
+}
+const cv = document.createElement('canvas').getContext('2d');
+function measure(t) { cv.font = '13px Inter, "PingFang SC", "Noto Sans SC", "WenQuanYi Zen Hei", sans-serif'; return cv.measureText(t).width; }
+function fitHouse(W, H, m) {
+  const P = S.d === 'phone', im = image(), [nw, nh] = IMG[im], pad = P ? 8 : 24;
+  let best = { s: 0, w: 0, h: 0 };
+  if (S.walk) best = { x: 0, y: 0, w: W, h: H, s: Math.max(W / nw, H / nh) };
+  else {
+    const g = P ? 6 : 12, O = obs.map(([x, y, w, h]) => [x - g, y - g, x + w + g, y + h + g]);
+    const xs = [...new Set([0, W, ...O.flatMap((o) => [o[0], o[2]])])].filter((v) => v >= 0 && v <= W).sort((a, b) => a - b);
+    const ys = [...new Set([0, H, ...O.flatMap((o) => [o[1], o[3]])])].filter((v) => v >= 0 && v <= H).sort((a, b) => a - b);
+    for (let a = 0; a < xs.length; a++) for (let b = a + 1; b < xs.length; b++) for (let c = 0; c < ys.length; c++) for (let d = c + 1; d < ys.length; d++) {
+      const r = [xs[a], ys[c], xs[b], ys[d]];
+      if (O.some((o) => o[0] < r[2] && o[2] > r[0] && o[1] < r[3] && o[3] > r[1])) continue;
+      const w = r[2] - r[0], h = r[3] - r[1], s = Math.min((w - 2 * pad) / nw, (h - 2 * pad) / nh);
+      if (s > best.s + 1e-6 || (Math.abs(s - best.s) < 1e-6 && w * h > best.w * best.h)) best = { x: r[0], y: r[1], w, h, s };
+    }
+  }
+  const hw = nw * best.s, hh = nh * best.s, hx = best.x + (best.w - hw) / 2, hy = best.y + (best.h - hh) / 2;
+  const hi = document.getElementById('house');
+  if (!hi.src.endsWith(`img/${im}.webp`)) hi.src = `img/${im}.webp`;
+  Object.assign(hi.style, { left: hx + 'px', top: hy + 'px', width: hw + 'px', height: hh + 'px' });
+  let cover = 0;
+  if (m.strip) { const x0 = m.strip.offsetLeft, y0 = parseFloat(m.strip.style.top), x1 = x0 + m.strip.offsetWidth, y1 = y0 + m.strip.offsetHeight; cover = Math.max(0, Math.min(x1, hx + hw) - Math.max(x0, hx)) * Math.max(0, Math.min(y1, hy + hh) - Math.max(y0, hy)) / (hw * hh); }
+  window.__m = { free: best.w * best.h / (W * H), houseW: Math.round(hw), houseH: Math.round(hh), cover, img: im, labels: m.labels, topFit: m.topFit };
+  fitStage();
+}
+function fitStage() {
+  const P = S.d === 'phone', W = P ? S.pw : 1440, H = P ? S.ph : 900, wrap = document.getElementById('wrap');
+  let sc = 1;
+  if (!document.body.classList.contains('bare') && !REAL) {
+    const avW = wrap.parentElement.clientWidth - (P ? 20 : 0), avH = Math.max(420, innerHeight - wrap.getBoundingClientRect().top - 24);
+    sc = Math.min(1, avW / W, (P ? avH : Math.max(avH, 520)) / H);
+  }
+  st.style.transform = `scale(${sc})`; wrap.style.width = W * sc + 'px'; wrap.style.height = H * sc + 'px';
+  wrap.className = 'wrap ' + (REAL || document.body.classList.contains('bare') ? '' : P ? 'phoneframe' : 'deskframe');
+}
+// ---- interactions
+let timer = null;
+function simulate() {
+  if (S.work) return;
+  clearTimeout(timer); S.walk = false; S.work = true; S.toast = null;
+  MSG.push({ u: '厨房的窗能再大一点吗？' }); layout(); document.getElementById('sim').disabled = true;
+  timer = setTimeout(() => {
+    S.work = false; S.n++;
+    MSG.push({ a: '厨房北窗从 1.2 m 加宽到 <b>1.8 m</b>，窗台降到 0.9 m，水槽正对窗口。', c: ['厨房北窗加宽 600 mm', '+0.6 m²'] });
+    if (!S.hist && !S.pin) S.toast = `${ic('check', 's14')}已修改：厨房北窗加宽 600 mm<button class="lnk" data-undo="${MSG.length - 1}">${ic('undo', 's14')}撤销</button>`;
+    layout(); document.getElementById('sim').disabled = false;
+    setTimeout(() => { if (S.toast) { S.toast = null; layout(); } }, 4500);
+  }, 4000);
+}
+st.addEventListener('click', (e) => {
+  const t = e.target.closest('[data-tool],[data-close],[data-hist],[data-pin],[data-unpin],[data-view],[data-level],[data-date],[data-undo],[data-sunoff],[data-todo]');
+  if (!t) { if (e.target.id === 'house' || e.target === st) { if (S.panel) { S.panel = null; layout(); } } return; }
+  const d = t.dataset;
+  S.hov = null;
+  if (d.tool) {
+    if (d.tool === 'walk') { S.walk = !S.walk; S.panel = null; S.hist = false; }
+    else { S.walk = false; S.panel = S.panel === d.tool ? null : d.tool; if (d.tool === 'sun') S.sun = true; }
+  }
+  if ('close' in d) S.panel = null;
+  if ('hist' in d) S.hist = !S.hist;
+  if ('pin' in d) { S.pin = true; S.hist = false; S.panel = null; }
+  if ('unpin' in d) S.pin = false;
+  if (d.view && !t.classList.contains('na')) { S.view = d.view; S.level = '全部'; }
+  if (d.level) { S.level = d.level; if (d.level !== '全部') S.view = '东南'; }
+  if (d.date) S.date = d.date;
+  if (d.undo) { MSG[+d.undo].undone = true; S.toast = null; }
+  if ('sunoff' in d) { S.sun = false; S.panel = null; if (S.level === '一层') S.level = '全部'; }
+  if ('todo' in d) { S.toast = '原型中未实现城市选择和朝向表盘'; setTimeout(() => { S.toast = null; layout(); }, 2200); }
+  layout();
+});
+// swipe the sheet down to close it
+let drag = null;
+st.addEventListener('pointerdown', (e) => { const g = e.target.closest('[data-grab]'); if (!g) return; drag = { y: e.clientY, el: g.parentElement, sc: st.getBoundingClientRect().height / st.offsetHeight }; g.setPointerCapture(e.pointerId); });
+st.addEventListener('pointermove', (e) => { if (!drag) return; const dy = Math.max(0, (e.clientY - drag.y) / drag.sc); drag.dy = dy; drag.el.style.transform = `translateY(${dy}px)`; });
+st.addEventListener('pointerup', () => { if (!drag) return; const dy = drag.dy || 0; drag.el.style.transform = ''; drag = null; if (dy > 70) { if (S.panel) S.panel = null; else S.pin = false; layout(); } });
+addEventListener('keydown', (e) => { if (e.key === 'Escape') { S.panel = null; S.walk = false; layout(); } });
+const sel = document.getElementById('sel');
+function syncBar() {
+  document.querySelectorAll('#gD button').forEach((b) => b.setAttribute('aria-pressed', b.dataset.d === S.d));
+  sel.innerHTML = PRE[S.d].map(([k, l]) => `<option value="${k}">${l}</option>`).join('');
+}
+document.getElementById('gD').onclick = (e) => { const b = e.target.closest('button'); if (b) { S.d = b.dataset.d; for (const c of [...st.children]) if (c.id !== 'house') c.remove(); preset('idle'); syncBar(); layout(); } };
+sel.onchange = () => { preset(sel.value); layout(); };
+document.getElementById('sim').onclick = simulate;
+document.getElementById('alt').onchange = (e) => { S.alt = e.target.checked; layout(); };
+function realSize() { if (!REAL) return; const bar = document.querySelector('.bar').offsetHeight + document.getElementById('lg').offsetHeight; S.pw = Math.round(innerWidth); S.ph = Math.round(innerHeight - bar - 1); }
+addEventListener('resize', () => { realSize(); layout(); });
+if (Q.has('bare')) document.body.classList.add('bare');
+if (REAL) { document.body.classList.add('real'); document.getElementById('lg').open = false; }
+preset(Q.get('s') || 'idle'); syncBar(); sel.value = Q.get('s') || 'idle'; realSize(); layout();
+document.fonts.ready.then(() => { layout(); const hi = document.getElementById('house'); (hi.complete ? Promise.resolve() : new Promise((r) => (hi.onload = r))).then(() => { window.__ready = true; }); });
+</script>
+</html>
