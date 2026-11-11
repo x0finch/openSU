@@ -7,8 +7,11 @@
     "build": "pnpm -r build",
     "typecheck": "pnpm -r typecheck",
     "test": "pnpm -r test",
-    "dev": "pnpm --filter @opensu/render dev",
-    "shots": "pnpm --filter @opensu/render shots"
+    "dev": "pnpm --filter @opensu/web dev",
+    "dev:render": "pnpm --filter @opensu/render dev",
+    "shots": "pnpm --filter @opensu/render shots",
+    "shots:web": "pnpm --filter @opensu/web shots",
+    "preview": "pnpm --filter @opensu/web preview"
   },
   "devDependencies": {
     "typescript": "5.9.3"

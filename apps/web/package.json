@@ -1,0 +1,43 @@
+{
+  "name": "@opensu/web",
+  "version": "0.0.0",
+  "private": true,
+  "license": "AGPL-3.0-only",
+  "type": "module",
+  "scripts": {
+    "dev": "vite dev",
+    "build": "vite build && node scripts/size-report.mjs",
+    "preview": "vite preview",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "node scripts/shots.mjs --smoke",
+    "shots": "node scripts/shots.mjs",
+    "deploy": "vite build && wrangler deploy",
+    "cf-typegen": "wrangler types"
+  },
+  "dependencies": {
+    "@fontsource-variable/inter": "5.3.0",
+    "@opensu/kernel": "workspace:*",
+    "@opensu/model": "workspace:*",
+    "@opensu/plan": "workspace:*",
+    "@opensu/render": "workspace:*",
+    "@tanstack/react-router": "1.170.46",
+    "@tanstack/react-start": "1.169.5",
+    "react": "19.3.1",
+    "react-dom": "19.3.1",
+    "three": "0.186.1",
+    "zustand": "5.1.0"
+  },
+  "devDependencies": {
+    "@cloudflare/vite-plugin": "1.68.0",
+    "@tailwindcss/vite": "4.3.5",
+    "@types/node": "22.20.5",
+    "@types/react": "19.3.0",
+    "@types/react-dom": "19.3.0",
+    "@types/three": "0.186.0",
+    "@vitejs/plugin-react": "6.3.0",
+    "tailwindcss": "4.3.5",
+    "typescript": "5.9.3",
+    "vite": "8.3.5",
+    "wrangler": "4.160.0"
+  }
+}
