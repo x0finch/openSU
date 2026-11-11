@@ -326,3 +326,32 @@ function computePlants(house: ResolvedHouse): Plant[] {
   void bigTree;
   return out;
 }
+
+/**
+ * True when a tree of the site planting stands between an eye-level camera
+ * (compass bearing `azimuthDeg` from the house) and the middle third of the
+ * house as seen from there: the hero would show a crown instead of the
+ * facade's centre. Shared by the sheets' hero views and the studio's
+ * eye-level preset, which turn to the other side then.
+ */
+export function treeHidesFacade(house: ResolvedHouse, azimuthDeg: number): boolean {
+  const pts = house.levels[0]!.spaces.filter((s) => !s.outdoor).flatMap((s) => s.rings.flat());
+  if (!pts.length) return false;
+  const a = (azimuthDeg * Math.PI) / 180;
+  const d: [number, number] = [Math.sin(a), Math.cos(a)];
+  const r: [number, number] = [-Math.cos(a), Math.sin(a)];
+  const along = (p: readonly number[]) => p[0]! * r[0] + p[1]! * r[1];
+  const toward = (p: readonly number[]) => p[0]! * d[0] + p[1]! * d[1];
+  const xs = pts.map(along);
+  const lo = Math.min(...xs), hi = Math.max(...xs);
+  const c0 = lo + (hi - lo) / 3, c1 = hi - (hi - lo) / 3;
+  const front = Math.max(...pts.map(toward));
+  return plantSite(house).some((p) => {
+    if (p.kind !== 'ginkgo' && p.kind !== 'maple-red' && p.kind !== 'maple-green') return false;
+    if (p.level !== house.levels[0]!.id || toward([p.x, p.y]) < front - 6000) return false;
+    // Crown radius of the 3D generators (about a third of the height).
+    const R = (p.kind === 'ginkgo' ? 0.36 : 0.5) * p.height * 1000;
+    const x = along([p.x, p.y]);
+    return x + R > c0 && x - R < c1;
+  });
+}
