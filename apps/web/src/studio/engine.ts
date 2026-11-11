@@ -1,13 +1,15 @@
 // Lazy chunk: three.js, the kernel and the illustration viewer. Nothing in
 // here may be imported statically from the route modules.
-import { Box3, type Mesh, OrthographicCamera, PerspectiveCamera, Vector3 } from 'three';
+import { Box3, type Mesh, type Object3D, OrthographicCamera, PerspectiveCamera, Vector3 } from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { treeHidesFacade } from '@opensu/furnish';
 import { buildHouse } from '@opensu/kernel';
 import type { ResolvedHouse } from '@opensu/model';
 import {
   createHouseObject, defaultLighting, type FrameInsets, IllustrationViewer, type LightingMode, type SceneStats, type StudySite, studySun, type StudySun, sunForView,
   type ViewPreset, type WalkState,
 } from '@opensu/render';
+import { EYE_ALTERNATE } from '../lib/views';
 
 export interface Engine {
   /**
@@ -55,6 +57,8 @@ export interface Engine {
    * has moved the camera.
    */
   setInsets(insets: FrameInsets | readonly FrameInsets[], instant?: boolean): void;
+  /** Frames on the house with its entourage (phones) or on the architecture alone. */
+  setWideFrame(on: boolean): void;
   /** Called with true when the user orbits / zooms / pans away from the preset, false when a preset is applied. */
   onMoved(cb: (moved: boolean) => void): void;
   /** The underlying viewer (tests and debugging). */
@@ -123,6 +127,26 @@ export interface EngineOptions {
   pixelRatio?: number;
   /** Called after each frame with the on-screen direction of north (degrees clockwise from up). */
   onNorth?: (deg: number) => void;
+  /** Frame the house with its trees and entourage (phones), not the architecture alone; see `setWideFrame`. */
+  wideFrame?: boolean;
+}
+
+/**
+ * Corners of the entourage (trees, bamboo, people, car) of a house object:
+ * framing points that keep a tree standing beside the house inside the
+ * frame, so the whole picture is centred, not the architecture alone.
+ */
+function entouragePoints(root: Object3D): Vector3[] {
+  const out: Vector3[] = [];
+  const box = new Box3();
+  root.updateMatrixWorld(true);
+  for (const o of root.children) {
+    if (o.userData.partId !== undefined || o.name === 'floor-lines') continue;
+    box.setFromObject(o);
+    if (box.isEmpty()) continue;
+    for (const x of [box.min.x, box.max.x]) for (const y of [box.min.y, box.max.y]) for (const z of [box.min.z, box.max.z]) out.push(new Vector3(x, y, z));
+  }
+  return out;
 }
 
 export function createEngine(container: HTMLElement, resolved: ResolvedHouse, opts: EngineOptions = {}): Engine {
@@ -151,12 +175,28 @@ export function createEngine(container: HTMLElement, resolved: ResolvedHouse, op
   const sceneCenter = new Vector3();
   let radius = 0;
 
+  let current = resolved;
+
+  /**
+   * The eye-level preset looks at the facade from the south-west unless a
+   * tree hides its centre from there and not from the south-east (the same
+   * rule as the sheets' hero views).
+   */
+  function eyeSide(preset: ViewPreset): ViewPreset {
+    if (preset.kind !== 'eye' || preset.id !== 'eye-sw') return preset;
+    const hidden = treeHidesFacade(current, preset.azimuthDeg) && !treeHidesFacade(current, EYE_ALTERNATE.azimuthDeg);
+    return hidden ? { ...preset, azimuthDeg: EYE_ALTERNATE.azimuthDeg } : preset;
+  }
+
+  let wideFrame = !!opts.wideFrame;
+
   /** Builds and shows a house; frees the geometry of the previous one. */
   function load(r: ResolvedHouse): void {
+    current = r;
     const old = viewer.scene.getObjectByName('baked');
     old?.traverse((o) => (o as Mesh).geometry?.dispose());
     const house = createHouseObject(buildHouse(r), viewer.palette);
-    viewer.setContent(house.root, house.framePoints);
+    viewer.setContent(house.root, wideFrame ? [...house.framePoints, ...entouragePoints(house.root)] : house.framePoints);
     site = house.root.userData.site as StudySite;
     const n = (r.site.northDeg * Math.PI) / 180;
     north.set(Math.sin(n), 0, -Math.cos(n));
@@ -273,8 +313,13 @@ export function createEngine(container: HTMLElement, resolved: ResolvedHouse, op
     canvas.style.opacity = '1';
   }
 
-  function setView(preset: ViewPreset, cut: string | null = viewer.cutaway, instant = false): void {
+  /** The preset the camera is on or moving to (a house swapped in mid-move lands there). */
+  let goal: ViewPreset | null = null;
+
+  function setView(requested: ViewPreset, cut: string | null = viewer.cutaway, instant = false): void {
     stop();
+    const preset = eyeSide(requested);
+    goal = preset;
     if (viewer.walking) {
       // A view or cutaway chosen while walking ends the walk.
       dissolve(() => {
@@ -389,7 +434,7 @@ export function createEngine(container: HTMLElement, resolved: ResolvedHouse, op
     });
   }
 
-  return {
+  const engine: Engine = {
     viewer,
     enterWalk,
     exitWalk,
@@ -422,6 +467,11 @@ export function createEngine(container: HTMLElement, resolved: ResolvedHouse, op
     onMoved(cb) {
       onMovedCb = cb;
     },
+    setWideFrame(on) {
+      if (on === wideFrame) return;
+      wideFrame = on;
+      engine.setHouse(current);
+    },
     setSun(sun) {
       lighting = sun ? { mode: 'physical', date: sun.date, minutes: sun.minutes } : defaultLighting;
       // Mid-transition the presentation sun is interpolated; the last frame applies `lighting`.
@@ -430,9 +480,16 @@ export function createEngine(container: HTMLElement, resolved: ResolvedHouse, op
     sunAt: (date, minutes) => studySun(site, date, minutes),
     resize,
     setHouse(r) {
+      const moving = !!(anim || fadeTimer);
       stop();
       const cam = viewer.camera;
       load(r);
+      if (moving && goal && !viewer.walking) {
+        // A view change was under way (e.g. a new template resets the view):
+        // finish it on the new house instead of freezing mid-morph.
+        snap(goal);
+        return;
+      }
       if (viewer.walking) {
         // The viewer keeps walking in the new house (same spot when free):
         // listen to its new walker.
@@ -473,5 +530,6 @@ export function createEngine(container: HTMLElement, resolved: ResolvedHouse, op
       viewer.dispose();
     },
   };
+  return engine;
 }
 

@@ -11,7 +11,7 @@ import {
 } from '../components/icons';
 import { cx, Segmented } from '../components/ui';
 import { levelName, type MessageKey, useT } from '../lib/i18n';
-import { type Mode, SUN_DATES, type SunDateId, type Tray, useStudio } from '../lib/store';
+import { freshView, type Mode, SUN_DATES, type SunDateId, type Tray, useStudio } from '../lib/store';
 import { resetToTemplate } from '../lib/autosave';
 import { bearingText, frontBearing, placeText, utcText } from '../lib/site';
 import { compass, dayText, hhmm, hourTicks, sunDate } from '../lib/sun';
@@ -184,6 +184,7 @@ function ProjectMenu({ onClose, compact, ref }: { onClose: (focus: boolean) => v
     const m = await loadHouseData();
     const house = m.templateById(id);
     const meta = TEMPLATE_META.find((x) => x.id === id);
+    freshView();
     await replaceHouse(house, t('tpl.edit', { name: meta?.name ?? house.name }));
     // A new house: say where it stands (or skip).
     setSitePanel({ kind: 'location', intro: true });

@@ -18,6 +18,13 @@ export const VIEW_PRESETS = [
 ] as const satisfies readonly ViewPreset[];
 
 export type ViewId = (typeof VIEW_PRESETS)[number]['id'];
+
+/**
+ * The eye-level view from the other side (the sheets' `eye-se`, same
+ * angle): the studio's eye level turns here when a tree hides the centre of
+ * the facade from the south-west and not from the south-east.
+ */
+export const EYE_ALTERNATE = { id: 'eye-se', label: 'Eye SE', kind: 'eye', azimuthDeg: 140 } as const satisfies ViewPreset;
 export const DEFAULT_VIEW: ViewId = 'axo-se';
 
 export const VIEW_GROUPS: { key: 'views.axo' | 'views.eye' | 'views.elevation'; ids: ViewId[] }[] = [

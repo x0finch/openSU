@@ -156,6 +156,19 @@ export const useStudio = create<StudioState>((set) => ({
     })),
 }));
 
+/**
+ * A newly opened house (a template, a reset) starts fresh: whole (no
+ * cutaway), in presentation light, at the default view, not walking;
+ * nothing of the previous house's view state carries over.
+ */
+export function freshView(): void {
+  const s = useStudio.getState();
+  s.setTray(null);
+  s.setSun({ on: false, playing: false });
+  s.setCut(null);
+  s.setView(DEFAULT_VIEW);
+}
+
 /** Applies a stored language preference after hydration. */
 export function restoreLang(): void {
   const l = storedLang();
