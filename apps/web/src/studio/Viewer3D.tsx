@@ -6,6 +6,7 @@ import { sunDate } from '../lib/sun';
 import { cutawayPreset, presetById } from '../lib/views';
 import type { Engine } from './engine';
 import { Loading } from './Loading';
+import { walkBridge } from './walk-bridge';
 
 declare global {
   interface Window {
@@ -82,6 +83,8 @@ export function Viewer3D({ resolved, active }: { resolved: ResolvedHouse; active
         e.setView(scenePreset(st), st.cut, true);
         applySun(e, st);
         engine.current = e;
+        walkBridge.attach(e);
+        if (st.walk) e.enterWalk();
         window.__studio = { ...window.__studio, engine: e, ready3d: true };
         setStatus('ready');
       } catch (err) {
@@ -91,6 +94,7 @@ export function Viewer3D({ resolved, active }: { resolved: ResolvedHouse; active
     });
     return () => {
       alive = false;
+      walkBridge.attach(null);
       engine.current?.dispose();
       engine.current = null;
       if (window.__studio) window.__studio.ready3d = false;
@@ -101,6 +105,15 @@ export function Viewer3D({ resolved, active }: { resolved: ResolvedHouse; active
     const st = useStudio.getState();
     engine.current?.setView(scenePreset(st), st.cut);
   }, [view, nonce, cut]);
+
+  // Walk mode on / off.
+  const walk = useStudio((s) => s.walk);
+  useEffect(() => {
+    const e = engine.current;
+    if (!e) return;
+    if (walk && !e.walking) e.enterWalk();
+    else if (!walk && e.walking) e.exitWalk();
+  }, [walk]);
 
   // Sun study: straight from the store to the engine (no React render per slider step).
   useEffect(
@@ -122,7 +135,7 @@ export function Viewer3D({ resolved, active }: { resolved: ResolvedHouse; active
   return (
     <div className="absolute inset-0" aria-hidden={!active} data-active={active}>
       <div ref={ref} className="absolute inset-0 [&>canvas]:h-full! [&>canvas]:w-full!" data-testid="viewer" />
-      {status === 'ready' && active && (
+      {status === 'ready' && active && !walk && (
         <div
           className="glass pointer-events-none absolute bottom-6 left-6 hidden size-12 place-items-center rounded-full md:grid"
           role="img"

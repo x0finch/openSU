@@ -6,7 +6,7 @@ import { buildHouse } from '@opensu/kernel';
 import type { ResolvedHouse } from '@opensu/model';
 import {
   cameraForView, createHouseObject, defaultLighting, IllustrationViewer, type LightingMode, type SceneStats, type StudySite, studySun, type StudySun, sunForView,
-  type ViewPreset,
+  type ViewPreset, type WalkState,
 } from '@opensu/render';
 
 export interface Engine {
@@ -28,6 +28,20 @@ export interface Engine {
   /** Renders a frame now and returns the share of non-white pixels (0..1). */
   inkCoverage(): number;
   stats(): SceneStats;
+  /**
+   * Walk mode: first person from the main entrance (or a level's stair
+   * arrival); a short dissolve in and out. `exitWalk` returns to the
+   * preset that was shown.
+   */
+  enterWalk(opts?: { level?: string }): void;
+  exitWalk(): void;
+  readonly walking: boolean;
+  /** Listens to the walker (position, heading, level); null when walking stops. */
+  onWalk(cb: (s: WalkState | null) => void): () => void;
+  /** Analogue movement from the touch joystick (-1..1 each). */
+  walkMove(forward: number, strafe: number): void;
+  /** Jump to a level's stair arrival point while walking. */
+  walkToLevel(levelId: string): void;
   /** The underlying viewer (tests and debugging). */
   readonly viewer: IllustrationViewer;
   dispose(): void;
@@ -170,7 +184,7 @@ export function createEngine(container: HTMLElement, resolved: ResolvedHouse, op
   function resize(): void {
     viewer.resize();
     const view = viewer.currentView;
-    if (!moved && !anim && !fadeTimer && view) {
+    if (!moved && !anim && !fadeTimer && view && !viewer.walking) {
       viewer.setView(view);
       attachControls();
     }
@@ -186,6 +200,16 @@ export function createEngine(container: HTMLElement, resolved: ResolvedHouse, op
 
   function setView(preset: ViewPreset, cut: string | null = viewer.cutaway, instant = false): void {
     stop();
+    if (viewer.walking) {
+      // A view or cutaway chosen while walking ends the walk.
+      dissolve(() => {
+        viewer.exitWalk();
+        emitWalk(null);
+        viewer.setCutaway(cut);
+        snap(preset);
+      });
+      return;
+    }
     const from = viewer.camera;
     if (cut !== viewer.cutaway) {
       // Clip now; the viewer re-frames its current preset, the morph below
@@ -249,8 +273,69 @@ export function createEngine(container: HTMLElement, resolved: ResolvedHouse, op
     anim = requestAnimationFrame(step);
   }
 
+  const walkListeners = new Set<(s: WalkState | null) => void>();
+  const emitWalk = (st: WalkState | null) => {
+    for (const cb of walkListeners) cb(st);
+  };
+  /** Runs `fn` under a short dissolve (or at once with reduced motion). */
+  function dissolve(fn: () => void): void {
+    const reduceMotion = typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
+    stop();
+    if (reduceMotion) {
+      fn();
+      return;
+    }
+    canvas.style.opacity = '0';
+    fadeTimer = window.setTimeout(() => {
+      fadeTimer = 0;
+      fn();
+      requestAnimationFrame(() => (canvas.style.opacity = '1'));
+    }, FADE);
+  }
+
+  function enterWalk(opts: { level?: string } = {}): void {
+    dissolve(() => {
+      controls?.dispose();
+      controls = null;
+      viewer.setLighting(lighting);
+      const w = viewer.enterWalk(opts.level ? { level: opts.level } : {});
+      w.onChange = (st) => emitWalk(st);
+      emitWalk(w.state);
+    });
+  }
+
+  function exitWalk(): void {
+    if (!viewer.walking) return;
+    dissolve(() => {
+      viewer.exitWalk();
+      emitWalk(null);
+      const view = viewer.currentView;
+      if (view) snap(view);
+    });
+  }
+
   return {
     viewer,
+    enterWalk,
+    exitWalk,
+    get walking() {
+      return viewer.walking;
+    },
+    onWalk(cb) {
+      walkListeners.add(cb);
+      return () => walkListeners.delete(cb);
+    },
+    walkMove(forward, strafe) {
+      viewer.walk?.setMove(forward, strafe);
+    },
+    walkToLevel(levelId) {
+      const w = viewer.walk;
+      const data = (house.root.userData.walk as { arrivals: { level: string; position: [number, number]; headingDeg: number }[] } | undefined);
+      const a = data?.arrivals.find((x) => x.level === levelId);
+      const lv = viewer.levelList.find((l) => l.id === levelId);
+      if (!w || !a || !lv) return;
+      dissolve(() => w.teleport(a.position[0], a.position[1], lv.elevation, a.headingDeg));
+    },
     setView,
     setSun(sun) {
       lighting = sun ? { mode: 'physical', date: sun.date, minutes: sun.minutes } : defaultLighting;
@@ -277,6 +362,7 @@ export function createEngine(container: HTMLElement, resolved: ResolvedHouse, op
     stats: () => viewer.lastStats,
     dispose() {
       disposed = true;
+      walkListeners.clear();
       stop();
       controls?.dispose();
       viewer.dispose();

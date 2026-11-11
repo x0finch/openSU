@@ -4,7 +4,7 @@
 // at -d/2), z up from the floor. Pieces are rotated and moved onto the floor
 // of their space. Bottom faces on the floor are left out (never seen).
 import { type FurniturePiece, furnishHouseLevel } from '@opensu/furnish';
-import { CUT_HEIGHT, DECK, GROUND_DECK, PAVING } from './constants';
+import { CUT_HEIGHT, DECK, FLOOR_SLAB, GROUND_DECK, PAVING } from './constants';
 import type { Ctx } from './context';
 import type { PartBuilder, PartSpec, V3 } from './mesh';
 import type { FurnitureBox, MaterialSlot } from './types';
@@ -25,6 +25,8 @@ interface Kit {
   w: number;
   d: number;
   h: number;
+  /** Height of the ceiling above the piece's floor (mm). */
+  ceiling: number;
   variant: string | undefined;
 }
 
@@ -96,8 +98,9 @@ export function buildFurniture(ctx: Ctx, all: FurniturePiece[][]): FurnitureBuil
         }
         return p;
       };
+      const ceiling = (ctx.levels[lv.index + 1]?.elev ?? lv.top) - FLOOR_SLAB - base;
       const kit: Kit = {
-        w, d, h: piece.h, variant: piece.variant,
+        w, d, h: piece.h, variant: piece.variant, ceiling,
         box(slot, x0, y0, z0, x1, y1, z1) {
           if (x1 - x0 < 1 || y1 - y0 < 1 || z1 - z0 < 1) return;
           if (base + z0 < zCut && base + z1 > zCut) {
@@ -200,6 +203,16 @@ function seat(k: Kit, cushions: number): void {
   k.box('textile', -hw + arm, hd - back, 70, hw - arm, hd, k.h);
   k.box('textile', -hw, -hd, 70, -hw + arm, hd, 600);
   k.box('textile', hw - arm, -hd, 70, hw, hd, 600);
+}
+
+/** A pendant lamp hanging from the ceiling over a table (indoors only). */
+function pendant(k: Kit, x: number, y: number): void {
+  const bottom = Math.max(k.h + 700, 1450);
+  if (k.ceiling < bottom + 400 || k.ceiling > 4500) return;
+  k.cyl('furnitureDark', x, y, 5, bottom + 160, k.ceiling, 6);
+  k.cyl('furnitureDark', x, y, 40, k.ceiling - 20, k.ceiling, 10);
+  // Shade: a shallow drum, white inside the white model.
+  k.cyl('furniture', x, y, 210, bottom, bottom + 160, 20);
 }
 
 /** Simple chair: legs, seat, back. */
@@ -308,12 +321,15 @@ const RECIPES: Partial<Record<FurniturePiece['kind'], Recipe>> = {
     const hw = k.w / 2, hd = k.d / 2;
     legs(k, 'furnitureWood', -hw, -hd, hw, hd, 70, 715, 60);
     k.box('furnitureWood', -hw, -hd, 715, hw, hd, k.h);
+    // Two pendants along the table.
+    for (const x of k.w >= 1500 ? [-k.w / 4, k.w / 4] : [0]) pendant(k, x, 0);
   },
   'dining-table-round'(k) {
     const r = Math.min(k.w, k.d) / 2;
     k.cyl('furnitureWood', 0, 0, r * 0.35, 0, 40, 16);
     k.cyl('furnitureWood', 0, 0, 70, 40, 715, 12);
     k.cyl('furnitureWood', 0, 0, r, 715, k.h, 32);
+    pendant(k, 0, 0);
   },
   chair(k) {
     chair(k, 'furniture', 'furnitureWood');

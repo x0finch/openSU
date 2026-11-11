@@ -281,6 +281,62 @@ async function sunAndCutChecks() {
   await ctx.close();
 }
 
+/** Waits for walk mode (after its dissolve) and places the walker. */
+async function walkTo(page, x, y, heading) {
+  await page.waitForFunction(() => window.__studio?.engine?.viewer?.walking === true, null, { timeout: 60000 });
+  await page.waitForTimeout(400);
+  await page.evaluate(([px, py, h]) => {
+    const v = window.__studio.engine.viewer;
+    v.walk.teleport(px, py, 0, h);
+  }, [x, y, heading]);
+  await settle(page);
+  await page.waitForTimeout(300);
+}
+
+/** Walk mode in the app: HUD, mini-map, moving, walls stop, doors let through. */
+async function walkChecks() {
+  if (!wanted('check-walk')) return;
+  const { ctx, page } = await open(DESKTOP, '/studio?walk=1');
+  await page.waitForFunction(() => window.__studio?.ready3d === true, null, { timeout: 180000 });
+  await page.waitForFunction(() => window.__studio?.engine?.viewer?.walking === true, null, { timeout: 60000 });
+  check(await page.locator('[data-testid=walk-hud]').count() === 1, 'walk HUD with mini-map is shown');
+  const st0 = await page.evaluate(() => window.__studio.engine.viewer.walkState);
+  check(st0 && st0.level === 'L1', `walk starts on the ground floor (${JSON.stringify(st0)})`);
+  // Forward with the keyboard (W held for ~0.6 s).
+  const camPos = () => page.evaluate(() => window.__studio.engine.viewer.camera.position.toArray());
+  const a = await camPos();
+  await page.locator('canvas').first().click({ position: { x: 700, y: 450 } });
+  await page.evaluate(() => window.__studio.engine.viewer.walk.look(90, 0));
+  await page.keyboard.down('KeyW');
+  await page.waitForTimeout(700);
+  await page.keyboard.up('KeyW');
+  await page.waitForTimeout(150);
+  const b = await camPos();
+  const moved = Math.hypot(b[0] - a[0], b[2] - a[2]);
+  check(moved > 0.2, `walking forward (W) moves the camera (${moved.toFixed(2)} m)`);
+  // A wall stops: walk east in the living room (north of the TV wall) towards the exterior wall at x = 13.8.
+  const wall = await page.evaluate(() => {
+    const w = window.__studio.engine.viewer.walk;
+    w.teleport(12.6, 6.3, 0, 90);
+    for (let i = 0; i < 80; i++) w.step(0.05);
+    return w.state;
+  });
+  check(wall.x < 13.8 - 0.12 - 0.2 && wall.x > 13.2, `a wall stops the walker (x ${wall.x.toFixed(2)} m, wall face at 13.68 m)`);
+  // A door lets through: from the living room north through the main entrance.
+  const door = await page.evaluate(() => {
+    const w = window.__studio.engine.viewer.walk;
+    w.teleport(12.15, 6.1, 0, 0);
+    for (let i = 0; i < 40; i++) w.step(0.05);
+    return w.state;
+  });
+  check(door.y > 7.2, `the main door lets the walker through (y ${door.y.toFixed(2)} m, wall at 6.9 m)`);
+  // Exit returns to the view.
+  await page.getByRole('button', { name: '退出漫游' }).click();
+  await page.waitForTimeout(600);
+  check((await page.evaluate(() => window.__studio.engine.viewer.walking)) === false, 'exit leaves walk mode');
+  await ctx.close();
+}
+
 /** 图册: the set renders in the page; thumbnails, preview, 4 PNGs of the right size. */
 async function sheets(opts, name) {
   if (!wanted(name)) return;
@@ -352,8 +408,12 @@ try {
       await p.getByRole('button', { name: '打开 AI 助手' }).click();
       await p.waitForTimeout(250);
     });
+    await studio3d(DESKTOP, 'studio-walk-desktop', '?walk=1&sun=winter&time=10:00', (p) => walkTo(p, 13.2, 6.3, 212));
+    await studio3d(PHONE, 'studio-walk-phone', '?walk=1&sun=winter&time=10:00', (p) => walkTo(p, 12.6, 2.4, 285));
+    await studio3d(DESKTOP, 'studio-walk-desktop-en', '?walk=1&lang=en', (p) => walkTo(p, 7.3, 8.6, 180));
     await compareWithRenderShots();
   }
+  await walkChecks();
   await sunAndCutChecks();
   await sheets(DESKTOP, 'studio-sheets-desktop');
   if (!smoke) await sheets(PHONE, 'studio-sheets-phone');

@@ -285,7 +285,7 @@ export class IllustrationViewer {
     const shade = toneToward(matTokens.floor, walkLight.floorShade);
     setToneFactors(p.floor, { sun, away: shade, shadow: shade });
     const white = { away: toneFactor(walkLight.wallShade), shadow: toneFactor(walkLight.wallShadow) };
-    setToneFactors(p.wall, white);
+    setToneFactors(p.wall, { ...white, ceiling: toneFactor(walkLight.ceiling) });
     for (const m of furniture) setToneFactors(m, white);
   }
 

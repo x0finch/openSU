@@ -306,6 +306,8 @@ export const walkLight = {
   wallShadow: '#DEDCD8',
   /** Interior floor in shade (final colour). */
   floorShade: '#D2CEC8',
+  /** Ceilings (white surfaces facing down). */
+  ceiling: '#EEECE8',
 } as const;
 
 export const tokens = { stage, shading, lighting, sun, lines, materials, furniture, patterns, entourage, cameras, cutaway, physical, cutawayLight, walk, walkLight } as const;

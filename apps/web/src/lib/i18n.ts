@@ -80,6 +80,15 @@ const zh = {
   'cut.label': '剖切',
   'cut.all': '全部',
 
+  'walk.enter': '漫游',
+  'walk.enterLong': '进入室内漫游',
+  'walk.exit': '退出漫游',
+  'walk.hint': 'WASD 或方向键移动 · 拖动环视 · Shift 加速',
+  'walk.hintTouch': '左下摇杆移动 · 拖动画面环视',
+  'walk.map': '当前位置',
+  'walk.goto': '去{level}',
+  'walk.joystick': '移动',
+
   'sheets.label': '图册',
   'sheets.generating': '正在生成 {n} / {total}',
   'sheets.ready': '{n} 张 · 1500 × 2000 PNG',
@@ -196,6 +205,15 @@ const en: Record<MessageKey, string> = {
 
   'cut.label': 'Cutaway',
   'cut.all': 'All',
+
+  'walk.enter': 'Walk',
+  'walk.enterLong': 'Walk through the house',
+  'walk.exit': 'Exit walk',
+  'walk.hint': 'WASD or arrow keys to move · drag to look · Shift to run',
+  'walk.hintTouch': 'Joystick to move · drag to look around',
+  'walk.map': 'Where you are',
+  'walk.goto': 'Go to {level}',
+  'walk.joystick': 'Move',
 
   'sheets.label': 'Sheets',
   'sheets.generating': 'Rendering {n} / {total}',

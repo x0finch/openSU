@@ -8,6 +8,7 @@ import { Loading } from './Loading';
 import { PlanView } from './PlanView';
 import { useDerived } from './useDerived';
 import { Viewer3D } from './Viewer3D';
+import { MobileWalkHUD, WalkHUD } from './WalkHUD';
 
 // The gallery pulls in @opensu/sheet (and with it three.js): its own lazy chunk.
 const SheetGallery = lazy(() => (import.meta.env.SSR ? new Promise<never>(() => {}) : import('./SheetGallery')));
@@ -48,6 +49,7 @@ function useInitialParams(): void {
     const cut = q.get('cut');
     if (cut) s.setCut(cut);
     if (q.get('panel') === 'open') s.setSheetOpen(true);
+    if (q.get('walk') === '1') s.setWalk(true);
     const lang = q.get('lang');
     if (lang === 'en' || lang === 'zh') s.setLang(lang);
   }, []);
@@ -60,6 +62,7 @@ export function Studio() {
   const derived = useDerived();
   const mode = useStudio((s) => s.mode);
   const level = useStudio((s) => s.level);
+  const walk = useStudio((s) => s.walk) && mode === '3d';
   const desktop = useIsDesktop();
   const [sheetH, setSheetH] = useState(0);
   const onSheetHeight = useCallback((h: number) => setSheetH(h), []);
@@ -111,11 +114,12 @@ export function Studio() {
               <SceneDock levels={derived?.levels ?? null} />
             </div>
           )}
-          {mode !== 'sheet' && (
+          {mode !== 'sheet' && !walk && (
             <div className="glass pointer-events-auto absolute right-6 bottom-6 rounded-ui p-1">
               <ZoomCluster />
             </div>
           )}
+          {walk && <WalkHUD derived={derived} />}
         </div>
       ) : (
         <>
@@ -125,6 +129,7 @@ export function Studio() {
               <ZoomCluster size="lg" />
             </div>
           )}
+          {walk && <MobileWalkHUD derived={derived} top={PHONE_HEADER} bottom={sheetH} />}
           <MobileSheet derived={derived} onHeight={onSheetHeight} />
           <MobileChat />
         </>

@@ -12,6 +12,7 @@ import { compass, hhmm, hourTicks } from '../lib/sun';
 import { VIEW_GROUPS } from '../lib/views';
 import type { Derived, LevelInfo } from './house-data';
 import { planCommands } from './PlanView';
+import { WalkButton } from './WalkHUD';
 
 const fmtArea = (a: number) => (Math.round(a * 10) / 10).toFixed(1);
 const fmtLen = (m: number) => String(Math.round(m * 10) / 10);
@@ -94,7 +95,8 @@ export function ModeSwitch({ size = 'md', className }: { size?: 'md' | 'lg'; cla
 
 export function ViewRail() {
   const t = useT();
-  const view = useStudio((s) => s.view);
+  const walk = useStudio((s) => s.walk);
+  const view = useStudio((s) => (walk ? null : s.view));
   const setView = useStudio((s) => s.setView);
   return (
     <nav aria-label={t('views.label')} className="glass pointer-events-auto flex w-[52px] flex-col items-center rounded-ui py-2">
@@ -108,6 +110,10 @@ export function ViewRail() {
           ))}
         </div>
       ))}
+      <div className="mt-2 flex flex-col items-center gap-0.5 border-t border-hairline pt-2">
+        <Caption className="mb-1 text-center tracking-normal normal-case">{t('walk.enter')}</Caption>
+        <WalkButton />
+      </div>
     </nav>
   );
 }
@@ -288,17 +294,23 @@ function SunNote() {
  */
 export function SceneDock({ levels }: { levels: LevelInfo[] | null }) {
   const t = useT();
+  // No cutaway while walking: the dock keeps the sun study only.
+  const walk = useStudio((s) => s.walk);
   return (
     <div className="glass pointer-events-auto flex max-w-[calc(100vw-200px)] flex-wrap items-center justify-center gap-x-1 gap-y-2 rounded-ui py-2 pr-2 pl-2.5">
-      <div className="flex items-center gap-1">
-        <Tip label={t('cut.label')} side="top">
-          <span className="grid size-7 place-items-center text-ink-2" aria-hidden="true">
-            <LayersIcon width={18} height={18} />
-          </span>
-        </Tip>
-        {levels ? <CutControl levels={levels} /> : <Skeleton w={160} />}
-      </div>
-      <span className="mx-2 h-5 w-px bg-hairline" aria-hidden="true" />
+      {!walk && (
+        <>
+          <div className="flex items-center gap-1">
+            <Tip label={t('cut.label')} side="top">
+              <span className="grid size-7 place-items-center text-ink-2" aria-hidden="true">
+                <LayersIcon width={18} height={18} />
+              </span>
+            </Tip>
+            {levels ? <CutControl levels={levels} /> : <Skeleton w={160} />}
+          </div>
+          <span className="mx-2 h-5 w-px bg-hairline" aria-hidden="true" />
+        </>
+      )}
       <div className="flex items-center gap-1">
         <Tip label={t('sun.study')} side="top">
           <span className="grid size-7 place-items-center text-ink-2" aria-hidden="true">
@@ -566,7 +578,7 @@ export function MobileSheet({ derived, onHeight }: { derived: Derived | null; on
                 <Caption className="mt-3 tracking-normal normal-case">{t('cut.label')}</Caption>
                 <div className="mt-2">{derived ? <CutControl levels={derived.levels} size="lg" className="bg-wash p-1" /> : <Skeleton w={200} />}</div>
                 <Caption className="mt-4 tracking-normal normal-case">{t('views.label')}</Caption>
-                <div className="mt-2 mb-1 grid grid-cols-5 gap-1.5" role="group" aria-label={t('views.label')}>
+                <div className="mt-2 mb-1 grid grid-cols-6 gap-1.5" role="group" aria-label={t('views.label')}>
                   {views.map((id) => (
                     <button
                       key={id}
@@ -583,6 +595,7 @@ export function MobileSheet({ derived, onHeight }: { derived: Derived | null; on
                       <span className={cx('text-2xs', view === id ? 'text-white/80' : 'text-ink-2')}>{t(`viewShort.${id}`)}</span>
                     </button>
                   ))}
+                  <WalkButton variant="tile" />
                   <button
                     type="button"
                     onClick={resetView}

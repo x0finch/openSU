@@ -43,6 +43,8 @@ uniform vec3 uShadowTone;
 uniform float uSunFullAt;
 uniform float uAwayBelow;
 uniform int uShadowLight;
+uniform vec3 uCeilingTone;
+uniform float uCeilingMix;
 float gSunDot = -1.0;
 float gSunVis = 1.0;
 int gLightIndex = 0;
@@ -64,6 +66,9 @@ const ILLUSTRATION_OUT = /* glsl */ `
   float litBand = smoothstep( uAwayBelow, uSunFullAt, gSunDot );
   vec3 sunBand = mix( uShadowTone, uSunTone, gSunVis );
   vec3 tone = mix( uAwayTone, sunBand, litBand );
+  // Ceilings (faces looking straight down) may take their own tone.
+  vec3 worldNormal = inverseTransformDirection( normal, viewMatrix );
+  tone = mix( tone, uCeilingTone, uCeilingMix * step( 0.9, - worldNormal.y ) );
   outgoingLight = diffuseColor.rgb * tone;
 }
 #include <envmap_fragment>
@@ -79,6 +84,8 @@ interface ToneUniforms {
   uSunTone: { value: Color };
   uAwayTone: { value: Color };
   uShadowTone: { value: Color };
+  uCeilingTone: { value: Color };
+  uCeilingMix: { value: number };
   /** The bands the material was created with. */
   base: { sun: Color; away: Color; shadow: Color };
 }
@@ -114,6 +121,8 @@ export interface ToneFactors {
   sun?: Color;
   away?: Color;
   shadow?: Color;
+  /** Faces looking straight down (ceilings), whatever the sun does. */
+  ceiling?: Color;
 }
 
 /** Linear factor that turns `albedo` into `target` (both sRGB hex). */
@@ -137,6 +146,8 @@ export function setToneFactors(mat: Material, f: ToneFactors | null): void {
   u.uSunTone.value.copy(f?.sun ?? u.base.sun);
   u.uAwayTone.value.copy(f?.away ?? u.base.away);
   u.uShadowTone.value.copy(f?.shadow ?? u.base.shadow);
+  u.uCeilingMix.value = f?.ceiling ? 1 : 0;
+  if (f?.ceiling) u.uCeilingTone.value.copy(f.ceiling);
 }
 
 /**
@@ -173,6 +184,8 @@ export function createShadedMaterial(color: string, opts: ShadedOptions = {}): M
     uSunTone: { value: base.sun.clone() },
     uAwayTone: { value: base.away.clone() },
     uShadowTone: { value: base.shadow.clone() },
+    uCeilingTone: { value: base.away.clone() },
+    uCeilingMix: { value: 0 },
     base,
   };
   toneUniforms.set(mat, uniforms);
@@ -182,6 +195,8 @@ export function createShadedMaterial(color: string, opts: ShadedOptions = {}): M
     shader.uniforms.uSunTone = uniforms.uSunTone;
     shader.uniforms.uAwayTone = uniforms.uAwayTone;
     shader.uniforms.uShadowTone = uniforms.uShadowTone;
+    shader.uniforms.uCeilingTone = uniforms.uCeilingTone;
+    shader.uniforms.uCeilingMix = uniforms.uCeilingMix;
     shader.uniforms.uSunFullAt = { value: sunFullAt };
     shader.uniforms.uAwayBelow = { value: awayBelow };
     shader.fragmentShader = shader.fragmentShader
