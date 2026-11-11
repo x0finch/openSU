@@ -70,6 +70,7 @@ export const stroke = {
   rail: 0.6,
   furniture: 0.75,
   furnitureDetail: 0.5,
+  hairline: 0.3,
   rug: 0.6,
   tree: 0.6,
   stair: 0.6,

@@ -11,7 +11,7 @@ import { furnishLevel } from './furnish/index';
 import { footprint, type Placement } from './furnish/types';
 import { bboxOfPoints, inflate, unionBox, type Rect } from './geom';
 import { attrs, f, pathOfRings, rectEl, View } from './svg';
-import { color, font, layout, SCALE } from './tokens';
+import { color, font, layout, SCALE, stroke } from './tokens';
 
 export interface PlanOptions {
   /** px per mm (default `SCALE`). */
@@ -107,20 +107,23 @@ export function renderPlanDetailed(house: ResolvedHouse, levelId: string, option
   out.push('<defs>'
     + `<filter id="soft" x="-20%" y="-20%" width="140%" height="140%"><feDropShadow${attrs({ dx: 0, dy: layout.furnitureShadowDy, stdDeviation: layout.furnitureShadowBlur, 'flood-color': color.shadow, 'flood-opacity': layout.furnitureShadowOpacity })}/></filter>`
     + `<pattern id="lawn" patternUnits="userSpaceOnUse" width="16" height="16"><rect width="16" height="16" fill="${color.lawn}"/><circle cx="4" cy="5" r="0.7" fill="${color.lawnDot}"/><circle cx="12" cy="13" r="0.7" fill="${color.lawnDot}"/></pattern>`
-    + `<pattern id="deck" patternUnits="userSpaceOnUse" width="${f(v.len(600))}" height="${f(v.len(150))}"><rect width="${f(v.len(600))}" height="${f(v.len(150))}" fill="${color.deck}"/><path d="M0,0.25H${f(v.len(600))}" stroke="${color.deckLine}" stroke-width="0.5"/></pattern>`
+    + `<pattern id="deck" patternUnits="userSpaceOnUse" width="${f(v.len(600))}" height="${f(v.len(150))}"><rect width="${f(v.len(600))}" height="${f(v.len(150))}" fill="${color.deck}"/><path d="M0,0.25H${f(v.len(600))}" stroke="${color.deckLine}" stroke-width="${stroke.furnitureDetail}"/></pattern>`
     + '</defs>');
   out.push(rectEl({ x0: 0, y0: 0, x1: width, y1: height }, { fill: color.page }));
 
   // Ground and canopies below.
   if (plan.plot) out.push(rectEl(v.rect(plan.plot), { fill: color.ground }));
-  for (const c of canopies) out.push(rectEl(v.rect(c), { fill: color.canopyBelow, stroke: color.canopyLine, 'stroke-width': 0.6 }));
+  for (const c of canopies) out.push(rectEl(v.rect(c), { fill: color.canopyBelow, stroke: color.canopyLine, 'stroke-width': stroke.canopy }));
 
   // Floors.
+  // One path per fill: adjacent rooms of the same tone show no anti-aliasing seam.
+  const byFill = new Map<string, string>();
   for (const sp of plan.spaces) {
     const fill = sp.outdoor ? groundFill(plan, sp.type) : (sp.type === 'bathroom' || sp.type === 'laundry' ? color.floorWet : color.floor);
     if (!fill) continue;
-    out.push(`<path${attrs({ d: pathOfRings(sp.rings, v), fill, 'fill-rule': 'evenodd' })}/>`);
+    byFill.set(fill, (byFill.get(fill) ?? '') + pathOfRings(sp.rings, v));
   }
+  for (const [fill, d] of byFill) out.push(`<path${attrs({ d, fill })}/>`);
   out.push(drawSlabEdges(plan, v));
 
   // Furniture: floor layer, then pieces, then counter tops; soft shadow on each group.

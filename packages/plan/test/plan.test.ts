@@ -1,4 +1,4 @@
-import { golden, resolve, type ResolvedHouse } from '@opensu/model';
+import { golden, resolve, type House, type ResolvedHouse } from '@opensu/model';
 import { describe, expect, it } from 'vitest';
 import { analyseLevel, chainPositions, checkPlan, furnishLevel, renderPlanDetailed, tokens } from '../src/index';
 
@@ -72,6 +72,21 @@ describe('golden floor plans', () => {
         expect(checkPlan(r), `${l.id} @ ${scale}`).toEqual([]);
         expect(r.missingLabels, `${l.id} @ ${scale}`).toEqual([]);
       }
+    }
+  });
+
+  it('handles a rotated north, no fence and an authored door swing', () => {
+    const h: House = structuredClone(golden);
+    h.site.northDeg = 25;
+    delete h.site.fence;
+    const door = h.levels[0]!.openings.find((o) => o.id === 'gf-d-bath')!;
+    Object.assign(door, { swing: { into: 'gf-hall', hinge: 'start' } });
+    const r = resolve(h);
+    for (const l of r.levels) {
+      const rep = renderPlanDetailed(r, l.id);
+      expect(checkPlan(rep), l.id).toEqual([]);
+      expect(rep.missingLabels, l.id).toEqual([]);
+      expect(rep.svg).toContain('rotate(25)');
     }
   });
 

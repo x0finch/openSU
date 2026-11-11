@@ -11,7 +11,7 @@ export function northArrow(cx: number, cy: number, deg: number, boxes: TextBox[]
   let g = `<circle${attrs({ cx: 0, cy: 0, r, fill: 'none', stroke: color.north, 'stroke-width': stroke.north })}/>`;
   // Needle: a slim kite, the east half filled.
   g += `<path${attrs({ d: `M0,${f(-tip)}L${f(r * 0.3)},${f(r * 0.62)}L0,${f(r * 0.36)}Z`, fill: color.north })}/>`;
-  g += `<path${attrs({ d: `M0,${f(-tip)}L${f(-r * 0.3)},${f(r * 0.62)}L0,${f(r * 0.36)}Z`, fill: '#FFFFFF', stroke: color.north, 'stroke-width': stroke.north * 0.8, 'stroke-linejoin': 'round' })}/>`;
+  g += `<path${attrs({ d: `M0,${f(-tip)}L${f(-r * 0.3)},${f(r * 0.62)}L0,${f(r * 0.36)}Z`, fill: color.page, stroke: color.north, 'stroke-width': stroke.north * 0.8, 'stroke-linejoin': 'round' })}/>`;
   let s = `<g transform="translate(${f(cx)} ${f(cy)})${deg ? ` rotate(${f(deg)})` : ''}">${g}</g>`;
   // "N" stays upright, just beyond the tip.
   const a = (deg * Math.PI) / 180;

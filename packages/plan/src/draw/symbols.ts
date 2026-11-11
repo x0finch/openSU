@@ -116,8 +116,8 @@ function body(p: Placement, W: number, D: number, k: number): string {
     case 'shower': {
       let s = R(x0, y0, W, D, base);
       const step = m(100);
-      for (let x = x0 + step; x < -x0 - 1; x += step) s += L(x, y0 + m(30), x, -y0 - m(40), { stroke: color.furnitureDetail, 'stroke-width': 0.3 });
-      for (let y = y0 + step; y < -y0 - 1; y += step) s += L(x0 + m(30), y, -x0 - m(30), y, { stroke: color.furnitureDetail, 'stroke-width': 0.3 });
+      for (let x = x0 + step; x < -x0 - 1; x += step) s += L(x, y0 + m(30), x, -y0 - m(40), { stroke: color.furnitureDetail, 'stroke-width': stroke.hairline });
+      for (let y = y0 + step; y < -y0 - 1; y += step) s += L(x0 + m(30), y, -x0 - m(30), y, { stroke: color.furnitureDetail, 'stroke-width': stroke.hairline });
       s += C(0, 0, m(45), detail);
       s += L(x0, D / 2, -x0, D / 2, { stroke: color.glassLine, 'stroke-width': stroke.furniture * 1.6 });
       s += L(x0 + W * 0.45, D / 2, x0 + W * 0.45 + W * 0.32, D / 2 - W * 0.32, { stroke: color.glassLine, 'stroke-width': stroke.furniture });
@@ -137,7 +137,7 @@ function body(p: Placement, W: number, D: number, k: number): string {
     }
     case 'outdoor-table': {
       let s = R(x0, y0, W, D, { ...wood, rx: m(20) });
-      for (let y = y0 + m(100); y < -y0 - 1; y += m(100)) s += L(x0 + m(20), y, -x0 - m(20), y, { stroke: color.woodLine, 'stroke-width': 0.3 });
+      for (let y = y0 + m(100); y < -y0 - 1; y += m(100)) s += L(x0 + m(20), y, -x0 - m(20), y, { stroke: color.woodLine, 'stroke-width': stroke.hairline });
       return s;
     }
     case 'bistro-table':
