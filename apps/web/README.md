@@ -9,7 +9,10 @@ edits the house through validated commands (`@opensu/agent`, see "AI
 assistant" below). The house and the chat transcript are autosaved in the
 browser (`localStorage` key `opensu.autosave.v1`; quota errors are ignored)
 until "恢复为模板 / Reset to template" (title block, phone sheet) clears it;
-`?sample=` links never read or write the save. The studio opens with our own
+an explicitly opened template (`?sample=t1|t2|t3`, the share page's
+"open in studio") always shows that template, never the save, and leaves
+the save alone until its first edit; that edit drops `?sample=` from the
+address and from then on the edited house is the saved one. The studio opens with our own
 default house (template T1 白墙坡顶小院; `?sample=t2` / `t3` open the other
 templates); the golden reference house is internal (`?sample=golden`). The
 studio title, the sheets and `/s/$id` show the house's own name.
