@@ -13,6 +13,8 @@ export const MIN_BEDROOM_SHORT_SIDE = 2700;
 export const MIN_BATHROOM_SHORT_SIDE = 1500;
 export const MIN_STAIR_WIDTH = 900;
 export const MIN_DOOR_WIDTH = 700;
+/** Minimum wall between two openings on the same wall segment. */
+export const MIN_OPENING_GAP = 200;
 
 /** Space types that must have at least one exterior window. */
 export const NEEDS_EXTERIOR_WINDOW = ['bedroom', 'living', 'kitchen'] as const;

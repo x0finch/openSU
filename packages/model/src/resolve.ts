@@ -28,6 +28,7 @@ export interface ResolvedSpace {
   area: number;
   edge?: Space['edge'];
   cover?: Space['cover'];
+  surface?: Space['surface'];
 }
 
 export interface ResolvedWall {
@@ -73,6 +74,8 @@ export interface ResolvedOpening {
   sill: number;
   spanLevels: number;
   insert?: Opening['insert'];
+  canopy?: Opening['canopy'];
+  panel?: Opening['panel'];
   /** Space ids on the [west|south, east|north] side. */
   sides: [string | null, string | null];
   /** Outward direction when hosted on a space side. */
@@ -131,6 +134,7 @@ export interface ResolvedRoof {
   ridge?: Roof['ridge'];
   eaveOffset: number;
   overhang: number;
+  vergeOverhang?: number;
   skylights: NonNullable<Roof['skylights']>;
 }
 
@@ -440,6 +444,8 @@ function placeOpening(grid: Grid, ctx: LevelCtx, o: Opening, problems: Issue[]):
     sides: [sideId(piece.sides[0]), sideId(piece.sides[1])],
   };
   if (o.insert) resolved.insert = o.insert;
+  if (o.canopy) resolved.canopy = o.canopy;
+  if (o.panel) resolved.panel = o.panel;
   if (facing) resolved.facing = facing;
   if (o.kind === 'door') {
     const swing = o.swing ? { ...o.swing, inferred: false } : inferSwing(grid, ctx, piece, lo, hi);
@@ -503,6 +509,7 @@ export function analyse(house: House): Analysis {
       if (s.nameEn) out.nameEn = s.nameEn;
       if (s.edge) out.edge = s.edge;
       if (s.cover) out.cover = s.cover;
+      if (s.surface) out.surface = s.surface;
       return out;
     });
     const sid = (n: number) => (n >= 0 ? level.spaces[n]!.id : null);
@@ -581,6 +588,7 @@ export function analyse(house: House): Analysis {
     if (r.pitchDeg !== undefined) out.pitchDeg = r.pitchDeg;
     if (r.fall) out.fall = r.fall;
     if (r.ridge) out.ridge = r.ridge;
+    if (r.vergeOverhang !== undefined) out.vergeOverhang = r.vergeOverhang;
     if (r.kind === 'canopy') {
       const lvl = house.levels.find((l) => l.id === r.onLevel);
       out.height = r.height ?? (lvl ? lvl.height - CANOPY_DROP : 0);

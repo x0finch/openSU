@@ -2,13 +2,13 @@
 // message says what is wrong and what to change, so an LLM can act on it.
 import {
   MIN_BATHROOM_SHORT_SIDE, MIN_BEDROOM_SHORT_SIDE, MIN_DOOR_WIDTH,
-  MIN_STAIR_WIDTH, NEEDS_EXTERIOR_WINDOW,
+  MIN_OPENING_GAP, MIN_STAIR_WIDTH, NEEDS_EXTERIOR_WINDOW,
 } from './constants';
 import {
   bboxOf, buildGrid, cellsOf, componentCount, largestRect, rectIndex, setArea,
 } from './grid';
 import type { Issue } from './issues';
-import { analyse, areAdjacent, type Analysis } from './resolve';
+import { analyse, areAdjacent, type Analysis, type Piece } from './resolve';
 import { House, isOutdoorType, type CellRect } from './schema';
 
 const m2 = (mm2: number) => `${(mm2 / 1e6).toFixed(2)} m²`;
@@ -93,8 +93,8 @@ function checkReferences(house: House): Issue[] {
         if (o === s.id) err('unknown-space', `Space "${s.id}" lists itself in openTo.`, where);
       }
       const outdoor = isOutdoorType(s.type);
-      if (!outdoor && (s.edge !== undefined || s.cover !== undefined)) {
-        issues.push({ code: 'outdoor-only', severity: 'warning', message: `Space "${s.id}" is ${s.type} (interior) but sets edge/cover, which only apply to outdoor spaces; they are ignored.`, where });
+      if (!outdoor && (s.edge !== undefined || s.cover !== undefined || s.surface !== undefined)) {
+        issues.push({ code: 'outdoor-only', severity: 'warning', message: `Space "${s.id}" is ${s.type} (interior) but sets edge/cover/surface, which only apply to outdoor spaces; they are ignored.`, where });
       }
     });
     level.openings.forEach((o) => {
@@ -211,6 +211,37 @@ function checkGeometry(house: House, an: Analysis): Issue[] {
 }
 
 function checkSwings(an: Analysis, issues: Issue[]): void {
+  for (const ctx of an.ctxs) {
+    for (const o of ctx.level.openings) {
+      if (o.canopy && o.kind !== 'door' && o.kind !== 'sliding-door') {
+        issues.push({ code: 'unsupported-attribute', severity: 'warning', message: `Opening "${o.id}" is a ${o.kind}; canopy only applies to doors and sliding doors and is ignored.`, where: { level: ctx.level.id, opening: o.id } });
+      }
+      if (o.panel && o.kind === 'void') {
+        issues.push({ code: 'unsupported-attribute', severity: 'warning', message: `Opening "${o.id}" is a void; panel is ignored.`, where: { level: ctx.level.id, opening: o.id } });
+      }
+    }
+    // Openings on the same wall segment need a pier of at least MIN_OPENING_GAP between them.
+    const byWall = new Map<Piece, typeof ctx.placed>();
+    for (const p of ctx.placed) {
+      const list = byWall.get(p.piece) ?? [];
+      list.push(p);
+      byWall.set(p.piece, list);
+    }
+    for (const list of byWall.values()) {
+      const sorted = [...list].sort((a, b) => a.lo - b.lo);
+      for (let i = 0; i + 1 < sorted.length; i++) {
+        const a = sorted[i]!, b = sorted[i + 1]!;
+        const gap = b.lo - a.hi;
+        if (gap > -0.5 && gap < MIN_OPENING_GAP) {
+          issues.push({
+            code: 'opening-spacing', severity: 'error',
+            message: `Openings "${a.opening.id}" and "${b.opening.id}" on the same wall of level "${ctx.level.id}" are only ${fmt(Math.max(0, gap))} mm apart (${fmt(a.lo)}..${fmt(a.hi)} and ${fmt(b.lo)}..${fmt(b.hi)}); leave at least ${MIN_OPENING_GAP} mm of wall between them, or merge them into one wider opening.`,
+            where: { level: ctx.level.id, opening: b.opening.id },
+          });
+        }
+      }
+    }
+  }
   for (const ctx of an.ctxs) {
     for (const o of ctx.level.openings) {
       if (!o.swing) continue;

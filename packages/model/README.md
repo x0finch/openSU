@@ -81,6 +81,15 @@ preinstalled Playwright Chromium; without it only SVGs are written.
   `CANOPY_DROP`), extended by `overhang` on every side. A space's
   `cover: 'canopy'` is shorthand for a canopy over the whole space (id
   `<space>:canopy`).
+- Opening extras: `canopy: { depth, above? }` on doors / sliding doors is a
+  thin slab over that opening (300 wider each side, `above` default 150 over
+  the head); `panel: 'start' | 'end'` is a timber side panel of about a
+  quarter of the width. Two windows of one space on adjacent faces that both
+  run to the shared corner form a corner window (the kernel joins them).
+- Outdoor `surface: 'deck' | 'paving' | 'gravel' | 'lawn'` overrides the
+  default finish (gardens gravel, courtyards / porches / carports paving).
+- Roofs: `overhang` is the eave overhang; `vergeOverhang` the side overhang
+  of mono / gable roofs (default 300 when `overhang` > 0, else 0).
 - Door swing: `swing: { into, hinge }` on doors (hinge `start` = west/south
   end of the opening). When absent, `resolve` infers it: into the interior
   side; between two interior spaces into the one that is not a hall/stair,
@@ -96,12 +105,15 @@ kitchen), `opening-off-edge`, `opening-not-adjacent`, `opening-too-wide`,
 `opening-no-wall`, `opening-overlap`, `span-no-wall`, `stair-misaligned`,
 `stair-space-type`, `min-size` (bedroom short side 2700, bathroom 1500,
 stair flight 900, door 700), `roof-params` (also canopies higher than their
-level), `gate-off-fence`, `swing` (swing into a space not beside the door).
+level), `gate-off-fence`, `swing` (swing into a space not beside the door),
+`opening-spacing` (less than 200 mm of wall between two openings on one wall
+segment).
 
 Warnings: `unsupported`, `roof-gap`, `open-to-not-adjacent`,
 `opening-too-tall` (against the level height, or the underside of a pitched
 roof on that level), `outdoor-only`, `unreachable` for upper outdoor spaces,
-`roof-params` for ignored roof fields, `swing` on non-doors.
+`roof-params` for ignored roof fields, `swing` on non-doors,
+`unsupported-attribute` (canopy on a window, panel on a void).
 
 ## Golden sample
 
@@ -114,6 +126,9 @@ balconies, terrace, porch and carport excluded).
 
 ## Schema changes
 
+Adopted in task 003 (review round): opening `canopy` and `panel`, corner
+windows, outdoor `surface`, roof `vergeOverhang`, `opening-spacing`.
+
 Adopted in task 003: `Gate { id, side, at, width, kind? }`, `Entourage
 { kind, at, rotationDeg? }`, door `swing`, `Roof.kind: 'canopy'` with
 `height`. The golden sample follows the 3D views for the middle bay's south
@@ -123,8 +138,7 @@ level-2 balcony cover.
 
 Still proposed (not applied):
 
-1. Canopy voids (the entry canopy has a hole for the tree) and canopies off
-   the grid (the shallow canopy over the west courtyard door).
+1. Canopy voids (the entry canopy has a hole for the tree).
 2. Balcony slabs projecting past the walls below and slab edge overhangs
    (dark bands in the 3D views); low priority.
 3. Fences: only the plot boundary. The reference has interior garden walls

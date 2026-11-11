@@ -280,6 +280,38 @@ describe('validate: canopies and door swings (task 003)', () => {
   });
 });
 
+describe('validate: opening spacing, canopies, panels, surfaces', () => {
+  it('opening-spacing: openings on one wall closer than 200 mm', () => {
+    const issues = broken((h) => {
+      L(h, 0).openings.push({ id: 'w-bed-2', kind: 'window', host: { space: 'bed', side: 'S' }, at: { from: 'start', offset: 2600 }, width: 600, height: 1500, sill: 900 });
+    });
+    expect(codes(issues)).toEqual(['error:opening-spacing']);
+    expect(issues[0]!.message).toMatch(/only 100 mm apart.*at least 200 mm.*merge them/);
+    const ok = broken((h) => {
+      L(h, 0).openings.push({ id: 'w-bed-2', kind: 'window', host: { space: 'bed', side: 'S' }, at: { from: 'start', offset: 2700 }, width: 600, height: 1500, sill: 900 });
+    });
+    expect(ok).toEqual([]);
+  });
+
+  it('canopy on a window and panel on a void are ignored with a warning; surface is outdoor-only', () => {
+    const issues = broken((h) => {
+      L(h, 0).openings.find((o) => o.id === 'w-bed')!.canopy = { depth: 800 };
+      L(h, 0).spaces.find((s) => s.id === 'living')!.surface = 'deck';
+    });
+    expect(codes(issues).sort()).toEqual(['warning:outdoor-only', 'warning:unsupported-attribute']);
+    expect(broken((h) => { L(h, 0).openings.find((o) => o.id === 'entry')!.canopy = { depth: 900, above: 100 }; })).toEqual([]);
+  });
+
+  it('openings may run to the end of their edge (corner windows)', () => {
+    const issues = broken((h) => {
+      const w = L(h, 0).openings.find((o) => o.id === 'w-living')!;
+      w.at = { from: 'start', offset: 0 };
+      L(h, 0).openings.push({ id: 'w-living-w', kind: 'window', host: { space: 'living', side: 'W' }, at: { from: 'start', offset: 0 }, width: 1200, height: 1500, sill: 900 });
+    });
+    expect(issues).toEqual([]);
+  });
+});
+
 describe('golden sample facts', () => {
   it('has the dimensioned grid and three levels', () => {
     const xs = golden.grid.x.map((g) => g.pos);

@@ -35,9 +35,12 @@
 //   tall slot windows spanning both floors with timber bands at the level-2
 //   floor, and a wide strip window (with a timber insert) on level 3. The
 //   3D views win (task 003): we are compared against them.
-// - Canopies (task 003): flat canopy roofs over the carport's gate end, the
-//   entry porch plus planter, and the level-2 south balcony. The shallow
-//   canopy over the west courtyard door is off the grid and left out.
+// - Canopies: a flat canopy roof over the entry porch and one over the
+//   level-2 south balcony; the small canopy over the west courtyard door is
+//   an opening canopy. The carport is open (ref-1).
+// - West block (ref-2, ref-4): timber side panels, a level-3 corner window
+//   wrapping the south-west corner, small windows on the west face, a deck
+//   in the south-west courtyard.
 // - Roof split between the two mono-pitch roofs is taken on grid line F
 //   (main wall); pitches and eave offsets are estimated from the elevations.
 //   The attic (level 3) is 1.8 m to the eaves; openings there are checked
@@ -119,7 +122,7 @@ export const golden: House = {
         // Outdoor, inside the plot fence.
         { id: 'gf-patio', name: '小院', nameEn: 'Senior room patio', type: 'courtyard', cells: [c('1', '2', 'K', 'L')], edge: 'none' },
         { id: 'gf-planter-n', name: '花池', nameEn: 'Planter', type: 'garden', cells: [c('2', '6', 'K', 'L')], edge: 'none' },
-        { id: 'gf-court-w', name: '庭院', nameEn: 'Courtyard', type: 'courtyard', cells: [c('1', '2', 'C', 'F')], edge: 'none' },
+        { id: 'gf-court-w', name: '庭院', nameEn: 'Courtyard', type: 'courtyard', cells: [c('1', '2', 'C', 'F')], edge: 'none', surface: 'deck' },
         { id: 'gf-garden-s', name: '花园', nameEn: 'South garden', type: 'garden', cells: [c('1', '6', 'A', 'C')], edge: 'none' },
         { id: 'gf-court-s', name: '庭院', nameEn: 'Courtyard', type: 'courtyard', cells: [c('6', '7', 'A', 'C')], edge: 'none' },
         { id: 'gf-planter-s', name: '花池', nameEn: 'Planter', type: 'garden', cells: [c('7', '10', 'A', 'C')], edge: 'none' },
@@ -128,16 +131,19 @@ export const golden: House = {
         { id: 'gf-porch', name: '入户', nameEn: 'Entry porch', type: 'porch', cells: [c('9', '10', 'F', 'G')], edge: 'none' },
         // Paved entry yard: the 1200 strip along the east fence plus the strip in front of the porch.
         { id: 'gf-yard', name: '入户庭院', nameEn: 'Entry yard', type: 'courtyard', cells: [c('10', '11', 'A', 'L'), c('7', '10', 'G', 'J')], edge: 'none' },
-        // 5300 x 2400 parking bay; the canopy over its gate end is a roof (canopy-carport).
+        // 5300 x 2400 parking bay, open to the sky (ref-1 shows the car in the open).
         { id: 'gf-carport', name: '车位', nameEn: 'Carport', type: 'carport', cells: [c('7', '10', 'J', 'L')], edge: 'none' },
       ],
       openings: [
         { id: 'gf-d-patio', kind: 'door', host: { space: 'gf-senior', side: 'N' }, at: start(2150), width: 800, height: 2100, sill: 0 },
         { id: 'gf-d-senior', kind: 'door', host: { space: 'gf-senior', side: 'E' }, at: start(200), width: 900, height: 2100, sill: 0 },
         { id: 'gf-w-senior', kind: 'window', host: { space: 'gf-senior', side: 'S' }, at: start(500), width: 1800, height: 1500, sill: 900 },
+        // Small high window on the west face (3D views).
+        { id: 'gf-w-senior-w', kind: 'window', host: { space: 'gf-senior', side: 'W' }, at: start(1600), width: 600, height: 900, sill: 1300 },
         { id: 'gf-d-bath', kind: 'door', host: { space: 'gf-bath', side: 'S' }, at: start(200), width: 800, height: 2100, sill: 0 },
         { id: 'gf-w-bath', kind: 'window', host: { space: 'gf-bath', side: 'N' }, at: start(200), width: 600, height: 600, sill: 1500 },
-        { id: 'gf-d-court', kind: 'door', host: { space: 'gf-hall', side: 'W' }, at: start(600), width: 800, height: 2100, sill: 0 },
+        // Courtyard door with a small canopy over it (south elevation).
+        { id: 'gf-d-court', kind: 'door', host: { space: 'gf-hall', side: 'W' }, at: start(600), width: 800, height: 2100, sill: 0, canopy: { depth: 900 } },
         { id: 'gf-d-store', kind: 'door', host: { between: ['gf-hall', 'gf-store'] }, at: start(200), width: 800, height: 2100, sill: 0 },
         // Two tall slot windows through the ground floor and level 2 (3D views),
         // with timber bands across the level-2 floor.
@@ -181,21 +187,23 @@ export const golden: House = {
       ],
       openings: [
         { id: 'l2-d-bed-w', kind: 'door', host: { space: 'l2-bed-w', side: 'E' }, at: start(200), width: 900, height: 2100, sill: 0 },
-        { id: 'l2-w-bed-w', kind: 'window', host: { space: 'l2-bed-w', side: 'S' }, at: start(500), width: 1800, height: 1500, sill: 900 },
+        { id: 'l2-w-bed-w', kind: 'window', host: { space: 'l2-bed-w', side: 'S' }, at: start(500), width: 1800, height: 1500, sill: 900, panel: 'start' },
+        { id: 'l2-w-bed-w-w', kind: 'window', host: { space: 'l2-bed-w', side: 'W' }, at: start(1400), width: 1000, height: 900, sill: 1100, panel: 'start' },
         { id: 'l2-d-bath', kind: 'door', host: { space: 'l2-bath', side: 'S' }, at: start(200), width: 800, height: 2100, sill: 0 },
         { id: 'l2-w-bath', kind: 'window', host: { space: 'l2-bath', side: 'N' }, at: start(200), width: 600, height: 600, sill: 1500 },
         { id: 'l2-d-bed-n', kind: 'door', host: { space: 'l2-bed-n', side: 'S' }, at: start(200), width: 850, height: 2100, sill: 0 },
-        { id: 'l2-w-bed-n', kind: 'window', host: { space: 'l2-bed-n', side: 'N' }, at: start(900), width: 1000, height: 1500, sill: 900 },
-        { id: 'l2-d-balcony-n', kind: 'door', host: { space: 'l2-bed-n', side: 'N' }, at: start(1900), width: 800, height: 2100, sill: 0 },
+        // One glazed unit onto the north balcony (window + door, ref-1).
+        { id: 'l2-sd-balcony-n', kind: 'sliding-door', host: { space: 'l2-bed-n', side: 'N' }, at: start(900), width: 1800, height: 2400, sill: 0 },
         // Tall slot window with a timber band at the attic floor (east face, 3D views).
         { id: 'l2-w-east-tall', kind: 'window', host: { space: 'l2-bed-n', side: 'E' }, at: start(800), width: 800, height: 4800, sill: 600, spanLevels: 2, insert: 'wood-panel' },
-        { id: 'l2-w-hall-w', kind: 'window', host: { space: 'l2-hall', side: 'W' }, at: start(600), width: 800, height: 1500, sill: 900 },
+        // Tall slot on the west face of the middle bay with a timber band at the attic floor (ref-2).
+        { id: 'l2-w-hall-w', kind: 'window', host: { space: 'l2-hall', side: 'W' }, at: start(600), width: 800, height: 3900, sill: 600, spanLevels: 2, insert: 'wood-panel' },
         { id: 'l2-w-hall-n', kind: 'window', host: { space: 'l2-hall', side: 'N' }, at: start(6700), width: 800, height: 1500, sill: 900 },
         { id: 'l2-d-master', kind: 'door', host: { space: 'l2-master', side: 'N' }, at: start(760), width: 900, height: 2100, sill: 0 },
         { id: 'l2-d-mbath', kind: 'door', host: { space: 'l2-master', side: 'N' }, at: start(1830), width: 850, height: 2100, sill: 0 },
         { id: 'l2-w-mbath', kind: 'window', host: { space: 'l2-mbath', side: 'E' }, at: start(450), width: 850, height: 900, sill: 1200 },
-        { id: 'l2-d-balcony-s', kind: 'door', host: { space: 'l2-master', side: 'S' }, at: start(700), width: 800, height: 2400, sill: 0 },
-        { id: 'l2-w-master', kind: 'window', host: { space: 'l2-master', side: 'S' }, at: start(1500), width: 2400, height: 2400, sill: 0 },
+        // One glazed unit onto the south balcony; its head stays below the balcony canopy.
+        { id: 'l2-sd-master', kind: 'sliding-door', host: { space: 'l2-master', side: 'S' }, at: start(700), width: 3200, height: 2300, sill: 0 },
       ],
       stairs: [
         { id: 'stair-2', space: 'l2-stair', kind: 'u', up: 'S' },
@@ -224,12 +232,14 @@ export const golden: House = {
       ],
       openings: [
         { id: 'l3-d-bed', kind: 'door', host: { space: 'l3-bed', side: 'E' }, at: start(200), width: 900, height: 2100, sill: 0 },
-        { id: 'l3-w-bed', kind: 'window', host: { space: 'l3-bed', side: 'S' }, at: start(500), width: 1800, height: 1500, sill: 900 },
+        // Corner window wrapping the south-west corner (both parts run to the
+        // corner), timber side panel at the north end of the west part.
+        { id: 'l3-w-bed', kind: 'window', host: { space: 'l3-bed', side: 'S' }, at: start(0), width: 1800, height: 1600, sill: 600 },
+        { id: 'l3-w-bed-w', kind: 'window', host: { space: 'l3-bed', side: 'W' }, at: start(0), width: 1300, height: 1600, sill: 600, panel: 'end' },
         { id: 'l3-d-bath', kind: 'door', host: { space: 'l3-bath', side: 'S' }, at: start(200), width: 800, height: 2100, sill: 0 },
         { id: 'l3-w-bath', kind: 'window', host: { space: 'l3-bath', side: 'N' }, at: start(200), width: 600, height: 600, sill: 1000 },
         { id: 'l3-d-study', kind: 'door', host: { space: 'l3-study', side: 'S' }, at: start(200), width: 850, height: 2100, sill: 0 },
         { id: 'l3-w-study', kind: 'window', host: { space: 'l3-study', side: 'N' }, at: start(900), width: 1800, height: 1300, sill: 300 },
-        { id: 'l3-w-hall-w', kind: 'window', host: { space: 'l3-hall', side: 'W' }, at: start(600), width: 800, height: 1500, sill: 900 },
         { id: 'l3-d-terrace', kind: 'door', host: { space: 'l3-hall', side: 'E' }, at: start(500), width: 850, height: 2100, sill: 0 },
         // Wide strip under the south eave: one part over the stair, one over the
         // family room with a timber insert at its west end (3D views).
@@ -241,19 +251,18 @@ export const golden: House = {
   ],
   roofs: [
     // North mono-pitch roof: high edge on line F, falls north; the higher one.
-    { id: 'roof-n', kind: 'mono', cells: [c('1', '7', 'F', 'K')], onLevel: 'L3', pitchDeg: 25, fall: 'N', eaveOffset: 300, overhang: 600 },
+    { id: 'roof-n', kind: 'mono', cells: [c('1', '7', 'F', 'K')], onLevel: 'L3', pitchDeg: 25, fall: 'N', eaveOffset: 300, overhang: 600, vergeOverhang: 100 },
     // South mono-pitch roof: falls south, lower, leaving a clerestory strip
     // under the north roof's high edge. Three-pane skylight over the family room.
     {
       id: 'roof-s', kind: 'mono', cells: [c('2', '7', 'C', 'F')], onLevel: 'L3', pitchDeg: 15, fall: 'S', eaveOffset: 0, overhang: 600,
       skylights: [{ at: [7300, 4300], width: 1800, length: 900 }],
     },
-    // Flat canopy over the gate end of the carport, reaching the east fence.
-    { id: 'canopy-carport', kind: 'canopy', cells: [c('9', '11', 'J', 'L')], onLevel: 'L1', height: 2700, overhang: 0 },
-    // Entry canopy over the porch and the planter in front of the hall.
-    { id: 'canopy-entry', kind: 'canopy', cells: [c('7', '10', 'F', 'G')], onLevel: 'L1', height: 3000, overhang: 300 },
+    // Entry canopy over the porch only (the planter beside it holds a tree).
+    { id: 'canopy-entry', kind: 'canopy', cells: [c('9', '10', 'F', 'G')], onLevel: 'L1', height: 3000, overhang: 150 },
     // Cover over the level-2 south balcony.
-    { id: 'canopy-balcony', kind: 'canopy', cells: [c('7', '10', 'B', 'C')], onLevel: 'L2', height: 2750, overhang: 200 },
+    // Low enough that a white wall band shows under the terrace slab (ref-4).
+    { id: 'canopy-balcony', kind: 'canopy', cells: [c('7', '10', 'B', 'C')], onLevel: 'L2', height: 2500, overhang: 200 },
   ],
   style: 'modern-pitched',
 };

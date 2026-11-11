@@ -127,7 +127,20 @@ describe('resolve', () => {
     expect(rr.roofs.find((x) => x.id === 'garden:canopy')).toMatchObject({ kind: 'canopy', fromSpace: 'garden', onLevel: 'L1', height: 2700, bbox: { x0: 8000, x1: 12000, y0: 0, y1: 10000 } });
     expect(rr.entourage).toEqual([{ kind: 'tree', at: [10000, 5000] }]);
     const g = resolve(golden);
-    expect(g.roofs.filter((x) => x.kind === 'canopy').map((x) => x.id)).toEqual(['canopy-carport', 'canopy-entry', 'canopy-balcony']);
+    expect(g.roofs.filter((x) => x.kind === 'canopy').map((x) => x.id)).toEqual(['canopy-entry', 'canopy-balcony']);
+  });
+
+  it('passes canopy, panel, surface and verge overhang through; corner windows reach the corner', () => {
+    const g = resolve(golden);
+    const l3 = g.levels[2]!;
+    const s = l3.openings.find((o) => o.id === 'l3-w-bed')!;
+    const w = l3.openings.find((o) => o.id === 'l3-w-bed-w')!;
+    expect(s.a).toEqual([0, 6900]);
+    expect(w.a).toEqual([0, 6900]);
+    expect(w.panel).toBe('end');
+    expect(g.levels[0]!.openings.find((o) => o.id === 'gf-d-court')!.canopy).toEqual({ depth: 900 });
+    expect(g.levels[0]!.spaces.find((x) => x.id === 'gf-court-w')!.surface).toBe('deck');
+    expect(g.roofs.find((r) => r.id === 'roof-n')!.vergeOverhang).toBe(100);
   });
 
   it('is deterministic', () => {

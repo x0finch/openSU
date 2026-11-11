@@ -77,6 +77,9 @@ export const Space = z.strictObject({
   edge: z.enum(['glass-rail', 'metal-rail', 'parapet', 'none']).optional(),
   /** Shorthand for a canopy roof over the whole space (see `Roof`). */
   cover: z.enum(['none', 'canopy']).optional(),
+  /** Outdoor only: ground / floor finish (default by type: gardens gravel,
+   *  courtyards / porches / carports paving, balconies / terraces deck). */
+  surface: z.enum(['deck', 'paving', 'gravel', 'lawn']).optional(),
 });
 export type Space = z.infer<typeof Space>;
 
@@ -107,6 +110,13 @@ export const Opening = z.strictObject({
   insert: z.literal('wood-panel').optional(),
   /** Doors only. */
   swing: DoorSwing.optional(),
+  /** Doors / sliding doors: a thin canopy slab over this opening, `depth`
+   *  out from the wall, 300 wider than the opening on each side, `above`
+   *  (default 150) above the head. */
+  canopy: z.strictObject({ depth: Length, above: NonNegative.optional() }).optional(),
+  /** A timber side panel (about a quarter of the width) at the start
+   *  (west / south) or end (east / north) of the opening. */
+  panel: z.enum(['start', 'end']).optional(),
 });
 export type Opening = z.infer<typeof Opening>;
 
@@ -152,7 +162,11 @@ export const Roof = z.strictObject({
   fall: Side.optional(),
   ridge: z.enum(['EW', 'NS']).optional(),
   eaveOffset: NonNegative.optional(),
+  /** Eaves (and canopy edges): overhang past the wall line. */
   overhang: NonNegative,
+  /** Mono / gable: side overhang at the verges (default: 300 when the roof
+   *  has an overhang, else 0). */
+  vergeOverhang: NonNegative.optional(),
   /** Canopy only: top of the slab above the floor of `onLevel`. */
   height: Length.optional(),
   skylights: z.array(Skylight).optional(),
