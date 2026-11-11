@@ -193,8 +193,8 @@ export function buildHouse(pal: Palette): Group {
   b.box(9100, 7000, 2950, 10900, 9300, 3070, pal.slab);
   b.box(1900, 2300, 2900, 3100, 5800, 3020, pal.slab);
   // Carport in the NE corner.
-  b.box(11000, 8000, 2550, 14750, 11750, 2700, pal.slab);
-  for (const [x, y] of [[11100, 8100], [14650, 8100], [11100, 11650], [14650, 11650]] as const) b.box(x - 50, y - 50, 0, x + 50, y + 50, 2550, pal.metal);
+  b.box(11000, 9400, 2550, 14750, 11750, 2700, pal.slab);
+  for (const [x, y] of [[11100, 9500], [14650, 9500], [11100, 11650], [14650, 11650]] as const) b.box(x - 50, y - 50, 0, x + 50, y + 50, 2550, pal.metal);
 
   // ---------------------------------------------------------------- site
   // Paving and deck.
@@ -238,7 +238,7 @@ export function buildHouse(pal: Palette): Group {
   // Low planting along the gravel strip and the court.
   const tufts: [number, number, number][] = [[3500, 800, 0.55], [4300, 650, 0.45], [6400, 900, 0.6], [7300, 700, 0.5], [8600, 850, 0.55], [12300, 900, 0.5], [13300, 700, 0.6], [2500, 3600, 0.5], [600, 1000, 0.6], [14400, 7000, 0.5]];
   tufts.forEach(([x, y, h], i) => place(createGrassTuft(treeMats, { height: h, seed: 40 + i }), x, y, 25));
-  place(createCar({ body: pal.carBody, glass: pal.carGlass, tyre: pal.tyre }), 12900, 9300, 25, Math.PI / 2);
+  place(createCar({ body: pal.carBody, glass: pal.carGlass, tyre: pal.tyre }), 12900, 9380, 25, Math.PI / 2);
   place(createPerson(pal.person, 'run', 1.72), 11300, 4300, eTop + 30);
   place(createPerson(pal.person, 'walk', 1.7, true), 9900, 7700, 25);
 
