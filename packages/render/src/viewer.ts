@@ -323,9 +323,29 @@ export class IllustrationViewer {
     setToneFactors(p.floor, { sun, away: shade, shadow: shade });
     const white = { away: toneFactor(walkLight.wallShade), shadow: toneFactor(walkLight.wallShadow) };
     setToneFactors(p.wall, { ...white, ceiling: toneFactor(walkLight.ceiling) });
-    // Under a pitched roof the ceiling is the underside of the roof boards.
-    setToneFactors(p.fascia, { ceiling: toneToward(matTokens.fascia, walkLight.ceiling) });
+    // Under a pitched roof the ceiling is the underside of the roof boards
+    // (indoors only: from a terrace the eaves keep their timber soffit).
+    this.walkIndoors = null;
+    this.updateWalkCeiling();
     for (const m of furniture) setToneFactors(m, white);
+  }
+
+  /** Indoors (roof boards read as ceiling) at the walker's last checked spot. */
+  private walkIndoors: boolean | null = null;
+  private walkCheckedAt = { x: NaN, y: NaN, z: NaN };
+
+  /** Roof-board undersides take the ceiling tone while the walker is inside a room. */
+  private updateWalkCeiling(): void {
+    const w = this.walker;
+    if (!w) return;
+    const st = w.state;
+    const c = this.walkCheckedAt;
+    if (this.walkIndoors !== null && Math.hypot(st.x - c.x, st.y - c.y) < 0.3 && Math.abs(st.z - c.z) < 0.2) return;
+    this.walkCheckedAt = { x: st.x, y: st.y, z: st.z };
+    const indoors = w.world.enclosed({ x: st.x, y: st.y, z: st.z });
+    if (indoors === this.walkIndoors) return;
+    this.walkIndoors = indoors;
+    setToneFactors(this.palette.fascia, indoors ? { ceiling: toneToward(matTokens.fascia, walkLight.ceiling) } : null);
   }
 
   /** True while walking. */
@@ -563,9 +583,25 @@ export class IllustrationViewer {
     const physical = mode.mode === 'physical';
     this.sun.setDirection(s.azimuthDeg, s.elevationDeg);
     this.sun.fit(this.bounds, physical ? physTokens.shadowReach : 0);
-    // Low sun: ground shadows fade out a few metres beyond the scene.
+    // Low sun (0 above lowSunFromDeg .. 1 at lowSunFullDeg): long ground
+    // shadows fade out a few metres beyond the scene, and the shadows over
+    // the plot's paving, gravel and decks lift towards the ground's shadow
+    // tone, so the plot is not a dark slab next to the light ground outside
+    // (whole house only; cutaway and walk set their own tones).
+    const t0 = physical ? Math.min(1, Math.max(0, (physTokens.lowSunFromDeg - s.elevationDeg) / (physTokens.lowSunFromDeg - physTokens.lowSunFullDeg))) : 0;
+    const low = t0 * t0 * (3 - 2 * t0);
     const b = this.bounds;
-    setShadowFade(this.palette.ground, physical && !b.isEmpty() ? [b.min.x, b.min.z, b.max.x, b.max.z] : null, physTokens.shadowFadeStart, physTokens.shadowFadeEnd);
+    const far = physTokens.shadowReach;
+    setShadowFade(
+      this.palette.ground,
+      low > 0 && !b.isEmpty() ? [b.min.x, b.min.z, b.max.x, b.max.z] : null,
+      far + (physTokens.shadowFadeStart - far) * low,
+      far + 10 + (physTokens.shadowFadeEnd - far - 10) * low,
+    );
+    if (physical && !this.cutLevel && !this.walker) {
+      const shadow = toneFactor(shading.shadowTone).lerp(toneFactor(shading.groundShadowTone), low);
+      for (const m of [this.palette.paving, this.palette.gravel, this.palette.deck]) setToneFactors(m, low > 0 ? { shadow } : null);
+    }
     // Glass passes sunlight in the sun study: its flat backing stops casting.
     for (const o of this.content?.children ?? []) {
       if (o.userData.paletteMaterial === this.palette.glassBacking) (o as Mesh).castShadow = !physical;
@@ -659,6 +695,7 @@ export class IllustrationViewer {
 
   renderNow(): SceneStats {
     this.updateBillboards();
+    this.updateWalkCeiling();
     if (this.shadowsDirty) {
       this.renderer.shadowMap.needsUpdate = true;
       this.shadowsDirty = false;

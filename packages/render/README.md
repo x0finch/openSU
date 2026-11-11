@@ -130,13 +130,20 @@ renders a single view with debug switches.
 - `src/style/ground.ts` - invisible ground that only shows received shadows.
   Ground-like materials (ground, paving, gravel, decks: `upLit`) never take
   the turned-away band on faces looking up, so a low sun never greys the
-  page or the plot; only cast shadows show. In the sun study the ground's
-  received shadows fade out between `physical.shadowFadeStart` and
-  `shadowFadeEnd` metres outside the scene bounds (`setShadowFade`), so
-  sunrise / sunset shadows never run off the viewport.
+  page or the plot; only cast shadows show. In the sun study, below
+  `physical.lowSunFromDeg` (fully at `lowSunFullDeg`), the ground's
+  received shadows fade out between `shadowFadeStart` and `shadowFadeEnd`
+  metres outside the scene bounds (`setShadowFade`), so sunrise / sunset
+  shadows never run off the viewport, and shadows on the plot's paving,
+  gravel and decks lift towards the ground's shadow tone, so the plot is
+  never a dark slab next to the light ground outside. Higher suns are
+  unchanged. In walk mode the roof-board undersides read as ceiling only
+  while the walker is inside a room (`WalkWorld.enclosed`); from a terrace
+  the eaves keep their timber soffit.
 - Framing around floating UI: `viewer.setFrameInsets({ top, right, bottom,
-  left })` (CSS px) frames every preset inside the canvas minus those
-  insets (the frustum is fitted to the free area, then grown to the whole
+  left } | alternatives[])` (CSS px) frames every preset inside the canvas
+  minus those insets (with alternatives, the one showing the subject
+  largest) (the frustum is fitted to the free area, then grown to the whole
   canvas: `applyFrameInsets`, `freeAspect` in `style/cameras.ts`);
   `viewer.cameraFor(preset)` gives that camera without applying it.
 - `src/style/cameras.ts` - presets: parallel axonometric, eye-level two-point

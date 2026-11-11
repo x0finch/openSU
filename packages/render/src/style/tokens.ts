@@ -152,9 +152,14 @@ export const physical = {
    */
   shadowReach: 30,
   /**
-   * Long low-sun shadows on the ground fade out between these distances
-   * (metres) outside the scene bounds, so they never cover the viewport.
+   * Low sun: below `lowSunFromDeg` (fully at `lowSunFullDeg`) the long
+   * shadows on the ground fade out between `shadowFadeStart` and
+   * `shadowFadeEnd` metres outside the scene bounds, so they never cover
+   * the viewport, and shadows on the plot's paving, gravel and decks lift
+   * towards `shading.groundShadowTone` (whole house shown).
    */
+  lowSunFromDeg: 15,
+  lowSunFullDeg: 4,
   shadowFadeStart: 0.5,
   shadowFadeEnd: 7,
 } as const;

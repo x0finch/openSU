@@ -162,6 +162,38 @@ export class WalkWorld {
     return ((best % 360) + 360) % 360;
   }
 
+  /**
+   * Of eight directions from `p`, how many see no wall or window within
+   * `reach` metres (open doors, glass doors, terraces, the garden).
+   */
+  openDirections(p: WalkPose, reach = 15): number {
+    let open = 0;
+    for (let k = 0; k < 8; k++) {
+      const a = (k * Math.PI) / 4;
+      const dx = Math.sin(a), dy = Math.cos(a);
+      let hit = false;
+      for (let d = 0.25; d <= reach && !hit; d += 0.25) {
+        const x = p.x + dx * d, y = p.y + dy * d;
+        for (const b of this.data.blockers) {
+          if ((b.kind === 'wall' || b.kind === 'window') && this.active(b, p.z) && rectDistance(b.rect, x, y) < 0.05) {
+            hit = true;
+            break;
+          }
+        }
+      }
+      if (!hit) open++;
+    }
+    return open;
+  }
+
+  /**
+   * Inside a room, not on a terrace or in the garden: most directions end at
+   * a wall or window (a few may leave through doors and glass doors).
+   */
+  enclosed(p: WalkPose, reach = 15): boolean {
+    return this.openDirections(p, reach) <= 3;
+  }
+
   /** Storey a body with feet at z is on (highest level floor at or below z + a margin). */
   levelAt(z: number, levels: readonly { id: string; elevation: number }[]): string | null {
     let id: string | null = null;

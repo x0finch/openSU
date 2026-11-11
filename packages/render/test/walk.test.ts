@@ -90,4 +90,12 @@ describe('walk world (golden sample)', () => {
     // With open floor ahead the preferred bearing is kept.
     expect(world.openHeading(atWall, 90, 1.5)).toBe(90);
   });
+
+  it('tells a room from the roof terrace (roof boards read as ceiling indoors only)', () => {
+    expect(world.enclosed(start())).toBe(true);
+    const l3 = levels.find((l) => l.id === 'L3')!;
+    const terrace = world.settle(13.3, 2.2, l3.elevation);
+    expect(terrace).not.toBeNull();
+    expect(world.enclosed(terrace!)).toBe(false);
+  });
 });
