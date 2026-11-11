@@ -103,6 +103,33 @@ describe('resolve', () => {
     expect(L2.walls.find((w) => w.sides[1] === 'bal')!.exterior).toBe(true);
   });
 
+  it('infers door swings: into the room, hinge near the wall end; authored swings win', () => {
+    // Hall (circulation) -> living: swings into the living room.
+    const dLiving = L1.openings.find((o) => o.id === 'd-living')!;
+    expect(dLiving.swing).toEqual({ into: 'living', hinge: 'start', inferred: true });
+    // Entrance: hall | yard (outdoor) -> into the hall; centred on a 4000 wall.
+    expect(L1.openings.find((o) => o.id === 'entry')!.swing).toMatchObject({ into: 'hall' });
+    // Living | bedroom: neither is circulation -> the smaller (equal: the first).
+    expect(L1.openings.find((o) => o.id === 'd-bed')!.swing?.into).toBe('living');
+    expect(L1.openings.find((o) => o.id === 'w-bed')!.swing).toBeUndefined();
+    const h = smallHouse();
+    h.levels[0]!.openings.find((o) => o.id === 'd-living')!.swing = { into: 'hall', hinge: 'end' };
+    expect(resolve(h).levels[0]!.openings.find((o) => o.id === 'd-living')!.swing).toEqual({ into: 'hall', hinge: 'end', inferred: false });
+  });
+
+  it('resolves canopies: authored heights, defaults and cover shorthand', () => {
+    const h = smallHouse();
+    h.roofs.push({ id: 'cp', kind: 'canopy', cells: [c('a', 'c', '3', '4')], onLevel: 'L1', overhang: 200 });
+    h.levels[0]!.spaces.find((s) => s.id === 'garden')!.cover = 'canopy';
+    h.entourage = [{ kind: 'tree', at: [10000, 5000] }];
+    const rr = resolve(h);
+    expect(rr.roofs.find((x) => x.id === 'cp')).toMatchObject({ kind: 'canopy', height: 2700, overhang: 200 });
+    expect(rr.roofs.find((x) => x.id === 'garden:canopy')).toMatchObject({ kind: 'canopy', fromSpace: 'garden', onLevel: 'L1', height: 2700, bbox: { x0: 8000, x1: 12000, y0: 0, y1: 10000 } });
+    expect(rr.entourage).toEqual([{ kind: 'tree', at: [10000, 5000] }]);
+    const g = resolve(golden);
+    expect(g.roofs.filter((x) => x.kind === 'canopy').map((x) => x.id)).toEqual(['canopy-carport', 'canopy-entry', 'canopy-balcony']);
+  });
+
   it('is deterministic', () => {
     expect(resolve(clone(golden))).toEqual(resolve(golden));
     expect(JSON.stringify(resolve(golden))).toBe(JSON.stringify(resolve(clone(golden))));

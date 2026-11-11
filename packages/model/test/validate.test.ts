@@ -250,6 +250,28 @@ describe('validate: one deliberately broken house per rule', () => {
   });
 });
 
+describe('validate: canopies and door swings (task 003)', () => {
+  it('roof-params: canopy higher than its level', () => {
+    const issues = broken((h) => { h.roofs.push({ id: 'cp', kind: 'canopy', cells: [c('a', 'c', '3', '4')], onLevel: 'L1', height: 3500, overhang: 0 }); });
+    expect(codes(issues)).toEqual(['error:roof-params']);
+  });
+
+  it('canopies need no pitch and do not count as roof cover', () => {
+    expect(validate({ ...smallHouse(), roofs: [...smallHouse().roofs, { id: 'cp', kind: 'canopy', cells: [c('a', 'c', '3', '4')], onLevel: 'L1', overhang: 300 }] })).toEqual([]);
+    const issues = broken((h) => { h.roofs[1] = { id: 'r-top', kind: 'canopy', cells: [c('a', 'c', '2', '3')], onLevel: 'L2', overhang: 0 }; });
+    expect(codes(issues)).toEqual(['warning:roof-gap', 'warning:roof-gap']);
+  });
+
+  it('swing: into must be a side of the door; windows ignore it', () => {
+    const bad = broken((h) => { L(h, 0).openings.find((o) => o.id === 'd-living')!.swing = { into: 'bed', hinge: 'start' }; });
+    expect(codes(bad)).toEqual(['error:swing']);
+    const win = broken((h) => { L(h, 0).openings.find((o) => o.id === 'w-bed')!.swing = { into: 'bed', hinge: 'start' }; });
+    expect(codes(win)).toEqual(['warning:swing']);
+    const ok = broken((h) => { L(h, 0).openings.find((o) => o.id === 'd-living')!.swing = { into: 'hall', hinge: 'end' }; });
+    expect(ok).toEqual([]);
+  });
+});
+
 describe('golden sample facts', () => {
   it('has the dimensioned grid and three levels', () => {
     const xs = golden.grid.x.map((g) => g.pos);

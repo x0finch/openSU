@@ -39,7 +39,9 @@ preinstalled Playwright Chromium; without it only SVGs are written.
   the spaces on the west/south and east/north side), outdoor edges with
   their rail treatment, openings on concrete walls with absolute ends,
   elevations, slab outlines, stair openings in the slab above; plus roofs
-  and total interior area. Output order and ids are deterministic. It
+  (authored, then canopies derived from `cover: 'canopy'`), explicit
+  entourage and total interior area. Doors carry a `swing` (authored or
+  inferred, see below). Output order and ids are deterministic. It
   assumes a schema-valid house; openings that cannot be placed are left out
   (`validate` explains why).
 - `debugSvg(resolved, levelIndex)` - the checking view as an SVG string.
@@ -73,7 +75,17 @@ preinstalled Playwright Chromium; without it only SVGs are written.
   doors, sliding doors, voids, `openTo`, adjacent outdoor spaces and stairs
   connect spaces.
 - Roof coverage: an interior cell with no space above it needs a roof whose
-  `onLevel` is that level.
+  `onLevel` is that level. Canopies do not count.
+- Canopies: `Roof.kind: 'canopy'` is a flat thin slab over its cells; its
+  top is `height` above the floor of `onLevel` (default: level height minus
+  `CANOPY_DROP`), extended by `overhang` on every side. A space's
+  `cover: 'canopy'` is shorthand for a canopy over the whole space (id
+  `<space>:canopy`).
+- Door swing: `swing: { into, hinge }` on doors (hinge `start` = west/south
+  end of the opening). When absent, `resolve` infers it: into the interior
+  side; between two interior spaces into the one that is not a hall/stair,
+  else the smaller; hinge at the end of the opening nearer its wall
+  segment's end. `swing.inferred` tells which.
 
 ## Validation rules
 
@@ -83,10 +95,12 @@ Errors: `schema`, `duplicate-id`, `unknown-grid-line`, `unknown-space`,
 kitchen), `opening-off-edge`, `opening-not-adjacent`, `opening-too-wide`,
 `opening-no-wall`, `opening-overlap`, `span-no-wall`, `stair-misaligned`,
 `stair-space-type`, `min-size` (bedroom short side 2700, bathroom 1500,
-stair flight 900, door 700), `roof-params`, `gate-off-fence`.
+stair flight 900, door 700), `roof-params` (also canopies higher than their
+level), `gate-off-fence`, `swing` (swing into a space not beside the door).
 
 Warnings: `unsupported`, `roof-gap`, `open-to-not-adjacent`,
-`opening-too-tall`, `outdoor-only`, `unreachable` for upper outdoor spaces.
+`opening-too-tall`, `outdoor-only`, `unreachable` for upper outdoor spaces,
+`roof-params` for ignored roof fields, `swing` on non-doors.
 
 ## Golden sample
 
@@ -96,28 +110,24 @@ lines, listed in the file header), 3 levels, 2 offset mono-pitch roofs.
 Total interior floor area 243.4 m² (ground 92.7, level 2 87.3, attic 63.4;
 balconies, terrace, porch and carport excluded).
 
-## Proposed schema changes (not applied)
+## Schema changes
 
-The golden sample needed these, and they are not in the task-002 schema:
+Adopted in task 003: `Gate { id, side, at, width, kind? }`, `Entourage
+{ kind, at, rotationDeg? }`, door `swing`, `Roof.kind: 'canopy'` with
+`height`. The golden sample follows the 3D views for the middle bay's south
+facade (two tall slot windows with timber bands, a level-3 strip window)
+and uses canopy roofs for the carport's gate end, the entry porch and the
+level-2 balcony cover.
 
-1. `Gate` was referenced but undefined. Defined minimally as
-   `{ id, side, at, width, kind?: 'swing' | 'sliding' }`.
-2. `Entourage` was referenced but undefined. Defined as a placeholder
-   `{ kind, at, rotationDeg? }`; the golden sample does not use it.
-3. Door swing: no way to say which side a door opens to or where its hinge
-   is (the drawings show both). Proposal: `swing?: { into: spaceId; hinge:
-   'start' | 'end' }` on doors.
-4. Partial canopies: `cover: 'canopy'` covers a whole outdoor space. The
-   reference has a canopy over only the gate end of the carport, a canopy
-   over the entry porch that also spans the planter (with a void for the
-   tree), and a shallow canopy over the west courtyard that is not on any
-   grid line. Proposal: canopies as roof-like elements `{ cells, onLevel,
-   voids? }` (e.g. `Roof.kind: 'canopy'`).
-5. Balcony slabs projecting past the walls below and slab edge overhangs
-   (dark bands in the 3D views) cannot be expressed; low priority.
-6. Fences: only the plot boundary. The reference has interior garden walls
+Still proposed (not applied):
+
+1. Canopy voids (the entry canopy has a hole for the tree) and canopies off
+   the grid (the shallow canopy over the west courtyard door).
+2. Balcony slabs projecting past the walls below and slab edge overhangs
+   (dark bands in the 3D views); low priority.
+3. Fences: only the plot boundary. The reference has interior garden walls
    and planter kerbs between outdoor spaces; outdoor | outdoor boundaries
    produce nothing. Proposal: optional `edges: { with: spaceId, treatment }`
    overrides between outdoor spaces.
-7. Stair shape: `kind` and `up` give no flight split or landing position;
-   the kernel will have to infer them from the stairwell.
+4. Stair shape: `kind` and `up` give no flight split or landing position;
+   the kernel infers them from the stairwell.

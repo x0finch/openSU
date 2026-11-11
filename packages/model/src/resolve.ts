@@ -1,14 +1,14 @@
 // Resolver: authored model -> derived elements (space polygons, walls,
 // openings on concrete walls, slabs, stair openings). Pure and deterministic.
-import { EXTERIOR_WALL_THICKNESS, INTERIOR_WALL_THICKNESS } from './constants';
+import { CANOPY_DROP, EXTERIOR_WALL_THICKNESS, INTERIOR_WALL_THICKNESS } from './constants';
 import {
   bboxOf, buildGrid, cellKey, cellsOf, rings, setArea, signedArea,
   type Grid, type Point,
 } from './grid';
 import type { Issue } from './issues';
 import {
-  isOutdoorType, type House, type Level, type Opening, type Roof, type Side,
-  type Space, type SpaceType, type Stair,
+  isOutdoorType, type DoorSwing, type Entourage, type House, type Level,
+  type Opening, type Roof, type Side, type Space, type SpaceType, type Stair,
 } from './schema';
 
 export type Orient = 'NS' | 'EW';
@@ -77,6 +77,9 @@ export interface ResolvedOpening {
   sides: [string | null, string | null];
   /** Outward direction when hosted on a space side. */
   facing?: Side;
+  /** Doors: authored swing, or inferred (into the room, hinge on the side
+   *  nearer a wall corner). `inferred` tells which. */
+  swing?: DoorSwing & { inferred: boolean };
 }
 
 export interface ResolvedStair {
@@ -117,6 +120,10 @@ export interface ResolvedRoof {
   id: string;
   kind: Roof['kind'];
   onLevel: string;
+  /** Space id when this canopy was derived from a space's `cover: 'canopy'`. */
+  fromSpace?: string;
+  /** Canopy: top of the slab above the floor of `onLevel` (mm). */
+  height?: number;
   rings: Point[][];
   bbox: { x0: number; x1: number; y0: number; y1: number } | null;
   pitchDeg?: number;
@@ -132,7 +139,10 @@ export interface ResolvedHouse {
   site: House['site'];
   grid: { x: { id: string; pos: number }[]; y: { id: string; pos: number }[] };
   levels: ResolvedLevel[];
+  /** Authored roofs, then canopies derived from `cover: 'canopy'`. */
   roofs: ResolvedRoof[];
+  /** Explicit entourage placements (empty: the engine places its own). */
+  entourage: Entourage[];
   /** Total interior floor area, mm². */
   interiorArea: number;
   style: string;
@@ -431,7 +441,31 @@ function placeOpening(grid: Grid, ctx: LevelCtx, o: Opening, problems: Issue[]):
   };
   if (o.insert) resolved.insert = o.insert;
   if (facing) resolved.facing = facing;
+  if (o.kind === 'door') {
+    const swing = o.swing ? { ...o.swing, inferred: false } : inferSwing(grid, ctx, piece, lo, hi);
+    if (swing) resolved.swing = swing;
+  }
   return { opening: o, levelIndex: ctx.index, orient: run.orient, line: run.line, lo, hi, piece, resolved };
+}
+
+const CIRCULATION: ReadonlySet<SpaceType> = new Set(['hall', 'stair']);
+
+/** Swing into the room: the interior side; between two interior spaces the
+ *  one that is not circulation, else the smaller. Hinge at the end of the
+ *  opening nearer the end of its wall segment (a corner). */
+function inferSwing(grid: Grid, ctx: LevelCtx, piece: Piece, lo: number, hi: number): (DoorSwing & { inferred: boolean }) | null {
+  const cand = piece.sides.filter((n) => n >= 0 && !isOutdoorType(ctx.level.spaces[n]!.type));
+  if (cand.length === 0) return null;
+  let into = cand[0]!;
+  if (cand.length === 2) {
+    const [a, b] = cand as [number, number];
+    const ca = CIRCULATION.has(ctx.level.spaces[a]!.type);
+    const cb = CIRCULATION.has(ctx.level.spaces[b]!.type);
+    if (ca !== cb) into = ca ? b : a;
+    else into = setArea(grid, ctx.spaceCells[a]!) <= setArea(grid, ctx.spaceCells[b]!) ? a : b;
+  }
+  const [plo, phi] = pieceRange(grid, piece);
+  return { into: ctx.level.spaces[into]!.id, hinge: lo - plo <= phi - hi ? 'start' : 'end', inferred: true };
 }
 
 function ringsOrEmpty(grid: Grid, cells: ReadonlySet<number>): Point[][] {
@@ -547,7 +581,24 @@ export function analyse(house: House): Analysis {
     if (r.pitchDeg !== undefined) out.pitchDeg = r.pitchDeg;
     if (r.fall) out.fall = r.fall;
     if (r.ridge) out.ridge = r.ridge;
+    if (r.kind === 'canopy') {
+      const lvl = house.levels.find((l) => l.id === r.onLevel);
+      out.height = r.height ?? (lvl ? lvl.height - CANOPY_DROP : 0);
+    }
     return out;
+  });
+  // `cover: 'canopy'` is shorthand for a canopy over the whole space.
+  ctxs.forEach((ctx) => {
+    ctx.level.spaces.forEach((s, si) => {
+      if (s.cover !== 'canopy' || !isOutdoorType(s.type)) return;
+      const cells = ctx.spaceCells[si]!;
+      roofs.push({
+        id: `${s.id}:canopy`, kind: 'canopy', onLevel: ctx.level.id, fromSpace: s.id,
+        height: ctx.level.height - CANOPY_DROP,
+        rings: ringsOrEmpty(grid, cells), bbox: bboxOf(grid, cells),
+        eaveOffset: 0, overhang: 0, skylights: [],
+      });
+    });
   });
 
   const resolved: ResolvedHouse = {
@@ -559,6 +610,7 @@ export function analyse(house: House): Analysis {
     },
     levels,
     roofs,
+    entourage: house.entourage ?? [],
     interiorArea: levels.reduce((s, l) => s + l.interiorArea, 0),
     style: house.style,
   };

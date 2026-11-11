@@ -25,8 +25,8 @@ export const At = z.union([
 ]);
 export type At = z.infer<typeof At>;
 
-/** Gate in the plot fence. Not specified in task 002; minimal shape needed
- *  by the golden sample (see README, "Proposed schema changes"). */
+/** Gate in the plot fence (adopted in task 003). `at` is measured along the
+ *  fence side from its west or south end. */
 export const Gate = z.strictObject({
   id: Id,
   side: Side,
@@ -75,6 +75,7 @@ export const Space = z.strictObject({
   cells: z.array(CellRect).min(1),
   openTo: z.array(Id).optional(),
   edge: z.enum(['glass-rail', 'metal-rail', 'parapet', 'none']).optional(),
+  /** Shorthand for a canopy roof over the whole space (see `Roof`). */
   cover: z.enum(['none', 'canopy']).optional(),
 });
 export type Space = z.infer<typeof Space>;
@@ -84,6 +85,15 @@ export const OpeningHost = z.union([
   z.strictObject({ between: z.tuple([Id, Id]) }),
 ]);
 export type OpeningHost = z.infer<typeof OpeningHost>;
+
+/** Door swing: the space the leaf opens into and the end of the opening
+ *  (start = west or south end) that carries the hinge. Optional; when absent
+ *  `resolve` infers it. */
+export const DoorSwing = z.strictObject({
+  into: Id,
+  hinge: z.enum(['start', 'end']),
+});
+export type DoorSwing = z.infer<typeof DoorSwing>;
 
 export const Opening = z.strictObject({
   id: Id,
@@ -95,6 +105,8 @@ export const Opening = z.strictObject({
   sill: NonNegative,
   spanLevels: z.number().int().min(1).optional(),
   insert: z.literal('wood-panel').optional(),
+  /** Doors only. */
+  swing: DoorSwing.optional(),
 });
 export type Opening = z.infer<typeof Opening>;
 
@@ -126,9 +138,14 @@ export const Skylight = z.strictObject({
 });
 export type Skylight = z.infer<typeof Skylight>;
 
+/**
+ * Roof over the cells, sitting on top of `onLevel`. Kind `canopy` is a flat
+ * thin slab (porch, carport, balcony cover) whose top is `height` above the
+ * floor of `onLevel` (default: that level's height minus 300).
+ */
 export const Roof = z.strictObject({
   id: Id,
-  kind: z.enum(['flat', 'mono', 'gable', 'hip']),
+  kind: z.enum(['flat', 'mono', 'gable', 'hip', 'canopy']),
   cells: z.array(CellRect).min(1),
   onLevel: Id,
   pitchDeg: z.number().min(0).max(75).optional(),
@@ -136,12 +153,15 @@ export const Roof = z.strictObject({
   ridge: z.enum(['EW', 'NS']).optional(),
   eaveOffset: NonNegative.optional(),
   overhang: NonNegative,
+  /** Canopy only: top of the slab above the floor of `onLevel`. */
+  height: Length.optional(),
   skylights: z.array(Skylight).optional(),
 });
 export type Roof = z.infer<typeof Roof>;
 
-/** Explicit entourage placement. Not specified in task 002; minimal
- *  placeholder (the engine normally places entourage itself). */
+/** Explicit entourage placement (adopted in task 003). The engine places
+ *  entourage itself; explicit entries replace its rules. `at` is a plan
+ *  position in mm. */
 export const Entourage = z.strictObject({
   kind: z.enum(['tree', 'shrub', 'bamboo', 'car', 'person']),
   at: z.tuple([z.number().finite(), z.number().finite()]),

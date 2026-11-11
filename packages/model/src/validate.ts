@@ -198,6 +198,7 @@ function checkGeometry(house: House, an: Analysis): Issue[] {
     }
   }
 
+  checkSwings(an, issues);
   checkOpeningOverlaps(an, issues);
   checkStairs(house, an, issues);
   checkReachability(house, an, issues);
@@ -206,6 +207,25 @@ function checkGeometry(house: House, an: Analysis): Issue[] {
   checkRoofs(house, an, issues);
   checkGates(house, issues);
   return issues;
+}
+
+function checkSwings(an: Analysis, issues: Issue[]): void {
+  for (const ctx of an.ctxs) {
+    for (const o of ctx.level.openings) {
+      if (!o.swing) continue;
+      const where = { level: ctx.level.id, opening: o.id };
+      if (o.kind !== 'door') {
+        issues.push({ code: 'swing', severity: 'warning', message: `Opening "${o.id}" is a ${o.kind}; swing only applies to doors and is ignored.`, where });
+        continue;
+      }
+      const p = ctx.placed.find((q) => q.opening.id === o.id);
+      if (!p) continue;
+      const sides = p.piece.sides.filter((n) => n >= 0).map((n) => ctx.level.spaces[n]!.id);
+      if (!sides.includes(o.swing.into)) {
+        issues.push({ code: 'swing', severity: 'error', message: `Door "${o.id}" swings into "${o.swing.into}", which is not on either side of it (${sides.join(', ') || 'nothing'}). Use one of those, or drop swing to let the engine choose.`, where });
+      }
+    }
+  }
 }
 
 function checkOpeningOverlaps(an: Analysis, issues: Issue[]): void {
@@ -386,7 +406,14 @@ function checkRoofs(house: House, an: Analysis, issues: Issue[]): void {
   const { ctxs, grid } = an;
   for (const r of house.roofs) {
     const where = { roof: r.id };
-    if (r.kind !== 'flat' && r.pitchDeg === undefined) issues.push({ code: 'roof-params', severity: 'error', message: `Roof "${r.id}" is ${r.kind} and needs pitchDeg.`, where });
+    if (r.kind === 'canopy') {
+      const lvl = house.levels.find((l) => l.id === r.onLevel);
+      if (lvl && r.height !== undefined && r.height > lvl.height) issues.push({ code: 'roof-params', severity: 'error', message: `Canopy "${r.id}" is ${fmt(r.height)} mm above the floor of "${lvl.id}", higher than that level (${fmt(lvl.height)} mm). Lower its height or put it on the level above.`, where });
+      if (r.pitchDeg !== undefined || r.fall || r.ridge || (r.skylights?.length ?? 0) > 0) issues.push({ code: 'roof-params', severity: 'warning', message: `Canopy "${r.id}" is a flat slab; pitchDeg, fall, ridge and skylights are ignored.`, where });
+    } else if (r.height !== undefined) {
+      issues.push({ code: 'roof-params', severity: 'warning', message: `Roof "${r.id}" is ${r.kind}; height only applies to canopies and is ignored.`, where });
+    }
+    if (r.kind !== 'flat' && r.kind !== 'canopy' && r.pitchDeg === undefined) issues.push({ code: 'roof-params', severity: 'error', message: `Roof "${r.id}" is ${r.kind} and needs pitchDeg.`, where });
     if (r.kind === 'mono' && !r.fall) issues.push({ code: 'roof-params', severity: 'error', message: `Mono-pitch roof "${r.id}" needs fall (direction of its low edge: N, S, E or W).`, where });
     if ((r.kind === 'gable' || r.kind === 'hip') && !r.ridge) issues.push({ code: 'roof-params', severity: 'error', message: `Roof "${r.id}" is ${r.kind} and needs ridge ("EW" or "NS").`, where });
     const bb = bboxOf(grid, cellsOf(grid, r.cells));
@@ -401,7 +428,7 @@ function checkRoofs(house: House, an: Analysis, issues: Issue[]): void {
     const coveredAbove = new Set<number>();
     if (above) above.spaceCells.forEach((c) => c.forEach((k) => coveredAbove.add(k)));
     const roofCells = new Set<number>();
-    for (const r of house.roofs) if (r.onLevel === ctx.level.id) cellsOf(grid, r.cells).forEach((k) => roofCells.add(k));
+    for (const r of house.roofs) if (r.onLevel === ctx.level.id && r.kind !== 'canopy') cellsOf(grid, r.cells).forEach((k) => roofCells.add(k));
     ctx.level.spaces.forEach((s, si) => {
       if (isOutdoorType(s.type)) return;
       const open = [...ctx.spaceCells[si]!].filter((k) => !coveredAbove.has(k) && !roofCells.has(k));
