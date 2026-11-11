@@ -3,6 +3,7 @@
 // composed on a 2D canvas at device resolution and encoded as PNG.
 import { type House, type ResolvedHouse, resolve } from '@opensu/model';
 import { buildHouse } from '@opensu/kernel';
+import { plantSite } from '@opensu/furnish';
 import { renderPlanDetailed } from '@opensu/plan';
 import { OffscreenView, type ViewPreset } from '@opensu/render';
 import { sheetFacts } from './facts.js';
@@ -24,6 +25,44 @@ export type SheetView = SheetViewId | ViewPreset;
 
 /** Hero views of the level sheets of a set, in level order (cycled). */
 export const LEVEL_HERO_VIEWS: readonly SheetViewId[] = ['axo-se', 'eye-sw', 'axo-ne'];
+
+/**
+ * True when a tree of the site planting stands between an eye-level camera
+ * (compass bearing `azimuthDeg` from the house) and the middle third of the
+ * house as seen from there: the hero would show a crown instead of the
+ * facade's centre.
+ */
+export function treeHidesFacade(house: ResolvedHouse, azimuthDeg: number): boolean {
+  const pts = house.levels[0]!.spaces.filter((s) => !s.outdoor).flatMap((s) => s.rings.flat());
+  if (!pts.length) return false;
+  const a = (azimuthDeg * Math.PI) / 180;
+  const d: [number, number] = [Math.sin(a), Math.cos(a)];
+  const r: [number, number] = [-Math.cos(a), Math.sin(a)];
+  const along = (p: readonly number[]) => p[0]! * r[0] + p[1]! * r[1];
+  const toward = (p: readonly number[]) => p[0]! * d[0] + p[1]! * d[1];
+  const xs = pts.map(along);
+  const lo = Math.min(...xs), hi = Math.max(...xs);
+  const c0 = lo + (hi - lo) / 3, c1 = hi - (hi - lo) / 3;
+  const front = Math.max(...pts.map(toward));
+  return plantSite(house).some((p) => {
+    if (p.kind !== 'ginkgo' && p.kind !== 'maple-red' && p.kind !== 'maple-green') return false;
+    if (p.level !== house.levels[0]!.id || toward([p.x, p.y]) < front - 6000) return false;
+    // Crown radius of the 3D generators (about a third of the height).
+    const R = (p.kind === 'ginkgo' ? 0.36 : 0.5) * p.height * 1000;
+    const x = along([p.x, p.y]);
+    return x + R > c0 && x - R < c1;
+  });
+}
+
+/**
+ * Hero views of the level sheets of this house: like `LEVEL_HERO_VIEWS`,
+ * but the eye-level view turns to the south-east when a tree would hide the
+ * facade's centre from the south-west (and not from the south-east).
+ */
+export function levelHeroViews(house: House | ResolvedHouse): SheetViewId[] {
+  const r = isResolved(house) ? house : resolve(house);
+  return LEVEL_HERO_VIEWS.map((v) => (v === 'eye-sw' && treeHidesFacade(r, SHEET_VIEWS['eye-sw'].azimuthDeg) && !treeHidesFacade(r, SHEET_VIEWS['eye-se'].azimuthDeg) ? 'eye-se' : v));
+}
 /** The two views of the views sheet of a set. */
 export const VIEWS_SHEET_VIEWS: readonly [SheetViewId, SheetViewId] = ['axo-sw', 'elev-south'];
 
@@ -71,6 +110,8 @@ class SheetContext {
   private readonly plans = new Map<string, Promise<PlanProbe>>();
   /** When set, every plan is drawn at most at this scale (one drawing scale across a set). */
   planScale: number | undefined;
+  /** Divider of the level sheets (page px); chosen with the plan scale. */
+  dividerY: number = Math.round(page.height * layout.dividerLevel);
 
   constructor(house: House | ResolvedHouse, scale: number) {
     this.house = isResolved(house) ? house : resolve(house);
@@ -310,7 +351,7 @@ async function composeSheet(ctx: SheetContext, o: SheetOptions): Promise<Blob> {
   const x1 = page.width - layout.marginX;
   if (o.kind === 'level') {
     if (!ctx.house.levels.some((l) => l.id === o.levelId)) throw new Error(`renderSheet: no level ${o.levelId}`);
-    const dividerY = Math.round(page.height * layout.dividerLevel);
+    const dividerY = ctx.dividerY;
     drawView(g, ctx, presetOf(o.view ?? LEVEL_HERO_VIEWS[0]!), { x0, y0: heroTop, x1, y1: dividerY - layout.gapAboveDivider }, layout.heroMaxWidth, 'bottom', keepout);
     drawDivider(g, s, dividerY);
     await breathe();
@@ -335,10 +376,32 @@ async function composeSheet(ctx: SheetContext, o: SheetOptions): Promise<Blob> {
 export async function renderSheet(house: House | ResolvedHouse, options: SheetOptions): Promise<Blob> {
   const ctx = new SheetContext(house, options.scale ?? 1);
   try {
+    if (options.kind === 'level' && ctx.house.levels.some((l) => l.id === options.levelId)) await choosePlanScale(ctx, [options.levelId]);
     return await composeSheet(ctx, options);
   } finally {
     ctx.dispose();
   }
+}
+
+/**
+ * One drawing scale for the plans of `levelIds`: the widest level spans
+ * `planWidthTarget` of the page width when the plans fit below a divider
+ * no higher than `dividerLevelMin`; otherwise the tallest level fills the
+ * height there. Smaller levels are drawn at the same scale (never shrunk
+ * further), and the divider sits just above the tallest plan.
+ */
+async function choosePlanScale(ctx: SheetContext, levelIds: readonly string[]): Promise<void> {
+  const masks = await Promise.all(levelIds.map(async (id) => (await ctx.plan(id)).mask));
+  const bw = Math.max(...masks.map((m) => m.bbox.x1 - m.bbox.x0));
+  const bh = Math.max(...masks.map((m) => m.bbox.y1 - m.bbox.y0));
+  if (bw <= 0 || bh <= 0) return;
+  const maxW = page.width - 2 * layout.marginX;
+  const minTop = Math.round(page.height * layout.dividerLevelMin) + layout.gapBelowDivider;
+  const k = Math.min((layout.planWidthTarget * page.width) / bw, maxW / bw, (layout.bottom - minTop) / bh);
+  ctx.planScale = k;
+  // The divider sits just above the plans (centred in their region), no lower than the default.
+  const top = layout.bottom - bh * k;
+  ctx.dividerY = Math.round(Math.min(page.height * layout.dividerLevel, Math.max(page.height * layout.dividerLevelMin, top - layout.gapBelowDivider)));
 }
 
 /**
@@ -349,10 +412,9 @@ export async function renderSheet(house: House | ResolvedHouse, options: SheetOp
 export async function renderSheetSet(house: House | ResolvedHouse, options: SheetSetOptions = {}): Promise<Blob[]> {
   const ctx = new SheetContext(house, options.scale ?? 1);
   try {
-    // One drawing scale for all plans of the set (the one that fits the largest).
-    const region = planRegion(Math.round(page.height * layout.dividerLevel));
-    const fits = await Promise.all(ctx.house.levels.map(async (l) => placeDrawing((await ctx.plan(l.id)).mask, region, { centerX: page.width / 2, alignY: 'center' }).scale));
-    ctx.planScale = Math.min(...fits);
+    // One drawing scale for all plans of the set.
+    await choosePlanScale(ctx, ctx.house.levels.map((l) => l.id));
+    const heroes = levelHeroViews(ctx.house);
     const out: Blob[] = [];
     const count = ctx.house.levels.length + 1;
     const done = (png: Blob) => {
@@ -361,7 +423,7 @@ export async function renderSheetSet(house: House | ResolvedHouse, options: Shee
     };
     for (const [i, level] of ctx.house.levels.entries()) {
       await breathe();
-      const view = LEVEL_HERO_VIEWS[i % LEVEL_HERO_VIEWS.length]!;
+      const view = heroes[i % heroes.length]!;
       done(await composeSheet(ctx, { kind: 'level', levelId: level.id, view, title: options.title, facts: i === 0 }));
     }
     await breathe();

@@ -56,6 +56,10 @@ export const layout = {
   lowerViewMaxWidth: 1260,
   /** Divider position as a fraction of the page height, per sheet kind. */
   dividerLevel: 0.46,
+  /** Plans of a set: the widest level should span this share of the page width... */
+  planWidthTarget: 0.78,
+  /** ...for which the divider of the level sheets may move up to here (the hero keeps the rest). */
+  dividerLevelMin: 0.37,
   dividerViews: 0.5,
   divider: 1.2,
   /** White space between a drawing and the divider. */
