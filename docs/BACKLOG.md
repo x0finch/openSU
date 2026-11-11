@@ -109,3 +109,20 @@ entourage, sheet formats (4:5, 2:3), privacy policy when accounts arrive.
   system prompt's framing and design rules, landing copy, hint copy
   mentioning Xiaohongshu / WeChat Moments, date chip formats, plan north
   arrow label, 坐北朝南 only valid north of the tropics.
+
+## From the v2 walkthrough recording (recorded before task 013's layout)
+- Performance suspicion: while the assistant's looping "working" indicator
+  animates, or a focused input's caret blinks, over frosted-glass
+  (backdrop-filter) panels, every frame becomes very expensive on software
+  GL (screenshots took ~25 s instead of ~0.2 s). Unverified on real
+  hardware; check on a low-end phone and consider dropping backdrop-filter
+  over the canvas.
+- The "working" indicator stays on while the summary is already streaming.
+- After a reload the changes card no longer offers undo (history is not
+  persisted); the reload shows ~0.5 s of blank page.
+- Eye-level SW: the tree hides much of the facade; NE axonometric: the
+  crown pokes into the top chrome.
+- Walk start faces a dark wall and the title text has no backing over
+  dark scenes.
+- Phone 3D crops the house close to the left edge.
+Re-check each against the task 013 layout before fixing; some may be gone.
