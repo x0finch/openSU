@@ -229,7 +229,7 @@ export function face(b: Builder, spec: FaceSpec): void {
     const rz1 = Math.min(zMax - 120, o.z1 + m, topOver(spec.outline, ru0, ru1) - 250);
     const d0 = rd;
     const d1 = rd + depth;
-    const inner = (pts: Vector3[], desired: Vector3, mat: Material) => b.add(polygons([oriented(pts, desired)]), mat, { cast: false });
+    const inner = (pts: Vector3[], desired: Vector3, mat: Material) => b.add(polygons([oriented(pts, desired)]), mat, { cast: true });
     inner([F(ru0, rz0, d1), F(ru1, rz0, d1), F(ru1, rz1, d1), F(ru0, rz1, d1)], N, b.pal.interior);
     inner([F(ru0, rz0, d0), F(ru0, rz1, d0), F(ru0, rz1, d1), F(ru0, rz0, d1)], U, b.pal.interior);
     inner([F(ru1, rz0, d0), F(ru1, rz1, d0), F(ru1, rz1, d1), F(ru1, rz0, d1)], U.clone().negate(), b.pal.interior);
@@ -242,7 +242,7 @@ export function face(b: Builder, spec: FaceSpec): void {
     if (ru0 < o.u0) front([F(ru0, rz0, d0), F(o.u0, rz0, d0), F(o.u0, rz1, d0), F(ru0, rz1, d0)]);
     if (ru1 > o.u1) front([F(o.u1, rz0, d0), F(ru1, rz0, d0), F(ru1, rz1, d0), F(o.u1, rz1, d0)]);
     if (rz1 > o.z1) front([F(o.u0, o.z1, d0), F(o.u1, o.z1, d0), F(o.u1, rz1, d0), F(o.u0, rz1, d0)]);
-    if (ring.length) b.add(polygons(ring), b.pal.interior, { cast: false, edges: false });
+    if (ring.length) b.add(polygons(ring), b.pal.interior, { cast: true, edges: false });
   }
 }
 
@@ -287,7 +287,9 @@ export function skylight(b: Builder, r: RoofSpec, xc: number, yc: number, w: num
   const pw = (w - 60 * (panes + 1)) / panes;
   for (let i = 0; i < panes; i++) {
     const x0 = xc - w / 2 + 60 + i * (pw + 60);
-    b.add(hexahedron(ring(x0, x0 + pw, yc - d / 2 + 60, yc + d / 2 - 60, t - 5), ring(x0, x0 + pw, yc - d / 2 + 60, yc + d / 2 - 60, t + 8)), b.pal.interior, { cast: false });
+    b.add(hexahedron(ring(x0, x0 + pw, yc - d / 2 + 60, yc + d / 2 - 60, t - 5), ring(x0, x0 + pw, yc - d / 2 + 60, yc + d / 2 - 60, t + 8)), b.pal.gravel, { cast: false });
+    const pane = ring(x0, x0 + pw, yc - d / 2 + 60, yc + d / 2 - 60, t + 14);
+    b.add(polygons([pane]), b.pal.glass, { edges: false, cast: false, receive: false });
   }
 }
 

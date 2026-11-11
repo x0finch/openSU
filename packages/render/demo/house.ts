@@ -230,7 +230,7 @@ export function buildHouse(pal: Palette): Group {
   };
   place(createGinkgo(treeMats, { height: 7.6, seed: 11 }), 1400, 2500);
   place(createGinkgo(treeMats, { height: 2.6, seed: 4, density: 1.1 }), 13000, 6200, eTop + 450);
-  place(createMaple(treeMats, { height: 2.4, seed: 8, color: 'red' }), 10300, 950);
+  place(createMaple(treeMats, { height: 2.9, seed: 8, color: 'red' }), 10300, 950);
   place(createMaple(treeMats, { height: 3.6, seed: 21, color: 'green' }), 10200, 10500);
   place(createBamboo(treeMats, { height: 3.6, seed: 2, stalks: 18, spread: 0.45 }), 14350, 3200);
   place(createBamboo(treeMats, { height: 3.4, seed: 9, stalks: 16, spread: 0.45 }), 14350, 5200);

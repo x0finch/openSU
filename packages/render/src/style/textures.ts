@@ -41,42 +41,53 @@ function rng(seed: number): () => number {
  */
 export function createRoofTileTexture(): CanvasTexture {
   const [canvas, ctx] = makeCanvas();
-  const rows = 4;
-  const cols = 5;
+  const rows = 6;
+  const cols = 6;
   const rowH = SIZE / rows;
   const colW = SIZE / cols;
-  ctx.fillStyle = m.roofTile;
+  ctx.fillStyle = m.roofTileLine;
   ctx.fillRect(0, 0, SIZE, SIZE);
-  const rand = rng(7);
-  for (let r = 0; r < rows; r++) {
+  // Colour per tile from its wrapped grid position so the pattern tiles seamlessly.
+  const shadeOf = (r: number, c: number) => {
+    const rr = ((r % rows) + rows) % rows;
+    const cc = ((c % cols) + cols) % cols;
+    const h = Math.sin(rr * 12.9898 + cc * 78.233) * 43758.5453;
+    return h - Math.floor(h);
+  };
+  const tile = (x0: number, y0: number, fill: string) => {
+    const g = 3;
+    const r = colW * 0.42;
+    const x1 = x0 + colW - g;
+    const xa = x0 + g;
+    const y1 = y0 + rowH * 1.18;
+    ctx.beginPath();
+    ctx.moveTo(xa, y0);
+    ctx.lineTo(x1, y0);
+    ctx.lineTo(x1, y1 - r);
+    ctx.quadraticCurveTo(x1, y1, x1 - r, y1);
+    ctx.lineTo(xa + r, y1);
+    ctx.quadraticCurveTo(xa, y1, xa, y1 - r);
+    ctx.closePath();
+    ctx.fillStyle = fill;
+    ctx.fill();
+    // Lighter exposed lower part of the tile (it catches the light).
+    ctx.save();
+    ctx.clip();
+    ctx.fillStyle = m.roofTileHighlight;
+    ctx.globalAlpha = 0.7;
+    ctx.fillRect(xa, y0 + rowH * 0.55, colW, rowH * 0.45);
+    ctx.restore();
+    ctx.strokeStyle = m.roofTileLine;
+    ctx.lineWidth = 5;
+    ctx.stroke();
+  };
+  // Upper rows overlap the row below them: paint from the bottom row up.
+  for (let r = rows; r >= -1; r--) {
     const y0 = r * rowH;
-    const shift = (r % 2) * colW * 0.5;
+    const shift = (((r % 2) + 2) % 2) * colW * 0.5;
     for (let c = -1; c <= cols; c++) {
-      const x0 = c * colW + shift;
-      // Upper part of each tile catches a little more light.
-      ctx.fillStyle = rand() > 0.5 ? m.roofTileHighlight : m.roofTile;
-      ctx.globalAlpha = 0.55;
-      ctx.beginPath();
-      ctx.moveTo(x0 + 3, y0);
-      ctx.lineTo(x0 + colW - 3, y0);
-      ctx.lineTo(x0 + colW - 3, y0 + rowH * 0.62);
-      ctx.quadraticCurveTo(x0 + colW * 0.5, y0 + rowH * 1.02, x0 + 3, y0 + rowH * 0.62);
-      ctx.closePath();
-      ctx.fill();
-      ctx.globalAlpha = 1;
-      // Rounded lower edge of the tile.
-      ctx.strokeStyle = m.roofTileLine;
-      ctx.lineWidth = 9;
-      ctx.beginPath();
-      ctx.moveTo(x0, y0 + rowH * 0.55);
-      ctx.quadraticCurveTo(x0 + colW * 0.5, y0 + rowH * 1.06, x0 + colW, y0 + rowH * 0.55);
-      ctx.stroke();
-      // Joint between neighbouring tiles.
-      ctx.lineWidth = 5;
-      ctx.beginPath();
-      ctx.moveTo(x0, y0);
-      ctx.lineTo(x0, y0 + rowH * 0.55);
-      ctx.stroke();
+      const v = shadeOf(r, c);
+      tile(c * colW + shift, y0, v > 0.75 ? m.roofTileShade : m.roofTile);
     }
   }
   return finish(canvas);

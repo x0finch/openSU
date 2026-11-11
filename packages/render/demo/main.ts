@@ -1,5 +1,4 @@
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
-import { Vector3 } from 'three';
 import { IllustrationViewer, type SceneStats } from '../src/index.js';
 import { buildHouse } from './house.js';
 import { VIEWS } from './views.js';
@@ -37,10 +36,7 @@ function applyView(id: string): void {
   controls?.dispose();
   if (!shot) {
     controls = new OrbitControls(viewer.camera, viewer.renderer.domElement);
-    const target = new Vector3();
-    viewer.camera.getWorldDirection(target);
-    // Orbit around the point the camera looks at, ~ scene centre distance.
-    controls.target.copy(viewer.camera.position).addScaledVector(target, viewer.camera.position.length());
+    controls.target.copy(viewer.focusPoint());
     controls.update();
     controls.addEventListener('change', () => viewer.requestRender());
   }

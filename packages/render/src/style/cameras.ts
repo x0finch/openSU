@@ -117,10 +117,30 @@ export function fitEyeLevelCamera(points: readonly Vector3[], azimuthDeg: number
   const hw = hh * aspect;
   cam.near = near;
   cam.far = hi * 4 + 200;
+  cam.userData.lensShift = { cx, cy, hh };
+  applyLensShift(cam, aspect);
+  return cam;
+}
+
+/** Re-applies a lens-shifted frustum (after a resize) keeping its vertical extent. */
+export function applyLensShift(cam: PerspectiveCamera, aspect: number): void {
+  const shift = cam.userData.lensShift as { cx: number; cy: number; hh: number } | undefined;
+  if (!shift) return;
+  const { cx, cy, hh } = shift;
+  const hw = hh * aspect;
+  const near = cam.near;
+  cam.aspect = aspect;
   cam.projectionMatrix.makePerspective((cx - hw) * near, (cx + hw) * near, (cy + hh) * near, (cy - hh) * near, near, cam.far);
   cam.projectionMatrixInverse.copy(cam.projectionMatrix).invert();
-  cam.userData.lensShift = true;
-  return cam;
+}
+
+/** Keeps an orthographic frustum's centre and height, adapting its width. */
+export function applyOrthoAspect(cam: OrthographicCamera, aspect: number): void {
+  const cx = (cam.left + cam.right) / 2;
+  const hw = ((cam.top - cam.bottom) / 2) * aspect;
+  cam.left = cx - hw;
+  cam.right = cx + hw;
+  cam.updateProjectionMatrix();
 }
 
 /** Builds the camera for a preset, framing the given world-space points. */

@@ -1,4 +1,4 @@
-import { type Box3, DirectionalLight, Matrix4, Object3D, Vector3 } from 'three';
+import { type Box3, Color, DirectionalLight, Matrix4, Object3D, Vector3 } from 'three';
 import { sun as sunTokens } from './tokens.js';
 
 /**
@@ -20,7 +20,7 @@ export class Sun {
   elevationDeg: number = sunTokens.elevationDeg;
 
   constructor() {
-    this.light = new DirectionalLight(0xffffff, 1);
+    this.light = new DirectionalLight(new Color(sunTokens.color), sunTokens.intensity);
     this.light.castShadow = true;
     this.light.target = this.target;
     const s = this.light.shadow;

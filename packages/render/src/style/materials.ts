@@ -168,7 +168,7 @@ export function createLineMaterial(color: string = lines.color, width: number = 
 }
 
 /** Tone bands used for foliage: lighter shading keeps leaves saturated. */
-const foliageTones: ToneBands = { sun: '#FFFFFF', away: '#D4D4D4', shadow: '#B4B4B4' };
+const foliageTones: ToneBands = { sun: shading.foliage.sun, away: shading.foliage.away, shadow: shading.foliage.shadow };
 
 /**
  * The full palette of style materials. Create one per renderer; the batcher
@@ -178,7 +178,7 @@ export function createPalette() {
   const roofTex = createRoofTileTexture();
   const woodTex = createWoodTexture(false);
   const deckTex = createWoodTexture(true);
-  const textured = (map: Texture) => createShadedMaterial('#FFFFFF', { map });
+  const textured = (map: Texture) => createShadedMaterial(shading.neutralAlbedo, { map });
   return {
     wall: createShadedMaterial(matTokens.wall),
     roofTile: textured(roofTex),
@@ -195,7 +195,7 @@ export function createPalette() {
     interior: createShadedMaterial(matTokens.interior, { side: DoubleSide }),
     interiorFloor: createShadedMaterial(matTokens.interiorFloor),
     trunk: createShadedMaterial(entourage.trunk),
-    leaves: createShadedMaterial('#FFFFFF', { side: DoubleSide, vertexColors: true, tones: foliageTones, sunFullAt: 0.05 }),
+    leaves: createShadedMaterial(shading.neutralAlbedo, { side: DoubleSide, vertexColors: true, tones: foliageTones, sunFullAt: shading.foliage.sunFullAt }),
     stalk: createShadedMaterial(entourage.bambooStalk, { tones: foliageTones }),
     person: createFlatMaterial(entourage.person, DoubleSide),
     carBody: createShadedMaterial(entourage.carBody),

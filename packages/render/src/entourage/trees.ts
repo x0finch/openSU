@@ -270,7 +270,7 @@ export function createGinkgo(mats: TreeMaterials, opts: TreeOptions = {}): Group
   return assemble('ginkgo', wood.build(), leaves.build(), mats);
 }
 
-/** Japanese maple: low spreading form, foliage in flat horizontal pads. */
+/** Japanese maple: thin trunk, spreading branches, foliage in flat layered pads. */
 export function createMaple(mats: TreeMaterials, opts: TreeOptions & { color?: 'red' | 'green' } = {}): Group {
   const h = opts.height ?? 3.2;
   const rand = createRand(opts.seed ?? 3);
@@ -278,28 +278,45 @@ export function createMaple(mats: TreeMaterials, opts: TreeOptions & { color?: '
   const base = red ? ent.redMaple : ent.greenMaple;
   const deep = red ? ent.redMapleDeep : ent.greenMapleDeep;
   const wood = createBuilder();
-  const twigs: Twig[] = [];
-  const top = new Vector3(range(rand, -0.15, 0.15), h * 0.28, range(rand, -0.15, 0.15));
-  addCylinder(wood, new Vector3(0, 0, 0), top, h * 0.022, h * 0.017, 7);
-  const params: BranchParams = { depth: 3, children: [4, 3, 3], spread: [0.75, 0.8, 0.7], ratio: 0.55, lift: [0.05, -0.05, -0.12], phyllotaxis: true };
-  growSkeleton(rand, wood, twigs, top, new Vector3(0, 1, 0), h * 0.45, h * 0.015, 0, params);
   const leaves = new LeafBuilder('maple');
   const density = opts.density ?? 1;
-  const size = 0.17;
-  for (const tw of twigs) {
-    if (tw.depth < 2) continue;
-    // Flat pad around the twig end.
-    const centre = tw.b.clone();
-    const n = Math.round(26 * density);
-    const radius = range(rand, 0.28, 0.42);
+  const s = h / 3.2;
+  const fork = new Vector3(range(rand, -0.1, 0.1) * s, h * 0.32, range(rand, -0.1, 0.1) * s);
+  addCylinder(wood, new Vector3(0, 0, 0), fork, 0.045 * s, 0.035 * s, 6);
+  const pad = (centre: Vector3, radius: number) => {
+    const n = Math.round(150 * density * (radius / 0.4) ** 2);
     for (let i = 0; i < n; i++) {
       const r = Math.sqrt(rand()) * radius;
       const t = rand() * Math.PI * 2;
-      const p = centre.clone().add(new Vector3(Math.cos(t) * r, range(rand, -0.05, 0.05) - r * 0.15, Math.sin(t) * r));
-      const along = new Vector3(Math.cos(t), range(rand, -0.3, 0.1), Math.sin(t));
-      const normal = new Vector3(range(rand, -0.35, 0.35), 1, range(rand, -0.35, 0.35));
-      leaves.add(p, along, normal, size * range(rand, 0.8, 1.2), leafColor(rand, base, deep));
+      // Slightly domed pad: higher in the middle.
+      const p = centre.clone().add(new Vector3(Math.cos(t) * r, (1 - (r / radius) ** 2) * radius * 0.25 + range(rand, -0.03, 0.03), Math.sin(t) * r));
+      const along = new Vector3(Math.cos(t), range(rand, -0.25, 0.15), Math.sin(t));
+      const normal = new Vector3(range(rand, -0.3, 0.3), 1, range(rand, -0.3, 0.3));
+      leaves.add(p, along, normal, 0.13 * range(rand, 0.8, 1.2), leafColor(rand, base, deep));
     }
+  };
+  const nBranches = 5;
+  let az = rand() * Math.PI * 2;
+  for (let b = 0; b < nBranches; b++) {
+    az += (Math.PI * 2) / nBranches + range(rand, -0.4, 0.4);
+    const tilt = range(rand, 0.5, 0.95);
+    const dir = new Vector3(Math.cos(az) * Math.sin(tilt), Math.cos(tilt), Math.sin(az) * Math.sin(tilt));
+    const len = h * range(rand, 0.32, 0.5);
+    const end = fork.clone().addScaledVector(dir, len);
+    addCylinder(wood, fork, end, 0.028 * s, 0.016 * s, 5);
+    // Each branch carries two or three near-horizontal arms ending in pads.
+    const arms = 2 + Math.floor(rand() * 2);
+    for (let a = 0; a < arms; a++) {
+      const t = range(rand, 0.45, 1);
+      const o = fork.clone().lerp(end, t);
+      const aaz = az + range(rand, -0.9, 0.9);
+      const adir = new Vector3(Math.cos(aaz), range(rand, -0.05, 0.3), Math.sin(aaz)).normalize();
+      const alen = h * range(rand, 0.12, 0.25);
+      const ae = o.clone().addScaledVector(adir, alen);
+      addCylinder(wood, o, ae, 0.014 * s, 0.008 * s, 4);
+      pad(ae, range(rand, 0.3, 0.48) * s);
+    }
+    pad(end, range(rand, 0.32, 0.5) * s);
   }
   return assemble(red ? 'red-maple' : 'green-maple', wood.build(), leaves.build(), mats);
 }

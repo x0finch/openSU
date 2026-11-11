@@ -34,12 +34,19 @@ export const shading = {
    * faces from flickering between bands.
    */
   sunFullAt: 0.1,
+  /** Neutral albedo for textured and vertex-coloured materials. */
+  neutralAlbedo: '#FFFFFF',
+  /** Lighter tone bands for foliage so leaves stay saturated. */
+  foliage: { sun: '#FFFFFF', away: '#D4D4D4', shadow: '#B4B4B4', sunFullAt: 0.05 },
   /** Polygon offset that pushes faces behind their own edge lines. */
   polygonOffsetFactor: 1,
   polygonOffsetUnits: 2,
 } as const;
 
 export const sun = {
+  color: '#FFFFFF',
+  /** Keep at 1: the illustration shader reads shadow visibility from the light colour. */
+  intensity: 1,
   /** Default sun elevation above the horizon, degrees. */
   elevationDeg: 48,
   /** Shadow map resolution (square). */
@@ -78,8 +85,9 @@ export const lines = {
 export const materials = {
   wall: '#FFFFFF',
   roofTile: '#4B4845',
-  roofTileLine: '#2B2928',
-  roofTileHighlight: '#5E5A55',
+  roofTileLine: '#2E2C2A',
+  roofTileHighlight: '#5F5A55',
+  roofTileShade: '#46433F',
   fascia: '#A46A42',
   wood: '#A9703F',
   woodLine: '#8E5A31',

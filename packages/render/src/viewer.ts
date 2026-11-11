@@ -15,7 +15,7 @@ import {
 } from 'three';
 import type { LineMaterial } from 'three/addons/lines/LineMaterial.js';
 import { bakeScene } from './style/batch.js';
-import { cameraForView, sunElevationFor, type ViewPreset } from './style/cameras.js';
+import { applyLensShift, applyOrthoAspect, cameraForView, sunElevationFor, type ViewPreset } from './style/cameras.js';
 import { createGround } from './style/ground.js';
 import { createLineMaterial, createPalette, type Palette } from './style/materials.js';
 import { Sun } from './style/sun.js';
@@ -132,6 +132,14 @@ export class IllustrationViewer {
     this.requestRender();
   }
 
+  /** Point on the view axis nearest to the scene centre (orbit target). */
+  focusPoint(): Vector3 {
+    const center = this.bounds.getCenter(new Vector3());
+    const dir = this.camera.getWorldDirection(new Vector3());
+    const pos = this.camera.getWorldPosition(new Vector3());
+    return pos.clone().addScaledVector(dir, dir.dot(center.sub(pos)));
+  }
+
   get currentView(): ViewPreset | null {
     return this.preset;
   }
@@ -147,14 +155,17 @@ export class IllustrationViewer {
     this.renderer.setSize(width, height, true);
     this.edgeMaterial.resolution.set(width, height);
     this.floorMaterial.resolution.set(width, height);
+    // Adapt the current camera in place (controls keep their reference).
     const cam = this.camera;
-    if (this.preset) {
-      this.setView(this.preset);
-    } else if (cam instanceof PerspectiveCamera && !cam.userData.lensShift) {
-      cam.aspect = width / height;
-      cam.updateProjectionMatrix();
+    const aspect = width / height;
+    if (cam instanceof PerspectiveCamera) {
+      if (cam.userData.lensShift) applyLensShift(cam, aspect);
+      else {
+        cam.aspect = aspect;
+        cam.updateProjectionMatrix();
+      }
     } else if (cam instanceof OrthographicCamera) {
-      cam.updateProjectionMatrix();
+      applyOrthoAspect(cam, aspect);
     }
     this.requestRender();
   }
