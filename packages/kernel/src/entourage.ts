@@ -40,7 +40,11 @@ function largestRect(ctx: Ctx, li: number, s: ResolvedSpace): Rect | null {
   return best;
 }
 
-export function placeEntourage(ctx: Ctx, covered: (x: number, y: number) => boolean): EntouragePlacement[] {
+/**
+ * `occupied(level, x, y, r)` tells whether a person of radius r (mm) at a
+ * plan point of a level would stand in furniture.
+ */
+export function placeEntourage(ctx: Ctx, covered: (x: number, y: number) => boolean, occupied: (li: number, x: number, y: number, r: number) => boolean = () => false): EntouragePlacement[] {
   const out: EntouragePlacement[] = [];
   const rnd = rand(ctx.seed);
   // Ground plants keep low foliage inside the fence's inner faces; terrace
@@ -206,6 +210,7 @@ export function placeEntourage(ctx: Ctx, covered: (x: number, y: number) => bool
     const cands: [number, number][] = [];
     for (let x = r[0] + 700; x <= r[2] - 600; x += 300) for (let y = r[1] + 600; y <= r[3] - 600; y += 300) {
       if (Math.abs(x - px) < 1100 && Math.abs(y - py) < 1000) continue;
+      if (occupied(terrace.li, x, y, 450)) continue;
       cands.push([x, y]);
     }
     standLevel = terrace.li;
@@ -250,6 +255,7 @@ export function placeEntourage(ctx: Ctx, covered: (x: number, y: number) => bool
         if ([[0, 0], [400, 0], [-400, 0], [0, 400], [0, -400]].some(([a, b]) => covered(x + a!, y + b!))) continue;
         // Clear of parked cars (4.9 x 1.9 m plus a margin).
         if (out.some((e) => e.kind === 'car' && Math.abs(e.position[0] / MM - x) < 2850 && Math.abs(e.position[1] / MM - y) < 1350)) continue;
+        if (occupied(0, x, y, 450)) continue;
         cands.push([x, y]);
       }
     }

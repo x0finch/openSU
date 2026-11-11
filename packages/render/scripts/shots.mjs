@@ -41,6 +41,13 @@ const SHOTS = {
   'cut-L1-sun-winter-15': 'view=cut-L1&sun=winter&time=15:00&year=2026',
   'cut-L1-sun-winter-10': 'view=cut-L1&sun=winter&time=10:00&year=2026',
   'cut-L2-sun-winter-10': 'view=cut-L2&sun=winter&time=10:00&year=2026',
+  // Furnished cutaways (presentation light) and the walk views.
+  'cut-L1-furnished': 'view=cut-L1',
+  'cut-L2-furnished': 'view=cut-L2',
+  'walk-living': 'walk=L1&at=13.2,6.3&heading=212&sun=winter&time=10:00&year=2026',
+  'walk-dining': 'walk=L1&at=12.6,2.4&heading=285&sun=winter&time=10:00&year=2026',
+  'walk-bedroom': 'walk=L2&at=10.3,5.0&heading=140&sun=winter&time=10:00&year=2026',
+  'walk-terrace': 'walk=L3&at=13.3,2.3&heading=305&sun=winter&time=10:00&year=2026',
 };
 const VIEWS = process.argv[2] ? process.argv[2].split(',') : Object.keys(SHOTS);
 const EXTRA = process.argv[3] ? `&${process.argv[3]}` : '';

@@ -9,7 +9,7 @@ import {
   type Texture,
 } from 'three';
 import { LineMaterial } from 'three/addons/lines/LineMaterial.js';
-import { entourage, lines, materials as matTokens, shading } from './tokens.js';
+import { entourage, furniture as furnTokens, lines, materials as matTokens, shading } from './tokens.js';
 import { createRoofTileTexture, createWoodTexture } from './textures.js';
 
 /** Grey-level tones for the three shading bands, as sRGB hex strings. */
@@ -274,6 +274,11 @@ export function createPalette() {
     gravel: createShadedMaterial(matTokens.gravel),
     floor: createShadedMaterial(matTokens.floor, { tones: { shadow: shading.floorShadowTone } }),
     cut: createFlatMaterial(matTokens.cut),
+    furniture: createShadedMaterial(furnTokens.body),
+    furnitureWood: createShadedMaterial(furnTokens.wood),
+    textile: createShadedMaterial(furnTokens.textile),
+    fixture: createShadedMaterial(furnTokens.fixture),
+    furnitureDark: createShadedMaterial(furnTokens.dark),
     glassBacking: createFlatMaterial(matTokens.glassBacking),
     recess: createFlatMaterial(matTokens.recess),
     trunk: createShadedMaterial(entourage.trunk),

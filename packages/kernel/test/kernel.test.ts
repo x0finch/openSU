@@ -28,7 +28,8 @@ describe('kernel: golden sample', () => {
   it('has no part without triangles and stays within budget', () => {
     for (const p of geo.parts) expect(p.indices.length, p.id).toBeGreaterThan(0);
     expect(geo.stats.triangles).toBeLessThan(60000);
-    expect(geo.parts.length).toBeLessThan(80);
+    // Parts are merged per material by the renderer; furniture adds a few per level.
+    expect(geo.parts.length).toBeLessThan(110);
   });
 
   it('has no overlapping coplanar faces', () => {
