@@ -1,0 +1,14 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "types": ["vite/client", "node"],
+    "paths": {
+      "@opensu/model": ["../model/src/index.ts"],
+      "@opensu/kernel": ["../kernel/src/index.ts"],
+      "@opensu/plan": ["../plan/src/index.ts"],
+      "@opensu/render": ["../render/src/index.ts"]
+    }
+  },
+  "include": ["src", "demo", "test", "vitest.config.ts"]
+}

@@ -1,0 +1,34 @@
+{
+  "name": "@opensu/sheet",
+  "version": "0.0.0",
+  "private": true,
+  "license": "AGPL-3.0-only",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json && vite build demo",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run",
+    "dev": "vite demo",
+    "shots": "node scripts/shots.mjs"
+  },
+  "dependencies": {
+    "@opensu/kernel": "workspace:*",
+    "@opensu/model": "workspace:*",
+    "@opensu/plan": "workspace:*",
+    "@opensu/render": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "22.20.5",
+    "typescript": "5.9.3",
+    "vite": "8.3.5",
+    "vitest": "5.1.0"
+  }
+}

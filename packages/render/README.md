@@ -56,5 +56,9 @@ renders a single view with debug switches.
   meshes (the one material-slot -> palette table, shadow flags), kernel
   feature edges and floor lines, entourage placements to the generators.
   Returns the object and the architecture's vertices for camera framing.
+- `src/offscreen.ts` - `OffscreenView`: renders views of a house into
+  detached canvases at a given size (optionally a window of a view framed
+  at another aspect) with its own hidden WebGL context; `dispose()`
+  releases it. Used by `@opensu/sheet`; leaves on-screen viewers alone.
 - `demo/` - the golden sample in the viewer, view switcher and orbit
   controls; `demo/views.ts` holds the five fixed views.

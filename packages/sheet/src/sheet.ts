@@ -1,0 +1,320 @@
+// Shareable sheets: a portrait page with the house name and facts, a hero
+// 3D view, a hairline divider and a coloured floor plan (or two 3D views),
+// composed on a 2D canvas at device resolution and encoded as PNG.
+import { type House, type ResolvedHouse, resolve } from '@opensu/model';
+import { buildHouse } from '@opensu/kernel';
+import { renderPlanDetailed } from '@opensu/plan';
+import { OffscreenView, type ViewPreset } from '@opensu/render';
+import { sheetFacts } from './facts.js';
+import { type InkMask, inkMask, placeDrawing, type Rect } from './layout.js';
+import { color, font, inkThreshold, layout, page } from './tokens.js';
+
+/** Hero views the sheets use (compass bearing from the house to the camera). */
+export const SHEET_VIEWS = {
+  'axo-se': { id: 'axo-se', label: 'Axo SE', kind: 'axo', azimuthDeg: 148 },
+  'axo-ne': { id: 'axo-ne', label: 'Axo NE', kind: 'axo', azimuthDeg: 50 },
+  'axo-sw': { id: 'axo-sw', label: 'Axo SW', kind: 'axo', azimuthDeg: 212 },
+  'eye-sw': { id: 'eye-sw', label: 'Eye SW', kind: 'eye', azimuthDeg: 222 },
+  'eye-se': { id: 'eye-se', label: 'Eye SE', kind: 'eye', azimuthDeg: 140 },
+  'elev-south': { id: 'elev-south', label: 'South', kind: 'elevation', azimuthDeg: 180 },
+} as const satisfies Record<string, ViewPreset>;
+
+export type SheetViewId = keyof typeof SHEET_VIEWS;
+export type SheetView = SheetViewId | ViewPreset;
+
+/** Hero views of the level sheets of a set, in level order (cycled). */
+export const LEVEL_HERO_VIEWS: readonly SheetViewId[] = ['axo-se', 'eye-sw', 'axo-ne'];
+/** The two views of the views sheet of a set. */
+export const VIEWS_SHEET_VIEWS: readonly [SheetViewId, SheetViewId] = ['axo-sw', 'elev-south'];
+
+interface CommonOptions {
+  /** Large header text; defaults to the house name. */
+  title?: string;
+  /** Show the fact lines (plot, area, style) under the title. Default true. */
+  facts?: boolean;
+  /** Resolution multiplier: 1 = 1500 x 2000 px, 2 = 3000 x 4000 px. */
+  scale?: number;
+}
+
+export type SheetOptions =
+  | (CommonOptions & { kind: 'level'; levelId: string; view?: SheetView })
+  | (CommonOptions & { kind: 'views'; views: readonly [SheetView, SheetView] });
+
+export interface SheetSetOptions {
+  title?: string;
+  scale?: number;
+}
+
+function isResolved(h: House | ResolvedHouse): h is ResolvedHouse {
+  return 'interiorArea' in h;
+}
+
+function presetOf(v: SheetView): ViewPreset {
+  return typeof v === 'string' ? SHEET_VIEWS[v] : v;
+}
+
+/** Shared state of one export: the resolved model and one offscreen WebGL context. */
+class SheetContext {
+  readonly house: ResolvedHouse;
+  readonly scale: number;
+  private view: OffscreenView | null = null;
+  private readonly plans = new Map<string, Promise<PlanProbe>>();
+  /** When set, every plan is drawn at most at this scale (one drawing scale across a set). */
+  planScale: number | undefined;
+
+  constructor(house: House | ResolvedHouse, scale: number) {
+    this.house = isResolved(house) ? house : resolve(house);
+    this.scale = scale;
+  }
+
+  get offscreen(): OffscreenView {
+    this.view ??= new OffscreenView(buildHouse(this.house), { pixelRatio: this.scale });
+    return this.view;
+  }
+
+  /** The level's plan SVG and where its ink is (rasterised once at its nominal size). */
+  plan(levelId: string): Promise<PlanProbe> {
+    let p = this.plans.get(levelId);
+    if (!p) {
+      p = probePlan(this.house, levelId);
+      this.plans.set(levelId, p);
+    }
+    return p;
+  }
+
+  dispose(): void {
+    this.view?.dispose();
+    this.view = null;
+  }
+}
+
+function newPage(scale: number): { canvas: HTMLCanvasElement; g: CanvasRenderingContext2D } {
+  const canvas = document.createElement('canvas');
+  canvas.width = Math.round(page.width * scale);
+  canvas.height = Math.round(page.height * scale);
+  const g = canvas.getContext('2d')!;
+  g.fillStyle = page.background;
+  g.fillRect(0, 0, canvas.width, canvas.height);
+  return { canvas, g };
+}
+
+function setFont(g: CanvasRenderingContext2D, size: number, weight: number, trackingEm = 0): void {
+  g.font = `${weight} ${size}px ${font.family}`;
+  (g as { letterSpacing?: string }).letterSpacing = `${(trackingEm * size).toFixed(2)}px`;
+}
+
+/**
+ * Title and fact lines; returns the block no hero ink may enter (page px).
+ * With `draw` false it only measures (text is painted last, over the views).
+ */
+function header(g: CanvasRenderingContext2D, s: number, title: string, facts: readonly string[], draw: boolean): Rect[] {
+  g.setTransform(s, 0, 0, s, 0, 0);
+  g.textBaseline = 'alphabetic';
+  g.textAlign = 'left';
+  g.fillStyle = color.title;
+  // Long names shrink (down to a floor) rather than run across the hero.
+  setFont(g, font.titleSize, font.titleWeight, font.titleTracking);
+  const fit = Math.max(font.titleMinSize, Math.min(font.titleSize, (font.titleSize * font.titleMaxWidth) / g.measureText(title).width));
+  setFont(g, fit, font.titleWeight, font.titleTracking);
+  if (draw) g.fillText(title, layout.marginX, layout.titleBaseline);
+  const pad = layout.headerClearance;
+  // One block per line, each anchored at the page corner: together a staircase.
+  const blocks: Rect[] = [{ x0: 0, y0: 0, x1: layout.marginX + g.measureText(title).width + pad, y1: layout.titleBaseline + fit * 0.22 + pad }];
+  g.fillStyle = color.fact;
+  setFont(g, font.factSize, font.factWeight);
+  facts.forEach((line, i) => {
+    const y = layout.firstFactBaseline + i * font.factLeading;
+    if (draw) g.fillText(line, layout.marginX, y);
+    blocks.push({ x0: 0, y0: 0, x1: layout.marginX + g.measureText(line).width + pad, y1: y + font.factSize * 0.22 + pad });
+  });
+  g.setTransform(1, 0, 0, 1, 0, 0);
+  return blocks;
+}
+
+function drawDivider(g: CanvasRenderingContext2D, s: number, y: number): void {
+  g.setTransform(1, 0, 0, 1, 0, 0);
+  g.fillStyle = color.divider;
+  const h = Math.max(1, Math.round(layout.divider * s));
+  g.fillRect(0, Math.round(y * s), Math.round(page.width * s), h);
+}
+
+function drawFooter(g: CanvasRenderingContext2D, s: number): void {
+  g.setTransform(s, 0, 0, s, 0, 0);
+  g.fillStyle = color.footer;
+  g.textAlign = 'right';
+  setFont(g, font.footerSize, 400, font.footerTracking);
+  // Trailing tracking would push the mark off the margin.
+  g.fillText('openSU', page.width - layout.marginX + font.footerTracking * font.footerSize, layout.footerBaseline);
+  g.setTransform(1, 0, 0, 1, 0, 0);
+  g.textAlign = 'left';
+}
+
+/** Draws an image 1:1 in device pixels, multiplied onto the page (its white never covers anything). */
+function blit(g: CanvasRenderingContext2D, paint: () => void): void {
+  g.setTransform(1, 0, 0, 1, 0, 0);
+  g.globalCompositeOperation = 'multiply';
+  paint();
+  g.globalCompositeOperation = 'source-over';
+}
+
+function maskOf(c: HTMLCanvasElement): InkMask {
+  const d = c.getContext('2d')!.getImageData(0, 0, c.width, c.height).data;
+  return inkMask(d, c.width, c.height, inkThreshold);
+}
+
+/** Renders a 3D view so its ink fills `region` as well as it can (page px). */
+function drawView(g: CanvasRenderingContext2D, ctx: SheetContext, preset: ViewPreset, region: Rect, maxWidth: number, alignY: 'bottom' | 'center', keepout?: readonly Rect[]): void {
+  const s = ctx.scale;
+  const aspect = (region.x1 - region.x0) / (region.y1 - region.y0);
+  const pw = aspect >= 1 ? layout.probeSize : Math.round(layout.probeSize * aspect);
+  const ph = aspect >= 1 ? Math.round(layout.probeSize / aspect) : layout.probeSize;
+  let margin: number = layout.probeMargin;
+  let mask: InkMask;
+  let framed: ViewPreset;
+  for (let attempt = 0; ; attempt++) {
+    framed = { ...preset, margin };
+    // Probe at 1x: only the ink outline matters.
+    mask = maskOf(ctx.offscreen.render(framed, { width: pw / s, height: ph / s }));
+    if (!mask.touchesBorder || attempt >= 3) break;
+    margin += 0.08;
+  }
+  const bw = mask.bbox.x1 - mask.bbox.x0;
+  const p = placeDrawing(mask, region, { centerX: page.width / 2, alignY, keepout, maxScale: bw > 0 ? maxWidth / bw : undefined });
+  const k = p.scale;
+  const pad = layout.inkPad;
+  const x = Math.round(p.x) - pad;
+  const y = Math.round(p.y) - pad;
+  const w = Math.round((mask.bbox.x1 - mask.bbox.x0) * k) + 2 * pad;
+  const h = Math.round((mask.bbox.y1 - mask.bbox.y0) * k) + 2 * pad;
+  const fx0 = (mask.bbox.x0 - pad / k) / mask.width;
+  const fy0 = (mask.bbox.y0 - pad / k) / mask.height;
+  const win = { x0: fx0, y0: fy0, x1: fx0 + w / (k * mask.width), y1: fy0 + h / (k * mask.height) };
+  const img = ctx.offscreen.render(framed, { width: w, height: h, frameAspect: mask.width / mask.height, window: win });
+  blit(g, () => g.drawImage(img, Math.round(x * s), Math.round(y * s)));
+}
+
+async function rasterSvg(svg: string, width: number, height: number, scale: number): Promise<HTMLImageElement> {
+  const w = Math.max(1, Math.round(width * scale));
+  const h = Math.max(1, Math.round(height * scale));
+  const sized = svg.replace(/<svg\b[^>]*>/, (tag) => tag.replace(/\swidth="[^"]*"/, ` width="${w}"`).replace(/\sheight="[^"]*"/, ` height="${h}"`));
+  const url = URL.createObjectURL(new Blob([sized], { type: 'image/svg+xml' }));
+  try {
+    const img = new Image();
+    img.src = url;
+    await img.decode();
+    return img;
+  } finally {
+    URL.revokeObjectURL(url);
+  }
+}
+
+interface PlanProbe {
+  svg: string;
+  /** Nominal SVG size (px). */
+  width: number;
+  height: number;
+  /** Ink of the plan rasterised at its nominal size. */
+  mask: InkMask;
+}
+
+async function probePlan(house: ResolvedHouse, levelId: string): Promise<PlanProbe> {
+  const plan = renderPlanDetailed(house, levelId);
+  const img = await rasterSvg(plan.svg, plan.width, plan.height, 1);
+  const c = document.createElement('canvas');
+  c.width = img.width;
+  c.height = img.height;
+  c.getContext('2d')!.drawImage(img, 0, 0);
+  return { svg: plan.svg, width: plan.width, height: plan.height, mask: maskOf(c) };
+}
+
+function planRegion(dividerY: number): Rect {
+  return { x0: layout.marginX, y0: dividerY + layout.gapBelowDivider, x1: page.width - layout.marginX, y1: layout.bottom };
+}
+
+/** Draws the level's floor plan (with its own title) to fill `region`. */
+async function drawPlan(g: CanvasRenderingContext2D, ctx: SheetContext, levelId: string, region: Rect): Promise<void> {
+  const s = ctx.scale;
+  const plan = await ctx.plan(levelId);
+  const { mask } = plan;
+  const p = placeDrawing(mask, region, { centerX: page.width / 2, alignY: 'center', maxScale: ctx.planScale });
+  const k = (p.scale * mask.width) / plan.width; // page px per SVG px
+  const img = await rasterSvg(plan.svg, plan.width, plan.height, k * s);
+  const pad = layout.inkPad;
+  const f = img.width / mask.width; // device px per probe px
+  const sx = Math.max(0, Math.floor((mask.bbox.x0 - pad) * f));
+  const sy = Math.max(0, Math.floor((mask.bbox.y0 - pad) * f));
+  const sw = Math.min(img.width - sx, Math.ceil((mask.bbox.x1 - mask.bbox.x0 + 2 * pad) * f));
+  const sh = Math.min(img.height - sy, Math.ceil((mask.bbox.y1 - mask.bbox.y0 + 2 * pad) * f));
+  const dx = Math.round((p.x - (mask.bbox.x0 - sx / f) * p.scale) * s);
+  const dy = Math.round((p.y - (mask.bbox.y0 - sy / f) * p.scale) * s);
+  blit(g, () => g.drawImage(img, sx, sy, sw, sh, dx, dy, sw, sh));
+}
+
+function toPng(canvas: HTMLCanvasElement): Promise<Blob> {
+  return new Promise((ok, fail) => canvas.toBlob((b) => (b ? ok(b) : fail(new Error('PNG encoding failed'))), 'image/png'));
+}
+
+async function composeSheet(ctx: SheetContext, o: SheetOptions): Promise<Blob> {
+  await document.fonts?.ready;
+  const s = ctx.scale;
+  const { canvas, g } = newPage(s);
+  const facts = o.facts === false ? [] : sheetFacts(ctx.house);
+  const title = o.title ?? ctx.house.name;
+  const keepout = header(g, s, title, facts, false);
+  const heroTop = layout.heroTop;
+  const x0 = layout.marginX;
+  const x1 = page.width - layout.marginX;
+  if (o.kind === 'level') {
+    if (!ctx.house.levels.some((l) => l.id === o.levelId)) throw new Error(`renderSheet: no level ${o.levelId}`);
+    const dividerY = Math.round(page.height * layout.dividerLevel);
+    drawView(g, ctx, presetOf(o.view ?? LEVEL_HERO_VIEWS[0]!), { x0, y0: heroTop, x1, y1: dividerY - layout.gapAboveDivider }, layout.heroMaxWidth, 'bottom', keepout);
+    drawDivider(g, s, dividerY);
+    await drawPlan(g, ctx, o.levelId, planRegion(dividerY));
+  } else {
+    const dividerY = Math.round(page.height * layout.dividerViews);
+    drawView(g, ctx, presetOf(o.views[0]), { x0, y0: heroTop, x1, y1: dividerY - layout.gapAboveDivider }, layout.heroMaxWidth, 'bottom', keepout);
+    drawDivider(g, s, dividerY);
+    drawView(g, ctx, presetOf(o.views[1]), { x0, y0: dividerY + layout.gapBelowDivider, x1, y1: layout.bottom }, layout.lowerViewMaxWidth, 'center');
+  }
+  header(g, s, title, facts, true);
+  drawFooter(g, s);
+  return toPng(canvas);
+}
+
+/**
+ * One sheet as a PNG: `{ kind: 'level', levelId, view }` (hero view and that
+ * level's plan) or `{ kind: 'views', views: [a, b] }` (two views stacked).
+ * Runs in the browser; uses its own offscreen WebGL context and releases it.
+ */
+export async function renderSheet(house: House | ResolvedHouse, options: SheetOptions): Promise<Blob> {
+  const ctx = new SheetContext(house, options.scale ?? 1);
+  try {
+    return await composeSheet(ctx, options);
+  } finally {
+    ctx.dispose();
+  }
+}
+
+/**
+ * The full set: one sheet per level (each with a different hero view; the
+ * first one carries the facts), then one views sheet. Shares one offscreen
+ * WebGL context across the set.
+ */
+export async function renderSheetSet(house: House | ResolvedHouse, options: SheetSetOptions = {}): Promise<Blob[]> {
+  const ctx = new SheetContext(house, options.scale ?? 1);
+  try {
+    // One drawing scale for all plans of the set (the one that fits the largest).
+    const region = planRegion(Math.round(page.height * layout.dividerLevel));
+    const fits = await Promise.all(ctx.house.levels.map(async (l) => placeDrawing((await ctx.plan(l.id)).mask, region, { centerX: page.width / 2, alignY: 'center' }).scale));
+    ctx.planScale = Math.min(...fits);
+    const out: Blob[] = [];
+    for (const [i, level] of ctx.house.levels.entries()) {
+      const view = LEVEL_HERO_VIEWS[i % LEVEL_HERO_VIEWS.length]!;
+      out.push(await composeSheet(ctx, { kind: 'level', levelId: level.id, view, title: options.title, facts: i === 0 }));
+    }
+    out.push(await composeSheet(ctx, { kind: 'views', views: VIEWS_SHEET_VIEWS, title: options.title, facts: false }));
+    return out;
+  } finally {
+    ctx.dispose();
+  }
+}
