@@ -1,9 +1,11 @@
-// Renders the fixed demo views to artifacts/shots/*.png (1600x1200, DPR 1).
+// Renders the fixed views of the golden sample (model -> kernel -> render)
+// to artifacts/shots/*.png (1600x1200, DPR 1).
 import { mkdirSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createRequire } from 'node:module';
 import { createServer } from 'vite';
+import { workspaceAliases } from '../demo/aliases.js';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const pkgRoot = resolve(here, '..');
@@ -20,11 +22,11 @@ try {
   playwright = require(require.resolve('playwright', { paths: [process.env.NODE_PATH ?? '', '/opt/node-tools/node_modules'] }));
 }
 
-const VIEWS = (process.argv[2] ?? 'axo-se,axo-ne,eye-sw,elev-south').split(',');
+const VIEWS = (process.argv[2] ?? 'axo-se,axo-ne,eye-sw,elev-south,axo-sw').split(',');
 const EXTRA = process.argv[3] ? `&${process.argv[3]}` : '';
 const SUFFIX = process.argv[4] ?? '';
 
-const server = await createServer({ root: resolve(pkgRoot, 'demo'), configFile: false, logLevel: 'error', server: { port: 0, host: '127.0.0.1' } });
+const server = await createServer({ root: resolve(pkgRoot, 'demo'), configFile: false, resolve: { alias: workspaceAliases }, logLevel: 'error', server: { port: 0, host: '127.0.0.1' } });
 await server.listen();
 const address = server.httpServer.address();
 const base = `http://127.0.0.1:${address.port}/`;

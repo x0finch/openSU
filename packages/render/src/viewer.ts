@@ -87,8 +87,12 @@ export class IllustrationViewer {
     this.resize();
   }
 
-  /** Bakes `root` into a few draw calls and shows it. */
-  setContent(root: Object3D): void {
+  /**
+   * Bakes `root` into a few draw calls and shows it. Views are framed on
+   * `framePoints` when given (e.g. the architecture only), otherwise on
+   * every baked vertex.
+   */
+  setContent(root: Object3D, framePoints?: readonly Vector3[]): void {
     if (this.content) this.scene.remove(this.content);
     const baked = bakeScene(root, this.edgeMaterial, this.floorMaterial);
     this.content = baked.group;
@@ -105,10 +109,11 @@ export class IllustrationViewer {
       }
     });
     // Framing points: every vertex, welded on a 5 cm grid to keep it small.
+    if (framePoints?.length) this.framePoints = framePoints.map((p) => p.clone());
     const seen = new Set<string>();
     const v = new Vector3();
     baked.group.traverse((o) => {
-      if (!isSurface(o) || o.userData.noFrame) return;
+      if (framePoints?.length || !isSurface(o) || o.userData.noFrame) return;
       const pos = o.geometry.getAttribute('position');
       for (let i = 0; i < pos.count; i++) {
         v.fromBufferAttribute(pos, i).applyMatrix4(o.matrixWorld);

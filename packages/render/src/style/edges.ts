@@ -30,6 +30,15 @@ export function appendSegments(local: readonly number[], matrix: Matrix4, out: n
   }
 }
 
+/** Append directions (xyz triples, local space) rotated to world and normalised. */
+export function appendDirections(local: readonly number[], matrix: Matrix4, out: number[]): void {
+  const v = new Vector3();
+  for (let i = 0; i < local.length; i += 3) {
+    v.set(local[i]!, local[i + 1]!, local[i + 2]!).transformDirection(matrix);
+    out.push(v.x, v.y, v.z);
+  }
+}
+
 const q = (x: number) => Math.round(x * 2000);
 const vkey = (x: number, y: number, z: number) => `${q(x)},${q(y)},${q(z)}`;
 const ekey = (a: string, b: string) => (a < b ? `${a}|${b}` : `${b}|${a}`);
@@ -85,8 +94,12 @@ export class EdgeAdjacency {
   }
 }
 
-/** Removes duplicated segments (shared edges of adjacent primitives). */
-export function dedupeSegments(pos: readonly number[]): number[] {
+/**
+ * Removes duplicated segments (shared edges of adjacent primitives). When
+ * `normals` (two face normals per segment) are given, `normalsOut` receives
+ * the normals of the kept segments.
+ */
+export function dedupeSegments(pos: readonly number[], normals?: readonly number[], normalsOut?: number[]): number[] {
   const seen = new Set<string>();
   const out: number[] = [];
   for (let i = 0; i < pos.length; i += 6) {
@@ -97,19 +110,31 @@ export function dedupeSegments(pos: readonly number[]): number[] {
     if (seen.has(key)) continue;
     seen.add(key);
     for (let k = 0; k < 6; k++) out.push(pos[i + k]!);
+    if (normals && normalsOut) for (let k = 0; k < 6; k++) normalsOut.push(normals[i + k] ?? 0);
   }
   return out;
 }
 
-export function createLineObject(positions: readonly number[], material: LineMaterial, name: string, adjacency?: EdgeAdjacency): LineSegments2 {
+/**
+ * Fat-line object. Each segment carries the normals of its two adjacent
+ * faces (for outer-profile widening): taken from `normals` when given and
+ * non-zero, otherwise looked up in `adjacency`.
+ */
+export function createLineObject(positions: readonly number[], material: LineMaterial, name: string, adjacency?: EdgeAdjacency, normals?: readonly number[]): LineSegments2 {
   const geo = new LineSegmentsGeometry();
   geo.setPositions(positions as number[]);
   const n = positions.length / 6;
   const n1 = new Float32Array(n * 3);
   const n2 = new Float32Array(n * 3);
-  if (adjacency) {
+  if (adjacency || normals) {
     for (let i = 0; i < n; i++) {
       const p = i * 6;
+      if (normals && (normals[p]! !== 0 || normals[p + 1]! !== 0 || normals[p + 2]! !== 0)) {
+        n1.set(normals.slice(p, p + 3), i * 3);
+        n2.set(normals.slice(p + 3, p + 6), i * 3);
+        continue;
+      }
+      if (!adjacency) continue;
       const r = adjacency.normals(positions[p]!, positions[p + 1]!, positions[p + 2]!, positions[p + 3]!, positions[p + 4]!, positions[p + 5]!);
       n1.set(r.slice(0, 3), i * 3);
       n2.set(r.slice(3, 6), i * 3);

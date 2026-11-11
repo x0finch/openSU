@@ -1,6 +1,7 @@
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
-import { IllustrationViewer, type SceneStats } from '../src/index.js';
-import { buildHouse } from './house.js';
+import { golden, resolve } from '@opensu/model';
+import { buildHouse } from '@opensu/kernel';
+import { createHouseObject, IllustrationViewer, type SceneStats } from '../src/index.js';
 import { VIEWS } from './views.js';
 
 declare global {
@@ -21,7 +22,13 @@ viewer.onAfterRender = (s) => {
   statsEl.textContent = `${s.triangles.toLocaleString()} triangles, ${s.drawCalls} draw calls (${s.drawCallsWithShadows} incl. shadow pass)`;
 };
 
-viewer.setContent(buildHouse(viewer.palette));
+// Golden sample: model -> kernel -> render.
+const t0 = performance.now();
+const geometry = buildHouse(resolve(golden));
+const t1 = performance.now();
+const house = createHouseObject(geometry, viewer.palette);
+viewer.setContent(house.root, house.framePoints);
+console.log(`[openSU] kernel ${(t1 - t0).toFixed(0)} ms, ${geometry.parts.length} parts, ${geometry.stats.triangles} kernel triangles, ${geometry.stats.edges} edges`);
 // Debug switches: ?hide=floor-lines,feature-edges
 for (const name of (params.get('hide') ?? '').split(',').filter(Boolean)) {
   const o = viewer.scene.getObjectByName(name);
