@@ -1,5 +1,6 @@
 // Screenshots of the studio chrome in every state at five viewports, and the
-// count of visible interactive controls (task 013). The built app runs in
+// count of visible interactive controls (tasks 013, 015; the approved
+// layout's own states and checks are in layout-check.mjs). The built app runs in
 // the local Workers runtime (`vite preview` = workerd).
 //
 //   node scripts/ui-shots.mjs                        -> artifacts/web/ui/<viewport>-<state>.png
@@ -89,7 +90,8 @@ for (const [vp, opts] of VPS) {
       const s = window.__studio.store.getState();
       s.setTray(null);
       s.setSitePanel(null);
-      s.setChatOpen(false);
+      s.setRecent(false);
+      s.setPinned(false);
       s.setWalk(false);
       s.setMode('3d');
       s.setSun({ on: false, playing: false });
@@ -143,9 +145,12 @@ for (const [vp, opts] of VPS) {
     await reset();
   }
   if (wanted('chat')) {
-    await page.getByTestId('prompt-bar').click();
+    await page.getByTestId('chat-history').click();
     await settle(page, 700);
     await shot('chat');
+    await page.getByTestId('chat-pin').click();
+    await settle(page, 900);
+    await shot('chat-pinned');
     await reset();
   }
   if (wanted('walk')) {

@@ -1,31 +1,19 @@
-// Walk mode HUD: exit, level indicator (tap to take the stairs at once),
-// a mini-map (the floor plan with a position and heading marker), a short
-// hint, and a touch joystick on phones. The sun tray stays available, so
-// the sun can move while standing in a room.
-import { type CSSProperties, type PointerEvent as RPointerEvent, type SVGProps, useEffect, useRef, useState } from 'react';
+// Walk mode HUD: a hint pill, level chips (tap to take the stairs at
+// once), a mini-map (the floor plan with a position and heading marker),
+// and a touch joystick. The toolbar's "走进去 ×" exits (Escape too); the
+// sun panel stays available, so the sun can move while standing in a room.
+import { type CSSProperties, type PointerEvent as RPointerEvent, useEffect, useRef, useState } from 'react';
 import { CloseIcon } from '../components/icons';
-import { cx, IconButton } from '../components/ui';
+import { cx } from '../components/ui';
 import { levelName, useT } from '../lib/i18n';
 import { useStudio } from '../lib/store';
 import type { Derived } from './house-data';
 import type { PlanDrawing } from './plan-data';
 import { useWalkLevel, walkBridge } from './walk-bridge';
-import { SunTime } from './chrome';
+import { SunTime } from './tools';
+export { WalkIcon } from './walk-icon';
 
 let planMod: Promise<typeof import('./plan-data')> | null = null;
-
-/** A walking figure (24 px grid, like the other line icons). */
-export function WalkIcon(p: SVGProps<SVGSVGElement>) {
-  return (
-    <svg viewBox="0 0 24 24" width={20} height={20} fill="none" stroke="currentColor" strokeWidth={1.4} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" {...p}>
-      <circle cx={13} cy={4.6} r={1.7} fill="currentColor" stroke="none" />
-      <path d="M12.2 8.2 10.4 13l2.9 2.6.9 5" />
-      <path d="M10.4 13 8.6 20.4" />
-      <path d="M12.2 8.2 15.4 11.6l2.6.6" />
-      <path d="M12.2 8.2 9 9.8 7.4 12.4" />
-    </svg>
-  );
-}
 
 /** The current level's plan, cropped to the plot, with the walker on it. */
 function MiniMap({ derived, width }: { derived: Derived; width: number }) {
@@ -191,45 +179,59 @@ function useCoarsePointer(): boolean {
   return coarse;
 }
 
-/** Desktop walk HUD: a card bottom-left (map, levels, hint) and the exit button top centre. */
-export function WalkHUD({ derived }: { derived: Derived | null }) {
+/** "Walking · level · how to move · how to leave", centred under the mode switch. */
+function WalkPill({ derived, touch, className, style }: { derived: Derived; touch: boolean; className?: string; style?: CSSProperties }) {
+  const t = useT();
+  const lang = useStudio((s) => s.lang);
+  const id = useWalkLevel() ?? derived.levels[0]?.id;
+  const l = derived.levels.find((x) => x.id === id);
+  const level = l ? levelName(lang, l.name, l.index, l.isAttic) : '';
+  return (
+    <p className={cx('glass pointer-events-none truncate rounded-full px-3.5 py-[7px] text-center text-[12.5px] leading-5 text-ink', className)} style={style} role="status" data-testid="walk-pill">
+      {touch ? t('walk.pillTouch') : t('walk.pill', { level })}
+    </p>
+  );
+}
+
+/** Desktop walk HUD: the hint pill top centre, the map with level chips under the title, a joystick on touch screens. */
+export function WalkHUD({ derived, left = 0 }: { derived: Derived | null; left?: number }) {
   const t = useT();
   const coarse = useCoarsePointer();
   if (!derived) return null;
   return (
     <>
-      <div className="absolute top-[72px] left-1/2 -translate-x-1/2">
-        <ExitWalk />
+      <div className="pointer-events-none absolute top-[76px] right-0 flex justify-center px-6" style={{ left }}>
+        <WalkPill derived={derived} touch={false} className="max-w-full" />
       </div>
-      <div className="glass pointer-events-auto absolute bottom-6 left-6 w-[252px] rounded-ui p-2" data-testid="walk-hud">
-        <MiniMap derived={derived} width={236} />
+      <div className="glass pointer-events-auto absolute top-[84px] w-[236px] rounded-ui p-2" style={{ left: left + 24 }} data-testid="walk-hud">
+        <MiniMap derived={derived} width={220} />
         <div className="mt-2 flex items-center justify-between gap-2 px-0.5">
           <Levels derived={derived} />
         </div>
         <p className="mt-1.5 px-0.5 text-2xs leading-4 text-ink-3">{coarse ? t('walk.hintTouch') : t('walk.hint')}</p>
       </div>
-      {coarse && <Joystick className="absolute right-6 bottom-6" />}
+      {coarse && <Joystick className="absolute right-6 bottom-[100px]" />}
     </>
   );
 }
 
-/** Phone walk HUD: exit and map under the header, joystick above the sheet. */
+/** Phone walk HUD: the pill under the header, levels and the map below it, the joystick above the input. */
 export function MobileWalkHUD({ derived, top, bottom }: { derived: Derived | null; top: string; bottom: number }) {
   if (!derived) return null;
   return (
     <>
-      <div className="pointer-events-none absolute inset-x-3 flex items-start justify-between" style={{ top: `calc(${top} + 8px)` }}>
-        <div className="flex flex-col items-start gap-2">
-          <ExitWalk />
+      <div className="pointer-events-none absolute inset-x-3 flex flex-col items-center gap-2" style={{ top: `calc(${top} + 4px)` }}>
+        <WalkPill derived={derived} touch className="max-w-full" />
+        <div className="flex w-full items-start justify-between">
           <div className="glass pointer-events-auto rounded-ui p-1">
             <Levels derived={derived} size="lg" />
           </div>
-        </div>
-        <div className="glass pointer-events-auto rounded-ui p-1" data-testid="walk-hud">
-          <MiniMap derived={derived} width={128} />
+          <div className="glass pointer-events-auto rounded-ui p-1" data-testid="walk-hud">
+            <MiniMap derived={derived} width={112} />
+          </div>
         </div>
       </div>
-      <Joystick className="absolute left-4 transition-[bottom] duration-300 ease-out-soft" style={{ bottom: bottom + 16 }} />
+      <Joystick className="absolute left-4 size-[112px]! transition-[bottom] duration-300 ease-out-soft" style={{ bottom: bottom + 12 }} />
     </>
   );
 }

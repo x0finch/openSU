@@ -25,13 +25,20 @@ function hasWebGL2(): boolean {
   }
 }
 
-/** Phones: the drawing is narrow, so the white margin around the house is smaller (trees may stand outside the architecture: not less). */
-let compactFraming = false;
+/** Framed on the house with its trees and entourage (wide frame), not the architecture alone. */
+let wideFraming = false;
+/**
+ * The studio's controls already keep the house clear of them (framing
+ * insets), so the white margin inside the free area is a fraction of the
+ * renderer's (task 015: the approved layout shows the house that large).
+ * `?frame=full` keeps the renderer's own margin (comparison with its shots).
+ */
+let marginScale = 1;
 
 function scenePreset(s: StudioState) {
   const p0 = presetById(s.view);
   const p = shownCut(s) ? cutawayPreset(p0) : p0;
-  return compactFraming ? { ...p, margin: (p.margin ?? camTokens.margin) * 0.7 } : p;
+  return marginScale !== 1 ? { ...p, margin: (p.margin ?? camTokens.margin) * marginScale } : p;
 }
 
 /** Applies the store's sun study to the engine and reports the sun back (for the time bar). */
@@ -59,8 +66,14 @@ function applySun(e: Engine, s: StudioState): void {
   if (!s.sun.playing && clamped !== s.sun.minutes && info.sunset > info.sunrise) s.setSun({ minutes: clamped });
 }
 
-export function Viewer3D({ resolved, active, insets, compact = false }: { resolved: ResolvedHouse; active: boolean; insets: readonly FrameInsets[]; compact?: boolean }) {
-  compactFraming = compact;
+/**
+ * The 3D view. `insets` are the screen areas taken by floating controls
+ * (alternatives: the one showing the house largest wins); a change re-frames
+ * the house in `insetMs` (the phone sheet passes its own slide duration).
+ */
+export function Viewer3D({ resolved, active, insets, insetMs, compact = false, wide = compact, margin = 1 }: { resolved: ResolvedHouse; active: boolean; insets: readonly FrameInsets[]; insetMs?: number; compact?: boolean; wide?: boolean; margin?: number }) {
+  wideFraming = wide;
+  marginScale = margin;
   const t = useT();
   const ref = useRef<HTMLDivElement>(null);
   const engine = useRef<Engine | null>(null);
@@ -96,7 +109,7 @@ export function Viewer3D({ resolved, active, insets, compact = false }: { resolv
         const dpr = new URLSearchParams(location.search).get('dpr');
         const e = m.createEngine(ref.current, latest.current, {
           pixelRatio: dpr ? Number(dpr) : undefined,
-          wideFrame: compactFraming,
+          wideFrame: wideFraming,
           onNorth: (deg) => {
             northDeg.current = deg;
             if (needle.current) needle.current.style.transform = `rotate(${deg.toFixed(1)}deg)`;
@@ -149,18 +162,20 @@ export function Viewer3D({ resolved, active, insets, compact = false }: { resolv
 
   // Phones frame the house with its trees, so the whole picture is centred.
   useEffect(() => {
-    engine.current?.setWideFrame(compact);
-  }, [compact]);
+    engine.current?.setWideFrame(wide);
+  }, [wide]);
 
   useEffect(() => {
     const st = useStudio.getState();
     engine.current?.setView(scenePreset(st), shownCut(st));
-  }, [view, nonce, cut, compact]);
+  }, [view, nonce, cut, wide, margin]);
 
   // Floating UI changed (chat panel opened / closed, resize): re-frame around it.
   const insetKey = JSON.stringify(insets);
+  const insetMsRef = useRef(insetMs);
+  insetMsRef.current = insetMs;
   useEffect(() => {
-    engine.current?.setInsets(insetsRef.current);
+    engine.current?.setInsets(insetsRef.current, false, insetMsRef.current);
   }, [insetKey]);
 
   // Walk mode on / off.
@@ -225,13 +240,14 @@ export function Viewer3D({ resolved, active, insets, compact = false }: { resolv
   return (
     <div className="absolute inset-0" aria-hidden={!active} data-active={active}>
       <div ref={ref} className="absolute inset-0 [&>canvas]:h-full! [&>canvas]:w-full!" data-testid="viewer" />
-      {status === 'ready' && active && !walk && (
+      {/* North, bottom-right on desktop; phones have no free corner for it (the toolbar is there). */}
+      {status === 'ready' && active && !walk && !compact && (
         <div
-          className="glass pointer-events-none absolute right-3 bottom-3 grid size-10 place-items-center rounded-full md:right-6 md:bottom-6 md:size-12"
+          className="glass pointer-events-none absolute right-6 bottom-6 grid size-12 place-items-center rounded-full"
           role="img"
           aria-label={t('north')}
         >
-          <svg ref={setNeedle} viewBox="0 0 32 32" className="size-8 md:size-9" aria-hidden="true">
+          <svg ref={setNeedle} viewBox="0 0 32 32" className="size-9" aria-hidden="true">
             <text x="16" y="8.5" textAnchor="middle" fontSize="8" fontWeight="600" fill="currentColor">
               N
             </text>

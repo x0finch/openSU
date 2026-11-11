@@ -1,13 +1,15 @@
-// The AI assistant. The prompt bar at the bottom is the studio's primary
-// action; the conversation opens from it: a panel on the left (desktop), a
-// sheet above the bar (phone).
+// The AI assistant (task 015): one input at the bottom centre; its history
+// button opens the translucent "recent" strip above it (the last exchange
+// with undo); pinned, the conversation is a column on the left (desktop) or
+// a half-height sheet (phone, see PhoneDock).
 import { type FormEvent, type KeyboardEvent, type ReactNode, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { create } from 'zustand';
 import { ChevronRightIcon, SendIcon, SparkIcon } from '../components/icons';
 import { cx, IconButton } from '../components/ui';
 import { type MessageKey, useT } from '../lib/i18n';
 import { useStudio } from '../lib/store';
 import { type ChatItem, fetchServerStatus, loadAgent, newChat, redoTurn, retry, send, stop, undoTurn, useChat } from './chat-store';
-import { ChevronDownIcon, ComposeIcon, NoteIcon, PlanCheckIcon, RedoIcon, RetryIcon, SlidersIcon, StopIcon, UndoIcon } from './icons';
+import { ChevronDownIcon, ComposeIcon, DockIcon, HistoryIcon, NoteIcon, PlanCheckIcon, RedoIcon, RetryIcon, SlidersIcon, StopIcon, UndockIcon, UndoIcon } from './icons';
 import { usesOwnKey } from './settings';
 import { SettingsSheet } from './SettingsSheet';
 
@@ -82,35 +84,34 @@ function Progress({ label }: { label: string }) {
   );
 }
 
-function ChangesCard({ item }: { item: ChatItem }) {
+function ChangesCard({ item, translucent }: { item: ChatItem; translucent?: boolean }) {
   const t = useT();
   const [open, setOpen] = useState(false);
   const changes = item.changes ?? [];
   if (!changes.length) return null;
   const undone = item.undo === 'undone' || item.undo === 'can-redo';
   return (
-    <div className={cx('mt-3 overflow-hidden rounded-sm border border-hairline bg-white', undone && 'opacity-70')} data-testid="changes-card">
-      <div className="flex items-center justify-between gap-2 py-1.5 pr-1.5 pl-3">
-        <p className="flex items-center gap-1.5 text-xs font-medium text-ink-2">
-          <PlanCheckIcon width={15} height={15} className={undone ? 'text-ink-3' : 'text-ink'} />
-          {t('chat.changes')}
-          <span className="tnum text-ink-3">{changes.length}</span>
+    <div className={cx('mt-2 overflow-hidden rounded-[10px] border border-black/10', translucent ? 'bg-white/60' : 'bg-white', undone && 'opacity-70')} data-testid="changes-card">
+      <div className="flex h-9 items-center justify-between gap-2 border-b border-black/[0.07] pr-1.5 pl-3">
+        <p className="flex items-center gap-1.5 text-xs text-ink-2">
+          <PlanCheckIcon width={14} height={14} className={undone ? 'text-ink-3' : 'text-ink-2'} />
+          {t('chat.changedN', { n: changes.length })}
           {undone && <span className="rounded-[5px] bg-wash px-1.5 py-px text-2xs font-normal text-ink-2">{t('chat.undone')}</span>}
         </p>
         <div className="flex items-center">
           {item.undo === 'can-undo' && (
-            <SmallButton onClick={() => undoTurn(item.id)} icon={<UndoIcon width={15} height={15} />}>
+            <SmallButton onClick={() => undoTurn(item.id)} icon={<UndoIcon width={14} height={14} />} className="h-[26px] bg-white px-[9px] shadow-[inset_0_0_0_1px_#e2e2e2] hover:bg-wash">
               {t('chat.undo')}
             </SmallButton>
           )}
           {item.undo === 'can-redo' && (
-            <SmallButton onClick={() => redoTurn(item.id)} icon={<RedoIcon width={15} height={15} />}>
+            <SmallButton onClick={() => redoTurn(item.id)} icon={<RedoIcon width={14} height={14} />} className="h-[26px] bg-white px-[9px] shadow-[inset_0_0_0_1px_#e2e2e2] hover:bg-wash">
               {t('chat.redo')}
             </SmallButton>
           )}
         </div>
       </div>
-      <ul className="border-t border-hairline px-3 py-2">
+      <ul className="px-3 py-2">
         {changes.map((c, i) => (
           <li key={i} className={cx('relative py-0.5 pl-3.5 text-[13px] leading-5', undone ? 'text-ink-2 line-through decoration-ink-3' : 'text-ink')}>
             <span className="absolute top-[9px] left-0.5 size-1.5 rounded-full bg-accent" aria-hidden="true" />
@@ -142,7 +143,7 @@ function SmallButton({ onClick, icon, children, className }: { onClick: () => vo
     <button
       type="button"
       onClick={onClick}
-      className={cx('inline-flex h-7 items-center gap-1 rounded-[6px] px-2 text-xs font-medium text-ink transition-colors hover:bg-wash', className)}
+      className={cx('hit inline-flex h-7 items-center gap-1 rounded-[6px] px-2 text-xs font-medium text-ink transition-colors hover:bg-wash', className)}
     >
       {icon}
       {children}
@@ -174,7 +175,7 @@ function errorText(t: ReturnType<typeof useT>, item: ChatItem): string {
   }
 }
 
-function AssistantMessage({ item, latest }: { item: ChatItem; latest: boolean }) {
+function AssistantMessage({ item, latest, translucent }: { item: ChatItem; latest: boolean; translucent?: boolean }) {
   const t = useT();
   const running = item.phase !== 'done';
   const openSettings = useChat((s) => s.setSettingsOpen);
@@ -184,7 +185,7 @@ function AssistantMessage({ item, latest }: { item: ChatItem; latest: boolean })
       {(item.text || running) && <RichText text={item.text} caret={running && !!item.text} />}
       {/* While the reply streams, its caret is the indicator. */}
       {running && item.phase !== 'writing' && (!item.text || item.phase !== 'thinking') && <div className={item.text ? 'mt-2.5' : ''}><Progress label={progress} /></div>}
-      <ChangesCard item={item} />
+      <ChangesCard item={item} translucent={translucent} />
       {item.aborted && <p className="mt-2 text-xs text-ink-3">{t('chat.aborted')}</p>}
       {item.gaveUp && (
         // The same words again would fail the same way: no retry, a next step instead.
@@ -259,7 +260,7 @@ function UserMessage({ item }: { item: ChatItem }) {
   const [open, setOpen] = useState(false);
   return (
     <div className="flex flex-col items-end">
-      <p className="max-w-[85%] rounded-[12px] rounded-br-[4px] bg-ink px-3 py-2 text-[13.5px] leading-[1.5] break-words whitespace-pre-wrap text-white" data-testid="user-message">
+      <p className="max-w-[86%] rounded-[12px] rounded-br-[4px] bg-ink px-3 py-[7px] text-[13.5px] leading-[1.5] break-words whitespace-pre-wrap text-white" data-testid="user-message">
         {/* Clamped inside the padding, so no half line peeks out. */}
         <span className={cx(long && !open && 'line-clamp-5')}>{item.text}</span>
       </p>
@@ -294,7 +295,7 @@ function EmptyState({ compact }: { compact?: boolean }) {
               key={k}
               type="button"
               onClick={() => void send(t(k))}
-              className="group inline-flex max-w-full items-center gap-2 rounded-full border border-hairline bg-white py-1.5 pr-3 pl-2.5 text-left text-[13px] leading-5 text-ink transition-colors hover:border-ink-3 hover:bg-wash"
+              className="hit group inline-flex max-w-full items-center gap-2 rounded-full border border-hairline bg-white py-1.5 pr-3 pl-2.5 text-left text-[13px] leading-5 text-ink transition-colors hover:border-ink-3 hover:bg-wash"
             >
               <SparkIcon width={14} height={14} className="shrink-0 text-ink-3 transition-colors group-hover:text-ink" />
               <span className="truncate">{t(k)}</span>
@@ -323,8 +324,10 @@ function ManualEdit({ item }: { item: ChatItem }) {
   );
 }
 
-function MessageList({ className }: { className?: string }) {
-  const items = useChat((s) => s.items);
+/** The conversation (from item `from`); `spacer` leaves room under the newest message so it can sit at the top. */
+function MessageList({ className, from = 0, spacer = true, translucent }: { className?: string; from?: number; spacer?: boolean; translucent?: boolean }) {
+  const all = useChat((s) => s.items);
+  const items = from ? all.slice(from) : all;
   const ref = useRef<HTMLDivElement>(null);
   const stick = useRef(true);
   const users = useRef(-1);
@@ -357,345 +360,432 @@ function MessageList({ className }: { className?: string }) {
         stick.current = el.scrollHeight - el.scrollTop - el.clientHeight < 40;
       }}
       className={cx('relative min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 pt-3 pb-4', className)}
+      tabIndex={-1}
       aria-live="polite"
       data-testid="messages"
     >
       {!items.length ? (
         <EmptyState />
       ) : (
-        <div className="flex flex-col gap-4">
+        <div className="flex flex-col gap-3">
           {items.map((it) => (
             <div key={it.id} data-msg className="scroll-mt-4">
-              {it.role === 'user' ? <UserMessage item={it} /> : it.manual ? <ManualEdit item={it} /> : <AssistantMessage item={it} latest={it.id === lastAssistant} />}
+              {it.role === 'user' ? <UserMessage item={it} /> : it.manual ? <ManualEdit item={it} /> : <AssistantMessage item={it} latest={it.id === lastAssistant} translucent={translucent} />}
             </div>
           ))}
           {/* Room below the newest message, so it can sit at the top while the reply arrives. */}
-          <div className="h-[30vh] shrink-0" aria-hidden="true" />
+          {spacer && <div className="h-[30vh] shrink-0" aria-hidden="true" />}
         </div>
       )}
     </div>
   );
 }
 
+/* ------------------------------------------------------------------ */
+/* The input                                                           */
+/* ------------------------------------------------------------------ */
+
+/** How many conversation items the user has seen (the recent strip or the pinned conversation was open). */
+const useSeen = create<{ seen: number }>(() => ({ seen: 0 }));
+
+function useMarkSeen(): void {
+  useEffect(() => {
+    const mark = () => {
+      const st = useStudio.getState();
+      if (st.recent || st.pinned) useSeen.setState({ seen: useChat.getState().items.length });
+    };
+    mark();
+    const a = useStudio.subscribe(mark);
+    const b = useChat.subscribe(mark);
+    return () => {
+      a();
+      b();
+    };
+  }, []);
+}
+
+/** The newest assistant turn that is under way (the phase drives the status phrase). */
+function useWorking(): { phase: ChatItem['phase']; prompt: string } | null {
+  const phase = useChat((s) => {
+    if (!s.running) return null;
+    for (let i = s.items.length - 1; i >= 0; i--) if (s.items[i]!.role === 'assistant' && !s.items[i]!.manual) return s.items[i]!.phase ?? 'thinking';
+    return 'thinking';
+  });
+  const prompt = useChat((s) => {
+    for (let i = s.items.length - 1; i >= 0; i--) if (s.items[i]!.role === 'user') return s.items[i]!.text;
+    return '';
+  });
+  return phase ? { phase, prompt } : null;
+}
+
+function statusKey(phase: ChatItem['phase']): MessageKey {
+  if (phase === 'working') return 'chat.status.working';
+  if (phase === 'repairing') return 'chat.status.repairing';
+  if (phase === 'writing') return 'chat.status.writing';
+  return 'chat.status.thinking';
+}
+
 /**
- * The prompt: Enter sends (not while an IME is composing), Shift+Enter breaks
- * the line, Escape gives the drawing back. The text lives in the chat store,
- * so it survives the move between the bar and the panel.
+ * The conversation's one input, bottom centre. While the assistant works a
+ * soft light travels round its rim and the placeholder gives way to what is
+ * happening ("正在修改房子…"). The history button opens the recent strip;
+ * pinned, a spark stands in its place. Enter sends (not while an IME is
+ * composing), Shift+Enter breaks the line, Escape gives the drawing back.
  */
-function Composer({ autoFocus, onSent, onEscape, onFocus, className, bar, testId = 'chat-input' }: {
-  autoFocus?: boolean; onSent?: () => void; onEscape?: () => void; onFocus?: () => void; className?: string; bar?: boolean; testId?: string;
-}) {
+export function ChatInput({ phone, pinned, className }: { phone?: boolean; pinned?: boolean; className?: string }) {
   const t = useT();
   const running = useChat((s) => s.running);
   const text = useChat((s) => s.draft);
   const setText = useChat((s) => s.setDraft);
+  const unseen = useChat((s) => s.items.length) > useSeen((s) => s.seen);
+  const recent = useStudio((s) => s.recent);
+  const setRecent = useStudio((s) => s.setRecent);
+  const working = useWorking();
+  const box = useRef<HTMLDivElement>(null);
   const ref = useRef<HTMLTextAreaElement>(null);
+  useMarkSeen();
+  useEffect(() => {
+    void fetchServerStatus();
+  }, []);
+  // The rotating light covers the whole input whatever its size.
+  useLayoutEffect(() => {
+    const el = box.current;
+    if (!el) return;
+    const set = () => el.style.setProperty('--d', `${Math.ceil(Math.hypot(el.offsetWidth, el.offsetHeight)) + 4}px`);
+    set();
+    const ro = new ResizeObserver(set);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
   useLayoutEffect(() => {
     const el = ref.current;
     if (!el) return;
     el.style.height = '0px';
     el.style.height = `${Math.min(120, el.scrollHeight)}px`;
   }, [text]);
-  useEffect(() => {
-    if (!autoFocus) return;
-    const el = ref.current;
-    el?.focus({ preventScroll: true });
-    el?.setSelectionRange(el.value.length, el.value.length);
-  }, [autoFocus]);
   const submit = (e?: FormEvent) => {
     e?.preventDefault();
     if (running || !text.trim()) return;
     void send(text);
     setText('');
-    onSent?.();
   };
   const onKey = (e: KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing && e.keyCode !== 229) {
       e.preventDefault();
       submit();
-    } else if (e.key === 'Escape' && onEscape) {
+    } else if (e.key === 'Escape') {
       e.preventDefault();
-      onEscape();
+      if (recent) setRecent(false);
+      ref.current?.blur();
     }
   };
   const can = !!text.trim() && !running;
+  const btn = phone ? 'size-[34px]' : 'size-[34px]';
   return (
-    <form
-      onSubmit={submit}
-      className={cx(
-        'flex items-end gap-2 bg-white transition-[border-color,box-shadow] duration-150',
-        bar ? 'min-h-12 rounded-[24px] py-[7px] pr-[7px] pl-4' : 'rounded-[16px] border border-hairline py-1.5 pr-1.5 pl-3 focus-within:border-ink-3',
-        className,
-      )}
-    >
-      {bar && <SparkIcon accent width={19} height={19} className="mb-[7px] shrink-0" />}
-      <textarea
-        ref={ref}
-        rows={1}
-        value={text}
-        onChange={(e) => setText(e.target.value)}
-        onKeyDown={onKey}
-        onFocus={onFocus}
-        placeholder={t('prompt.placeholder')}
-        aria-label={t('chat.placeholder')}
-        className="max-h-[120px] min-h-[34px] flex-1 resize-none bg-transparent py-[7px] text-[15px] leading-5 outline-none placeholder:text-ink-3 [&:focus-visible]:outline-none"
-        data-testid={testId}
-      />
-      {running ? (
-        <button type="button" onClick={stop} aria-label={t('chat.stop')} className="grid size-[34px] shrink-0 place-items-center rounded-full bg-ink text-white transition-opacity hover:opacity-85">
-          <StopIcon width={16} height={16} />
-        </button>
-      ) : (
-        (can || !bar) && (
+    <div ref={box} className={cx('ai-input pointer-events-auto', className)} data-working={working ? '' : undefined} data-testid="prompt">
+      <div className="ai-halo" aria-hidden="true" />
+      <div className="ai-rim" aria-hidden="true">
+        <div className="ai-spin" />
+      </div>
+      <form
+        onSubmit={submit}
+        onPointerDown={(e) => {
+          if (e.target === e.currentTarget) {
+            e.preventDefault();
+            ref.current?.focus();
+          }
+        }}
+        className={cx('ai-face flex cursor-text items-end gap-2 px-[7px]', phone ? 'py-[7px]' : 'py-2')}
+      >
+        {pinned ? (
+          <span className={cx('grid shrink-0 place-items-center', btn)}>
+            <SparkIcon accent width={17} height={17} />
+          </span>
+        ) : (
+          <button
+            type="button"
+            onClick={() => setRecent(!recent)}
+            aria-label={recent ? t('chat.historyClose') : t('chat.history')}
+            aria-expanded={recent}
+            aria-controls="recent-strip"
+            className={cx('hit relative grid shrink-0 place-items-center rounded-full transition-colors', btn, recent ? 'bg-ink text-white' : 'text-ink-2 hover:bg-wash hover:text-ink')}
+            data-testid="chat-history"
+          >
+            <HistoryIcon width={17} height={17} />
+            {unseen && !recent && !running && <span className="absolute top-[5px] right-[5px] size-[7px] rounded-full bg-accent shadow-[0_0_0_2px_white]" aria-hidden="true" />}
+          </button>
+        )}
+        <div className="relative min-w-0 flex-1">
+          <textarea
+            ref={ref}
+            rows={1}
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+            onKeyDown={onKey}
+            placeholder={working ? '' : t('prompt.placeholder')}
+            aria-label={t('chat.placeholder')}
+            className="block max-h-[120px] min-h-[34px] w-full resize-none bg-transparent py-[7px] text-[14px] leading-5 outline-none placeholder:text-ink-3 [&:focus-visible]:outline-none"
+            data-testid="prompt-bar"
+          />
+          {working && !text && (
+            <p className="pointer-events-none absolute inset-0 flex items-center truncate text-[14px] text-ink" role="status" data-testid="chat-status" data-phase={working.phase}>
+              <span className="truncate">
+                {t(statusKey(working.phase))}
+                <span className="text-accent-ink">…</span>
+                {!phone && working.prompt && <span className="ml-1 text-ink-3">{`“${working.prompt.replace(/\s+/g, ' ')}”`}</span>}
+              </span>
+            </p>
+          )}
+        </div>
+        {running ? (
+          <button type="button" onClick={stop} aria-label={t('chat.stop')} className={cx('hit grid shrink-0 place-items-center rounded-full bg-ink text-white transition-opacity hover:opacity-85', btn)}>
+            <StopIcon width={16} height={16} />
+          </button>
+        ) : (
           <button
             type="submit"
             disabled={!can}
             aria-label={t('chat.send')}
-            className={cx('grid size-[34px] shrink-0 animate-[fade-in_120ms_ease-out] place-items-center rounded-full transition-colors duration-150', can ? 'bg-accent text-ink hover:brightness-95' : 'bg-wash text-ink-3')}
+            className={cx('hit grid shrink-0 place-items-center rounded-full transition-colors duration-150', btn, can ? 'bg-accent text-ink hover:brightness-95' : 'bg-wash text-ink-2')}
             data-testid="chat-send"
           >
-            <SendIcon width={17} height={17} />
+            <SendIcon width={16} height={16} />
           </button>
-        )
-      )}
-    </form>
-  );
-}
-
-function useStatusOnOpen() {
-  useEffect(() => {
-    void fetchServerStatus();
-    // Warm the agent chunk while the user types.
-    void loadAgent();
-  }, []);
-}
-
-function PanelHeader({ onClose, closeLabel, closeIcon, leading }: { onClose: () => void; closeLabel: string; closeIcon: ReactNode; leading?: ReactNode }) {
-  const t = useT();
-  const hasItems = useChat((s) => s.items.length > 0);
-  const setSettingsOpen = useChat((s) => s.setSettingsOpen);
-  return (
-    <header className="flex h-12 shrink-0 items-center justify-between pr-1.5 pl-4">
-      <div className="flex min-w-0 items-center gap-2">
-        {leading}
-        <SparkIcon accent width={18} height={18} className="shrink-0" />
-        <h2 className="truncate text-sm font-semibold">{t('chat.title')}</h2>
-      </div>
-      <div className="flex items-center">
-        {hasItems && (
-          <IconButton label={t('chat.newChat')} tipSide="bottom" onClick={newChat} className="size-9">
-            <ComposeIcon width={18} height={18} />
-          </IconButton>
         )}
-        <IconButton label={t('chat.settings')} tipSide="bottom" onClick={() => setSettingsOpen(true)} className="size-9" data-testid="chat-settings">
-          <SlidersIcon width={18} height={18} />
-        </IconButton>
-        <IconButton label={closeLabel} tipSide="bottom" onClick={onClose} className="size-9" data-testid="chat-collapse">
-          {closeIcon}
-        </IconButton>
-      </div>
-    </header>
+      </form>
+    </div>
   );
 }
 
 /* ------------------------------------------------------------------ */
-/* The prompt bar (collapsed conversation)                             */
+/* Recent strip                                                        */
 /* ------------------------------------------------------------------ */
 
-/** The newest assistant turn or studio edit. */
-function useLast(): ChatItem | undefined {
-  return useChat((s) => {
-    for (let i = s.items.length - 1; i >= 0; i--) if (s.items[i]!.role === 'assistant') return s.items[i];
-    return undefined;
-  });
+/** Index of the last exchange: from the last message of the user (or the last few studio edits). */
+function lastExchangeStart(items: ChatItem[]): number {
+  for (let i = items.length - 1; i >= 0; i--) if (items[i]!.role === 'user') return i;
+  return Math.max(0, items.length - 3);
 }
 
-/** One line about the latest turn: progress, the last change with undo / redo, or the problem. */
-function BarSummary({ item, onOpen }: { item: ChatItem; onOpen: () => void }) {
-  const t = useT();
-  const running = item.phase !== 'done';
-  const n = item.changes?.length ?? 0;
-  const undone = item.undo === 'undone' || item.undo === 'can-redo';
-  let line: ReactNode = null;
-  if (running) line = <Progress label={phaseLabel(t, item.phase)} />;
-  else if (item.error || item.gaveUp) line = <span className="truncate text-ink-2">{item.gaveUp ? t('chat.gaveUp') : errorText(t, item)}</span>;
-  else if (n) {
-    line = (
-      <span className="flex min-w-0 items-center gap-1.5">
-        <PlanCheckIcon width={16} height={16} className={cx('shrink-0', undone ? 'text-ink-3' : 'text-ink')} />
-        <span className={cx('truncate', undone ? 'text-ink-2 line-through decoration-ink-3' : 'text-ink')}>{item.changes![n - 1]!.summary}</span>
-        {n > 1 && <span className="tnum shrink-0 text-ink-3">+{n - 1}</span>}
-      </span>
-    );
-  } else if (item.text) line = <span className="truncate text-ink-2">{item.text.replace(/\*\*/g, '').split('\n')[0]}</span>;
-  if (!line) return null;
+function LinkButton({ onClick, icon, children, testId, className }: { onClick: () => void; icon?: ReactNode; children: ReactNode; testId?: string; className?: string }) {
   return (
-    <div className="flex min-w-0 flex-1 items-center gap-1" data-testid="bar-summary">
-      <button type="button" onClick={onOpen} className="min-w-0 flex-1 py-2 text-left text-[14px]" aria-label={t('chat.peek')}>
-        {line}
-      </button>
-      {!running && item.undo === 'can-undo' && (
-        <SmallButton onClick={() => undoTurn(item.id)} icon={<UndoIcon width={15} height={15} />} className="h-[34px] rounded-full px-3">
-          {t('chat.undo')}
-        </SmallButton>
-      )}
-      {!running && item.undo === 'can-redo' && (
-        <SmallButton onClick={() => redoTurn(item.id)} icon={<RedoIcon width={15} height={15} />} className="h-[34px] rounded-full px-3">
-          {t('chat.redo')}
-        </SmallButton>
-      )}
-      {running && (
-        <button type="button" onClick={stop} aria-label={t('chat.stop')} className="grid size-[34px] shrink-0 place-items-center rounded-full bg-ink text-white">
-          <StopIcon width={16} height={16} />
-        </button>
-      )}
-    </div>
+    <button type="button" onClick={onClick} data-testid={testId} className={cx('hit inline-flex h-[30px] shrink-0 items-center gap-[5px] rounded-[7px] px-2 text-[12.5px] whitespace-nowrap text-ink transition-colors hover:bg-black/5', className)}>
+      {icon}
+      {children}
+    </button>
   );
 }
 
 /**
- * The primary action: a calm bar at the bottom. Focusing it opens the
- * conversation (desktop: the panel on the left, which takes the prompt
- * along; phone: a sheet above the bar, which stays the input). Collapsed,
- * it shows a one-line summary of the last change with undo.
+ * The last exchange and its changes card (with undo), translucent above the
+ * input: 80% white, no blur, at most ~35% of the screen height. "See all"
+ * pins the conversation.
  */
-export function PromptBar({ compact, className }: { compact?: boolean; className?: string }) {
-  const open = useStudio((s) => s.chatOpen);
-  const setOpen = useStudio((s) => s.setChatOpen);
-  const draft = useChat((s) => s.draft);
-  const last = useLast();
-  const [typing, setTyping] = useState(false);
-  const wrap = useRef<HTMLDivElement>(null);
-  // While collapsed with an empty prompt, the bar recaps the last turn.
-  const recap = !!last && !draft && !typing && !(compact && open) && (last.phase !== 'done' || !!last.changes?.length || !!last.error || !!last.gaveUp);
-  const openChat = () => {
-    setOpen(true);
-    if (compact) setTyping(true);
-  };
+export function RecentStrip({ phone, className }: { phone?: boolean; className?: string }) {
+  const t = useT();
+  const items = useChat((s) => s.items);
+  const setRecent = useStudio((s) => s.setRecent);
+  const setPinned = useStudio((s) => s.setPinned);
+  const rounds = items.filter((i) => i.role === 'user').length;
   useEffect(() => {
-    if (!typing || !compact) return;
-    wrap.current?.querySelector('textarea')?.focus({ preventScroll: true });
-  }, [typing, compact]);
-  return (
-    <div
-      ref={wrap}
-      className={cx('pointer-events-auto relative rounded-[24px] bg-white shadow-[0_10px_34px_rgba(0,0,0,0.12),0_0_0_1px_rgba(0,0,0,0.06)] transition-shadow focus-within:shadow-[0_10px_34px_rgba(0,0,0,0.14),0_0_0_1.5px_var(--color-ink-3)]', className)}
-      data-testid="prompt"
-      onBlur={(e) => {
-        if (!e.currentTarget.contains(e.relatedTarget as Node)) setTyping(false);
-      }}
-    >
-      {recap ? (
-        <div className="flex min-h-12 items-center gap-2 py-[7px] pr-[7px] pl-4">
-          <SparkIcon accent width={19} height={19} className="shrink-0" />
-          <BarSummary item={last!} onOpen={openChat} />
-        </div>
-      ) : (
-        <Composer
-          bar
-          testId="prompt-bar"
-          onFocus={() => {
-            setTyping(true);
-            // Desktop: the panel takes the prompt along (and its focus).
-            if (!open) setOpen(true);
-          }}
-          onEscape={() => {
-            setOpen(false);
-            (document.activeElement as HTMLElement | null)?.blur();
-          }}
-          onSent={() => {
-            // Phone: give the drawing back so the house can be seen growing.
-            if (compact) {
-              setOpen(false);
-              setTyping(false);
-              (document.activeElement as HTMLElement | null)?.blur();
-            }
-          }}
-        />
-      )}
-    </div>
-  );
-}
-
-/* ------------------------------------------------------------------ */
-/* Desktop                                                             */
-/* ------------------------------------------------------------------ */
-
-/** The conversation, docked on the left; the prompt bar moves into its foot. */
-export function DesktopChat() {
-  const t = useT();
-  const open = useStudio((s) => s.chatOpen);
-  const setOpen = useStudio((s) => s.setChatOpen);
-  const settingsOpen = useChat((s) => s.settingsOpen);
-  if (!open) return null;
-  return <DesktopPanel onClose={() => setOpen(false)} settingsOpen={settingsOpen} label={t('chat.title')} />;
-}
-
-function DesktopPanel({ onClose, settingsOpen, label }: { onClose: () => void; settingsOpen: boolean; label: string }) {
-  const t = useT();
-  useStatusOnOpen();
+    void loadAgent();
+  }, []);
   return (
     <section
-      aria-label={label}
-      className="glass-solid pointer-events-auto absolute top-[92px] bottom-6 left-6 flex w-[380px] animate-[tray-in_180ms_cubic-bezier(0.22,0.8,0.24,1)] flex-col overflow-hidden rounded-[16px]"
-      data-testid="chat-panel"
+      id="recent-strip"
+      aria-label={t('chat.recent')}
+      className={cx('pointer-events-auto flex animate-[strip-rise_220ms_cubic-bezier(0.22,0.8,0.24,1)] flex-col overflow-hidden rounded-[16px] bg-veil shadow-[0_8px_30px_rgba(0,0,0,0.08),0_0_0_1px_rgba(0,0,0,0.07)]', phone ? 'max-h-[42vh]' : 'max-h-[35vh]', className)}
+      data-testid="recent-strip"
     >
-      <PanelHeader onClose={onClose} closeLabel={t('prompt.collapse')} closeIcon={<ChevronDownIcon width={19} height={19} />} />
-      <div className="h-px shrink-0 bg-hairline" />
-      <div className="relative flex min-h-0 flex-1 flex-col">
-        <MessageList />
-        <div className="shrink-0 px-3 pb-3">
-          <Composer autoFocus onEscape={onClose} />
-          <p className="mt-1.5 text-center text-2xs text-ink-3">{t('chat.footer')}</p>
+      <header className="flex h-[42px] shrink-0 items-center gap-1.5 pr-1.5 pl-4">
+        <h2 className="text-[13px] font-medium">{t('chat.recent')}</h2>
+        <span className="flex-1" />
+        <LinkButton onClick={() => setPinned(true)} icon={<DockIcon width={14} height={14} />} testId="chat-pin">
+          {phone ? t('chat.pinPhone') : t('chat.pin')}
+        </LinkButton>
+        <button type="button" onClick={() => setRecent(false)} aria-label={t('chat.historyClose')} className="hit grid size-[30px] place-items-center rounded-[8px] text-ink-2 transition-colors hover:bg-black/5 hover:text-ink">
+          <ChevronDownIcon width={16} height={16} />
+        </button>
+      </header>
+      <MessageList from={items.length ? lastExchangeStart(items) : 0} spacer={false} className="px-4 pt-0.5 pb-3" translucent />
+      {rounds > 1 && (
+        <div className="shrink-0 px-2.5 pb-2.5">
+          <LinkButton onClick={() => setPinned(true)} testId="chat-view-all">
+            {t('chat.viewAll', { n: rounds })}
+            <ChevronRightIcon width={14} height={14} />
+          </LinkButton>
         </div>
-        {settingsOpen && <SettingsSheet />}
-      </div>
+      )}
     </section>
   );
 }
 
 /* ------------------------------------------------------------------ */
-/* Phone                                                               */
+/* Pinned conversation                                                 */
 /* ------------------------------------------------------------------ */
 
-/** The conversation as a sheet above the prompt bar (which stays the input). */
-export function MobileChat({ top, bottom }: { top: string; bottom: number }) {
+function ConversationHeader({ phone }: { phone?: boolean }) {
   const t = useT();
-  const open = useStudio((s) => s.chatOpen);
-  const setOpen = useStudio((s) => s.setChatOpen);
-  const settingsOpen = useChat((s) => s.settingsOpen);
-  // Sending (a suggestion, or the bar) gives the drawing back: the house is seen changing, the bar shows progress.
-  useEffect(
-    () =>
-      useChat.subscribe((s, p) => {
-        if (s.running && !p.running) useStudio.getState().setChatOpen(false);
-      }),
-    [],
+  const hasItems = useChat((s) => s.items.length > 0);
+  const setSettingsOpen = useChat((s) => s.setSettingsOpen);
+  const setPinned = useStudio((s) => s.setPinned);
+  return (
+    <header className={cx('flex shrink-0 items-center gap-1.5', phone ? 'h-10 pr-2 pl-4' : 'h-11 border-y border-hairline pr-2 pl-6')}>
+      <SparkIcon accent width={15} height={15} className="shrink-0" />
+      <h2 className="truncate text-[13px] font-medium">{t('chat.title')}</h2>
+      <span className="flex-1" />
+      {hasItems && (
+        <IconButton label={t('chat.newChat')} tipSide="bottom" onClick={newChat} className="hit size-8 text-ink-2">
+          <ComposeIcon width={16} height={16} />
+        </IconButton>
+      )}
+      <IconButton label={t('chat.settings')} tipSide="bottom" onClick={() => setSettingsOpen(true)} className="hit size-8 text-ink-2" data-testid="chat-settings">
+        <SlidersIcon width={16} height={16} />
+      </IconButton>
+      <LinkButton onClick={() => setPinned(false)} icon={<UndockIcon width={16} height={16} />} testId="chat-unpin">
+        {t('chat.unpin')}
+      </LinkButton>
+    </header>
   );
-  if (!open) return null;
+}
+
+/** Desktop: the conversation pinned as a 360 px column on the left, with the title on top and the input at its foot. */
+export function PinnedColumn({ title }: { title: ReactNode }) {
+  const t = useT();
+  const settingsOpen = useChat((s) => s.settingsOpen);
+  useEffect(() => {
+    void loadAgent();
+  }, []);
+  return (
+    <aside aria-label={t('chat.title')} className="pointer-events-auto absolute inset-y-0 left-0 flex w-[360px] animate-[fade-in_200ms_ease-out] flex-col border-r border-hairline bg-white" data-testid="chat-panel">
+      <div className="shrink-0 px-6 pt-4 pb-3">{title}</div>
+      <ConversationHeader />
+      <MessageList className="px-6 pt-4" />
+      <div className="shrink-0 px-4 pt-2 pb-6">
+        <ChatInput pinned />
+      </div>
+      {settingsOpen && <SettingsSheet />}
+    </aside>
+  );
+}
+
+/** Phone: the pinned conversation as the content of the half-height sheet (the input inside it). */
+export function PinnedChat() {
+  const t = useT();
+  useEffect(() => {
+    void loadAgent();
+  }, []);
+  return (
+    <section aria-label={t('chat.title')} className="flex min-h-0 flex-1 flex-col" data-testid="chat-panel">
+      <ConversationHeader phone />
+      <MessageList className="px-4 pt-1" spacer={false} />
+      <div className="shrink-0 px-3 pt-1.5 pb-[max(12px,env(safe-area-inset-bottom))]">
+        <ChatInput phone pinned />
+      </div>
+    </section>
+  );
+}
+
+/** The key settings over the drawing, when the conversation is not pinned (desktop) or always (phone). */
+export function SettingsHost({ phone }: { phone?: boolean }) {
+  const open = useChat((s) => s.settingsOpen);
+  const pinnedColumn = useStudio((s) => s.pinned && s.mode !== 'sheet') && !phone;
+  const close = () => useChat.getState().setSettingsOpen(false);
+  if (!open || pinnedColumn) return null;
   return (
     <>
-      <div className="absolute inset-0 z-20 animate-[fade-in_160ms_ease-out] bg-black/10" onClick={() => setOpen(false)} aria-hidden="true" />
-      <MobileStatus />
-      <section
-        aria-label={t('chat.title')}
-        data-testid="chat-panel"
-        className="absolute inset-x-2 z-30 flex animate-[tray-in_180ms_cubic-bezier(0.22,0.8,0.24,1)] flex-col overflow-hidden rounded-[16px] bg-white shadow-[0_8px_30px_rgba(0,0,0,0.12)]"
-        style={{ top, bottom }}
+      <div className="pointer-events-auto absolute inset-0 z-40 animate-[fade-in_160ms_ease-out] bg-black/10" onClick={close} aria-hidden="true" />
+      <div
+        className={cx(
+          'pointer-events-auto absolute z-50 overflow-hidden bg-white shadow-[0_8px_30px_rgba(0,0,0,0.14)]',
+          phone ? 'inset-x-0 bottom-0 h-[86%] rounded-t-[18px] land:inset-x-auto land:top-2 land:right-2 land:bottom-2 land:h-auto land:w-[400px] land:rounded-[16px]' : 'top-1/2 left-1/2 h-[min(600px,calc(100%-120px))] w-[420px] -translate-x-1/2 -translate-y-1/2 rounded-[16px]',
+        )}
       >
-        <PanelHeader onClose={() => setOpen(false)} closeLabel={t('prompt.collapse')} closeIcon={<ChevronDownIcon width={19} height={19} />} />
-        <div className="h-px shrink-0 bg-hairline" />
-        <div className="relative flex min-h-0 flex-1 flex-col">
-          <MessageList />
-          {settingsOpen && <SettingsSheet />}
-        </div>
-      </section>
+        <SettingsSheet />
+      </div>
     </>
   );
 }
 
-/** Loads the relay status once the phone chat opens. */
-function MobileStatus() {
-  useStatusOnOpen();
-  return null;
+/* ------------------------------------------------------------------ */
+/* After a turn: a short note with undo                                */
+/* ------------------------------------------------------------------ */
+
+/**
+ * When a turn (or a change made in the studio) completes while the
+ * conversation is out of sight: "已修改：… 撤销" for a few seconds above the
+ * input; problems offer "查看" (the recent strip).
+ */
+export function ChangeToast({ className }: { className?: string }) {
+  const t = useT();
+  const [id, setId] = useState<string | null>(null);
+  const item = useChat((s) => (id ? s.items.find((i) => i.id === id) : undefined));
+  const hidden = useStudio((s) => s.recent || s.pinned);
+  const hover = useRef(false);
+  const timer = useRef(0);
+  useEffect(() => {
+    const arm = () => {
+      clearTimeout(timer.current);
+      timer.current = window.setTimeout(function tick() {
+        if (hover.current) timer.current = window.setTimeout(tick, 1000);
+        else setId(null);
+      }, 5000);
+    };
+    const unsub = useChat.subscribe((s, p) => {
+      const last = s.items[s.items.length - 1];
+      if (p.running && !s.running) {
+        const a = [...s.items].reverse().find((i) => i.role === 'assistant' && !i.manual);
+        if (a && (a.changes?.length || a.error || a.gaveUp)) {
+          setId(a.id);
+          arm();
+        }
+      } else if (s.items.length > p.items.length && last?.manual && last.changes?.length) {
+        setId(last.id);
+        arm();
+      }
+    });
+    return () => {
+      unsub();
+      clearTimeout(timer.current);
+    };
+  }, []);
+  if (!id || !item || hidden) return null;
+  const n = item.changes?.length ?? 0;
+  const undone = item.undo === 'undone' || item.undo === 'can-redo';
+  const problem = !n && (item.error || item.gaveUp);
+  return (
+    <div
+      className={cx('glass pointer-events-auto flex h-[38px] max-w-full animate-[strip-rise_260ms_cubic-bezier(0.22,0.8,0.24,1)] items-center gap-2 rounded-full pr-1.5 pl-3.5 text-[13px] whitespace-nowrap', className)}
+      role="status"
+      data-testid="change-toast"
+      onPointerEnter={() => (hover.current = true)}
+      onPointerLeave={() => (hover.current = false)}
+      onFocus={() => (hover.current = true)}
+      onBlur={() => (hover.current = false)}
+    >
+      {problem ? (
+        <>
+          <NoteIcon width={15} height={15} className="shrink-0 text-ink-2" />
+          <span className="min-w-0 truncate text-ink-2">{item.gaveUp ? t('chat.gaveUp') : errorText(t, item)}</span>
+          <SmallButton onClick={() => useStudio.getState().setRecent(true)} className="rounded-full">{t('chat.show')}</SmallButton>
+        </>
+      ) : (
+        <>
+          <PlanCheckIcon width={15} height={15} className={cx('shrink-0', undone ? 'text-ink-3' : 'text-ink')} />
+          <span className={cx('min-w-0 truncate', undone && 'text-ink-2 line-through decoration-ink-3')}>{t('chat.changed', { s: item.changes![n - 1]!.summary })}</span>
+          {n > 1 && <span className="tnum shrink-0 text-ink-3">+{n - 1}</span>}
+          {item.undo === 'can-undo' && (
+            <SmallButton onClick={() => undoTurn(item.id)} icon={<UndoIcon width={14} height={14} />} className="rounded-full">
+              {t('chat.undo')}
+            </SmallButton>
+          )}
+          {item.undo === 'can-redo' && (
+            <SmallButton onClick={() => redoTurn(item.id)} icon={<RedoIcon width={14} height={14} />} className="rounded-full">
+              {t('chat.redo')}
+            </SmallButton>
+          )}
+        </>
+      )}
+    </div>
+  );
 }

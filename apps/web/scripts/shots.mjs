@@ -272,7 +272,7 @@ async function sunAndCutChecks() {
   // Cutaway: the whole house shows its roof, a cut at L1 does not.
   check((await page.getByTestId('bar-levels').textContent()) === '一层', 'the levels button shows the current cut');
   await page.getByTestId('bar-levels').click();
-  check((await page.getByTestId('tray-sun').count()) === 0, 'one tray at a time');
+  check((await page.getByTestId('tray-sun').count()) === 0, 'one panel at a time');
   await page.getByRole('radio', { name: '全部' }).click();
   await page.waitForTimeout(800);
   await settle(page);
@@ -285,27 +285,32 @@ async function sunAndCutChecks() {
   check(whole > 2000 && cut < whole * 0.05, `cutaway hides the roof (roof pixels ${whole} -> ${cut})`);
   check((await page.evaluate(() => window.__studio.engine.viewer.cutaway)) === 'L1', 'cutaway L1 is applied to the viewer');
   await page.keyboard.press('Escape');
-  check((await page.getByTestId('tray-levels').count()) === 0, 'Escape closes the tray');
-  check((await page.evaluate(() => window.__studio.engine.viewer.lightingMode.mode)) === 'physical', 'closing the sun tray keeps the sun on');
+  check((await page.getByTestId('tray-levels').count()) === 0, 'Escape closes the panel');
+  check((await page.evaluate(() => window.__studio.engine.viewer.lightingMode.mode)) === 'physical', 'closing the sun panel keeps the sun on');
   check(/\d\d:\d\d/.test((await page.getByTestId('bar-sun').textContent()) ?? ''), 'the sun button shows the time while the sun is on');
   // Back to presentation light.
   await page.getByTestId('bar-sun').click();
-  await page.getByRole('button', { name: '退出日照' }).click();
+  await page.getByRole('button', { name: '关闭日照' }).click();
   await settle(page);
   check((await page.evaluate(() => window.__studio.engine.viewer.lightingMode.mode)) === 'presentation', 'exit returns to presentation lighting');
   await ctx.close();
 }
 
-/** Visible controls in the default state: desktop <= 9, phone <= 8 (task 013). */
+/**
+ * Visible controls in the default state (task 015), desktop and phone alike:
+ * the house name, 3D / 平面 / 图册, the four tools, and the input (history,
+ * text, send): at most 9 widgets (a segmented control counts once, one tab
+ * stop) and 11 elements (each segment counted).
+ */
+const CONTROL_LIMITS = { widgets: 9, elements: 11 };
 async function controlChecks() {
   if (!wanted('check-controls')) return;
-  for (const [name, opts, max] of [['desktop', DESKTOP, 9], ['phone', PHONE, 8]]) {
+  for (const [name, opts] of [['desktop', DESKTOP], ['phone', PHONE]]) {
     const { ctx, page } = await open(opts, '/studio');
     await page.waitForFunction(() => window.__studio?.ready3d === true, null, { timeout: 180000 });
     await page.waitForTimeout(500);
     const c = await page.evaluate(countControls);
-    // A segmented control (one radio group, one tab stop) counts once; every element is also capped at 9.
-    check(c.widgets <= max && c.elements <= 9, `${name}: ${c.widgets} visible controls (${c.elements} counting each segment), max ${max}: ${c.list.join(' | ')}`);
+    check(c.widgets <= CONTROL_LIMITS.widgets && c.elements <= CONTROL_LIMITS.elements, `${name}: ${c.widgets} visible controls (${c.elements} counting each segment), max ${CONTROL_LIMITS.widgets} / ${CONTROL_LIMITS.elements}: ${c.list.join(' | ')}`);
     await ctx.close();
   }
 }
@@ -381,10 +386,12 @@ async function siteChecks() {
   check(Math.abs(gz.elevation - 43.4) < 0.3, `Guangzhou (searched in pinyin): noon sun ${gz.elevation.toFixed(1)} deg (~43.4)`);
   check((await page.getByTestId('sun-place').textContent())?.includes('广州'), 'the sun tray names the chosen place');
   await page.keyboard.press('Escape');
-  // Undo from the prompt bar's one-line summary of the last change.
-  await page.getByTestId('bar-summary').getByRole('button', { name: '撤销' }).click();
+  // Undo from the recent strip (the last studio edits with undo).
+  await page.getByTestId('chat-history').click();
+  await page.getByTestId('recent-strip').getByRole('button', { name: '撤销' }).last().click();
   await page.waitForFunction(() => window.__studio.store.getState().house.site.placeName === '哈尔滨市', null, { timeout: 10000 });
-  check(true, 'undo in the prompt bar restores the previous place');
+  check(true, 'undo in the recent strip restores the previous place');
+  await page.keyboard.press('Escape');
   // Orientation: the front facing due east = north turned by 90 deg; the sun and the shadows turn with it.
   await page.evaluate(() => window.__studio.store.getState().setSun({ on: true, dateId: 'winter', minutes: 600 }));
   await settle(page);
@@ -561,7 +568,7 @@ try {
   if (!smoke) {
     await studio3d(DESKTOP, 'studio-3d-desktop-eye', '?view=eye-sw');
     await studio3d(DESKTOP, 'studio-3d-desktop-chat', '?view=elev-south', async (p) => {
-      await p.getByTestId('prompt-bar').click();
+      await p.getByTestId('chat-history').click();
       await p.waitForTimeout(300);
     });
     await studio3d(DESKTOP, 'studio-3d-desktop-en', '?lang=en&view=axo-ne');
@@ -585,9 +592,11 @@ try {
       await p.waitForTimeout(700);
     });
     await studio3d(PHONE, 'studio-3d-phone-chat', '', async (p) => {
-      await p.getByTestId('prompt-bar').click();
+      await p.getByTestId('chat-history').click();
       await p.waitForTimeout(300);
     });
+    await studio3d(DESKTOP, 'studio-3d-desktop-pinned', '?panel=pin');
+    await studio3d(PHONE, 'studio-3d-phone-pinned', '?panel=pin');
     await studio3d(DESKTOP, 'studio-walk-desktop', '?sample=golden&walk=1&sun=winter&time=10:00', (p) => walkTo(p, 13.2, 6.3, 212));
     await studio3d(PHONE, 'studio-walk-phone', '?sample=golden&walk=1&sun=winter&time=10:00', (p) => walkTo(p, 12.6, 2.4, 285));
     await studio3d(DESKTOP, 'studio-walk-desktop-en', '?sample=golden&walk=1&lang=en', (p) => walkTo(p, 7.3, 8.6, 180));

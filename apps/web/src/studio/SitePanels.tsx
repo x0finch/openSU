@@ -1,9 +1,10 @@
 // Where the house is and which way it faces: the location picker (city
 // search, "use my location", manual latitude / longitude) and the
 // orientation dial. Both edit the site through `update_site` commands
-// (validated, one undo step, autosaved). Desktop: a card in the left
-// column; phone: a sheet. No network service is called: the city list is a
-// lazy chunk of this app, and geolocation is asked for only on a tap.
+// (validated, one undo step, autosaved). They show in the tool panel's
+// place (desktop card, phone sheet; see tools.tsx). No network service is
+// called: the city list is a lazy chunk of this app, and geolocation is
+// asked for only on a tap.
 import { type KeyboardEvent as RKeyboardEvent, type PointerEvent as RPointerEvent, type ReactNode, useEffect, useMemo, useRef, useState } from 'react';
 import { ChevronDownSmallIcon, CloseIcon, LocateIcon, PinIcon, SearchIcon } from '../components/icons';
 import { cx } from '../components/ui';
@@ -29,70 +30,15 @@ function usePlaces(): PlacesModule | null {
   return m;
 }
 
-/** The open site panel, placed for the layout. */
-export function SitePanelHost({ desktop }: { desktop: boolean }) {
-  const panel = useStudio((s) => s.sitePanel);
-  const setPanel = useStudio((s) => s.setSitePanel);
-  const box = useRef<HTMLElement>(null);
-  const opener = useRef<HTMLElement | null>(null);
-  useEffect(() => {
-    if (!panel) return;
-    opener.current = document.activeElement as HTMLElement | null;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && !e.defaultPrevented) {
-        e.preventDefault();
-        setPanel(null);
-      }
-    };
-    // Capture: the panel is on top, so Escape closes it before an open tray.
-    window.addEventListener('keydown', onKey, true);
-    return () => {
-      window.removeEventListener('keydown', onKey, true);
-      // Focus goes back to what opened the panel, when it is still there.
-      if (opener.current?.isConnected) opener.current.focus({ preventScroll: true });
-    };
-  }, [panel, setPanel]);
-  if (!panel) return null;
-  const body = panel.kind === 'location' ? <LocationPanel panel={panel} desktop={desktop} /> : <OrientationPanel />;
-  if (desktop) {
-    return (
-      <section
-        ref={box}
-        role="dialog"
-        aria-label={panel.kind}
-        className="glass-solid pointer-events-auto absolute top-[92px] left-6 flex max-h-[calc(100%-116px)] w-[360px] animate-[tray-in_180ms_cubic-bezier(0.22,0.8,0.24,1)] flex-col overflow-hidden rounded-[16px]"
-        data-testid={`panel-${panel.kind}`}
-      >
-        {body}
-      </section>
-    );
-  }
-  return (
-    <>
-      <div className="absolute inset-0 z-40 animate-[fade-in_160ms_ease-out] bg-black/15" onClick={() => setPanel(null)} aria-hidden="true" />
-      <section
-        ref={box}
-        role="dialog"
-        aria-label={panel.kind}
-        className="absolute inset-x-0 bottom-0 z-50 flex max-h-[86%] animate-[tray-in_200ms_cubic-bezier(0.22,0.8,0.24,1)] flex-col overflow-hidden rounded-t-[18px] bg-white pb-[env(safe-area-inset-bottom)] shadow-[0_-8px_30px_rgba(0,0,0,0.12)] land:inset-x-auto land:top-2 land:right-2 land:bottom-2 land:max-h-none land:w-[400px] land:rounded-[16px]"
-        data-testid={`panel-${panel.kind}`}
-      >
-        {body}
-      </section>
-    </>
-  );
-}
-
-function PanelHead({ title, sub }: { title: string; sub?: string }) {
+function PanelHead({ title, sub, onClose }: { title: string; sub?: string; onClose: () => void }) {
   const t = useT();
-  const setPanel = useStudio((s) => s.setSitePanel);
   return (
     <header className="flex shrink-0 items-start justify-between gap-2 pt-3.5 pr-2 pl-4">
       <div className="min-w-0 pt-0.5">
         <h2 className="text-[15px] font-semibold">{title}</h2>
         {sub && <p className="mt-0.5 text-xs leading-[18px] text-ink-2">{sub}</p>}
       </div>
-      <button type="button" onClick={() => setPanel(null)} aria-label={t('panel.done')} className="grid size-9 shrink-0 place-items-center rounded-full text-ink-2 transition-colors hover:bg-wash hover:text-ink">
+      <button type="button" onClick={onClose} aria-label={t('panel.done')} className="hit grid size-9 shrink-0 place-items-center rounded-full text-ink-2 transition-colors hover:bg-wash hover:text-ink">
         <CloseIcon width={18} height={18} />
       </button>
     </header>
@@ -109,7 +55,7 @@ async function setPlace(p: { lat: number; lon: number; tz: string; name: string 
   return applyEdit([{ op: 'update_site', latitude: round2(p.lat), longitude: round2(p.lon), timeZone: p.tz, placeName: p.name }], summary);
 }
 
-function LocationPanel({ panel, desktop }: { panel: SitePanel; desktop: boolean }) {
+export function LocationPanel({ panel, desktop, onClose }: { panel: SitePanel; desktop: boolean; onClose: () => void }) {
   const t = useT();
   const lang = useStudio((s) => s.lang);
   const site = useStudio((s) => s.house?.site);
@@ -158,7 +104,7 @@ function LocationPanel({ panel, desktop }: { panel: SitePanel; desktop: boolean 
 
   return (
     <>
-      <PanelHead title={panel.intro ? t('loc.newHouse') : t('loc.title')} sub={t('loc.intro')} />
+      <PanelHead title={panel.intro ? t('loc.newHouse') : t('loc.title')} sub={t('loc.intro')} onClose={onClose} />
       <div className="min-h-0 flex-1 overflow-y-auto px-4 pt-3 pb-4">
         {site && (
           <div className="mb-3 flex items-center gap-2.5 rounded-[10px] bg-wash px-3 py-2" data-testid="loc-current">
@@ -301,7 +247,7 @@ const snap = (deg: number, step = 5) => {
 
 const SUN_DIR: Record<'zh' | 'en', [string, string]> = { zh: ['南', '北'], en: ['south', 'north'] };
 
-function OrientationPanel() {
+export function OrientationPanel({ onClose }: { onClose: () => void }) {
   const t = useT();
   const lang = useStudio((s) => s.lang);
   const site = useStudio((s) => s.house?.site);
@@ -326,7 +272,7 @@ function OrientationPanel() {
   const sun = SUN_DIR[lang][site.latitude >= 0 ? 0 : 1];
   return (
     <>
-      <PanelHead title={t('ori.title')} sub={t('ori.drag')} />
+      <PanelHead title={t('ori.title')} sub={t('ori.drag')} onClose={onClose} />
       <div className="min-h-0 flex-1 overflow-y-auto px-4 pt-2 pb-4">
         <Dial north={north} onChange={setNorth} onCommit={commit} />
         <p className="mt-1 text-center text-[15px] font-semibold" data-testid="ori-text">
