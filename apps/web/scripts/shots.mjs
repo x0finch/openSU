@@ -11,6 +11,7 @@ import { createRequire } from 'node:module';
 import { createServer } from 'node:net';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { countControls } from './controls.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const appRoot = resolve(here, '..');
@@ -107,6 +108,8 @@ const PHONE = { viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, isM
 
 async function open(ctxOpts, path) {
   const ctx = await browser.newContext(ctxOpts);
+  // The first-visit hints are shot on their own (ui-shots.mjs); here they are dismissed.
+  await ctx.addInitScript(() => localStorage.setItem('opensu.hints.v1', 'done'));
   const page = await ctx.newPage();
   page.on('pageerror', (e) => failures.push(`${path}: page error ${e.message}`));
   page.on('console', (m) => {
@@ -123,7 +126,8 @@ async function noHorizontalScroll(page, name) {
 
 async function shot(page, name) {
   const file = resolve(outDir, `${name}.png`);
-  await page.screenshot({ path: file });
+  // Software GL on a busy machine can take long for one frame.
+  await page.screenshot({ path: file, timeout: 180000 });
   console.log(`  -> ${file}`);
 }
 
@@ -256,6 +260,7 @@ async function sunAndCutChecks() {
   await page.waitForFunction(() => window.__studio?.ready3d === true, null, { timeout: 180000 });
   await settle(page);
   const a = await canvasPixels(page);
+  await page.getByTestId('bar-sun').click();
   await setRange(page, 15 * 60);
   await settle(page);
   const b = await canvasPixels(page);
@@ -265,6 +270,9 @@ async function sunAndCutChecks() {
   const mode = await page.evaluate(() => window.__studio.engine.viewer.lightingMode);
   check(mode.mode === 'physical' && mode.minutes === 900, `slider drives the physical sun (${JSON.stringify(mode)})`);
   // Cutaway: the whole house shows its roof, a cut at L1 does not.
+  check((await page.getByTestId('bar-levels').textContent()) === '一层', 'the levels button shows the current cut');
+  await page.getByTestId('bar-levels').click();
+  check((await page.getByTestId('tray-sun').count()) === 0, 'one tray at a time');
   await page.getByRole('radio', { name: '全部' }).click();
   await page.waitForTimeout(800);
   await settle(page);
@@ -276,10 +284,101 @@ async function sunAndCutChecks() {
   // A few roof-like pixels remain: anti-aliased edges of dark furniture legs over timber.
   check(whole > 2000 && cut < whole * 0.05, `cutaway hides the roof (roof pixels ${whole} -> ${cut})`);
   check((await page.evaluate(() => window.__studio.engine.viewer.cutaway)) === 'L1', 'cutaway L1 is applied to the viewer');
+  await page.keyboard.press('Escape');
+  check((await page.getByTestId('tray-levels').count()) === 0, 'Escape closes the tray');
+  check((await page.evaluate(() => window.__studio.engine.viewer.lightingMode.mode)) === 'physical', 'closing the sun tray keeps the sun on');
+  check(/\d\d:\d\d/.test((await page.getByTestId('bar-sun').textContent()) ?? ''), 'the sun button shows the time while the sun is on');
   // Back to presentation light.
+  await page.getByTestId('bar-sun').click();
   await page.getByRole('button', { name: '退出日照' }).click();
   await settle(page);
   check((await page.evaluate(() => window.__studio.engine.viewer.lightingMode.mode)) === 'presentation', 'exit returns to presentation lighting');
+  await ctx.close();
+}
+
+/** Visible controls in the default state: desktop <= 9, phone <= 8 (task 013). */
+async function controlChecks() {
+  if (!wanted('check-controls')) return;
+  for (const [name, opts, max] of [['desktop', DESKTOP, 9], ['phone', PHONE, 8]]) {
+    const { ctx, page } = await open(opts, '/studio');
+    await page.waitForFunction(() => window.__studio?.ready3d === true, null, { timeout: 180000 });
+    await page.waitForTimeout(500);
+    const c = await page.evaluate(countControls);
+    // A segmented control (one radio group, one tab stop) counts once; every element is also capped at 9.
+    check(c.widgets <= max && c.elements <= 9, `${name}: ${c.widgets} visible controls (${c.elements} counting each segment), max ${max}: ${c.list.join(' | ')}`);
+    await ctx.close();
+  }
+}
+
+/** The sun's elevation at solar noon of the site's winter solstice. */
+async function noonElevation(page) {
+  await page.evaluate(() => window.__studio.store.getState().setSun({ on: true, dateId: 'winter', minutes: 600 }));
+  await settle(page);
+  await page.evaluate(() => {
+    const s = window.__studio.store.getState();
+    s.setSun({ minutes: s.sunInfo.solarNoon });
+  });
+  await settle(page);
+  return page.evaluate(() => window.__studio.store.getState().sunInfo);
+}
+
+/** Location and orientation: chosen in the UI, undoable, autosaved; the sun follows (task 013, part 2). */
+async function siteChecks() {
+  if (!wanted('check-site')) return;
+  const { ctx, page } = await open(DESKTOP, '/studio');
+  await page.waitForFunction(() => window.__studio?.ready3d === true, null, { timeout: 180000 });
+  const hz = await noonElevation(page);
+  check(Math.abs(hz.elevation - 36.3) < 0.3, `default site (near Hangzhou): winter-solstice noon sun ${hz.elevation.toFixed(1)} deg (~36.3)`);
+  const pick = async (query, expect) => {
+    if (!(await page.getByTestId('tray-sun').count())) await page.getByTestId('bar-sun').click();
+    await page.getByTestId('sun-place').click();
+    await page.getByTestId('loc-search').fill(query);
+    await page.waitForSelector('[data-testid=loc-results] button', { timeout: 30000 });
+    await page.locator('[data-testid=loc-results] button').first().click();
+    await page.waitForFunction((e) => window.__studio.store.getState().house.site.placeName === e, expect, { timeout: 30000 });
+    await settle(page);
+  };
+  await pick('哈尔滨', '哈尔滨市');
+  const hrb = await noonElevation(page);
+  check(Math.abs(hrb.elevation - 20.8) < 0.3, `Harbin (searched in Chinese): noon sun ${hrb.elevation.toFixed(1)} deg (~20.8)`);
+  await pick('guangzhou', '广州市');
+  const gz = await noonElevation(page);
+  check(Math.abs(gz.elevation - 43.4) < 0.3, `Guangzhou (searched in pinyin): noon sun ${gz.elevation.toFixed(1)} deg (~43.4)`);
+  check((await page.getByTestId('sun-place').textContent())?.includes('广州'), 'the sun tray names the chosen place');
+  await page.keyboard.press('Escape');
+  // Undo from the prompt bar's one-line summary of the last change.
+  await page.getByTestId('bar-summary').getByRole('button', { name: '撤销' }).click();
+  await page.waitForFunction(() => window.__studio.store.getState().house.site.placeName === '哈尔滨市', null, { timeout: 10000 });
+  check(true, 'undo in the prompt bar restores the previous place');
+  // Orientation: the front facing due east = north turned by 90 deg; the sun and the shadows turn with it.
+  await page.evaluate(() => window.__studio.store.getState().setSun({ on: true, dateId: 'winter', minutes: 600 }));
+  await settle(page);
+  const az0 = await page.evaluate(() => window.__studio.engine.viewer.sunStudy.azimuthDeg);
+  const px0 = await canvasPixels(page);
+  await page.getByTestId('project-menu').click();
+  await page.getByTestId('menu-orientation').click();
+  await page.getByRole('button', { name: '正东' }).click();
+  await page.waitForFunction(() => window.__studio.store.getState().house.site.northDeg === 90, null, { timeout: 10000 });
+  await page.waitForTimeout(400);
+  await settle(page);
+  const az1 = await page.evaluate(() => window.__studio.engine.viewer.sunStudy.azimuthDeg);
+  const d = ((az1 - az0 + 540) % 360) - 180;
+  check(Math.abs(d - 90) < 0.01, `turning north by 90 deg turns the sun in model axes by ${d.toFixed(2)} deg`);
+  const px1 = await canvasPixels(page);
+  let diff = 0;
+  for (let i = 0; i < px0.length; i += 4) if (Math.abs(px0[i] - px1[i]) > 30) diff++;
+  check(diff / (px0.length / 4) > 0.01, `the shadows move with the orientation (${((100 * diff) / (px0.length / 4)).toFixed(1)}% pixels differ)`);
+  check((await page.getByTestId('ori-text').textContent())?.includes('正东'), 'the dial describes the orientation in everyday words');
+  await shot(page, 'studio-orientation-east');
+  await page.keyboard.press('Escape');
+  // Southern hemisphere: Sydney's winter solstice is in June, the noon sun stands in the north.
+  await pick('Sydney', '悉尼');
+  const syd = await noonElevation(page);
+  check(syd.date.endsWith('-06-21') && Math.abs(syd.elevation - (90 - 33.87 - 23.44)) < 0.4 && (syd.azimuth < 5 || syd.azimuth > 355), `Sydney: winter solstice ${syd.date}, noon sun ${syd.elevation.toFixed(1)} deg at bearing ${syd.azimuth.toFixed(0)}`);
+  check(syd.utcOffsetHours === 10, `Sydney clock in June: UTC+${syd.utcOffsetHours}`);
+  await page.waitForTimeout(900);
+  const saved = await page.evaluate(() => JSON.parse(localStorage.getItem('opensu.autosave.v1') ?? '{}').house?.site ?? null);
+  check(saved?.timeZone === 'Australia/Sydney' && saved?.northDeg === 90, `the site is autosaved (${JSON.stringify(saved && { placeName: saved.placeName, timeZone: saved.timeZone, northDeg: saved.northDeg })})`);
   await ctx.close();
 }
 
@@ -389,28 +488,32 @@ try {
   if (!smoke) {
     await studio3d(DESKTOP, 'studio-3d-desktop-eye', '?view=eye-sw');
     await studio3d(DESKTOP, 'studio-3d-desktop-chat', '?view=elev-south', async (p) => {
-      await p.getByRole('button', { name: '打开 AI 助手' }).click();
-      await p.waitForTimeout(200);
+      await p.getByTestId('prompt-bar').click();
+      await p.waitForTimeout(300);
     });
     await studio3d(DESKTOP, 'studio-3d-desktop-en', '?lang=en&view=axo-ne');
     await studioPlan(DESKTOP, 'studio-plan-desktop-l2', '&level=L2');
     await studioPlan(PHONE, 'studio-plan-phone-attic', '&sample=golden&level=L3');
     await studio3d(DESKTOP, 'studio-golden-desktop', '?sample=golden');
-    await studio3d(PHONE, 'studio-3d-phone-expanded', '', async (p) => {
-      await p.getByRole('button', { name: '展开控制面板' }).click();
+    await studio3d(PHONE, 'studio-3d-phone-views', '', async (p) => {
+      await p.getByTestId('bar-views').click();
       await p.waitForTimeout(450);
     });
     await studio3d(DESKTOP, 'studio-sun-cut-L1-desktop', '?sun=winter&time=10:00&cut=L1');
     await studio3d(PHONE, 'studio-sun-cut-L1-phone', '?sun=winter&time=10:00&cut=L1');
     await studio3d(DESKTOP, 'studio-cut-L2-desktop', '?cut=L2');
-    await studio3d(PHONE, 'studio-cut-L2-phone-expanded', '?cut=L2&sun=summer&time=16:00&panel=open');
-    await studio3d(DESKTOP, 'studio-3d-desktop-tooltip', '', async (p) => {
-      await p.getByRole('button', { name: '东北轴测' }).hover();
-      await p.waitForTimeout(600);
+    await studio3d(PHONE, 'studio-cut-L2-phone-levels', '?cut=L2&sun=summer&time=16:00', async (p) => {
+      await p.getByTestId('bar-levels').click();
+      await p.waitForTimeout(450);
+    });
+    await studio3d(DESKTOP, 'studio-3d-desktop-views', '', async (p) => {
+      await p.getByTestId('bar-views').click();
+      await p.getByRole('button', { name: '东北轴测' }).click();
+      await p.waitForTimeout(700);
     });
     await studio3d(PHONE, 'studio-3d-phone-chat', '', async (p) => {
-      await p.getByRole('button', { name: '打开 AI 助手' }).click();
-      await p.waitForTimeout(250);
+      await p.getByTestId('prompt-bar').click();
+      await p.waitForTimeout(300);
     });
     await studio3d(DESKTOP, 'studio-walk-desktop', '?sample=golden&walk=1&sun=winter&time=10:00', (p) => walkTo(p, 13.2, 6.3, 212));
     await studio3d(PHONE, 'studio-walk-phone', '?sample=golden&walk=1&sun=winter&time=10:00', (p) => walkTo(p, 12.6, 2.4, 285));
@@ -422,8 +525,10 @@ try {
     });
     await compareWithRenderShots();
   }
+  await controlChecks();
   await walkChecks();
   await sunAndCutChecks();
+  await siteChecks();
   await sheets(DESKTOP, 'studio-sheets-desktop');
   if (!smoke) await sheets(PHONE, 'studio-sheets-phone');
 } finally {

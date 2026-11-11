@@ -1,12 +1,13 @@
-// The AI assistant: docked panel in the left rail (desktop), full-height
-// sheet with a peek state over the drawing (phone).
+// The AI assistant. The prompt bar at the bottom is the studio's primary
+// action; the conversation opens from it: a panel on the left (desktop), a
+// sheet above the bar (phone).
 import { type FormEvent, type KeyboardEvent, type ReactNode, useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { ChevronRightIcon, CloseIcon, SendIcon, SparkIcon } from '../components/icons';
+import { ChevronRightIcon, SendIcon, SparkIcon } from '../components/icons';
 import { cx, IconButton } from '../components/ui';
 import { type MessageKey, useT } from '../lib/i18n';
 import { useStudio } from '../lib/store';
 import { type ChatItem, fetchServerStatus, loadAgent, newChat, redoTurn, retry, send, stop, undoTurn, useChat } from './chat-store';
-import { ChevronUpIcon, ComposeIcon, NoteIcon, PlanCheckIcon, RedoIcon, RetryIcon, SlidersIcon, StopIcon, UndoIcon } from './icons';
+import { ChevronDownIcon, ComposeIcon, NoteIcon, PlanCheckIcon, RedoIcon, RetryIcon, SlidersIcon, StopIcon, UndoIcon } from './icons';
 import { usesOwnKey } from './settings';
 import { SettingsSheet } from './SettingsSheet';
 
@@ -292,16 +293,49 @@ function EmptyState({ compact }: { compact?: boolean }) {
   );
 }
 
+
+/** A change the user made in the studio (place, orientation, template): a quiet line with undo. */
+function ManualEdit({ item }: { item: ChatItem }) {
+  const t = useT();
+  const c = item.changes?.[0];
+  if (!c) return null;
+  const undone = item.undo === 'undone' || item.undo === 'can-redo';
+  return (
+    <div className="flex items-center justify-center gap-1 text-xs text-ink-2" data-testid="manual-edit">
+      <PlanCheckIcon width={14} height={14} className={undone ? 'text-ink-3' : 'text-ink'} />
+      <span className={cx('truncate', undone && 'line-through decoration-ink-3')}>{c.summary}</span>
+      {item.undo === 'can-undo' && <SmallButton onClick={() => undoTurn(item.id)} icon={<UndoIcon width={14} height={14} />}>{t('chat.undo')}</SmallButton>}
+      {item.undo === 'can-redo' && <SmallButton onClick={() => redoTurn(item.id)} icon={<RedoIcon width={14} height={14} />}>{t('chat.redo')}</SmallButton>}
+    </div>
+  );
+}
+
 function MessageList({ className }: { className?: string }) {
   const items = useChat((s) => s.items);
   const ref = useRef<HTMLDivElement>(null);
   const stick = useRef(true);
-  // Follow the stream while the user is at the bottom.
+  const users = useRef(-1);
+  // A new message of the user moves to the top of the list (never under the
+  // header) and the reply grows below it; otherwise follow the stream while
+  // the user is at the bottom.
   useLayoutEffect(() => {
     const el = ref.current;
-    if (el && stick.current) el.scrollTop = el.scrollHeight;
+    if (!el) return;
+    const n = items.filter((i) => i.role === 'user').length;
+    const fresh = users.current >= 0 && n > users.current;
+    users.current = n;
+    if (fresh) {
+      const msgs = el.querySelectorAll<HTMLElement>('[data-testid=user-message]');
+      const last = msgs[msgs.length - 1]?.closest<HTMLElement>('[data-msg]');
+      if (last) {
+        el.scrollTop = Math.max(0, last.offsetTop - 16);
+        stick.current = false;
+        return;
+      }
+    }
+    if (stick.current) el.scrollTop = el.scrollHeight;
   }, [items]);
-  const lastAssistant = [...items].reverse().find((i) => i.role === 'assistant')?.id;
+  const lastAssistant = [...items].reverse().find((i) => i.role === 'assistant' && !i.manual)?.id;
   return (
     <div
       ref={ref}
@@ -309,7 +343,7 @@ function MessageList({ className }: { className?: string }) {
         const el = e.currentTarget;
         stick.current = el.scrollHeight - el.scrollTop - el.clientHeight < 40;
       }}
-      className={cx('min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-4', className)}
+      className={cx('relative min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 pt-3 pb-4', className)}
       aria-live="polite"
       data-testid="messages"
     >
@@ -317,18 +351,31 @@ function MessageList({ className }: { className?: string }) {
         <EmptyState />
       ) : (
         <div className="flex flex-col gap-4">
-          {items.map((it) => (it.role === 'user' ? <UserMessage key={it.id} item={it} /> : <AssistantMessage key={it.id} item={it} latest={it.id === lastAssistant} />))}
+          {items.map((it) => (
+            <div key={it.id} data-msg className="scroll-mt-4">
+              {it.role === 'user' ? <UserMessage item={it} /> : it.manual ? <ManualEdit item={it} /> : <AssistantMessage item={it} latest={it.id === lastAssistant} />}
+            </div>
+          ))}
+          {/* Room below the newest message, so it can sit at the top while the reply arrives. */}
+          <div className="h-[30vh] shrink-0" aria-hidden="true" />
         </div>
       )}
     </div>
   );
 }
 
-/** Message box: Enter sends (not while an IME is composing), Shift+Enter breaks the line. */
-function Composer({ autoFocus, onSent, className }: { autoFocus?: boolean; onSent?: () => void; className?: string }) {
+/**
+ * The prompt: Enter sends (not while an IME is composing), Shift+Enter breaks
+ * the line, Escape gives the drawing back. The text lives in the chat store,
+ * so it survives the move between the bar and the panel.
+ */
+function Composer({ autoFocus, onSent, onEscape, onFocus, className, bar, testId = 'chat-input' }: {
+  autoFocus?: boolean; onSent?: () => void; onEscape?: () => void; onFocus?: () => void; className?: string; bar?: boolean; testId?: string;
+}) {
   const t = useT();
   const running = useChat((s) => s.running);
-  const [text, setText] = useState('');
+  const text = useChat((s) => s.draft);
+  const setText = useChat((s) => s.setDraft);
   const ref = useRef<HTMLTextAreaElement>(null);
   useLayoutEffect(() => {
     const el = ref.current;
@@ -337,7 +384,10 @@ function Composer({ autoFocus, onSent, className }: { autoFocus?: boolean; onSen
     el.style.height = `${Math.min(120, el.scrollHeight)}px`;
   }, [text]);
   useEffect(() => {
-    if (autoFocus) ref.current?.focus({ preventScroll: true });
+    if (!autoFocus) return;
+    const el = ref.current;
+    el?.focus({ preventScroll: true });
+    el?.setSelectionRange(el.value.length, el.value.length);
   }, [autoFocus]);
   const submit = (e?: FormEvent) => {
     e?.preventDefault();
@@ -350,36 +400,50 @@ function Composer({ autoFocus, onSent, className }: { autoFocus?: boolean; onSen
     if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing && e.keyCode !== 229) {
       e.preventDefault();
       submit();
+    } else if (e.key === 'Escape' && onEscape) {
+      e.preventDefault();
+      onEscape();
     }
   };
   const can = !!text.trim() && !running;
   return (
-    <form onSubmit={submit} className={cx('flex items-end gap-2 rounded-[12px] border border-hairline bg-white py-1.5 pr-1.5 pl-3 transition-colors focus-within:border-ink-3', className)}>
+    <form
+      onSubmit={submit}
+      className={cx(
+        'flex items-end gap-2 bg-white transition-[border-color,box-shadow] duration-150',
+        bar ? 'min-h-12 rounded-[24px] py-[7px] pr-[7px] pl-4' : 'rounded-[16px] border border-hairline py-1.5 pr-1.5 pl-3 focus-within:border-ink-3',
+        className,
+      )}
+    >
+      {bar && <SparkIcon accent width={19} height={19} className="mb-[7px] shrink-0" />}
       <textarea
         ref={ref}
         rows={1}
         value={text}
         onChange={(e) => setText(e.target.value)}
         onKeyDown={onKey}
-        placeholder={t('chat.placeholder')}
+        onFocus={onFocus}
+        placeholder={t('prompt.placeholder')}
         aria-label={t('chat.placeholder')}
-        className="max-h-[120px] min-h-[28px] flex-1 resize-none bg-transparent py-1 text-[14px] leading-5 outline-none placeholder:text-ink-3 [&:focus-visible]:outline-none"
-        data-testid="chat-input"
+        className="max-h-[120px] min-h-[34px] flex-1 resize-none bg-transparent py-[7px] text-[15px] leading-5 outline-none placeholder:text-ink-3 [&:focus-visible]:outline-none"
+        data-testid={testId}
       />
       {running ? (
-        <button type="button" onClick={stop} aria-label={t('chat.stop')} className="grid size-8 shrink-0 place-items-center rounded-[8px] bg-ink text-white transition-opacity hover:opacity-85">
+        <button type="button" onClick={stop} aria-label={t('chat.stop')} className="grid size-[34px] shrink-0 place-items-center rounded-full bg-ink text-white transition-opacity hover:opacity-85">
           <StopIcon width={16} height={16} />
         </button>
       ) : (
-        <button
-          type="submit"
-          disabled={!can}
-          aria-label={t('chat.send')}
-          className={cx('grid size-8 shrink-0 place-items-center rounded-[8px] transition-colors duration-150', can ? 'bg-accent text-ink hover:brightness-95' : 'bg-wash text-ink-3')}
-          data-testid="chat-send"
-        >
-          <SendIcon width={17} height={17} />
-        </button>
+        (can || !bar) && (
+          <button
+            type="submit"
+            disabled={!can}
+            aria-label={t('chat.send')}
+            className={cx('grid size-[34px] shrink-0 animate-[fade-in_120ms_ease-out] place-items-center rounded-full transition-colors duration-150', can ? 'bg-accent text-ink hover:brightness-95' : 'bg-wash text-ink-3')}
+            data-testid="chat-send"
+          >
+            <SendIcon width={17} height={17} />
+          </button>
+        )
       )}
     </form>
   );
@@ -413,7 +477,7 @@ function PanelHeader({ onClose, closeLabel, closeIcon, leading }: { onClose: () 
         <IconButton label={t('chat.settings')} tipSide="bottom" onClick={() => setSettingsOpen(true)} className="size-9" data-testid="chat-settings">
           <SlidersIcon width={18} height={18} />
         </IconButton>
-        <IconButton label={closeLabel} tipSide="bottom" onClick={onClose} className="size-9">
+        <IconButton label={closeLabel} tipSide="bottom" onClick={onClose} className="size-9" data-testid="chat-collapse">
           {closeIcon}
         </IconButton>
       </div>
@@ -422,25 +486,153 @@ function PanelHeader({ onClose, closeLabel, closeIcon, leading }: { onClose: () 
 }
 
 /* ------------------------------------------------------------------ */
+/* The prompt bar (collapsed conversation)                             */
+/* ------------------------------------------------------------------ */
+
+/** The newest assistant turn or studio edit. */
+function useLast(): ChatItem | undefined {
+  return useChat((s) => {
+    for (let i = s.items.length - 1; i >= 0; i--) if (s.items[i]!.role === 'assistant') return s.items[i];
+    return undefined;
+  });
+}
+
+/** One line about the latest turn: progress, the last change with undo / redo, or the problem. */
+function BarSummary({ item, onOpen }: { item: ChatItem; onOpen: () => void }) {
+  const t = useT();
+  const running = item.phase !== 'done';
+  const n = item.changes?.length ?? 0;
+  const undone = item.undo === 'undone' || item.undo === 'can-redo';
+  let line: ReactNode = null;
+  if (running) line = <Progress label={item.phase === 'repairing' ? t('chat.repairing') : item.phase === 'working' ? t('chat.working') : t('chat.thinking')} />;
+  else if (item.error || item.gaveUp) line = <span className="truncate text-ink-2">{item.gaveUp ? t('chat.gaveUp') : errorText(t, item)}</span>;
+  else if (n) {
+    line = (
+      <span className="flex min-w-0 items-center gap-1.5">
+        <PlanCheckIcon width={16} height={16} className={cx('shrink-0', undone ? 'text-ink-3' : 'text-ink')} />
+        <span className={cx('truncate', undone ? 'text-ink-2 line-through decoration-ink-3' : 'text-ink')}>{item.changes![n - 1]!.summary}</span>
+        {n > 1 && <span className="tnum shrink-0 text-ink-3">+{n - 1}</span>}
+      </span>
+    );
+  } else if (item.text) line = <span className="truncate text-ink-2">{item.text.replace(/\*\*/g, '').split('\n')[0]}</span>;
+  if (!line) return null;
+  return (
+    <div className="flex min-w-0 flex-1 items-center gap-1" data-testid="bar-summary">
+      <button type="button" onClick={onOpen} className="min-w-0 flex-1 py-2 text-left text-[14px]" aria-label={t('chat.peek')}>
+        {line}
+      </button>
+      {!running && item.undo === 'can-undo' && (
+        <SmallButton onClick={() => undoTurn(item.id)} icon={<UndoIcon width={15} height={15} />} className="h-[34px] rounded-full px-3">
+          {t('chat.undo')}
+        </SmallButton>
+      )}
+      {!running && item.undo === 'can-redo' && (
+        <SmallButton onClick={() => redoTurn(item.id)} icon={<RedoIcon width={15} height={15} />} className="h-[34px] rounded-full px-3">
+          {t('chat.redo')}
+        </SmallButton>
+      )}
+      {running && (
+        <button type="button" onClick={stop} aria-label={t('chat.stop')} className="grid size-[34px] shrink-0 place-items-center rounded-full bg-ink text-white">
+          <StopIcon width={16} height={16} />
+        </button>
+      )}
+    </div>
+  );
+}
+
+/**
+ * The primary action: a calm bar at the bottom. Focusing it opens the
+ * conversation (desktop: the panel on the left, which takes the prompt
+ * along; phone: a sheet above the bar, which stays the input). Collapsed,
+ * it shows a one-line summary of the last change with undo.
+ */
+export function PromptBar({ compact, className }: { compact?: boolean; className?: string }) {
+  const open = useStudio((s) => s.chatOpen);
+  const setOpen = useStudio((s) => s.setChatOpen);
+  const draft = useChat((s) => s.draft);
+  const last = useLast();
+  const [typing, setTyping] = useState(false);
+  const wrap = useRef<HTMLDivElement>(null);
+  // While collapsed with an empty prompt, the bar recaps the last turn.
+  const recap = !!last && !draft && !typing && !(compact && open) && (last.phase !== 'done' || !!last.changes?.length || !!last.error || !!last.gaveUp);
+  const openChat = () => {
+    setOpen(true);
+    if (compact) setTyping(true);
+  };
+  useEffect(() => {
+    if (!typing || !compact) return;
+    wrap.current?.querySelector('textarea')?.focus({ preventScroll: true });
+  }, [typing, compact]);
+  return (
+    <div
+      ref={wrap}
+      className={cx('pointer-events-auto relative rounded-[24px] bg-white shadow-[0_10px_34px_rgba(0,0,0,0.12),0_0_0_1px_rgba(0,0,0,0.06)] transition-shadow focus-within:shadow-[0_10px_34px_rgba(0,0,0,0.14),0_0_0_1.5px_var(--color-ink-3)]', className)}
+      data-testid="prompt"
+      onBlur={(e) => {
+        if (!e.currentTarget.contains(e.relatedTarget as Node)) setTyping(false);
+      }}
+    >
+      {recap ? (
+        <div className="flex min-h-12 items-center gap-2 py-[7px] pr-[7px] pl-4">
+          <SparkIcon accent width={19} height={19} className="shrink-0" />
+          <BarSummary item={last!} onOpen={openChat} />
+        </div>
+      ) : (
+        <Composer
+          bar
+          testId="prompt-bar"
+          onFocus={() => {
+            setTyping(true);
+            // Desktop: the panel takes the prompt along (and its focus).
+            if (!open) setOpen(true);
+          }}
+          onEscape={() => {
+            setOpen(false);
+            (document.activeElement as HTMLElement | null)?.blur();
+          }}
+          onSent={() => {
+            // Phone: give the drawing back so the house can be seen growing.
+            if (compact) {
+              setOpen(false);
+              setTyping(false);
+              (document.activeElement as HTMLElement | null)?.blur();
+            }
+          }}
+        />
+      )}
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------------ */
 /* Desktop                                                             */
 /* ------------------------------------------------------------------ */
 
-function DesktopPanel({ onClose }: { onClose: () => void }) {
+/** The conversation, docked on the left; the prompt bar moves into its foot. */
+export function DesktopChat() {
   const t = useT();
+  const open = useStudio((s) => s.chatOpen);
+  const setOpen = useStudio((s) => s.setChatOpen);
   const settingsOpen = useChat((s) => s.settingsOpen);
+  if (!open) return null;
+  return <DesktopPanel onClose={() => setOpen(false)} settingsOpen={settingsOpen} label={t('chat.title')} />;
+}
+
+function DesktopPanel({ onClose, settingsOpen, label }: { onClose: () => void; settingsOpen: boolean; label: string }) {
+  const t = useT();
   useStatusOnOpen();
   return (
     <section
-      aria-label={t('chat.title')}
-      className="glass-solid pointer-events-auto absolute top-[184px] bottom-[92px] left-6 flex w-[360px] animate-[fade-in_160ms_ease-out] flex-col overflow-hidden rounded-ui"
+      aria-label={label}
+      className="glass-solid pointer-events-auto absolute top-[92px] bottom-6 left-6 flex w-[380px] animate-[tray-in_180ms_cubic-bezier(0.22,0.8,0.24,1)] flex-col overflow-hidden rounded-[16px]"
       data-testid="chat-panel"
     >
-      <PanelHeader onClose={onClose} closeLabel={t('chat.close')} closeIcon={<CloseIcon width={18} height={18} />} />
+      <PanelHeader onClose={onClose} closeLabel={t('prompt.collapse')} closeIcon={<ChevronDownIcon width={19} height={19} />} />
       <div className="h-px shrink-0 bg-hairline" />
       <div className="relative flex min-h-0 flex-1 flex-col">
         <MessageList />
         <div className="shrink-0 px-3 pb-3">
-          <Composer autoFocus />
+          <Composer autoFocus onEscape={onClose} />
           <p className="mt-1.5 text-center text-2xs text-ink-3">{t('chat.footer')}</p>
         </div>
         {settingsOpen && <SettingsSheet />}
@@ -449,131 +641,41 @@ function DesktopPanel({ onClose }: { onClose: () => void }) {
   );
 }
 
-export function ChatRail() {
-  const t = useT();
-  const open = useStudio((s) => s.chatOpen);
-  const setOpen = useStudio((s) => s.setChatOpen);
-  if (open) return <DesktopPanel onClose={() => setOpen(false)} />;
-  return (
-    <div className="absolute top-1/2 left-6 -translate-y-1/2">
-      <button
-        type="button"
-        onClick={() => setOpen(true)}
-        aria-label={t('chat.open')}
-        aria-expanded={false}
-        className="glass group pointer-events-auto flex w-[52px] flex-col items-center gap-1.5 rounded-ui pt-3.5 pb-3 text-ink transition-colors hover:bg-white"
-      >
-        <SparkIcon accent width={22} height={22} className="transition-transform duration-300 ease-out-soft group-hover:rotate-12" />
-        <span className="text-xs font-medium text-ink-2 group-hover:text-ink">{t('chat.rail')}</span>
-        <ChevronRightIcon width={16} height={16} className="mt-1 text-ink-3 transition-transform duration-200 group-hover:translate-x-0.5" />
-      </button>
-    </div>
-  );
-}
-
 /* ------------------------------------------------------------------ */
 /* Phone                                                               */
 /* ------------------------------------------------------------------ */
 
-const lastParagraph = (text: string) => text.replace(/\*\*/g, '').trim().split(/\n{2,}/).pop() ?? '';
-
-/** Undo / redo of the latest turn, for the peek strip. */
-function PeekUndo() {
-  const t = useT();
-  const items = useChat((s) => s.items);
-  const running = useChat((s) => s.running);
-  const last = [...items].reverse().find((i) => i.role === 'assistant');
-  if (!last || running) return null;
-  if (last.undo === 'can-undo') return <SmallButton onClick={() => undoTurn(last.id)} icon={<UndoIcon width={15} height={15} />} className="h-9">{t('chat.undo')}</SmallButton>;
-  if (last.undo === 'can-redo') return <SmallButton onClick={() => redoTurn(last.id)} icon={<RedoIcon width={15} height={15} />} className="h-9">{t('chat.redo')}</SmallButton>;
-  return null;
-}
-
-/** Latest assistant line for the peek strip. */
-function PeekLine() {
-  const t = useT();
-  const items = useChat((s) => s.items);
-  const last = [...items].reverse().find((i) => i.role === 'assistant');
-  if (!last) return <p className="truncate text-[13px] text-ink-2">{t('chat.intro')}</p>;
-  const running = last.phase !== 'done';
-  const n = last.changes?.length ?? 0;
-  return (
-    <div className="min-w-0 space-y-1.5">
-      {running && <Progress label={last.phase === 'repairing' ? t('chat.repairing') : last.phase === 'working' ? t('chat.working') : t('chat.thinking')} />}
-      {last.text && <p className="line-clamp-2 text-[13px] leading-5 text-ink">{lastParagraph(last.text)}</p>}
-      {!running && n > 0 && (
-        <p className="flex items-center gap-1.5 text-xs text-ink-2">
-          <PlanCheckIcon width={14} height={14} className="text-ink" />
-          {last.changes![n - 1]!.summary}
-          {n > 1 && <span className="tnum text-ink-3">+{n - 1}</span>}
-          {(last.undo === 'undone' || last.undo === 'can-redo') && <span className="rounded-[5px] bg-wash px-1.5 py-px text-2xs">{t('chat.undone')}</span>}
-        </p>
-      )}
-      {!running && (last.error || last.gaveUp) && <p className="truncate text-xs text-ink-2">{last.gaveUp ? t('chat.gaveUp') : errorText(t, last)}</p>}
-    </div>
-  );
-}
-
-export function MobileChat() {
+/** The conversation as a sheet above the prompt bar (which stays the input). */
+export function MobileChat({ top, bottom }: { top: string; bottom: number }) {
   const t = useT();
   const open = useStudio((s) => s.chatOpen);
   const setOpen = useStudio((s) => s.setChatOpen);
-  const sheet = useChat((s) => s.sheet);
-  const setSheet = useChat((s) => s.setSheet);
   const settingsOpen = useChat((s) => s.settingsOpen);
+  // Sending (a suggestion, or the bar) gives the drawing back: the house is seen changing, the bar shows progress.
+  useEffect(
+    () =>
+      useChat.subscribe((s, p) => {
+        if (s.running && !p.running) useStudio.getState().setChatOpen(false);
+      }),
+    [],
+  );
   if (!open) return null;
-  const full = sheet === 'full';
   return (
     <>
-      {full && <div className="absolute inset-0 z-30 animate-[fade-in_160ms_ease-out] bg-black/10" onClick={() => setSheet('peek')} aria-hidden="true" />}
+      <div className="absolute inset-0 z-20 animate-[fade-in_160ms_ease-out] bg-black/10" onClick={() => setOpen(false)} aria-hidden="true" />
       <MobileStatus />
       <section
         aria-label={t('chat.title')}
         data-testid="chat-panel"
-        data-sheet={sheet}
-        className={cx(
-          'absolute inset-x-0 bottom-0 z-30 flex flex-col overflow-hidden rounded-t-[14px] border-t border-hairline bg-white shadow-[0_-6px_24px_rgba(0,0,0,0.08)]',
-          full ? 'top-[calc(max(4px,env(safe-area-inset-top))+40px)]' : '',
-        )}
+        className="absolute inset-x-2 z-30 flex animate-[tray-in_180ms_cubic-bezier(0.22,0.8,0.24,1)] flex-col overflow-hidden rounded-[16px] bg-white shadow-[0_8px_30px_rgba(0,0,0,0.12)]"
+        style={{ top, bottom }}
       >
-        <button
-          type="button"
-          onClick={() => setSheet(full ? 'peek' : 'full')}
-          aria-label={full ? t('chat.collapse') : t('chat.peek')}
-          aria-expanded={full}
-          className="flex h-5 w-full shrink-0 touch-none items-start justify-center pt-2"
-        >
-          <span className="h-1 w-9 rounded-full bg-hairline" />
-        </button>
-        {full ? (
-          <>
-            <PanelHeader onClose={() => setOpen(false)} closeLabel={t('chat.close')} closeIcon={<CloseIcon width={19} height={19} />} />
-            <div className="h-px shrink-0 bg-hairline" />
-            <div className="relative flex min-h-0 flex-1 flex-col">
-              <MessageList />
-              <div className="shrink-0 px-3 pt-1 pb-[max(10px,env(safe-area-inset-bottom))]">
-                <Composer onSent={() => setSheet('peek')} />
-              </div>
-              {settingsOpen && <SettingsSheet />}
-            </div>
-          </>
-        ) : (
-          <div className="px-4 pb-[max(10px,env(safe-area-inset-bottom))]">
-            <div className="flex items-start gap-2">
-              <button type="button" onClick={() => setSheet('full')} className="min-w-0 flex-1 py-1 text-left" aria-label={t('chat.peek')}>
-                <PeekLine />
-              </button>
-              <PeekUndo />
-              <IconButton label={t('chat.peek')} tip={false} onClick={() => setSheet('full')} className="size-9 shrink-0">
-                <ChevronUpIcon width={18} height={18} />
-              </IconButton>
-              <IconButton label={t('chat.close')} tip={false} onClick={() => setOpen(false)} className="-mr-2 size-9 shrink-0">
-                <CloseIcon width={18} height={18} />
-              </IconButton>
-            </div>
-            <Composer className="mt-2" />
-          </div>
-        )}
+        <PanelHeader onClose={() => setOpen(false)} closeLabel={t('prompt.collapse')} closeIcon={<ChevronDownIcon width={19} height={19} />} />
+        <div className="h-px shrink-0 bg-hairline" />
+        <div className="relative flex min-h-0 flex-1 flex-col">
+          <MessageList />
+          {settingsOpen && <SettingsSheet />}
+        </div>
       </section>
     </>
   );

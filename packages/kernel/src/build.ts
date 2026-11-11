@@ -208,7 +208,7 @@ export function buildHouseDetailed(house: ResolvedHouse, opts: BuildOptions = {}
   const levels: LevelSpan[] = ctx.levels.map((l) => ({ id: l.level.id, elevation: l.elev * MM, top: l.top * MM, cutZ: (l.elev + CUT_HEIGHT) * MM }));
   const geometry: HouseGeometry = {
     parts,
-    site: { latitude: site.latitude, longitude: site.longitude, northDeg: site.northDeg, utcOffsetHours: site.utcOffsetHours ?? DEFAULT_UTC_OFFSET },
+    site: { latitude: site.latitude, longitude: site.longitude, northDeg: site.northDeg, utcOffsetHours: site.utcOffsetHours ?? DEFAULT_UTC_OFFSET, ...(site.timeZone ? { timeZone: site.timeZone } : {}) },
     levels,
     floorLines: new Float32Array(ex.floorLines.map((v) => v * MM)),
     entourage,

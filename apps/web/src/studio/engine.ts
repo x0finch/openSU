@@ -127,11 +127,12 @@ export interface EngineOptions {
 
 export function createEngine(container: HTMLElement, resolved: ResolvedHouse, opts: EngineOptions = {}): Engine {
   const viewer = new IllustrationViewer(container, { pixelRatio: opts.pixelRatio });
+  /** True north in scene axes (model +Y turned by the site's northDeg). */
+  const north = new Vector3(0, 0, -1);
   if (opts.onNorth) {
     const onNorth = opts.onNorth;
     const right = new Vector3();
     const up = new Vector3();
-    const north = new Vector3(0, 0, -1); // model +Y in scene axes
     viewer.onAfterRender = () => {
       const m = viewer.camera.matrixWorld;
       right.setFromMatrixColumn(m, 0);
@@ -157,6 +158,8 @@ export function createEngine(container: HTMLElement, resolved: ResolvedHouse, op
     const house = createHouseObject(buildHouse(r), viewer.palette);
     viewer.setContent(house.root, house.framePoints);
     site = house.root.userData.site as StudySite;
+    const n = (r.site.northDeg * Math.PI) / 180;
+    north.set(Math.sin(n), 0, -Math.cos(n));
     const min = new Vector3(Infinity, Infinity, Infinity);
     const max = new Vector3(-Infinity, -Infinity, -Infinity);
     for (const p of house.framePoints) {

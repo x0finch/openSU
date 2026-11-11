@@ -47,6 +47,11 @@ export const Site = z.strictObject({
   longitude: z.number().min(-180).max(180),
   /** Local clock offset from UTC in hours (sun study); default 8 (China). */
   utcOffsetHours: z.number().min(-12).max(14).optional(),
+  /** IANA time zone of the place (e.g. "Europe/Berlin"); when set it wins over
+   *  `utcOffsetHours` and gives the date's offset, daylight saving included. */
+  timeZone: z.string().min(1).max(64).optional(),
+  /** Display name of the place the user chose (city or "near ..."); informational. */
+  placeName: z.string().min(1).max(80).optional(),
   fence: z.strictObject({ height: Length, gates: z.array(Gate) }).optional(),
 });
 export type Site = z.infer<typeof Site>;

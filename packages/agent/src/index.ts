@@ -2,7 +2,7 @@
 // turn controller) and the built-in starting points. No DOM; the network is
 // whatever adapter the caller passes in.
 export { SYSTEM_PROMPT, houseContext } from './prompt';
-export { createHouseTools, editHouseInputSchema, type AppliedBatch, type ToolHooks } from './tools';
+export { createHouseTools, editHouseInputSchema, type AppliedBatch, type FindPlace, type PlaceMatch, type ToolHooks } from './tools';
 export {
   HouseSession, runTurn, pastMessages, classifyError, MAX_REPAIRS, HISTORY_TURNS,
   type AgentEvent, type PastTurn, type TurnError, type TurnOptions, type TurnResult, type TurnStatus,

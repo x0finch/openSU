@@ -63,11 +63,27 @@ function firstChangedLevel(before: House, after: House): number {
   return i < 0 ? Math.max(0, after.levels.length - 1) : i;
 }
 
+/** A place from the host's built-in list (see `find_place`). */
+export interface PlaceMatch {
+  /** Display name, e.g. "成都" or "Berlin". */
+  name: string;
+  /** Region and country, e.g. "四川, 中国" or "Berlin, Germany". */
+  region: string;
+  latitude: number;
+  longitude: number;
+  /** IANA time zone. */
+  timeZone: string;
+}
+
+/** Looks a place up by name (any language the host supports); best match first. */
+export type FindPlace = (query: string) => Promise<PlaceMatch[]>;
+
 /**
  * The tools for one turn. `getHouse` / `setHouse` read and write the turn's
- * working house (the last valid state).
+ * working house (the last valid state). With `findPlace` the model can
+ * also look up where the house is (no network: the host's own list).
  */
-export function createHouseTools(getHouse: () => House, hooks: ToolHooks) {
+export function createHouseTools(getHouse: () => House, hooks: ToolHooks, findPlace?: FindPlace) {
   const editHouse = toolDefinition({
     name: 'edit_house',
     description: `${EDIT_HOUSE_DESCRIPTION} Also give "summary": one short line in the user's language. The result lists what each command did and the changed lines of the house description.`,
@@ -129,5 +145,21 @@ export function createHouseTools(getHouse: () => House, hooks: ToolHooks) {
     return { ok: true, description: describeHouse(house) };
   });
 
-  return [editHouse, getHouseTool, newHouse] as const;
+  const findPlaceTool = toolDefinition({
+    name: 'find_place',
+    description: 'Look up a city or town by name (Chinese, pinyin or English) in the built-in place list. Returns up to 5 matches with latitude, longitude and IANA time zone, best first. Then set the site with edit_house update_site { latitude, longitude, timeZone, placeName }.',
+    inputSchema: lenientSchema({
+      type: 'object',
+      properties: { query: { type: 'string', description: 'Place name, e.g. "成都", "chengdu", "Berlin".' } },
+      required: ['query'],
+      additionalProperties: false,
+    }),
+  }).server(async (input: unknown) => {
+    const query = String((input as { query?: unknown } | null)?.query ?? '').trim();
+    if (!query || !findPlace) return { ok: false, matches: [], note: 'Give a place name.' };
+    const matches = (await findPlace(query)).slice(0, 5);
+    return matches.length ? { ok: true, matches } : { ok: false, matches: [], note: 'No such place in the list. Ask the user for a nearby larger town, or for latitude and longitude.' };
+  });
+
+  return findPlace ? ([editHouse, getHouseTool, newHouse, findPlaceTool] as const) : ([editHouse, getHouseTool, newHouse] as const);
 }

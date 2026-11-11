@@ -2,6 +2,8 @@
 // and to the studio's house. The agent loop and the tools run here, in the
 // browser; the Worker only relays the model stream.
 import type { AgentEvent, AppliedBatch, HouseSession, PastTurn, TurnError } from '@opensu/agent';
+import type { House } from '@opensu/model';
+import { countryName, loadPlaces } from '../lib/site';
 import { create } from 'zustand';
 import { useStudio } from '../lib/store';
 import { type AiSettings, loadSettings, relayHeaders, requestModel, saveSettings } from './settings';
@@ -25,6 +27,8 @@ export interface ChatItem {
   prompt?: string;
   /** Assistant: validation errors of the last rejected batch (shown when giving up). */
   lastErrors?: string[];
+  /** An edit the user made in the UI (place, orientation, template): no model involved. */
+  manual?: boolean;
 }
 
 export interface ServerStatus {
@@ -39,11 +43,11 @@ interface ChatState {
   settings: AiSettings;
   settingsOpen: boolean;
   server: ServerStatus | null;
-  /** Phone: the chat sheet covers the drawing (`full`) or shows a strip (`peek`). */
-  sheet: 'full' | 'peek';
+  /** Unsent text of the prompt bar (kept while it moves between bar and panel). */
+  draft: string;
+  setDraft: (draft: string) => void;
   setSettings: (s: AiSettings) => void;
   setSettingsOpen: (open: boolean) => void;
-  setSheet: (sheet: 'full' | 'peek') => void;
 }
 
 export const useChat = create<ChatState>((set) => ({
@@ -52,13 +56,13 @@ export const useChat = create<ChatState>((set) => ({
   settings: loadSettings(),
   settingsOpen: false,
   server: null,
-  sheet: 'full',
+  draft: '',
+  setDraft: (draft) => set({ draft }),
   setSettings: (settings) => {
     saveSettings(settings);
     set({ settings });
   },
   setSettingsOpen: (settingsOpen) => set({ settingsOpen }),
-  setSheet: (sheet) => set({ sheet }),
 }));
 
 type AgentModule = typeof import('@opensu/agent');
@@ -97,6 +101,63 @@ function syncSession(m: AgentModule): HouseSession {
   return session;
 }
 
+/** The assistant's find_place tool: the built-in place list (lazy chunk), no network. */
+async function findPlace(query: string) {
+  const { searchPlaces } = await loadPlaces();
+  return searchPlaces(query, 5).map((p) => ({
+    name: p.zh || p.en,
+    region: [p.regionZh || p.regionEn, countryName(p.cc, 'en')].filter(Boolean).join(', '),
+    latitude: p.lat,
+    longitude: p.lon,
+    timeZone: p.tz,
+  }));
+}
+
+/** Marks a new undo step: earlier steps are kept, redo is gone. */
+function pushCommitted(id: string): void {
+  for (const k of committed) patch(k, { undo: 'kept' });
+  for (const k of redoable) patch(k, { undo: 'undone' });
+  redoable.length = 0;
+  committed.push(id);
+}
+
+/**
+ * An edit made in the UI (location, orientation): applied with the model's
+ * commands, validated, one undo step on the same history as the assistant's
+ * turns, and listed in the conversation. Returns false when rejected.
+ */
+export async function applyEdit(commands: unknown[], summary: string): Promise<boolean> {
+  if (useChat.getState().running) return false;
+  // Never on the server: keeps the model chunk out of the Worker bundle.
+  const [m, model] = await Promise.all([loadAgent(), import.meta.env.SSR ? new Promise<typeof import('@opensu/model')>(() => {}) : import('@opensu/model')]);
+  const sess = syncSession(m);
+  const r = model.applyCommands(sess.house, commands);
+  if (!r.ok) {
+    console.warn('edit rejected', r.issues);
+    return false;
+  }
+  commitManual(sess, r.house, { summary, details: r.applied.map((a) => a.summary) });
+  useStudio.getState().setHouse(r.house);
+  return true;
+}
+
+/** Replaces the whole house from the UI (a template), as one undo step. */
+export async function replaceHouse(house: House, summary: string): Promise<void> {
+  if (useChat.getState().running) return;
+  const m = await loadAgent();
+  const sess = syncSession(m);
+  commitManual(sess, house, { summary, details: [`New house "${house.name}"`] });
+  useStudio.getState().setHouse(house, { fromLevel: 0 });
+}
+
+function commitManual(sess: HouseSession, house: House, batch: AppliedBatch): void {
+  sess.commit(house);
+  const id = nextId();
+  pushCommitted(id);
+  useChat.setState((s) => ({ items: [...s.items, { id, role: 'assistant', text: '', phase: 'done', changes: [batch], undo: 'can-undo', manual: true }] }));
+  past.set(id, { user: '(The user edited the house in the studio, not in this chat.)', assistant: '', changes: [batch.summary] });
+}
+
 export async function fetchServerStatus(): Promise<void> {
   try {
     const res = await fetch(endpoint(), { headers: { accept: 'application/json' } });
@@ -113,8 +174,6 @@ export async function send(text: string): Promise<void> {
   const id = nextId();
   useChat.setState((s) => ({
     running: true,
-    // Phones: drop to the peek strip so the drawing shows the house change.
-    sheet: 'peek',
     items: [...s.items, { id: userId, role: 'user', text: prompt }, { id, role: 'assistant', text: '', phase: 'thinking', prompt }],
   }));
   abort = new AbortController();
@@ -140,13 +199,9 @@ export async function send(text: string): Promise<void> {
       signal: abort.signal,
       onEvent,
       threadId: 'studio',
+      findPlace,
     });
-    if (r.committed) {
-      for (const k of committed) patch(k, { undo: 'kept' });
-      for (const k of redoable) patch(k, { undo: 'undone' });
-      redoable.length = 0;
-      committed.push(id);
-    }
+    if (r.committed) pushCommitted(id);
     past.set(id, { user: prompt, assistant: r.text, changes: r.changes.map((c) => c.summary) });
     patch(id, {
       text: r.text,
@@ -183,7 +238,7 @@ export function undoTurn(id: string): void {
   const p = past.get(id);
   if (p) past.set(id, { ...p, changes: [], assistant: `${p.assistant}\n(The user undid the edits of this turn.)` });
   // The studio stores this exact object, so the session stays in step.
-  useStudio.getState().setHouse(house, { fromLevel: firstDifferentLevel(before, house) });
+  useStudio.getState().setHouse(house, growFrom(before, house));
 }
 
 export function redoTurn(id: string): void {
@@ -196,13 +251,16 @@ export function redoTurn(id: string): void {
   if (prev) patch(prev, { undo: 'kept' });
   committed.push(id);
   patch(id, { undo: 'can-undo' });
-  useStudio.getState().setHouse(house, { fromLevel: firstDifferentLevel(before, house) });
+  useStudio.getState().setHouse(house, growFrom(before, house));
 }
 
-function firstDifferentLevel(a: { levels: unknown[]; grid: unknown }, b: { levels: unknown[]; grid: unknown }): number {
-  if (a.levels.length !== b.levels.length || JSON.stringify(a.grid) !== JSON.stringify(b.grid)) return 0;
-  const i = b.levels.findIndex((l, k) => JSON.stringify(l) !== JSON.stringify(a.levels[k]));
-  return Math.max(0, i);
+/** How an undo / redo should grow the 3D view: from the first changed level; not at all when no level changed (a site edit). */
+function growFrom(a: House, b: House): { fromLevel: number } | undefined {
+  const same = (x: unknown, y: unknown) => JSON.stringify(x) === JSON.stringify(y);
+  if (a.levels.length !== b.levels.length || !same(a.grid, b.grid)) return { fromLevel: 0 };
+  const i = b.levels.findIndex((l, k) => !same(l, a.levels[k]));
+  if (i >= 0) return { fromLevel: i };
+  return same(a.roofs, b.roofs) ? undefined : { fromLevel: 0 };
 }
 
 /** Send the failed turn's message again (the failed exchange is removed). */

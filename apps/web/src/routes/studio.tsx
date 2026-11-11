@@ -1,4 +1,5 @@
 import { createFileRoute } from '@tanstack/react-router';
+import { useT } from '../lib/i18n';
 import { Studio } from '../studio/Studio';
 
 /**
@@ -13,13 +14,20 @@ export const Route = createFileRoute('/studio')({
   }),
   component: Studio,
   pendingComponent: StudioFallback,
+  // Coming from the landing page: show the loading state at once, not a blank page.
+  pendingMs: 0,
+  pendingMinMs: 0,
 });
 
 function StudioFallback() {
+  const t = useT();
   return (
     <div className="fixed inset-0 grid place-items-center bg-page" role="status">
-      <div className="relative h-px w-40 overflow-hidden bg-hairline">
-        <div className="absolute inset-y-0 left-0 w-2/5 animate-[progress-sweep_1.2s_cubic-bezier(0.6,0,0.4,1)_infinite] bg-ink" />
+      <div className="flex w-40 flex-col items-center gap-3">
+        <div className="relative h-px w-full overflow-hidden bg-hairline">
+          <div className="absolute inset-y-0 left-0 w-2/5 animate-[progress-sweep_1.2s_cubic-bezier(0.6,0,0.4,1)_infinite] bg-ink" />
+        </div>
+        <p className="text-xs text-ink-2">{t('loading.studio')}</p>
       </div>
     </div>
   );

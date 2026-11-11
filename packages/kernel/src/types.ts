@@ -106,8 +106,10 @@ export interface SiteInfo {
   longitude: number;
   /** True north, degrees clockwise from model +Y. */
   northDeg: number;
-  /** Local clock offset from UTC, hours (default 8). */
+  /** Local clock offset from UTC, hours (default 8); used when there is no `timeZone`. */
   utcOffsetHours: number;
+  /** IANA time zone: the offset follows the date (daylight saving). */
+  timeZone?: string;
 }
 
 /** One storey, metres. */

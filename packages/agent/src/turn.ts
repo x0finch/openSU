@@ -3,7 +3,7 @@
 import { describeHouse, History, type House, validate } from '@opensu/model';
 import { type AnyTextAdapter, chat, combineStrategies, maxIterations, type ModelMessage } from '@tanstack/ai';
 import { houseContext, SYSTEM_PROMPT } from './prompt';
-import { type AppliedBatch, createHouseTools } from './tools';
+import { type AppliedBatch, createHouseTools, type FindPlace } from './tools';
 
 /** Repair attempts per user message after a rejected edit. */
 export const MAX_REPAIRS = 3;
@@ -83,6 +83,8 @@ export interface TurnOptions {
   onEvent?: (e: AgentEvent) => void;
   threadId?: string;
   maxRepairs?: number;
+  /** Place lookup for the `find_place` tool (the tool is offered only with it). */
+  findPlace?: FindPlace;
 }
 
 /** Earlier turns as plain messages (newest `HISTORY_TURNS`). */
@@ -147,7 +149,7 @@ export async function runTurn(opts: TurnOptions): Promise<TurnResult> {
       changes.push(batch);
       onEvent?.({ type: 'house', house, reason: 'new', fromLevel: 0, batch });
     },
-  });
+  }, opts.findPlace);
 
   // HTTP errors of the relay, read before the SDK turns them into exceptions.
   let httpError: { status: number; body: unknown } | null = null;

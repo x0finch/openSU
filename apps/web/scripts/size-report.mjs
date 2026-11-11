@@ -8,7 +8,7 @@ import { gzipSync } from 'node:zlib';
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const client = join(root, 'dist/client');
 const assets = join(client, 'assets');
-const BUDGET = { studioInitial: 200 * 1024, viewer: 300 * 1024, assistant: 150 * 1024 };
+const BUDGET = { studioInitial: 200 * 1024, viewer: 300 * 1024, assistant: 150 * 1024, places: 400 * 1024 };
 
 const gz = new Map();
 const deps = new Map();
@@ -83,6 +83,8 @@ report('model chunk (lazy)', model);
 report('plan chunk (lazy)', plan);
 report('sheet chunk (lazy, on top)', sheets);
 report('assistant chunk (lazy, chat)', assistant, BUDGET.assistant);
+// The built-in place list (location picker, find_place): only on first use.
+report('places chunk (lazy, location)', lazy(/^places-.*\.js$/), BUDGET.places);
 report('CSS', studio.css);
 // The Worker (dist/server) must stay small and never carry viewer code.
 const server = join(root, 'dist/server');

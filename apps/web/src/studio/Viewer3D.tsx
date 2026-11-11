@@ -36,7 +36,8 @@ function scenePreset(s: StudioState) {
 
 /** Applies the store's sun study to the engine and reports the sun back (for the time bar). */
 function applySun(e: Engine, s: StudioState): void {
-  const date = sunDate(s.sun.dateId);
+  // Seasons of the site: the winter solstice is in June south of the equator.
+  const date = sunDate(s.sun.dateId, s.house?.site.latitude);
   e.setSun(s.sun.on ? { date, minutes: s.sun.minutes } : null);
   const sun = e.sunAt(date, s.sun.minutes);
   const info = {
@@ -46,6 +47,8 @@ function applySun(e: Engine, s: StudioState): void {
     minutes: sun.minutes,
     azimuth: sun.trueAzimuthDeg,
     elevation: sun.trueElevationDeg,
+    solarNoon: sun.times.solarNoon,
+    utcOffsetHours: sun.utcOffsetHours,
   };
   const cur = s.sunInfo;
   if (!cur || (Object.keys(info) as (keyof typeof info)[]).some((k) => info[k] !== cur[k])) s.setSunInfo(info);
@@ -163,6 +166,39 @@ export function Viewer3D({ resolved, active, insets, compact = false }: { resolv
     [],
   );
 
+  // Double-click / double-tap on the drawing goes back to the preset framing.
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    let lastUp = 0;
+    let downAt = { x: 0, y: 0, t: 0 };
+    const reset = () => {
+      const s = useStudio.getState();
+      if (!s.walk) s.resetView();
+    };
+    const down = (e: PointerEvent) => {
+      downAt = { x: e.clientX, y: e.clientY, t: performance.now() };
+    };
+    const up = (e: PointerEvent) => {
+      if (e.pointerType === 'mouse') return;
+      const now = performance.now();
+      // A tap: short and still. Two taps within 320 ms reset.
+      if (now - downAt.t > 250 || Math.hypot(e.clientX - downAt.x, e.clientY - downAt.y) > 10) return;
+      if (now - lastUp < 320) {
+        lastUp = 0;
+        reset();
+      } else lastUp = now;
+    };
+    el.addEventListener('dblclick', reset);
+    el.addEventListener('pointerdown', down);
+    el.addEventListener('pointerup', up);
+    return () => {
+      el.removeEventListener('dblclick', reset);
+      el.removeEventListener('pointerdown', down);
+      el.removeEventListener('pointerup', up);
+    };
+  }, []);
+
   useEffect(() => {
     const el = ref.current;
     if (!el) return;
@@ -176,7 +212,7 @@ export function Viewer3D({ resolved, active, insets, compact = false }: { resolv
       <div ref={ref} className="absolute inset-0 [&>canvas]:h-full! [&>canvas]:w-full!" data-testid="viewer" />
       {status === 'ready' && active && !walk && (
         <div
-          className="glass pointer-events-none absolute bottom-3 left-3 grid size-10 place-items-center rounded-full md:bottom-6 md:left-6 md:size-12"
+          className="glass pointer-events-none absolute right-3 bottom-3 grid size-10 place-items-center rounded-full md:right-6 md:bottom-6 md:size-12"
           role="img"
           aria-label={t('north')}
         >

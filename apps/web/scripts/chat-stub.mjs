@@ -75,6 +75,27 @@ const SCRIPTS = [
     ],
   },
   {
+    // Where the house is and which way it faces: look the city up, then
+    // set the site from the tool's answer (the stub reads it back).
+    name: 'place',
+    match: /我家在|my house is in/i,
+    steps: (zh, results) => {
+      let best = null;
+      try {
+        best = JSON.parse(results[0] ?? '{}').matches?.[0] ?? null;
+      } catch {
+        /* no result yet */
+      }
+      return [
+        { tools: [{ name: 'find_place', args: { query: zh ? '成都' : 'Chengdu' } }] },
+        best
+          ? { tools: [{ name: 'edit_house', args: { summary: zh ? '位置改为成都，朝南偏东 15°' : 'Site: Chengdu, facing 15° east of south', commands: [{ op: 'update_site', latitude: best.latitude, longitude: best.longitude, timeZone: best.timeZone, placeName: zh ? '成都' : 'Chengdu', northDeg: 15 }] } }] }
+          : { text: '(stub) find_place returned nothing' },
+        { text: zh ? '好的：房子在成都（北纬 30.66°），正面朝南偏东 15°。冬至正午太阳高度约 36°，比杭州略低一点。' : 'Done: the house is in Chengdu (30.66° N), its front facing 15° east of south.' },
+      ];
+    },
+  },
+  {
     name: 'give-up',
     match: /9 ?米|9 ?m door/i,
     steps: () => Array.from({ length: 6 }, () => ({ tools: [{ name: 'edit_house', args: { summary: '开 9 米的门', commands: [{ op: 'add_opening', kind: 'door', host: { space: 'l1-living', side: 'S' }, width: 9000 }] } }] })),
@@ -141,7 +162,11 @@ export function startStub(port = 0) {
     const body = JSON.parse(raw);
     const { text, toolResults } = lastUser(body.messages ?? []);
     const script = SCRIPTS.find((s) => s.match.test(text));
-    const steps = script.steps(cjk(text));
+    // Tool results since the last user message (some scripts read them back).
+    const msgs = body.messages ?? [];
+    const lastUserAt = msgs.map((m) => m.role).lastIndexOf('user');
+    const results = msgs.slice(lastUserAt + 1).filter((m) => m.role === 'tool').map((m) => (typeof m.content === 'string' ? m.content : JSON.stringify(m.content)));
+    const steps = script.steps(cjk(text), results);
     const step = steps[Math.min(toolResults, steps.length - 1)];
     received.push({
       authorization: req.headers.authorization ?? null,

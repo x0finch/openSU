@@ -4,18 +4,17 @@ import { useT } from '../lib/i18n';
 import { Loading } from './Loading';
 import type { PlanDrawing } from './plan-data';
 
-/** Space kept free for floating chrome when fitting (px). */
-const INSETS = {
-  // Plan mode has no bottom dock (only the zoom buttons in the corner).
-  desktop: { top: 84, right: 104, bottom: 28, left: 104 },
-  mobile: { top: 76, right: 12, bottom: 12, left: 12 },
-};
-
 /** Smallest room-name size on screen at the fitted zoom (CSS px). */
 const MIN_LABEL_PX = { desktop: 12, mobile: 10 };
 
-function fitArea(W: number, H: number) {
-  const ins = W >= 768 ? INSETS.desktop : INSETS.mobile;
+/** Space kept free for floating chrome when fitting (px): title and mode switch on top, the dock below, an open left column. */
+interface Free {
+  left: number;
+  bottom: number;
+}
+
+function fitArea(W: number, H: number, free: Free) {
+  const ins = W >= 768 ? { top: 84, right: 40, bottom: Math.max(28, free.bottom), left: Math.max(40, free.left + 16) } : { top: 8, right: 12, bottom: 8, left: 12 };
   return { ins, aw: Math.max(80, W - ins.left - ins.right), ah: Math.max(80, H - ins.top - ins.bottom) };
 }
 
@@ -30,7 +29,9 @@ export const planCommands: { zoom: (factor: number) => void; fit: () => void } =
 
 let planMod: Promise<typeof import('./plan-data')> | null = null;
 
-export function PlanView({ resolved, levelId, active }: { resolved: ResolvedHouse; levelId: string; active: boolean }) {
+export function PlanView({ resolved, levelId, active, insetLeft = 0, insetBottom = 0 }: { resolved: ResolvedHouse; levelId: string; active: boolean; insetLeft?: number; insetBottom?: number }) {
+  const free = useRef<Free>({ left: insetLeft, bottom: insetBottom });
+  free.current = { left: insetLeft, bottom: insetBottom };
   const t = useT();
   const box = useRef<HTMLDivElement>(null);
   const sheet = useRef<HTMLDivElement>(null);
@@ -45,7 +46,7 @@ export function PlanView({ resolved, levelId, active }: { resolved: ResolvedHous
     if (import.meta.env.SSR || !size) return;
     void (planMod ??= import('./plan-data')).then((m) => {
       if (!alive) return;
-      const { aw, ah } = fitArea(size.w, size.h);
+      const { aw, ah } = fitArea(size.w, size.h, free.current);
       const minPx = size.w >= 768 ? MIN_LABEL_PX.desktop : MIN_LABEL_PX.mobile;
       // Phones: no dimension chains or title (unreadable at that size; the level is named in the UI).
       setPlan(m.planForViewport(resolved, levelId, (w, h) => Math.min(aw / w, ah / h), minPx, size.w < 768));
@@ -66,7 +67,7 @@ export function PlanView({ resolved, levelId, active }: { resolved: ResolvedHous
   const fit = useCallback(() => {
     const b = box.current;
     if (!b || !plan) return;
-    const { ins, aw, ah } = fitArea(b.clientWidth, b.clientHeight);
+    const { ins, aw, ah } = fitArea(b.clientWidth, b.clientHeight, free.current);
     const s = Math.min(aw / plan.width, ah / plan.height);
     fitScale.current = s;
     xf.current = { s, x: ins.left + (aw - plan.width * s) / 2, y: ins.top + (ah - plan.height * s) / 2 };
@@ -85,6 +86,10 @@ export function PlanView({ resolved, levelId, active }: { resolved: ResolvedHous
   );
 
   useLayoutEffect(fit, [fit]);
+  // The free area changed (assistant opened, dock grew): fit again.
+  useEffect(() => {
+    fit();
+  }, [insetLeft, insetBottom, fit]);
 
   useEffect(() => {
     const b = box.current;

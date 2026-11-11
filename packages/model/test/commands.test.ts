@@ -352,3 +352,17 @@ describe('History', () => {
     expect(validate(hist.current)).toEqual([]);
   });
 });
+
+describe('update_site: place and time zone', () => {
+  it('sets and removes the place name and the IANA time zone; rejects unknown zones', () => {
+    const r = run([{ op: 'update_site', latitude: 30.66, longitude: 104.06, northDeg: 15, placeName: '成都', timeZone: 'Asia/Shanghai' }]);
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.house.site).toMatchObject({ latitude: 30.66, longitude: 104.06, northDeg: 15, placeName: '成都', timeZone: 'Asia/Shanghai' });
+    expect(resolve(r.house).site.timeZone).toBe('Asia/Shanghai');
+    const back = run([{ op: 'update_site', placeName: null, timeZone: null }], r.house);
+    expect(back.ok).toBe(true);
+    if (back.ok) expect('placeName' in back.house.site || 'timeZone' in back.house.site).toBe(false);
+    expect(run([{ op: 'update_site', timeZone: 'Mars/Olympus' }]).ok).toBe(false);
+  });
+});

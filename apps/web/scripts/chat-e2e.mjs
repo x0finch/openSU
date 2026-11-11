@@ -93,6 +93,7 @@ const browser = await playwright.chromium.launch({
 
 async function open(base, ctxOpts, path) {
   const ctx = await browser.newContext(ctxOpts);
+  await ctx.addInitScript(() => localStorage.setItem('opensu.hints.v1', 'done'));
   const page = await ctx.newPage();
   page.on('pageerror', (e) => failures.push(`${path}: page error ${e.message}`));
   page.on('console', (m) => {
@@ -107,7 +108,8 @@ async function open(base, ctxOpts, path) {
 async function shot(page, name) {
   if (smoke) return;
   const file = resolve(outDir, `${name}.png`);
-  await page.screenshot({ path: file });
+  // Software GL on a busy machine can take long for one frame.
+  await page.screenshot({ path: file, timeout: 180000 });
   console.log(`  -> ${file}`);
 }
 
@@ -134,7 +136,7 @@ const pixelDiff = (a, b) => {
 
 /** Interior floor area as the studio shows it (m²). */
 const shownArea = async (page) => {
-  const t = await page.locator('dd', { hasText: 'm²' }).first().textContent();
+  const t = await page.getByTestId('fact-area').first().textContent();
   return Number(/([\d.]+)/.exec(t ?? '')?.[1]);
 };
 
@@ -169,12 +171,16 @@ try {
   // --- Desktop: the main flow ---------------------------------------------
   if (wanted('chat-desktop') || wanted('chat-repair') || wanted('chat-error') || wanted('chat-settings') || wanted('chat-giveup') || wanted('chat-new')) {
     const { ctx, page } = await open(preview.base, DESKTOP, '/studio');
-    await page.getByRole('button', { name: '打开 AI 助手' }).click();
+    // Focusing the prompt bar opens the conversation; the prompt moves into the panel with its focus.
+    await page.getByTestId('prompt-bar').click();
     await page.waitForSelector('[data-testid=suggestions]');
     await page.waitForTimeout(300);
+    check(await page.evaluate(() => document.activeElement?.dataset.testid === 'chat-input'), 'focusing the prompt bar opens the panel with the prompt focused');
     await shot(page, 'chat-empty-desktop');
 
     const area0 = await shownArea(page);
+    // Opening the panel re-frames the house (~0.4 s): wait until the camera has settled.
+    await page.waitForTimeout(900);
     await settle(page);
     const px0 = await canvasPixels(page);
 
@@ -290,9 +296,28 @@ try {
     await waitDone(page, 6);
     await waitGrown(page);
 
+    // 8b. Where the house is, said in a sentence: find_place (the built-in
+    //     list, no network) and then update_site with its answer.
+    await sendMessage(page, '我家在成都，房子朝南偏东 15 度');
+    await waitDone(page, 7);
+    const placeCalls = received('place');
+    const site = await page.evaluate(() => window.__studio.store.getState().house.site);
+    check(placeCalls.length === 3 && placeCalls[0].tools.includes('find_place'), `place: the model is offered find_place and the turn takes 3 calls (${placeCalls.length})`);
+    check(/"matches":\[\{"name":"成都市"/.test(placeCalls[1]?.toolResults?.[0] ?? ''), 'place: find_place answers with Chengdu from the built-in list');
+    check(site.latitude === 30.66 && site.longitude === 104.06 && site.timeZone === 'Asia/Shanghai' && site.northDeg === 15 && site.placeName === '成都', `place: the site is set by update_site (${JSON.stringify(site)})`);
+    await page.getByTestId('chat-collapse').click();
+    await page.getByTestId('bar-sun').click();
+    check((await page.getByTestId('sun-place').textContent())?.includes('成都') && (await page.getByTestId('sun-orientation').textContent())?.includes('南偏东 15°'), 'place: the sun tray shows the new place and orientation');
+    await page.waitForTimeout(300);
+    await shot(page, 'chat-place-desktop');
+    await page.keyboard.press('Escape');
+    await page.evaluate(() => window.__studio.store.getState().setSun({ on: false }));
+
     // 9. Walk through the house the assistant just made: the walk button
     //    tucks the chat away and starts at the new house's entrance.
-    await page.getByRole('button', { name: '进入室内漫游' }).click();
+    // After a change the bar sums it up; its line opens the conversation again.
+    await page.getByTestId('bar-summary').getByRole('button', { name: '展开对话' }).click();
+    await page.getByTestId('bar-walk').click();
     await page.waitForFunction(() => window.__studio?.engine?.viewer?.walking === true, null, { timeout: 30000 });
     await page.waitForTimeout(400);
     check((await page.getByTestId('chat-panel').count()) === 0, 'walk mode tucks the chat panel away');
@@ -308,7 +333,7 @@ try {
     check(atStart && Math.hypot(walk.s1.x - walk.s0.x, walk.s1.y - walk.s0.y) > 0.3, `walk follows the edited house: starts at its entrance and moves (${JSON.stringify(walk.s0)})`);
     await settle(page);
     await shot(page, 'chat-walk-after-edit-desktop');
-    await page.getByRole('button', { name: '打开 AI 助手' }).click();
+    await page.getByTestId('bar-summary').getByRole('button', { name: '展开对话' }).click();
     await page.waitForTimeout(500);
     check((await page.evaluate(() => window.__studio.engine.viewer.walking)) === false, 'opening the assistant ends the walk');
     await ctx.close();
@@ -317,16 +342,18 @@ try {
   // --- Phone ---------------------------------------------------------------
   if (wanted('chat-phone')) {
     const { ctx, page } = await open(preview.base, PHONE, '/studio');
-    await page.getByRole('button', { name: '打开 AI 助手' }).click();
+    // The prompt bar stays the input; the conversation opens as a sheet above it.
+    await page.getByTestId('prompt-bar').click();
     await page.waitForSelector('[data-testid=suggestions]');
     await page.waitForTimeout(300);
     await shot(page, 'chat-phone-empty');
     stub.config.holdMs = 2500;
     stub.config.delay = 20;
     await page.getByTestId('suggestions').getByRole('button').first().click();
-    await page.waitForFunction(() => document.querySelector('[data-testid=chat-panel]')?.dataset.sheet === 'peek', null, { timeout: 5000 });
-    check(true, 'phone: sending drops the chat to the peek strip');
+    await page.waitForSelector('[data-testid=chat-panel]', { state: 'detached', timeout: 5000 });
+    check(true, 'phone: sending folds the conversation back into the bar');
     await page.waitForTimeout(1200);
+    check((await page.getByTestId('bar-summary').locator('[role=status]').count()) === 1, 'phone: the bar shows the progress of the turn');
     await shot(page, 'chat-phone-streaming');
     stub.config.holdMs = 0;
     stub.config.delay = 8;
@@ -334,13 +361,15 @@ try {
     await page.waitForTimeout(500);
     await shot(page, 'chat-phone-grow');
     await waitGrown(page);
-    await page.waitForFunction(() => !document.querySelector('[data-testid=chat-panel] [role=status]'), null, { timeout: 30000 });
+    await page.waitForFunction(() => !document.querySelector('[data-testid=bar-summary] [role=status]'), null, { timeout: 30000 });
     await page.waitForTimeout(300);
-    await shot(page, 'chat-phone-peek');
+    check((await page.getByTestId('bar-summary').getByRole('button', { name: '撤销' }).count()) === 1, 'phone: the bar sums up the last change with undo');
+    await shot(page, 'chat-phone-bar');
     await page.getByRole('button', { name: '展开对话' }).first().click();
     await page.waitForTimeout(400);
     await shot(page, 'chat-phone-changes');
-    await sendMessage(page, '限流测试');
+    await page.getByTestId('prompt-bar').fill('限流测试');
+    await page.getByTestId('prompt-bar').press('Enter');
     await page.waitForTimeout(1500);
     await page.getByRole('button', { name: '展开对话' }).first().click();
     await page.waitForTimeout(400);
@@ -374,7 +403,7 @@ try {
     const s = await (await fetch(`${preview.base}/api/chat`)).json();
     check(s.serverKey === false, 'without a key the relay says so');
     const { ctx, page } = await open(preview.base, DESKTOP, '/studio');
-    await page.getByRole('button', { name: '打开 AI 助手' }).click();
+    await page.getByTestId('prompt-bar').click();
     await sendMessage(page, '把北侧房间加深 600');
     await waitDone(page, 1);
     const t = await page.getByTestId('assistant-message').first().textContent();

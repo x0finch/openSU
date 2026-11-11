@@ -33,6 +33,19 @@ export interface SunInfo {
   /** True compass bearing and elevation of the sun, degrees. */
   azimuth: number;
   elevation: number;
+  /** Clock time of solar noon at the site on that date. */
+  solarNoon: number;
+  /** Clock offset from UTC used for that date (time zone, daylight saving). */
+  utcOffsetHours: number;
+}
+
+/** The quiet trays of the 3D / plan chrome: one open at a time. */
+export type Tray = 'views' | 'levels' | 'sun';
+/** Site panels (left column on desktop, a sheet on phones). */
+export interface SitePanel {
+  kind: 'location' | 'orientation';
+  /** Opened right after a new house: "where is it?" with a skip. */
+  intro?: boolean;
 }
 
 export interface StudioState {
@@ -52,7 +65,8 @@ export interface StudioState {
   /** First-person walk through the 3D view. */
   walk: boolean;
   chatOpen: boolean;
-  sheetOpen: boolean;
+  tray: Tray | null;
+  sitePanel: SitePanel | null;
   house: House | null;
   /** How the 3D view should show the next house change (set with `setHouse`). */
   grow: GrowHint | null;
@@ -67,7 +81,9 @@ export interface StudioState {
   setSunInfo: (info: SunInfo | null) => void;
   setWalk: (on: boolean) => void;
   setChatOpen: (open: boolean) => void;
-  setSheetOpen: (open: boolean) => void;
+  /** Opens a tray (closing any other), or closes it with null. */
+  setTray: (tray: Tray | null) => void;
+  setSitePanel: (panel: SitePanel | null) => void;
   /** Replaces the house; `grow` asks the 3D view to play the grow transition. */
   setHouse: (house: House, grow?: Omit<GrowHint, 'nonce'>) => void;
 }
@@ -101,8 +117,8 @@ export const useStudio = create<StudioState>((set) => ({
   sunInfo: null,
   walk: false,
   chatOpen: false,
-  // Phones start with the drawing large and the controls collapsed.
-  sheetOpen: false,
+  tray: null,
+  sitePanel: null,
   house: null,
   grow: null,
   setLang: (lang) => {
@@ -114,7 +130,7 @@ export const useStudio = create<StudioState>((set) => ({
     if (typeof document !== 'undefined') document.documentElement.lang = lang === 'zh' ? 'zh-CN' : 'en';
     set({ lang });
   },
-  setMode: (mode) => set(mode === '3d' ? { mode } : { mode, walk: false }),
+  setMode: (mode) => set((s) => ({ mode, tray: mode === 'sheet' || (mode === 'plan' && s.tray !== 'levels') ? null : s.tray, ...(mode === '3d' ? {} : { walk: false }) })),
   // The cutaway choice survives a change of view (eye level and elevations
   // show the whole house and the dock marks the cut as paused; see `shownCut`).
   setView: (view) => set((s) => ({ view, viewNonce: s.viewNonce + 1, viewMoved: false, walk: false })),
@@ -126,10 +142,11 @@ export const useStudio = create<StudioState>((set) => ({
   setSun: (patch) => set((s) => ({ sun: { ...s.sun, ...patch } })),
   setSunInfo: (sunInfo) => set({ sunInfo }),
   // Walking and the assistant panel take turns: entering walk mode tucks the chat away.
-  // Entering walk also folds the phone sheet away, so the room fills the screen.
-  setWalk: (walk) => set(walk ? { walk, mode: '3d', chatOpen: false, sheetOpen: false } : { walk }),
-  setChatOpen: (chatOpen) => set(chatOpen ? { chatOpen, walk: false } : { chatOpen }),
-  setSheetOpen: (sheetOpen) => set({ sheetOpen }),
+  // Entering walk closes the panels, so the room fills the screen; the sun tray may stay.
+  setWalk: (walk) => set((s) => (walk ? { walk, mode: '3d', chatOpen: false, sitePanel: null, tray: s.tray === 'sun' ? 'sun' : null } : { walk })),
+  setChatOpen: (chatOpen) => set(chatOpen ? { chatOpen, walk: false, tray: null, sitePanel: null } : { chatOpen }),
+  setTray: (tray) => set(tray ? { tray, chatOpen: false } : { tray }),
+  setSitePanel: (sitePanel) => set(sitePanel ? { sitePanel, chatOpen: false } : { sitePanel }),
   setHouse: (house, grow) =>
     set((s) => ({
       house,

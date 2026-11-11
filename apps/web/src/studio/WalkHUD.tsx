@@ -1,7 +1,7 @@
 // Walk mode HUD: exit, level indicator (tap to take the stairs at once),
 // a mini-map (the floor plan with a position and heading marker), a short
-// hint, and a touch joystick on phones. The time slider of the scene dock
-// stays available, so the sun can move while standing in a room.
+// hint, and a touch joystick on phones. The sun tray stays available, so
+// the sun can move while standing in a room.
 import { type CSSProperties, type PointerEvent as RPointerEvent, type SVGProps, useEffect, useRef, useState } from 'react';
 import { CloseIcon } from '../components/icons';
 import { cx, IconButton } from '../components/ui';
@@ -10,7 +10,7 @@ import { useStudio } from '../lib/store';
 import type { Derived } from './house-data';
 import type { PlanDrawing } from './plan-data';
 import { useWalkLevel, walkBridge } from './walk-bridge';
-import { SunTime, SunToggle } from './chrome';
+import { SunTime } from './chrome';
 
 let planMod: Promise<typeof import('./plan-data')> | null = null;
 
@@ -24,32 +24,6 @@ export function WalkIcon(p: SVGProps<SVGSVGElement>) {
       <path d="M12.2 8.2 15.4 11.6l2.6.6" />
       <path d="M12.2 8.2 9 9.8 7.4 12.4" />
     </svg>
-  );
-}
-
-/** Enters walk mode (view rail on desktop, the sheet on phones). */
-export function WalkButton({ variant = 'rail' }: { variant?: 'rail' | 'tile' }) {
-  const t = useT();
-  const walk = useStudio((s) => s.walk);
-  const setWalk = useStudio((s) => s.setWalk);
-  if (variant === 'tile') {
-    return (
-      <button
-        type="button"
-        aria-pressed={walk}
-        aria-label={t('walk.enterLong')}
-        onClick={() => setWalk(!walk)}
-        className={cx('flex h-[52px] flex-col items-center justify-center gap-0.5 rounded-sm transition-colors', walk ? 'bg-ink text-white' : 'bg-wash text-ink')}
-      >
-        <WalkIcon width={18} height={18} />
-        <span className={cx('text-2xs', walk ? 'text-white/80' : 'text-ink-2')}>{t('walk.enter')}</span>
-      </button>
-    );
-  }
-  return (
-    <IconButton label={t('walk.enterLong')} active={walk} aria-pressed={walk} onClick={() => setWalk(!walk)}>
-      <WalkIcon width={22} height={22} />
-    </IconButton>
   );
 }
 
@@ -234,7 +208,7 @@ export function WalkHUD({ derived }: { derived: Derived | null }) {
         </div>
         <p className="mt-1.5 px-0.5 text-2xs leading-4 text-ink-3">{coarse ? t('walk.hintTouch') : t('walk.hint')}</p>
       </div>
-      {coarse && <Joystick className="absolute bottom-6 left-[296px]" />}
+      {coarse && <Joystick className="absolute right-6 bottom-6" />}
     </>
   );
 }
@@ -282,7 +256,6 @@ export function LandscapeWalkHUD({ derived }: { derived: Derived | null }) {
       </div>
       <Joystick className="absolute bottom-3 size-[112px]!" style={{ left }} />
       <div className="glass pointer-events-auto absolute bottom-3 flex w-[340px] items-center gap-2 rounded-ui py-1.5 pr-3 pl-1.5" style={{ right }}>
-        <SunToggle iconOnly />
         <SunTime className="min-w-0 flex-1" />
       </div>
     </div>

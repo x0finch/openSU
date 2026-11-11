@@ -34,6 +34,11 @@ export function loadSample(): House {
   return isTemplateId(q) ? templateHouse(q) : starterHouse();
 }
 
+/** A template house by id (the "start from a template" menu). */
+export function templateById(id: string): House {
+  return isTemplateId(id) ? templateHouse(id) : starterHouse();
+}
+
 export function derive(house: House): Derived {
   const resolved = resolve(house);
   const pitchedOn = new Set(house.roofs.filter((r) => r.kind !== 'flat' && r.kind !== 'canopy').map((r) => r.onLevel));
