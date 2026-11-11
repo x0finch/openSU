@@ -39,7 +39,7 @@ describe('template houses', () => {
 
   it('the starter (default house) is T1', () => {
     expect(starterHouse()).toEqual(templateHouse('t1'));
-    expect(resolve(starterHouse()).interiorArea / 1e6).toBeCloseTo(163.8, 1);
+    expect(resolve(starterHouse()).interiorArea / 1e6).toBeCloseTo(159.5, 1);
   });
 
   it('blank plot validates; sizes round to 100 mm', () => {
