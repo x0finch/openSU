@@ -99,14 +99,16 @@ stair flight 900, door 700), `roof-params` (also canopies higher than their
 level), `gate-off-fence`, `swing` (swing into a space not beside the door).
 
 Warnings: `unsupported`, `roof-gap`, `open-to-not-adjacent`,
-`opening-too-tall`, `outdoor-only`, `unreachable` for upper outdoor spaces,
+`opening-too-tall` (against the level height, or the underside of a pitched
+roof on that level), `outdoor-only`, `unreachable` for upper outdoor spaces,
 `roof-params` for ignored roof fields, `swing` on non-doors.
 
 ## Golden sample
 
 `src/samples/golden.ts` transcribes the reference house: grid from the
 dimension chains of all three plans (plus a few scaled, undimensioned
-lines, listed in the file header), 3 levels, 2 offset mono-pitch roofs.
+lines, listed in the file header), 3 levels (level 3 is an attic, 1.8 m to
+the eaves), 2 offset mono-pitch roofs, 3 canopies.
 Total interior floor area 243.4 m² (ground 92.7, level 2 87.3, attic 63.4;
 balconies, terrace, porch and carport excluded).
 

@@ -12,11 +12,13 @@ From the repository root:
 pnpm install
 pnpm build      # library (tsc) + demo bundle (vite)
 pnpm dev        # demo page with orbit controls and a view switcher
-pnpm shots      # renders artifacts/shots/{axo-se,axo-ne,eye-sw,elev-south}.png
+pnpm shots      # renders artifacts/shots/{axo-se,axo-ne,eye-sw,elev-south,axo-sw}.png
 pnpm typecheck
 ```
 
-`pnpm shots` starts a Vite server on the demo, opens it in headless Chromium
+The demo shows the golden sample through model -> kernel -> render
+(`@opensu/model` and `@opensu/kernel` are aliased to their sources, so no
+prior build is needed). `pnpm shots` starts a Vite server on the demo, opens it in headless Chromium
 (SwiftShader WebGL) at 1600x1200, DPR 1, and prints triangle and draw-call
 counts per view. `node scripts/shots.mjs eye-sw hide=floor-lines -debug`
 renders a single view with debug switches.
@@ -50,9 +52,9 @@ renders a single view with debug switches.
   silhouette people (billboards), low-detail car. Deterministic (seeded).
 - `src/viewer.ts` - renderer setup (sRGB, no tone mapping, MSAA, PCF
   shadows), render-on-demand loop, resize and DPR cap, scene statistics.
-- `demo/` - throwaway: a hard-coded approximation of the reference house built
-  from small helpers (wall faces with openings, mono-pitch roof, balustrades,
-  fence walls, gates).
-
-Model units are millimetres (X east, Y north, Z up); the demo converts once to
-scene metres (Y up) in `demo/helpers.ts#P`.
+- `src/house.ts` - `createHouseObject(geometry, palette)`: kernel parts to
+  meshes (the one material-slot -> palette table, shadow flags), kernel
+  feature edges and floor lines, entourage placements to the generators.
+  Returns the object and the architecture's vertices for camera framing.
+- `demo/` - the golden sample in the viewer, view switcher and orbit
+  controls; `demo/views.ts` holds the five fixed views.
