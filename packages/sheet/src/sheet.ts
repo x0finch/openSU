@@ -162,8 +162,37 @@ function maskOf(c: HTMLCanvasElement): InkMask {
   return inkMask(d, c.width, c.height, inkThreshold);
 }
 
-/** Renders a 3D view so its ink fills `region` as well as it can (page px). */
-function drawView(g: CanvasRenderingContext2D, ctx: SheetContext, preset: ViewPreset, region: Rect, maxWidth: number, alignY: 'bottom' | 'center', keepout?: readonly Rect[]): void {
+/**
+ * A thin ground line under an elevation: along the ink's base, running a
+ * little past the drawing on both sides (page px).
+ */
+function drawGroundLine(g: CanvasRenderingContext2D, s: number, ink: Rect, baseY: number): void {
+  g.setTransform(1, 0, 0, 1, 0, 0);
+  g.fillStyle = color.groundLine;
+  const h = Math.max(1, Math.round(layout.groundLine * s));
+  const x0 = Math.round((ink.x0 - layout.groundLineOverhang) * s);
+  const x1 = Math.round((ink.x1 + layout.groundLineOverhang) * s);
+  g.fillRect(x0, baseY - Math.floor(h / 2), x1 - x0, h);
+}
+
+/**
+ * Device row of an elevation's base: among the lowest rows of the render,
+ * the one with the most dark line pixels (the outline along the ground).
+ */
+function baseRow(img: HTMLCanvasElement, bottomPad: number): number {
+  const rows = Math.min(img.height, bottomPad + 24);
+  const d = img.getContext('2d')!.getImageData(0, img.height - rows, img.width, rows).data;
+  let best = rows - 1, bestCount = -1;
+  for (let r = 0; r < rows; r++) {
+    let n = 0;
+    for (let x = 0, i = r * img.width * 4; x < img.width; x++, i += 4) if (d[i]! < 110 && d[i + 1]! < 110 && d[i + 2]! < 110) n++;
+    if (n >= bestCount) { bestCount = n; best = r; }
+  }
+  return img.height - rows + best;
+}
+
+/** Renders a 3D view so its ink fills `region` as well as it can (page px); returns where the ink landed. */
+function drawView(g: CanvasRenderingContext2D, ctx: SheetContext, preset: ViewPreset, region: Rect, maxWidth: number, alignY: 'bottom' | 'center', keepout?: readonly Rect[]): Rect {
   const s = ctx.scale;
   const aspect = (region.x1 - region.x0) / (region.y1 - region.y0);
   const pw = aspect >= 1 ? layout.probeSize : Math.round(layout.probeSize * aspect);
@@ -191,6 +220,9 @@ function drawView(g: CanvasRenderingContext2D, ctx: SheetContext, preset: ViewPr
   const win = { x0: fx0, y0: fy0, x1: fx0 + w / (k * mask.width), y1: fy0 + h / (k * mask.height) };
   const img = ctx.offscreen.render(framed, { width: w, height: h, frameAspect: mask.width / mask.height, window: win });
   blit(g, () => g.drawImage(img, Math.round(x * s), Math.round(y * s)));
+  const ink = { x0: x + pad, y0: y + pad, x1: x + w - pad, y1: y + h - pad };
+  if (preset.kind === 'elevation') drawGroundLine(g, s, ink, Math.round(y * s) + baseRow(img, Math.ceil(pad * s)));
+  return ink;
 }
 
 async function rasterSvg(svg: string, width: number, height: number, scale: number): Promise<HTMLImageElement> {
@@ -218,7 +250,9 @@ interface PlanProbe {
 }
 
 async function probePlan(house: ResolvedHouse, levelId: string): Promise<PlanProbe> {
-  const plan = renderPlanDetailed(house, levelId);
+  // Sheet-sized text: labels, dimensions, title and north arrow read at the
+  // reference sheets' relative size once the plan is fitted to the page.
+  const plan = renderPlanDetailed(house, levelId, { textScale: layout.planTextScale });
   const img = await rasterSvg(plan.svg, plan.width, plan.height, 1);
   const c = document.createElement('canvas');
   c.width = img.width;

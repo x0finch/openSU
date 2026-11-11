@@ -11,7 +11,7 @@ import { furnishLevel } from './furnish/index';
 import { footprint, type Placement } from './furnish/types';
 import { bboxOfPoints, inflate, unionBox, type Rect } from './geom';
 import { attrs, f, pathOfRings, rectEl, View } from './svg';
-import { color, font, layout, SCALE, stroke } from './tokens';
+import { color, layout, SCALE, stroke, typography } from './tokens';
 
 export interface PlanOptions {
   /** px per mm (default `SCALE`). */
@@ -22,6 +22,12 @@ export interface PlanOptions {
   title?: string;
   /** Small English line under the title; false to omit. */
   subtitle?: string | false;
+  /**
+   * Text size relative to the screen plan (default 1). Labels, dimension
+   * figures and tiers, title and north arrow grow together (sheets use
+   * ~1.6); the zero-overlap rules still hold.
+   */
+  textScale?: number;
 }
 
 export interface PlanReport {
@@ -76,13 +82,15 @@ export function renderPlanDetailed(house: ResolvedHouse, levelId: string, option
   const idx = levelIndexOf(house, levelId);
   const plan = analyseLevel(house, idx);
   const s = options.scale ?? SCALE;
+  const ty = typography(options.textScale ?? 1);
+  const tl = ty.layout;
   const items0 = options.furniture === false ? [] : furnishLevel(plan);
   const own = inflate(plan.extent, 450);
   const canopies = lowerCanopies(house, idx).filter((c) => c.x0 >= own.x0 && c.x1 <= own.x1 && c.y0 >= own.y0 && c.y1 <= own.y1);
 
   // Extent of the drawing (mm): spaces and walls, the wall thickness, canopies below.
   const ext = unionBox([inflate(plan.extent, 130), ...canopies])!;
-  const pad = layout.margin + layout.dimOffset1 + layout.dimTierGap + font.dimSize + 10;
+  const pad = tl.margin + tl.dimOffset1 + tl.dimTierGap + ty.font.dimSize + 10 * ty.scale;
   const v = new View(s, ext.x0, ext.y1, pad, pad);
   const extPx = v.rect(ext);
   const texts: TextBox[] = [];
@@ -91,26 +99,26 @@ export function renderPlanDetailed(house: ResolvedHouse, levelId: string, option
   const walls = drawWalls(plan, v);
   const openings = drawOpenings(plan, v);
   let stairSvg = '';
-  for (const st of plan.stairs) stairSvg += drawStair(st, v, texts);
+  for (const st of plan.stairs) stairSvg += drawStair(st, v, texts, ty);
 
   // --- Labels first so furniture can yield; then draw what is left.
   const ownCanopies = plan.openings.map((o) => openingCanopy(o.op, o.thickness)).filter((r): r is Rect => !!r);
   // Labels keep clear of walls and of canopy outlines drawn over the floor.
-  const labels = placeLabels(plan, v, items0, openings.swings, texts, [...walls.wallBoxes, ...ownCanopies]);
+  const labels = placeLabels(plan, v, items0, openings.swings, texts, [...walls.wallBoxes, ...ownCanopies], ty);
   const items = items0.filter((p) => !labels.removed.has(p.id));
   texts.push(...labels.boxes);
 
   // --- Dimensions, north arrow, title.
-  const dims = drawDims(plan, v, extPx, texts);
+  const dims = drawDims(plan, v, extPx, texts, ty);
   texts.push(...dims.boxes);
-  const north = northArrow(layout.margin + layout.northRadius + 6, layout.margin + layout.northRadius + 14, house.site.northDeg, texts);
+  const north = northArrow(tl.margin + tl.northRadius + 6 * ty.scale, tl.margin + tl.northRadius + 14 * ty.scale, house.site.northDeg, texts, ty);
   const levelName = house.levels[idx]!.name;
   const title = options.title ?? `${levelName}平面图`;
   const subtitle = options.subtitle === false ? '' : (options.subtitle ?? `${ORDINAL[idx] ?? `LEVEL ${idx + 1}`} PLAN`);
   const width = Math.ceil(extPx.x1 + pad);
   // Title centred on the drawing's extents (plan plus dimension chains).
-  const tb = titleBlock((dims.linesPx.x0 + dims.linesPx.x1) / 2, dims.extentPx.y1 + layout.titleGap, title, subtitle, texts);
-  const height = Math.ceil(tb.bottom + layout.margin);
+  const tb = titleBlock((dims.linesPx.x0 + dims.linesPx.x1) / 2, dims.extentPx.y1 + tl.titleGap, title, subtitle, texts, ty);
+  const height = Math.ceil(tb.bottom + tl.margin);
 
   // --- Assemble, bottom to top.
   const out: string[] = [];

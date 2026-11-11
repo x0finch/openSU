@@ -3,7 +3,7 @@ import type { StairInfo } from '../analyse';
 import { intersection, rectUnionRings, type Rect } from '../geom';
 import { attrs, f, line, pathOfRings, rectEl, type View } from '../svg';
 import { textWidth } from '../text';
-import { color, font, mm, stroke } from '../tokens';
+import { color, mm, stroke, type Typography, typography } from '../tokens';
 import type { TextBox } from './labels';
 
 interface Flight { across: [number, number]; from: number; to: number }
@@ -35,7 +35,7 @@ function layout(st: StairInfo) {
   };
 }
 
-export function drawStair(st: StairInfo, v: View, texts: TextBox[]): string {
+export function drawStair(st: StairInfo, v: View, texts: TextBox[], ty: Typography = typography()): string {
   const L = layout(st);
   const toRect = (a: [number, number], p: number, q: number): Rect => L.ns
     ? { x0: a[0], x1: a[1], y0: Math.min(p, q), y1: Math.max(p, q) }
@@ -100,11 +100,11 @@ export function drawStair(st: StairInfo, v: View, texts: TextBox[]): string {
     a += `<path${attrs({ d: `M${f(p1[0])},${f(p1[1])}L${f(hx - Math.sin(ang) * aw)},${f(hy + Math.cos(ang) * aw)}L${f(hx + Math.sin(ang) * aw)},${f(hy - Math.cos(ang) * aw)}Z`, fill: color.stairArrow })}/>`;
     a += `<circle${attrs({ cx: p0[0], cy: p0[1], r: 1.6, fill: color.stairArrow })}/>`;
     // Label just outside the start end of the flight.
-    const size = font.stairSize;
+    const size = ty.font.stairSize;
     const out = v.len(Math.abs(from - L.start)) + 4 + size / 2;
     const lx = p0[0] - Math.cos(ang) * out, ly = p0[1] - Math.sin(ang) * out;
     const w = textWidth(label, size);
-    a += `<text${attrs({ x: lx, y: ly + size * 0.36, 'text-anchor': 'middle', 'font-family': font.cjk, 'font-size': size, fill: color.labelCn })}>${label}</text>`;
+    a += `<text${attrs({ x: lx, y: ly + size * 0.36, 'text-anchor': 'middle', 'font-family': ty.font.cjk, 'font-size': size, fill: color.labelCn })}>${label}</text>`;
     texts.push({ x0: lx - w / 2, x1: lx + w / 2, y0: ly - size / 2, y1: ly + size / 2, text: label, kind: 'stair' });
     return a;
   };
@@ -120,13 +120,13 @@ export function drawStair(st: StairInfo, v: View, texts: TextBox[]): string {
     w += `<path${attrs({ d: `M${f(e[0])},${f(e[1])}L${f(hx - Math.sin(ang) * aw)},${f(hy + Math.cos(ang) * aw)}L${f(hx + Math.sin(ang) * aw)},${f(hy - Math.cos(ang) * aw)}Z`, fill: color.stairArrow })}/>`;
     w += `<circle${attrs({ cx: pts[0]![0], cy: pts[0]![1], r: 1.6, fill: color.stairArrow })}/>`;
     // 下 just outside the top of the arriving flight.
-    const size = font.stairSize;
+    const size = ty.font.stairSize;
     const p0 = pts[0]!, p1 = pts[1]!;
     const dirA = Math.atan2(p1[1] - p0[1], p1[0] - p0[0]);
     const out = v.len(Math.abs(from - L.start)) + 4 + size / 2;
     const lx = p0[0] - Math.cos(dirA) * out, ly = p0[1] - Math.sin(dirA) * out;
     const tw = textWidth('下', size);
-    w += `<text${attrs({ x: lx, y: ly + size * 0.36, 'text-anchor': 'middle', 'font-family': font.cjk, 'font-size': size, fill: color.labelCn })}>下</text>`;
+    w += `<text${attrs({ x: lx, y: ly + size * 0.36, 'text-anchor': 'middle', 'font-family': ty.font.cjk, 'font-size': size, fill: color.labelCn })}>下</text>`;
     texts.push({ x0: lx - tw / 2, x1: lx + tw / 2, y0: ly - size / 2, y1: ly + size / 2, text: '下', kind: 'stair' });
     return w;
   };

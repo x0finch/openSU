@@ -43,8 +43,13 @@ demo is still alive after the offscreen exports.
   frame at sheet resolution (`OffscreenView` in `@opensu/render`), so lines
   stay crisp at any size.
 - Plan: `@opensu/plan` SVG (with its own title, dimensions and north
-  arrow), rasterised at device resolution and cropped to its ink. All plans
+  arrow) at `layout.planTextScale` (1.7: plan title ~40 px on the 1500 px
+  page, like the reference sheets), rasterised at device resolution and
+  cropped to its ink. The divider sits at 46% of the page so the ground
+  floor plan spans ~70% of the page width (height-limited). All plans
   of a set share one drawing scale (the one that fits the largest level).
+- Elevation views get a thin ground line along their base, running a
+  little past the drawing.
 - Images are multiplied onto the white page, text is drawn last on top, at
   device resolution.
 - One offscreen WebGL context per call (shared across a set), released at

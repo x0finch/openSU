@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest';
 import { golden, resolve } from '@opensu/model';
 import { metres, sheetFacts } from '../src/facts.js';
 import { hitsKeepout, inkMask, placeDrawing } from '../src/layout.js';
+import { layout } from '../src/tokens.js';
+import { checkPlan, renderPlanDetailed } from '@opensu/plan';
 
 /** RGBA white image with black rectangles. */
 function image(w: number, h: number, rects: [number, number, number, number][]): Uint8ClampedArray {
@@ -78,5 +80,16 @@ describe('staircase keepout', () => {
     const facts = { x0: 0, y0: 0, x1: 60, y1: 70 };
     const p = placeDrawing(mask, { x0: 0, y0: 0, x1: 300, y1: 120 }, { centerX: 150, alignY: 'bottom', keepout: [title, facts] });
     expect(hitsKeepout(mask, p, title) || hitsKeepout(mask, p, facts)).toBe(false);
+  });
+});
+
+describe('sheet plans', () => {
+  it('are collision-free with sheet-sized text', () => {
+    const house = resolve(golden);
+    for (const l of house.levels) {
+      const r = renderPlanDetailed(house, l.id, { textScale: layout.planTextScale });
+      expect(checkPlan(r), l.id).toEqual([]);
+      expect(r.missingLabels, l.id).toEqual([]);
+    }
   });
 });

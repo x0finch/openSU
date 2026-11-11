@@ -5,7 +5,7 @@ import type { LevelPlan } from '../analyse';
 import { overlaps, type Rect } from '../geom';
 import { attrs, f, line, type View } from '../svg';
 import { textWidth } from '../text';
-import { color, font, layout, stroke } from '../tokens';
+import { color, stroke, type Typography, typography } from '../tokens';
 import type { TextBox } from './labels';
 
 interface Seg { lo: number; hi: number; at: number }
@@ -84,7 +84,7 @@ export interface DimResult { svg: string; boxes: TextBox[]; extentPx: Rect; /** 
  * Draw the chains around `ext` (plan extent in px). `planBox` is the drawn
  * building in px; text boxes go into `taken` so later text avoids them.
  */
-export function drawDims(plan: LevelPlan, v: View, ext: Rect, taken: TextBox[]): DimResult {
+export function drawDims(plan: LevelPlan, v: View, ext: Rect, taken: TextBox[], typo: Typography = typography()): DimResult {
   let svg = '';
   const boxes: TextBox[] = [];
   let outer: Rect = { ...ext };
@@ -95,25 +95,25 @@ export function drawDims(plan: LevelPlan, v: View, ext: Rect, taken: TextBox[]):
     const horiz = side === 'N' || side === 'S';
     const out = side === 'N' || side === 'W' ? -1 : 1;
     const base = horiz ? (out < 0 ? ext.y0 : ext.y1) : (out < 0 ? ext.x0 : ext.x1);
-    const t1 = base + out * layout.dimOffset1;
-    const tiers = pts.length > 2 ? [t1, t1 + out * layout.dimTierGap] : [t1];
+    const t1 = base + out * typo.layout.dimOffset1;
+    const tiers = pts.length > 2 ? [t1, t1 + out * typo.layout.dimTierGap] : [t1];
     const tLast = tiers[tiers.length - 1]!;
     const P = (along: number, across: number): [number, number] => (horiz ? [v.x(along), across] : [across, v.y(along)]);
-    const extFrom = base + out * layout.dimExtGap;
+    const extFrom = base + out * typo.layout.dimExtGap;
     const a = { stroke: color.dimLine, 'stroke-width': stroke.dimExt };
     // Extension lines: segment points to tier 1, end points to the last tier.
     pts.forEach((p, i) => {
       const isEnd = i === 0 || i === pts.length - 1;
-      const to = (isEnd ? tLast : t1) + out * layout.dimExtOver;
+      const to = (isEnd ? tLast : t1) + out * typo.layout.dimExtOver;
       const [x1, y1] = P(p, extFrom), [x2, y2] = P(p, to);
       svg += line(x1, y1, x2, y2, a);
     });
     const tick = (p: number, t: number) => {
       const [x, y] = P(p, t);
-      const h = layout.dimTickLen / 2 / Math.SQRT2 * Math.SQRT2;
+      const h = typo.layout.dimTickLen / 2 / Math.SQRT2 * Math.SQRT2;
       return line(x - h * 0.7, y + h * 0.7, x + h * 0.7, y - h * 0.7, { stroke: color.dimTick, 'stroke-width': stroke.dimTick, 'stroke-linecap': 'butt' });
     };
-    const over = layout.dimExtOver * 0.8;
+    const over = typo.layout.dimExtOver * 0.8;
     const drawTier = (t: number, list: number[]) => {
       const [x1, y1] = P(list[0]!, t), [x2, y2] = P(list[list.length - 1]!, t);
       svg += horiz ? line(x1 - over, y1, x2 + over, y2, { stroke: color.dimLine, 'stroke-width': stroke.dim })
@@ -127,17 +127,17 @@ export function drawDims(plan: LevelPlan, v: View, ext: Rect, taken: TextBox[]):
         const txt = String(Math.round(hi - lo));
         const segPx = v.len(hi - lo);
         const cands: { size: number; along: number; lift: number }[] = [];
-        for (const size of [font.dimSize, font.dimSizeSmall]) cands.push({ size, along: (lo + hi) / 2, lift: 0 });
-        const wS = textWidth(txt, font.dimSizeSmall) + 6;
-        cands.push({ size: font.dimSizeSmall, along: lo - (wS / 2 + 3) / v.s, lift: 0 });
-        cands.push({ size: font.dimSizeSmall, along: hi + (wS / 2 + 3) / v.s, lift: 0 });
-        cands.push({ size: font.dimSizeSmall, along: (lo + hi) / 2, lift: font.dimSizeSmall + 3 });
+        for (const size of [typo.font.dimSize, typo.font.dimSizeSmall]) cands.push({ size, along: (lo + hi) / 2, lift: 0 });
+        const wS = textWidth(txt, typo.font.dimSizeSmall) + 6;
+        cands.push({ size: typo.font.dimSizeSmall, along: lo - (wS / 2 + 3) / v.s, lift: 0 });
+        cands.push({ size: typo.font.dimSizeSmall, along: hi + (wS / 2 + 3) / v.s, lift: 0 });
+        cands.push({ size: typo.font.dimSizeSmall, along: (lo + hi) / 2, lift: typo.font.dimSizeSmall + 3 });
         let chosen: TextBox | null = null;
         for (const c of cands) {
           const w = textWidth(txt, c.size);
           const fits = c.lift > 0 || c.along < lo || c.along > hi || w + 6 <= segPx;
           if (!fits) continue;
-          const dist = layout.dimTextGap + c.lift;
+          const dist = typo.layout.dimTextGap + c.lift;
           const [cx, cy] = P(c.along, t);
           // "Above" the line = away from the plan for N/W, towards it for S/E
           // (numbers always read from the bottom or the right).
@@ -149,7 +149,7 @@ export function drawDims(plan: LevelPlan, v: View, ext: Rect, taken: TextBox[]):
           chosen = b;
           const tx = horiz ? cx : cx - dist;
           const ty = horiz ? cy - dist : cy;
-          svg += `<text${attrs({ x: tx, y: ty, 'text-anchor': 'middle', 'font-family': font.latin, 'font-size': c.size, 'font-weight': 300, fill: color.dimText, ...(horiz ? {} : { transform: `rotate(-90 ${f(tx)} ${f(ty)})` }) })}>${txt}</text>`;
+          svg += `<text${attrs({ x: tx, y: ty, 'text-anchor': 'middle', 'font-family': typo.font.latin, 'font-size': c.size, 'font-weight': 300, fill: color.dimText, ...(horiz ? {} : { transform: `rotate(-90 ${f(tx)} ${f(ty)})` }) })}>${txt}</text>`;
           break;
         }
         if (chosen) placed.push(chosen);
@@ -158,8 +158,8 @@ export function drawDims(plan: LevelPlan, v: View, ext: Rect, taken: TextBox[]):
     };
     drawTier(t1, pts);
     if (tiers.length > 1) drawTier(tLast, [pts[0]!, pts[pts.length - 1]!]);
-    const reach = tLast + out * (font.dimSize + 8);
-    const lineReach = tLast + out * layout.dimExtOver;
+    const reach = tLast + out * (typo.font.dimSize + 8 * typo.scale);
+    const lineReach = tLast + out * typo.layout.dimExtOver;
     if (horiz) lines = out < 0 ? { ...lines, y0: Math.min(lines.y0, lineReach) } : { ...lines, y1: Math.max(lines.y1, lineReach) };
     else lines = out < 0 ? { ...lines, x0: Math.min(lines.x0, lineReach) } : { ...lines, x1: Math.max(lines.x1, lineReach) };
     if (horiz) outer = out < 0 ? { ...outer, y0: Math.min(outer.y0, reach) } : { ...outer, y1: Math.max(outer.y1, reach) };

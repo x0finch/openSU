@@ -143,3 +143,37 @@ export const mm = {
   stairGap: 120,
   stairRail: 50,
 } as const;
+
+/** Font sizes and text spacing that grow with `textScale` (tracking stays in em). */
+const SCALED_FONT = [
+  'cnSize', 'cnSizeSmall', 'cnSizeTiny', 'enSize', 'enSizeSmall', 'labelGap', 'labelPad',
+  'dimSize', 'dimSizeSmall', 'stairSize', 'titleSize', 'subtitleSize', 'northSize',
+] as const;
+/** Layout lengths that hold text (dimension tiers, ticks, north arrow) and grow with it. */
+const SCALED_LAYOUT = ['dimTierGap', 'dimExtOver', 'dimTickLen', 'dimTextGap', 'northRadius'] as const;
+/** White space around the drawing: grows at half the rate, so larger text does not cost the drawing its size. */
+const EASED_LAYOUT = ['margin', 'dimOffset1', 'dimExtGap'] as const;
+
+type Widen<T> = { -readonly [K in keyof T]: T[K] extends number ? number : T[K] };
+
+export interface Typography {
+  /** The text scale these sizes were made for (1 = the screen plan). */
+  scale: number;
+  font: Widen<typeof font>;
+  layout: Widen<typeof layout>;
+}
+
+/**
+ * Text sizes for a drawing whose text is `textScale` times the screen
+ * plan's (sheets: text that reads at the reference's relative size).
+ * Labels, dimension figures and tiers, title and north arrow grow together;
+ * line weights and the drawing itself do not.
+ */
+export function typography(textScale = 1): Typography {
+  const f: Widen<typeof font> = { ...font };
+  const l: Widen<typeof layout> = { ...layout };
+  for (const k of SCALED_FONT) f[k] = font[k] * textScale;
+  for (const k of SCALED_LAYOUT) l[k] = layout[k] * textScale;
+  for (const k of EASED_LAYOUT) l[k] = layout[k] * (1 + (textScale - 1) / 2);
+  return { scale: textScale, font: f, layout: l };
+}
