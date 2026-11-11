@@ -3,7 +3,7 @@
 import { applyCommands, commandsJsonSchema, describeHouse, EDIT_HOUSE_DESCRIPTION, type House, type Issue, validate } from '@opensu/model';
 import { toolDefinition } from '@tanstack/ai';
 import { describeDiff } from './diff';
-import { blankHouse, starterHouse } from './starter';
+import { blankHouse, DEFAULT_TEMPLATE, isTemplateId, TEMPLATE_IDS, TEMPLATES, templateHouse } from './starter';
 
 /**
  * A Standard Schema that accepts any input but reports `jsonSchema` to the
@@ -106,11 +106,11 @@ export function createHouseTools(getHouse: () => House, hooks: ToolHooks) {
 
   const newHouse = toolDefinition({
     name: 'new_house',
-    description: 'Start over: replace the whole house (the user can undo). template "starter": a finished two-storey 12 x 10 m house (plot 16.8 x 18 m) to adapt; "blank": an empty plot with one empty level, to build on with edit_house. Returns the full description of the new house.',
+    description: `Start over: replace the whole house (the user can undo). Finished houses to adapt: ${TEMPLATES.map((t) => `"${t.id}" ${t.name}: ${t.summary}`).join('; ')}. "blank": an empty plot with one empty level, to build on with edit_house. Returns the full description of the new house.`,
     inputSchema: lenientSchema({
       type: 'object',
       properties: {
-        template: { type: 'string', enum: ['starter', 'blank'] },
+        template: { type: 'string', enum: [...TEMPLATE_IDS, 'blank'] },
         plotWidth: { type: 'number', description: 'blank only: plot size along X (west-east), mm. Default 16800.' },
         plotDepth: { type: 'number', description: 'blank only: plot size along Y (south-north), mm. Default 18000.' },
         name: { type: 'string', description: 'House name.' },
@@ -123,7 +123,7 @@ export function createHouseTools(getHouse: () => House, hooks: ToolHooks) {
     const { template, plotWidth, plotDepth, name, summary } = (input ?? {}) as { template?: string; plotWidth?: number; plotDepth?: number; name?: string; summary?: string };
     let house = template === 'blank'
       ? blankHouse({ width: typeof plotWidth === 'number' ? plotWidth : undefined, depth: typeof plotDepth === 'number' ? plotDepth : undefined, name })
-      : starterHouse();
+      : templateHouse(isTemplateId(template) ? template : DEFAULT_TEMPLATE);
     if (template !== 'blank' && name) house = { ...house, name };
     hooks.onNewHouse(house, typeof summary === 'string' && summary.trim() ? summary.trim() : `New house: ${house.name}`);
     return { ok: true, description: describeHouse(house) };

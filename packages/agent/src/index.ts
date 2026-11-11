@@ -9,4 +9,7 @@ export {
 } from './turn';
 export { describeDiff } from './diff';
 export { createRelayAdapter, DEFAULT_MODEL, type RelayOptions } from './provider';
-export { blankHouse, starterHouse, STARTER_COMMANDS, type BlankOptions } from './starter';
+export {
+  blankHouse, starterHouse, STARTER_COMMANDS, DEFAULT_TEMPLATE, TEMPLATES, TEMPLATE_IDS, TEMPLATE_META, templateHouse, isTemplateId,
+  type BlankOptions, type Template, type TemplateId, type TemplateMeta,
+} from './starter';
