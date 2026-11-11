@@ -1,4 +1,4 @@
-import { type Box3, Color, DirectionalLight, Matrix4, Object3D, Vector3 } from 'three';
+import { Box3, Color, DirectionalLight, Matrix4, Object3D, Vector3 } from 'three';
 import { sun as sunTokens } from './tokens.js';
 
 /**
@@ -35,8 +35,13 @@ export class Sun {
     this.elevationDeg = elevationDeg;
   }
 
-  /** Place the light and fit its orthographic shadow camera around `bounds`. */
-  fit(bounds: Box3): void {
+  /**
+   * Place the light and fit its orthographic shadow camera around `bounds`.
+   * With `reach` (metres), the frustum also covers the ground where the
+   * scene's shadows fall, up to that far beyond the bounds (low sun).
+   */
+  fit(sceneBounds: Box3, reach = 0): void {
+    const bounds = reach > 0 ? withShadowReach(sceneBounds, sunDirection(this.azimuthDeg, this.elevationDeg), reach) : sceneBounds;
     const center = bounds.getCenter(new Vector3());
     const radius = bounds.getSize(new Vector3()).length() * 0.5 + sunTokens.shadowMargin;
     const dir = sunDirection(this.azimuthDeg, this.elevationDeg);
@@ -69,4 +74,21 @@ export class Sun {
     cam.updateProjectionMatrix();
     this.light.shadow.needsUpdate = true;
   }
+}
+
+/** Bounds grown by the ground footprint of their shadows (capped at `reach` metres). */
+function withShadowReach(bounds: Box3, toSun: Vector3, reach: number): Box3 {
+  const out = bounds.clone();
+  if (toSun.y <= 1e-4) return out;
+  const p = new Vector3();
+  for (let i = 0; i < 4; i++) {
+    p.set(i & 1 ? bounds.max.x : bounds.min.x, bounds.max.y, i & 2 ? bounds.max.z : bounds.min.z);
+    const h = Math.max(0, p.y - Math.max(0, bounds.min.y));
+    const t = Math.min(h / toSun.y, reach / Math.max(1e-4, Math.hypot(toSun.x, toSun.z)));
+    p.x -= toSun.x * t;
+    p.z -= toSun.z * t;
+    p.y = Math.max(0, bounds.min.y);
+    out.expandByPoint(p);
+  }
+  return out;
 }

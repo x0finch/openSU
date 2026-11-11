@@ -16,7 +16,11 @@ export type MaterialSlot =
   | 'metal'
   | 'paving'
   | 'gravel'
-  | 'soil';
+  | 'soil'
+  /** Interior floor finish. */
+  | 'floor'
+  /** Cut face of a level cutaway (section through walls). */
+  | 'cut';
 
 export type PartRole =
   | 'wall'
@@ -33,7 +37,10 @@ export type PartRole =
   | 'canopy'
   | 'deck'
   | 'planter'
-  | 'skylight';
+  | 'skylight'
+  | 'floor'
+  /** Section caps at the level's cut height; shown only in a cutaway. */
+  | 'cut';
 
 export interface Part {
   /** Stable id derived from model ids, e.g. "L2:wall", "roof-n:tile". */
@@ -83,8 +90,30 @@ export interface EntouragePlacement {
   clip?: { min: [number, number]; max: [number, number]; below: number };
 }
 
+/** Site data the renderer needs for the sun study. */
+export interface SiteInfo {
+  latitude: number;
+  longitude: number;
+  /** True north, degrees clockwise from model +Y. */
+  northDeg: number;
+  /** Local clock offset from UTC, hours (default 8). */
+  utcOffsetHours: number;
+}
+
+/** One storey, metres. */
+export interface LevelSpan {
+  id: string;
+  elevation: number;
+  top: number;
+  /** Height of the cutaway section plane (parts with role `cut` lie on it). */
+  cutZ: number;
+}
+
 export interface HouseGeometry {
   parts: Part[];
+  site: SiteInfo;
+  /** Storeys, bottom to top. Parts carry their level id. */
+  levels: LevelSpan[];
   /** Floor-level marker lines on facades (segment pairs), metres. */
   floorLines: Float32Array;
   entourage: EntouragePlacement[];

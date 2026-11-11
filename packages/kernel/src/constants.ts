@@ -4,6 +4,12 @@
 
 /** Interior floor slab thickness. */
 export const FLOOR_SLAB = 200;
+/** Ground-floor floor finish (sits below grade, its top is the floor). */
+export const GROUND_FLOOR = 100;
+/** Cutaway section height above each level's floor (plan cut). */
+export const CUT_HEIGHT = 1250;
+/** Default local clock offset from UTC, hours, when the site has none. */
+export const DEFAULT_UTC_OFFSET = 8;
 /** Balcony / terrace slab: thickness and projection past the wall line. */
 export const OUTDOOR_SLAB = 180;
 export const OUTDOOR_SLAB_OUT = 180;

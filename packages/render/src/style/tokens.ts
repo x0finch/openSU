@@ -29,6 +29,12 @@ export const shading = {
   /** Tone of cast shadows on the (otherwise invisible) ground. */
   groundShadowTone: '#D6D6D6',
   /**
+   * Tone of cast shadows on interior floors: a lift over the wall shadow
+   * tone, so a cutaway interior in the sun study stays readable (not a dark
+   * cave) while sun patches still stand out clearly.
+   */
+  floorShadowTone: '#BEBEBE',
+  /**
    * N.L at which a face counts as fully sunlit. Faces between 0 and this
    * value blend from the "away" tone to the sun tone, which keeps grazing
    * faces from flickering between bands.
@@ -43,6 +49,12 @@ export const shading = {
   /** Polygon offset that pushes faces behind their own edge lines. */
   polygonOffsetFactor: 1,
   polygonOffsetUnits: 2,
+  /**
+   * Extra polygon offset of the invisible ground: the ground-floor finish
+   * lies on it, and the ground (two huge triangles) must lose there.
+   */
+  groundPolygonOffsetFactor: 2,
+  groundPolygonOffsetUnits: 40,
 } as const;
 
 /** Presentation lighting rule (sun relative to the camera). */
@@ -118,6 +130,27 @@ export const materials = {
   /** Back of blind recesses (small wall openings). */
   recess: '#6F7376',
   gravel: '#DCDAD5',
+  /** Interior floor finish (warm light grey, as the plan's room floor). */
+  floor: '#DAD7D2',
+  /** Cut wall tops in a level cutaway (as the plan's wall fill). */
+  cut: '#9A9A9A',
+} as const;
+
+/** Level cutaway (dollhouse view). */
+export const cutaway = {
+  /** The clip plane sits this far above the section caps (metres). */
+  clipAbove: 0.002,
+} as const;
+
+/** Physical sun study. */
+export const physical = {
+  /** Lowest sun elevation used for lighting (degrees); keeps faces from flickering at sunrise. */
+  minElevationDeg: 0.5,
+  /**
+   * How far (metres) the shadow frustum extends beyond the scene along the
+   * sun's ground direction, so long low-sun shadows are not cut off.
+   */
+  shadowReach: 30,
 } as const;
 
 /**
@@ -192,5 +225,5 @@ export const cameras = {
   margin: 0.12,
 } as const;
 
-export const tokens = { stage, shading, lighting, sun, lines, materials, patterns, entourage, cameras } as const;
+export const tokens = { stage, shading, lighting, sun, lines, materials, patterns, entourage, cameras, cutaway, physical } as const;
 export type Tokens = typeof tokens;

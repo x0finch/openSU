@@ -12,9 +12,18 @@ From the repository root:
 pnpm install
 pnpm build      # library (tsc) + demo bundle (vite)
 pnpm dev        # demo page with orbit controls and a view switcher
-pnpm shots      # renders artifacts/shots/{axo-se,axo-ne,eye-sw,elev-south,axo-sw}.png
+pnpm shots      # renders artifacts/shots/*.png (see below)
 pnpm typecheck
+pnpm test       # solar position unit tests
 ```
+
+`pnpm shots` renders the presentation views `axo-se, axo-ne, eye-sw,
+elev-south, axo-sw`, the sun study `sun-winter-09, sun-winter-12,
+sun-winter-15, sun-summer-12` (SE axonometric, physical sun at the golden
+site), the cutaways `cut-L1, cut-L2` and `cut-L1-sun-winter-15`, and
+prints the sun position and the cost of a shadow update. Demo URL
+parameters: `view=`, `sun=winter|spring|summer|autumn|today|YYYY-MM-DD`,
+`time=HH:MM`, `year=`, `cut=L1|none`, `hide=`.
 
 The demo shows the golden sample through model -> kernel -> render
 (`@opensu/model` and `@opensu/kernel` are aliased to their sources, so no
@@ -37,14 +46,38 @@ renders a single view with debug switches.
   edges + dihedral angle threshold per primitive), de-duplication, and edge
   adjacency across primitives so the line shader can detect profiles.
 - `src/style/batch.ts` - bakes a scene description into one merged mesh per
-  material, one feature-edge object and one floor-line object.
+  (bake group, material), one feature-edge object and one floor-line object
+  per group. Transparent materials stay merged across groups so their
+  blending order is unchanged.
 - `src/style/lighting.ts` - lighting modes. `presentation` (default): the
   sun is placed relative to the camera (behind the viewer, 40 deg to the side
   of the main facade, 60 deg high for axonometrics, 45 deg otherwise) so one
-  visible face is sunlit and the other turned away. `physical`: an explicit
-  sun position (for a later sun study); `viewer.setLighting(...)`.
+  visible face is sunlit and the other turned away. `physical`: the real sun
+  of the site, `viewer.setLighting({ mode: 'physical', date: 'YYYY-MM-DD',
+  minutes })` (local clock minutes, clamped to sunrise..sunset), or an
+  explicit `{ mode: 'physical', sun }`; back with `{ mode: 'presentation' }`.
+- `src/sun/solar.ts` - `solarPosition` and `sunriseSunset` (NOAA / Meeus,
+  no dependency, unit-tested against published values).
+  `src/sun/study.ts` - the site's sun in model bearings (`site.northDeg`
+  rotates the model against true north), daylight clamping, date presets.
 - `src/style/sun.ts` - one directional sun; the shadow frustum is fitted to
-  the scene bounds.
+  the scene bounds (in the sun study also to the ground the long shadows
+  fall on, up to `physical.shadowReach`).
+- Sun study rules: window/door glass and glass balustrades never cast; in
+  physical lighting the flat glass backing stops casting too, so sun
+  patches fall into the rooms; frames, walls, slabs, roofs and canopies
+  cast. Interior floors have their own lighter shadow tone
+  (`shading.floorShadowTone`) so a lit-up interior is never a dark cave.
+  Shadow maps are re-rendered only when the sun, the content, the cutaway
+  or a billboard's facing change (`viewer.measureShadowUpdate()` reports
+  the cost).
+- Cutaway: `viewer.setCutaway(levelId | null)`. House geometry (bake group
+  `house`) uses twin materials with a clipping plane at the level's cut
+  height (kernel `cutZ`); the kernel's section caps (`cut:<level>`) show in
+  the cut tone with outlines; stairs and entourage of a level
+  (`level:<id>`) stay whole and are hidden above the cut; site and garden
+  are never clipped. In physical lighting the clipped parts keep casting
+  shadows (the light inside stays true); in presentation they do not.
 - `src/style/ground.ts` - invisible ground that only shows received shadows.
 - `src/style/cameras.ts` - presets: parallel axonometric, eye-level two-point
   perspective (horizontal view axis + lens shift), straight elevation.
@@ -62,3 +95,7 @@ renders a single view with debug switches.
   releases it. Used by `@opensu/sheet`; leaves on-screen viewers alone.
 - `demo/` - the golden sample in the viewer, view switcher and orbit
   controls; `demo/views.ts` holds the five fixed views.
+
+- `demo/` - the golden sample in the viewer, view switcher, cutaway level
+  buttons, date presets and a time slider, orbit controls; `demo/views.ts`
+  holds the fixed views (including one cutaway axonometric per level).

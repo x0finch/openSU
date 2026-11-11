@@ -97,11 +97,13 @@ export class EdgeAdjacency {
 /**
  * Removes duplicated segments (shared edges of adjacent primitives). When
  * `normals` (two face normals per segment) are given, `normalsOut` receives
- * the normals of the kept segments.
+ * the normals of the kept segments. `kept` lists the input index of every
+ * kept segment.
  */
-export function dedupeSegments(pos: readonly number[], normals?: readonly number[], normalsOut?: number[]): number[] {
+export function dedupeSegments(pos: readonly number[], normals?: readonly number[], normalsOut?: number[]): { positions: number[]; kept: number[] } {
   const seen = new Set<string>();
   const out: number[] = [];
+  const kept: number[] = [];
   for (let i = 0; i < pos.length; i += 6) {
     const a = `${q(pos[i]!)},${q(pos[i + 1]!)},${q(pos[i + 2]!)}`;
     const b = `${q(pos[i + 3]!)},${q(pos[i + 4]!)},${q(pos[i + 5]!)}`;
@@ -109,10 +111,11 @@ export function dedupeSegments(pos: readonly number[], normals?: readonly number
     const key = a < b ? `${a}|${b}` : `${b}|${a}`;
     if (seen.has(key)) continue;
     seen.add(key);
+    kept.push(i / 6);
     for (let k = 0; k < 6; k++) out.push(pos[i + k]!);
     if (normals && normalsOut) for (let k = 0; k < 6; k++) normalsOut.push(normals[i + k] ?? 0);
   }
-  return out;
+  return { positions: out, kept };
 }
 
 /**

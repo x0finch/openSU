@@ -109,6 +109,48 @@ describe('kernel: review round features', () => {
   });
 });
 
+describe('kernel: sun study and cutaway data', () => {
+  it('reports the site (default UTC+8) and the storeys with their cut heights', () => {
+    expect(geo.site).toEqual({ latitude: 30.3, longitude: 120.2, northDeg: 0, utcOffsetHours: 8 });
+    const h = structuredClone(golden);
+    h.site.utcOffsetHours = 9;
+    expect(buildHouse(resolve(h)).site.utcOffsetHours).toBe(9);
+    expect(geo.levels.map((l) => l.id)).toEqual(['L1', 'L2', 'L3']);
+    for (const l of geo.levels) expect(l.cutZ).toBeCloseTo(l.elevation + 1.25, 6);
+  });
+
+  it('gives every storey a floor finish at its elevation', () => {
+    for (const l of geo.levels) {
+      const floor = geo.parts.find((p) => p.id === `${l.id}:floor`)!;
+      expect(floor.material, l.id).toBe('floor');
+      expect(floor.level).toBe(l.id);
+      const tops = Array.from(floor.positions).filter((_, i) => i % 3 === 2);
+      expect(Math.max(...tops), l.id).toBeCloseTo(l.elevation, 4);
+    }
+    // The ground-floor finish has no feature edges (its outline lies under the walls).
+    expect(geo.parts.find((p) => p.id === 'L1:floor')!.edges.length).toBe(0);
+  });
+
+  it('caps the walls at each cut plane, with outlines, but not the stairs', () => {
+    for (const l of geo.levels) {
+      const cut = geo.parts.find((p) => p.id === `${l.id}:cut`)!;
+      expect(cut.role).toBe('cut');
+      expect(cut.indices.length, l.id).toBeGreaterThan(0);
+      expect(cut.edges.length, l.id).toBeGreaterThan(0);
+      for (let i = 2; i < cut.positions.length; i += 3) expect(cut.positions[i]).toBeCloseTo(l.cutZ, 4);
+    }
+    // No cap inside the L1 stair core (gf-stair, x 4.3..5.5 m, y 4.0..5.3 m).
+    const cut = geo.parts.find((p) => p.id === 'L1:cut')!;
+    const q: [number, number] = [4.9, 4.6];
+    const area = (u: number[], v: number[], w: number[]) => (v[0]! - u[0]!) * (w[1]! - u[1]!) - (w[0]! - u[0]!) * (v[1]! - u[1]!);
+    for (let t = 0; t < cut.indices.length; t += 3) {
+      const [a, b, c] = [0, 1, 2].map((k) => cut.indices[t + k]! * 3).map((o) => [cut.positions[o]!, cut.positions[o + 1]!]) as [number[], number[], number[]];
+      const s = [area(a, b, q), area(b, c, q), area(c, a, q)];
+      expect(s.every((v) => v > 0) || s.every((v) => v < 0)).toBe(false);
+    }
+  });
+});
+
 /** One-room house with a single roof of the given kind and fall. */
 function shed(kind: 'mono' | 'gable' | 'hip', fall: 'N' | 'S' | 'E' | 'W' = 'S'): House {
   return {

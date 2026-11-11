@@ -63,6 +63,16 @@ locked in `packages/render/src/style/tokens.ts`.
 - Elevations are orthographic, straight on.
 - Generous white margin around the subject.
 
+### Sun study and level cutaway
+- Physical sun: same tone bands; glass passes sunlight, frames cast.
+  Interior floors use the warm plan floor tone `#DAD7D2`; shadows on them
+  use a lifted tone (`#BEBEBE`) so interiors stay readable while sun
+  patches stand out.
+- Cutaway: walls cut at 1.25 m above the level floor; cut tops flat mid
+  grey `#9A9A9A` (the plan's wall fill) with their outline. Stairs stay
+  whole; site and garden are never cut. Cutaway axonometrics look down
+  steeper (50 deg).
+
 ## Floor plans (SVG)
 - Walls: mid-grey fill `#9A9A9A` with dark outline `#3A3A3A`; exterior walls
   and interior walls share the style, cut clean at openings.

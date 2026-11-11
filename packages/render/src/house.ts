@@ -21,6 +21,8 @@ export const MATERIAL_SLOTS: Record<MaterialSlot, PaletteKey> = {
   paving: 'paving',
   gravel: 'gravel',
   soil: 'soil',
+  floor: 'floor',
+  cut: 'cut',
 };
 
 /** Shadow flags per slot: transparent glazing neither casts nor receives. */
@@ -28,7 +30,21 @@ const SHADOWS: Partial<Record<MaterialSlot, [cast: boolean, receive: boolean]>> 
   glass: [false, false],
   balustrade: [false, false],
   glassBacking: [true, false],
+  cut: [false, false],
 };
+
+/**
+ * Bake groups (see `bakeScene`): architecture of the levels is clipped in a
+ * cutaway; section caps show only in a cutaway of their level; stairs and
+ * entourage standing on an upper level are never clipped but hidden when
+ * the cut is below their level; everything else is site.
+ */
+export const BAKE_GROUP = {
+  house: 'house',
+  site: 'site',
+  cut: (levelId: string) => `cut:${levelId}`,
+  level: (levelId: string) => `level:${levelId}`,
+} as const;
 
 /** Model axes (metres, Z up) -> scene axes (Y up, Z south). */
 function toScene(src: ArrayLike<number>): Float32Array {
@@ -106,11 +122,21 @@ export function createHouseObject(geometry: HouseGeometry, pal: Palette): HouseO
     mesh.userData.partId = part.id;
     mesh.userData.role = part.role;
     if (part.level) mesh.userData.level = part.level;
+    mesh.userData.bakeGroup = !part.level ? BAKE_GROUP.site
+      : part.role === 'cut' ? BAKE_GROUP.cut(part.level)
+      : part.role === 'stair' ? BAKE_GROUP.level(part.level)
+      : BAKE_GROUP.house;
     if (part.edges.length) {
       mesh.userData.lines = Array.from(toScene(part.edges));
       mesh.userData.lineNormals = Array.from(toScene(part.edgeNormals));
     }
     root.add(mesh);
+    // Floor finishes (partly below grade) and section caps lie inside the
+    // building: they never take part in framing or shadow fitting.
+    if (part.role === 'floor' || part.role === 'cut') {
+      mesh.userData.noFrame = true;
+      continue;
+    }
     for (let i = 0; i < positions.length; i += 3) {
       const key = `${Math.round(positions[i]! * 20)},${Math.round(positions[i + 1]! * 20)},${Math.round(positions[i + 2]! * 20)}`;
       if (seen.has(key)) continue;
@@ -122,15 +148,23 @@ export function createHouseObject(geometry: HouseGeometry, pal: Palette): HouseO
     const fl = new Object3D();
     fl.name = 'floor-lines';
     fl.userData.floorLines = Array.from(toScene(geometry.floorLines));
+    fl.userData.bakeGroup = BAKE_GROUP.house;
     root.add(fl);
   }
   for (const e of geometry.entourage) {
     const obj = createEntourage(e, pal);
+    // Entourage standing on an upper level (terraces, balconies).
+    const lv = [...geometry.levels].reverse().find((l) => e.position[2] >= l.elevation - 0.05);
+    const upper = lv && lv !== geometry.levels[0] ? lv.id : undefined;
+    obj.userData.bakeGroup = upper ? BAKE_GROUP.level(upper) : BAKE_GROUP.site;
+    if (upper) obj.userData.level = upper;
     obj.position.set(e.position[0], e.position[2], -e.position[1]);
     obj.rotation.y += e.rotation;
     if (e.clip) clipFoliage(obj, e.clip);
     root.add(obj);
   }
+  root.userData.site = geometry.site;
+  root.userData.levels = geometry.levels;
   return { root, framePoints };
 }
 
