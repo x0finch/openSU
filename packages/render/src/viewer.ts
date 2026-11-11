@@ -90,7 +90,7 @@ export class IllustrationViewer {
   private pending = false;
   private preset: ViewPreset | null = null;
   private lighting: LightingMode = defaultLighting;
-  private insets: FrameInsets = { ...NO_INSETS };
+  private insets: FrameInsets[] = [{ ...NO_INSETS }];
   private readonly fixedPixelRatio: number | undefined;
   private groups = new Map<string, Object3D[]>();
   private clipMaterials: Material[] = [];
@@ -471,29 +471,46 @@ export class IllustrationViewer {
     this.requestRender();
   }
 
-  /** The camera of a preset for the current canvas, framed inside the free area. */
+  /**
+   * The camera of a preset for the current canvas, framed inside the free
+   * area. With several alternative insets (floating UI that can be avoided
+   * from above or from the side), the one that shows the subject largest.
+   */
   cameraFor(preset: ViewPreset): Camera {
     const { width, height } = this.size();
-    const cam = cameraForView(preset, this.viewPoints(), freeAspect(this.insets, width, height));
-    applyFrameInsets(cam, this.insets, width, height);
-    return cam;
+    let best: Camera | null = null;
+    let bestScale = -Infinity;
+    for (const raw of this.insets) {
+      const i = { ...raw };
+      // Never leave less than a third of the canvas free.
+      if (width - i.left - i.right < width / 3) i.left = i.right = 0;
+      if (height - i.top - i.bottom < height / 3) i.top = i.bottom = 0;
+      const cam = cameraForView(preset, this.viewPoints(), freeAspect(i, width, height));
+      applyFrameInsets(cam, i, width, height);
+      // Screen pixels per unit of the frustum's height: larger = a larger subject.
+      let scale = 0;
+      if (cam instanceof OrthographicCamera) scale = (height * cam.zoom) / (cam.top - cam.bottom);
+      else if (cam instanceof PerspectiveCamera) scale = height / (2 * ((cam.userData.lensShift as { hh: number } | undefined)?.hh ?? Math.tan((cam.fov * Math.PI) / 360)));
+      if (scale > bestScale + 1e-9) {
+        bestScale = scale;
+        best = cam;
+      }
+    }
+    return best!;
   }
 
   /**
    * Keeps presets framed inside the canvas minus these insets (CSS px), e.g.
-   * the space under floating UI. Re-frames the current preset.
+   * the space under floating UI; alternatives are tried and the one that
+   * shows the subject largest wins. Re-frames the current preset.
    */
-  setFrameInsets(insets: FrameInsets, reframe = true): void {
-    const i = { top: Math.max(0, insets.top), right: Math.max(0, insets.right), bottom: Math.max(0, insets.bottom), left: Math.max(0, insets.left) };
-    const { width, height } = this.size();
-    // Never leave less than a third of the canvas free.
-    if (width - i.left - i.right < width / 3) i.left = i.right = 0;
-    if (height - i.top - i.bottom < height / 3) i.top = i.bottom = 0;
-    this.insets = i;
+  setFrameInsets(insets: FrameInsets | readonly FrameInsets[], reframe = true): void {
+    const list = (Array.isArray(insets) ? insets : [insets]) as readonly FrameInsets[];
+    this.insets = (list.length ? list : [NO_INSETS]).map((i) => ({ top: Math.max(0, i.top), right: Math.max(0, i.right), bottom: Math.max(0, i.bottom), left: Math.max(0, i.left) }));
     if (reframe && this.preset && !this.walker) this.setView(this.preset);
   }
 
-  get frameInsets(): FrameInsets {
+  get frameInsets(): readonly FrameInsets[] {
     return this.insets;
   }
 
