@@ -141,6 +141,46 @@ export function houseSeed(house: Pick<ResolvedHouse, 'name'>): number {
   return h;
 }
 
+/** Large glazing: sliding doors and windows at least this wide (mm). */
+const WIDE_GLAZING = 1500;
+
+/** Outward side of an opening in an exterior wall (null when both sides are inside or both outside). */
+function outwardSide(house: ResolvedHouse, li: number, o: ResolvedHouse['levels'][number]['openings'][number]): Side | null {
+  if (o.facing) return o.facing;
+  const lv = house.levels[li]!;
+  const out = o.sides.map((id) => !id || !!lv.spaces.find((s) => s.id === id)?.outdoor);
+  if (out[0] === out[1]) return null;
+  const k = out[0] ? 0 : 1;
+  return o.orient === 'NS' ? (k === 0 ? 'W' : 'E') : k === 0 ? 'S' : 'N';
+}
+
+/** Main glazing of a house: wide glazing in exterior walls, with the side it faces. */
+function mainGlazing(house: ResolvedHouse): { li: number; side: Side; a: number; b: number; at: number; width: number }[] {
+  const out: { li: number; side: Side; a: number; b: number; at: number; width: number }[] = [];
+  house.levels.forEach((lv, li) => {
+    for (const o of lv.openings) {
+      if (!(o.kind === 'sliding-door' || (o.kind === 'window' && o.width >= WIDE_GLAZING) || (o.kind === 'door' && o.width >= WIDE_GLAZING))) continue;
+      const side = outwardSide(house, li, o);
+      if (!side) continue;
+      const along = o.orient === 'NS' ? o.center[1] : o.center[0];
+      out.push({ li, side, a: along - o.width / 2, b: along + o.width / 2, at: o.orient === 'NS' ? o.center[0] : o.center[1], width: o.width });
+    }
+  });
+  return out;
+}
+
+/**
+ * The side the house opens to: the facade with the most large glazing
+ * (ties: the plan's bottom edge, which templates and the assistant treat as
+ * the front). Decided by the house alone, never by the latitude, so moving
+ * the house to another place or turning it never moves a plant.
+ */
+export function frontSide(house: ResolvedHouse): Side {
+  const sum: Record<Side, number> = { N: 0, E: 0, S: 0, W: 0 };
+  for (const g of mainGlazing(house)) sum[g.side] += g.width;
+  return (['S', 'E', 'W', 'N'] as const).reduce((m, s) => (sum[s] > sum[m] ? s : m), 'S' as Side);
+}
+
 const cache = new WeakMap<ResolvedHouse, Plant[]>();
 
 /**
@@ -182,7 +222,32 @@ function computePlants(house: ResolvedHouse): Plant[] {
 
   const covered = (x: number, y: number) =>
     house.roofs.some((r) => pointInRings(r.rings, x, y)) || house.levels.slice(1).some((_, k) => !!g.spaceAt(k + 1, x, y));
-  const mainSide: Side = site.latitude >= 0 ? 'S' : 'N';
+  // The side the house opens to, from its glazing (never from the latitude).
+  const mainSide: Side = frontSide(house);
+  // Main glazing: the large windows and sliding doors of the front.
+  const glazing = mainGlazing(house).filter((z) => z.side === mainSide);
+  const upperOutdoor = (x: number, y: number) => house.levels.slice(1).some((_, k) => !!g.spaceAt(k + 1, x, y)?.outdoor);
+  /**
+   * A tree's crown would stand in front of main glazing: inside the band
+   * that runs out from a large window or sliding door (its width plus a
+   * margin, 6 m deep), or reach into a balcony, terrace or roof above.
+   */
+  const blocksHouse = (x: number, y: number, R: number) => {
+    for (const z of glazing) {
+      const along = z.side === 'N' || z.side === 'S' ? x : y;
+      const out = z.side === 'S' ? z.at - y : z.side === 'N' ? y - z.at : z.side === 'W' ? z.at - x : x - z.at;
+      const m = 0.2 * (z.b - z.a);
+      if (out > 0 && out < 6000 && along > z.a + m && along < z.b - m) return true;
+    }
+    if (covered(x, y)) return true;
+    // Foliage is clipped where it meets rooms, but a crown in a balcony or
+    // on a terrace would stand where people walk.
+    for (let k = 0; k < 8; k++) {
+      const a = (k * Math.PI) / 4;
+      if (upperOutdoor(x + Math.cos(a) * R * 0.75, y + Math.sin(a) * R * 0.75)) return true;
+    }
+    return upperOutdoor(x, y);
+  };
   const outdoor = gf.spaces.filter((s) => s.outdoor);
   // Horizontal extent of the house (ground floor interior), for keeping the
   // big tree off the facade's centre.
@@ -195,23 +260,37 @@ function computePlants(house: ResolvedHouse): Plant[] {
     .map((s) => ({ s, r: g.largestRect(0, s.id) }))
     .filter((c): c is { s: ResolvedSpace; r: R4 } => !!c.r && Math.min(c.r[2] - c.r[0], c.r[3] - c.r[1]) >= 2500)
     .sort((a, b) => (b.r[2] - b.r[0]) * (b.r[3] - b.r[1]) - (a.r[2] - a.r[0]) * (a.r[3] - a.r[1]));
-  const big = candidates.find((c) => !covered((c.r[0] + c.r[2]) / 2, (c.r[1] + c.r[3]) / 2));
   let bigTree: [number, number] | null = null;
-  if (big) {
-    // On the court's open (sunny) side, at the corner away from the plot
-    // fence; between equally placed corners the one farther from the
-    // middle of the house, so the tree frames the facade instead of hiding it.
-    const r = big.r;
-    const fenceDist = (x: number, y: number) => Math.min(x, y, site.width - x, site.depth - y);
-    const sunny = ([[r[0], r[1], 1, 1], [r[2], r[1], -1, 1], [r[2], r[3], -1, -1], [r[0], r[3], 1, -1]] as const)
-      .filter((c) => (mainSide === 'S' ? c[1] === r[1] : c[1] === r[3]));
-    // Last tie-break: the east corner (the eye-level hero view looks from the
-    // south-west, so the tree stands to the side of the facade's centre).
-    const score = (c: readonly number[]) => fenceDist(c[0]!, c[1]!) * 10 + Math.abs(c[0]! - houseMidX) * 1e-3 + c[0]! * 1e-7;
-    const corner = sunny.reduce((m, c) => (score(c) > score(m) ? c : m));
+  const BIG = 7.6;
+  const bigR = crownRadius({ kind: 'ginkgo', height: BIG });
+  const fenceDist = (x: number, y: number) => Math.min(x, y, site.width - x, site.depth - y);
+  // The east corner breaks the last tie (the eye-level hero view looks from
+  // the south-west, so the tree stands to the side of the facade's centre).
+  const score = (x: number, y: number) => fenceDist(x, y) * 10 + Math.abs(x - houseMidX) * 1e-3 + x * 1e-7;
+  for (const c of candidates) {
+    if (covered((c.r[0] + c.r[2]) / 2, (c.r[1] + c.r[3]) / 2)) continue;
+    // At a corner of the court on the side the house opens to, away from
+    // the plot fence; between equally placed corners the one farther from
+    // the middle of the house, so the tree frames the facade instead of
+    // hiding it. Never in front of main glazing or into a balcony,
+    // terrace or roof: then the other corners, then anywhere in the court.
+    const r = c.r;
     const inset = Math.min(900, 0.3 * Math.min(r[2] - r[0], r[3] - r[1]));
-    bigTree = [corner[0] + corner[2] * inset, corner[1] + corner[3] * inset];
-    put('ginkgo', gf.id, big.s, bigTree[0], bigTree[1], 7.6);
+    const corners = ([[r[0], r[1], 1, 1], [r[2], r[1], -1, 1], [r[2], r[3], -1, -1], [r[0], r[3], 1, -1]] as const).map(
+      (k) => [k[0] + k[2] * inset, k[1] + k[3] * inset, k[1]] as const,
+    );
+    const front = mainSide === 'S' ? r[1] : mainSide === 'N' ? r[3] : null;
+    const open = corners.filter((k) => front === null || k[2] === front);
+    const rest = corners.filter((k) => !open.includes(k));
+    const best = (pts: readonly (readonly [number, number, ...unknown[]])[]) =>
+      pts.filter((p) => !blocksHouse(p[0], p[1], bigR)).reduce<readonly [number, number, ...unknown[]] | null>((m, p) => (!m || score(p[0], p[1]) > score(m[0], m[1]) ? p : m), null);
+    const grid: [number, number][] = [];
+    for (let x = r[0] + inset; x <= r[2] - inset; x += 300) for (let y = r[1] + inset; y <= r[3] - inset; y += 300) grid.push([x, y]);
+    const at = best(open) ?? best(rest) ?? best(grid);
+    if (!at) continue;
+    bigTree = [at[0], at[1]];
+    put('ginkgo', gf.id, c.s, bigTree[0], bigTree[1], BIG);
+    break;
   }
 
   // 1b. A small green maple in a garden beside the entrance porch.
@@ -311,7 +390,7 @@ function computePlants(house: ResolvedHouse): Plant[] {
     const dc = door?.center ?? [r[0], r[1]];
     const corners: [number, number, number, number][] = [[r[0], r[1], 1, 1], [r[2], r[1], -1, 1], [r[2], r[3], -1, -1], [r[0], r[3], 1, -1]];
     const away = corners
-      .filter(([, y]) => (mainSide === 'S' ? y > r[1] : y < r[3]))
+      .filter(([x, y]) => (mainSide === 'S' ? y > r[1] : mainSide === 'N' ? y < r[3] : mainSide === 'E' ? x < r[2] : x > r[0]))
       // Farthest from the door; between corners about as far, the one farther
       // from the middle of the house (the tree then frames the facade).
       .sort((a, b) => {

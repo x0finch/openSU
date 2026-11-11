@@ -9,7 +9,7 @@ import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRe
 import type { FrameInsets } from '@opensu/render';
 import { cx } from '../components/ui';
 import { useT } from '../lib/i18n';
-import { ChangeToast, ChatInput, PinnedColumn, RecentStrip, SettingsHost } from '../chat/ChatPanel';
+import { ChatInput, PinnedColumn, RecentStrip, SettingsHost } from '../chat/ChatPanel';
 import { useChat } from '../chat/chat-store';
 import { useAutosave } from '../lib/autosave';
 import { restoreLang, useStudio } from '../lib/store';
@@ -98,7 +98,10 @@ function desktopInsets(W: number, H: number, left: number, o: { title: Box | nul
   const g = GAP_DESKTOP;
   const base = { top: o.top + g, right: 24, left: 24, bottom: o.dock ? H - o.dock.top + g : 24 };
   const tops = [base];
-  if (o.title) tops.push({ ...base, top: Math.max(base.top, o.title.bottom + g) }, { ...base, left: Math.max(base.left, o.title.right - left + 16) });
+  // Kept clear of the title from the side, the free area stays symmetric, so
+  // the house stands centred over the input (task 016).
+  const side = o.title ? Math.max(base.left, o.title.right - left + 16) : 0;
+  if (o.title) tops.push({ ...base, top: Math.max(base.top, o.title.bottom + g) }, { ...base, left: side, right: Math.max(base.right, side) });
   const out = o.title ? tops.slice(1) : tops;
   if (!o.panel) return out;
   const all = out.flatMap((i) => [
@@ -191,8 +194,21 @@ function DesktopDock({ onBox }: { onBox: (b: Box | null) => void }) {
     <div ref={ref} className="pointer-events-none absolute bottom-6 left-1/2 flex w-[min(600px,calc(100%-48px))] -translate-x-1/2 flex-col items-center gap-2.5" data-testid="dock">
       <Hints />
       <div className="relative w-full">
-        {recent ? <RecentStrip className="absolute inset-x-0 bottom-full mb-2" /> : <ChangeToast className="absolute bottom-full left-1/2 mb-3 -translate-x-1/2" />}
+        {recent && <RecentStrip className="absolute inset-x-0 bottom-full mb-2" />}
         <ChatInput />
+      </div>
+    </div>
+  );
+}
+
+/** Phones in the sheets view: no tools apply, the conversation input stays (with its recent strip). */
+function SheetInput() {
+  const recent = useStudio((s) => s.recent);
+  return (
+    <div className="pointer-events-none absolute inset-x-3 bottom-[max(12px,env(safe-area-inset-bottom))] z-20" data-testid="dock">
+      <div className="relative">
+        {recent && <RecentStrip phone className="absolute inset-x-0 bottom-full mb-2" />}
+        <ChatInput phone />
       </div>
     </div>
   );
@@ -264,7 +280,8 @@ export function Studio() {
     const g = GAP_PHONE;
     const top = (header?.bottom ?? 58) + g;
     const bottom = (extent?.bottom ?? 130) + g;
-    return [{ top, bottom, left: extent?.left ? extent.left + 12 : 0, right: 0 }];
+    // A small even margin at the sides: the house, its shadow and trees never touch the screen edge.
+    return [{ top, bottom, left: extent?.left ? extent.left + 12 : 10, right: 10 }];
   }, [fullFrame, desktop, modeBox, vp, canvasLeft, column, title, mode, dockBox, panelOpen, panel, header, extent]);
 
   // The 3D viewer is created the first time 3D is shown and kept afterwards.
@@ -324,7 +341,8 @@ export function Studio() {
           {mode !== 'sheet' && <Toolbar derived={derived} className="absolute top-4 right-4" />}
           {mode !== 'sheet' && <PanelCard derived={derived} onRect={onPanel} />}
           {walk && <WalkHUD derived={derived} left={canvasLeft} />}
-          {mode !== 'sheet' && !column && <DesktopDock onBox={setDockBox} />}
+          {/* The input stays in the sheets view too (the column is not shown there). */}
+          {!column && <DesktopDock onBox={setDockBox} />}
           <SettingsHost />
         </div>
       ) : walkLandscape ? (
@@ -342,7 +360,7 @@ export function Studio() {
             <ModeSwitch size="sm" className="glass pointer-events-auto shrink-0 rounded-[12px]" />
           </header>
           {walk && <MobileWalkHUD derived={derived} top={`${header?.bottom ?? 58}px`} bottom={extent?.bottom ?? 130} />}
-          {mode !== 'sheet' && <PhoneDock derived={derived} landscape={landscape} onExtent={onExtent} />}
+          {mode !== 'sheet' ? <PhoneDock derived={derived} landscape={landscape} onExtent={onExtent} /> : <SheetInput />}
           <SettingsHost phone />
         </>
       )}

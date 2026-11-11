@@ -131,10 +131,9 @@ export class WalkWorld {
    * How far (metres, up to `max`) a body can walk from `p` straight along a
    * bearing (degrees, 0 = north) on the same floor.
    */
-  clearance(p: WalkPose, headingDeg: number, max = 6): number {
+  clearance(p: WalkPose, headingDeg: number, max = 6, step = 0.1): number {
     const a = (headingDeg * Math.PI) / 180;
     const dx = Math.sin(a), dy = Math.cos(a);
-    const step = 0.1;
     for (let d = step; d <= max; d += step) {
       const z = this.standAt(p.x + dx * d, p.y + dy * d, p.z);
       if (z === null || Math.abs(z - p.z) > 0.05) return d - step;
@@ -184,6 +183,49 @@ export class WalkWorld {
       if (!hit) open++;
     }
     return open;
+  }
+
+  /**
+   * A good first view near `p` (the spot just inside the entrance): a place
+   * indoors within `radius` metres with room around the body (never wedged
+   * in a door frame) and at least `ahead` metres of clear floor in front,
+   * facing the longest open sightline into the house. Null when none fits.
+   */
+  bestStart(p: WalkPose, preferredDeg: number, radius = 3.5, ahead = 1.5): { pose: WalkPose; headingDeg: number } | null {
+    let best: { pose: WalkPose; headingDeg: number } | null = null;
+    let bestScore = -Infinity;
+    for (let dx = -radius; dx <= radius + 1e-6; dx += 0.5) {
+      for (let dy = -radius; dy <= radius + 1e-6; dy += 0.5) {
+        const d = Math.hypot(dx, dy);
+        if (d > radius) continue;
+        const x = p.x + dx, y = p.y + dy;
+        const z = this.standAt(x, y, p.z);
+        if (z === null || Math.abs(z - p.z) > 0.05) continue;
+        const q = { x, y, z };
+        // Room around the body: half a metre free in every direction.
+        let roomy = true;
+        for (let k = 0; k < 8 && roomy; k++) if (this.clearance(q, k * 45, 0.5) < 0.45) roomy = false;
+        if (!roomy) continue;
+        let indoors: boolean | null = null;
+        for (let k = 0; k < 16; k++) {
+          const h = k * 22.5;
+          const sight = this.clearance(q, h, 14, 0.25);
+          if (sight < ahead) continue;
+          // The longest sightline; a little preference for staying near the
+          // door and for looking the way one enters.
+          const turn = Math.abs(((h - preferredDeg + 540) % 360) - 180);
+          const score = sight - 0.25 * d - turn / 180;
+          if (score > bestScore) {
+            // Indoors (not on a terrace or in the garden): checked only for a winner.
+            indoors ??= this.enclosed(q);
+            if (!indoors) break;
+            bestScore = score;
+            best = { pose: q, headingDeg: h };
+          }
+        }
+      }
+    }
+    return best;
   }
 
   /**

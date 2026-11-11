@@ -8,7 +8,7 @@
 // the input share one row and the sheet stands above the toolbar on the left.
 import { type PointerEvent as RPointerEvent, type ReactNode, useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { cx } from '../components/ui';
-import { ChangeToast, ChatInput, PinnedChat, RecentStrip } from '../chat/ChatPanel';
+import { ChatInput, PinnedChat, RecentStrip } from '../chat/ChatPanel';
 import { useStudio } from '../lib/store';
 import { Hints } from './chrome';
 import type { Derived } from './house-data';
@@ -234,7 +234,6 @@ export function PhoneDock({ derived, landscape, onExtent }: { derived: Derived |
   const above: ReactNode = (
     <>
       {recent && !want && <RecentStrip phone className="absolute inset-x-0 bottom-full mb-2" />}
-      {!recent && <ChangeToast className="absolute bottom-full left-1/2 mb-2.5 -translate-x-1/2" />}
     </>
   );
 

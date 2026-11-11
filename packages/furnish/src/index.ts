@@ -15,7 +15,7 @@ export { furnishLevel, keepClearZones } from './furnish';
 export { isEntryHall } from './rules';
 export { footprint, isSolid, type FurnitureKind, type Placement } from './types';
 export { planDims } from './dims';
-export { plantSite, crownRadius, plantFootprint, houseSeed, treeHidesFacade, type Plant, type PlantKind } from './planting';
+export { plantSite, crownRadius, frontSide, plantFootprint, houseSeed, treeHidesFacade, type Plant, type PlantKind } from './planting';
 
 /**
  * Overall height (mm) of each kind as built in 3D. Pieces the plan draws but

@@ -367,7 +367,7 @@ async function siteChecks() {
   check(Math.abs(urumqi.info.sunrise - urumqi.truth.sunrise) < 0.5 && Math.abs(urumqi.info.solarNoon - urumqi.truth.noon) < 0.5 && Math.abs(urumqi.info.elevation - urumqi.truth.el) < 0.05,
     `a new place refreshes the sun at once (Urumqi: sunrise ${(urumqi.info.sunrise / 60).toFixed(2)} h, noon ${(urumqi.info.solarNoon / 60).toFixed(2)} h, sun ${urumqi.info.elevation.toFixed(1)} deg)`);
   check(urumqi.noon.includes('14:08'), `the strip shows the new solar noon (${urumqi.noon})`);
-  check(urumqi.range && urumqi.range[0] === Math.ceil(urumqi.truth.sunrise) && urumqi.range[1] === Math.floor(urumqi.truth.sunset) && urumqi.range[2] === 600 && urumqi.minutes === 600,
+  check(urumqi.range && urumqi.range[0] === Math.round(urumqi.truth.sunrise) && urumqi.range[1] === Math.round(urumqi.truth.sunset) && urumqi.range[2] === 600 && urumqi.minutes === 600,
     `the slider takes the new day and keeps 10:00 (still daylight): ${JSON.stringify(urumqi.range)}`);
   const pxUq = await canvasPixels(page);
   let moved = 0;
@@ -377,7 +377,7 @@ async function siteChecks() {
   await page.evaluate(() => window.__studio.store.getState().setSun({ minutes: 480 }));
   await settle(page);
   const clamp = await page.evaluate(() => window.__studio.store.getState().sun.minutes);
-  check(clamp === Math.ceil(urumqi.truth.sunrise), `a time before sunrise is clamped to sunrise (${clamp})`);
+  check(clamp === Math.round(urumqi.truth.sunrise), `a time before sunrise is clamped to sunrise, the minute the slider and the text show (${clamp})`);
   await pick('哈尔滨', '哈尔滨市');
   const hrb = await noonElevation(page);
   check(Math.abs(hrb.elevation - 20.8) < 0.3, `Harbin (searched in Chinese): noon sun ${hrb.elevation.toFixed(1)} deg (~20.8)`);
@@ -399,7 +399,7 @@ async function siteChecks() {
   const px0 = await canvasPixels(page);
   await page.getByTestId('project-menu').click();
   await page.getByTestId('menu-orientation').click();
-  await page.getByRole('button', { name: '正东' }).click();
+  await page.getByRole('button', { name: '东（90°）' }).click();
   await page.waitForFunction(() => window.__studio.store.getState().house.site.northDeg === 90, null, { timeout: 10000 });
   await page.waitForTimeout(400);
   await settle(page);
@@ -417,7 +417,7 @@ async function siteChecks() {
   let diff = 0;
   for (let i = 0; i < px0.length; i += 4) if (Math.abs(px0[i] - px1[i]) > 30) diff++;
   check(diff / (px0.length / 4) > 0.01, `the shadows move with the orientation (${((100 * diff) / (px0.length / 4)).toFixed(1)}% pixels differ)`);
-  check((await page.getByTestId('ori-text').textContent())?.includes('正东'), 'the dial describes the orientation in everyday words');
+  check((await page.getByTestId('ori-text').textContent())?.includes('东（90°）'), 'the dial describes the orientation by the compass');
   await shot(page, 'studio-orientation-east');
   await page.keyboard.press('Escape');
   // Southern hemisphere: Sydney's winter solstice is in June, the noon sun stands in the north.
@@ -457,8 +457,9 @@ async function eyeLevelChecks() {
   const { ctx, page } = await open(DESKTOP, '/studio?view=eye-sw');
   await page.waitForFunction(() => window.__studio?.ready3d === true, null, { timeout: 180000 });
   await settle(page);
-  const az = await page.evaluate(() => window.__studio.engine.viewer.currentView?.azimuthDeg);
-  check(az === 140, `T1 eye level looks from the unobstructed south-east (azimuth ${az})`);
+  // Task 016: inside the fence, on open ground south of the house, clear of the south-west ginkgo.
+  const v = await page.evaluate(() => ({ at: window.__studio.engine.viewer.currentView?.eyeAt ?? null, az: window.__studio.engine.viewer.currentView?.azimuthDeg }));
+  check(!!v.at && v.at[0] > 0 && v.at[0] < 12 && -v.at[1] > 0 && -v.at[1] < 14 && v.az > 90 && v.az < 270, `T1 eye level stands inside the plot, south of the house (${JSON.stringify(v)})`);
   await ctx.close();
 }
 

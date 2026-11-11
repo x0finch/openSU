@@ -17,6 +17,16 @@ export interface ViewPreset {
   fovDeg?: number;
   /** White margin as a fraction of the frame. */
   margin?: number;
+  /**
+   * Eye level from a fixed standing point (scene x, z; e.g. inside the plot
+   * fence) instead of a distance fitted to the field of view: the field of
+   * view widens up to `maxFovDeg` to show the subject.
+   */
+  eyeAt?: [number, number];
+  /** Widest vertical field of view for `eyeAt`, degrees. */
+  maxFovDeg?: number;
+  /** Points to frame instead of the viewer's framing points (e.g. the building without its plot). */
+  frame?: readonly Vector3[];
 }
 
 function horizontalDir(azimuthDeg: number): Vector3 {
@@ -120,6 +130,52 @@ export function fitEyeLevelCamera(points: readonly Vector3[], azimuthDeg: number
   return cam;
 }
 
+/**
+ * Eye-level two-point perspective from a fixed standing point: the camera
+ * looks horizontally at the subject's centre; the field of view is the
+ * narrowest from `fovDeg` up to `maxFovDeg` that shows the subject with the
+ * margin. When even the widest one cannot, the ground line stays in the
+ * frame and the top is cut.
+ */
+export function fitEyeLevelFrom(points: readonly Vector3[], at: [number, number], eyeHeight: number, fovDeg: number, maxFovDeg: number, aspect: number, margin: number): PerspectiveCamera {
+  const center = centerOf(points);
+  const cam = new PerspectiveCamera(fovDeg, aspect, 0.1, 1000);
+  cam.position.set(at[0], eyeHeight, at[1]);
+  cam.up.set(0, 1, 0);
+  cam.lookAt(center.x, eyeHeight, center.z);
+  cam.updateMatrixWorld();
+  const view = new Matrix4().copy(cam.matrixWorld).invert();
+  const k = 1 / (1 - 2 * margin);
+  const minTan = Math.tan((fovDeg * Math.PI) / 360) * 2;
+  const maxTan = Math.tan((maxFovDeg * Math.PI) / 360) * 2;
+  // Only what the widest frame can hold sideways counts (a wing beside the
+  // standing point is cut at the frame's edge, as in a photograph).
+  const side = (maxTan * aspect) / 2 / k;
+  let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity, far = 0;
+  const v = new Vector3();
+  for (const p of points) {
+    v.copy(p).applyMatrix4(view);
+    const depth = -v.z;
+    if (depth < 1 || Math.abs(v.x / depth) > side) continue;
+    far = Math.max(far, depth);
+    x0 = Math.min(x0, v.x / depth); x1 = Math.max(x1, v.x / depth);
+    y0 = Math.min(y0, v.y / depth); y1 = Math.max(y1, v.y / depth);
+  }
+  if (x0 === Infinity) return fitEyeLevelCamera(points, 0, eyeHeight, fovDeg, aspect, margin);
+  const need = Math.max((y1 - y0) * k, ((x1 - x0) * k) / aspect);
+  const tanH = Math.min(maxTan, Math.max(minTan, need));
+  const hh = tanH / 2;
+  const cx = (x0 + x1) / 2;
+  // Centred when it fits; else the ground line (with its margin) at the bottom.
+  const fits = (y1 - y0) * k <= tanH;
+  const cy = fits ? (y0 + y1) / 2 : y0 - (y1 - y0) * (k - 1) / 2 + hh;
+  cam.near = 0.1;
+  cam.far = far * 4 + 200;
+  cam.userData.lensShift = { cx, cy, hh };
+  applyLensShift(cam, aspect);
+  return cam;
+}
+
 /** Re-applies a lens-shifted frustum (after a resize) keeping its vertical extent. */
 export function applyLensShift(cam: PerspectiveCamera, aspect: number): void {
   const shift = cam.userData.lensShift as { cx: number; cy: number; hh: number } | undefined;
@@ -193,6 +249,7 @@ export function cameraForView(preset: ViewPreset, points: readonly Vector3[], as
     case 'elevation':
       return fitParallelCamera(points, preset.azimuthDeg, 0, aspect, margin);
     case 'eye':
-      return fitEyeLevelCamera(points, preset.azimuthDeg, preset.eyeHeight ?? camTokens.eyeHeight, preset.fovDeg ?? camTokens.eyeFovDeg, aspect, margin);
+      if (preset.eyeAt) return fitEyeLevelFrom(preset.frame ?? points, preset.eyeAt, preset.eyeHeight ?? camTokens.eyeHeight, preset.fovDeg ?? camTokens.eyeFovDeg, preset.maxFovDeg ?? preset.fovDeg ?? camTokens.eyeFovDeg, aspect, margin);
+      return fitEyeLevelCamera(preset.frame ?? points, preset.azimuthDeg, preset.eyeHeight ?? camTokens.eyeHeight, preset.fovDeg ?? camTokens.eyeFovDeg, aspect, margin);
   }
 }

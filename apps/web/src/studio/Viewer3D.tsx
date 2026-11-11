@@ -45,12 +45,18 @@ function scenePreset(s: StudioState) {
 function applySun(e: Engine, s: StudioState): void {
   // Seasons of the site: the winter solstice is in June south of the equator.
   const date = sunDate(s.sun.dateId, s.house?.site.latitude);
-  e.setSun(s.sun.on ? { date, minutes: s.sun.minutes } : null);
   const sun = e.sunAt(date, s.sun.minutes);
+  const polar = sun.times.polar ?? null;
+  // Polar night: the sun never rises, so the house stays in presentation
+  // light (the panel says so); the sun study needs a sun above the horizon.
+  e.setSun(s.sun.on && polar !== 'night' ? { date, minutes: s.sun.minutes } : null);
+  const noon = Math.round(sun.times.solarNoon);
   const info = {
     date,
-    sunrise: sun.times.sunrise ?? 0,
-    sunset: sun.times.sunset ?? 1439,
+    // Whole minutes, shared by the slider and the texts.
+    sunrise: polar === 'day' ? 0 : polar === 'night' ? noon : Math.ceil(sun.times.sunrise! - 0.5),
+    sunset: polar === 'day' ? 1439 : polar === 'night' ? noon : Math.floor(sun.times.sunset! + 0.5),
+    polar,
     minutes: sun.minutes,
     azimuth: sun.trueAzimuthDeg,
     elevation: sun.trueElevationDeg,
@@ -62,7 +68,7 @@ function applySun(e: Engine, s: StudioState): void {
   // A new place, time zone or date can move sunrise / sunset: the same clock
   // time is kept while it is daylight there, otherwise it is clamped (the
   // store then calls this again with a time inside the day).
-  const clamped = Math.min(Math.floor(info.sunset), Math.max(Math.ceil(info.sunrise), s.sun.minutes));
+  const clamped = Math.min(info.sunset, Math.max(info.sunrise, s.sun.minutes));
   if (!s.sun.playing && clamped !== s.sun.minutes && info.sunset > info.sunrise) s.setSun({ minutes: clamped });
 }
 
@@ -118,8 +124,9 @@ export function Viewer3D({ resolved, active, insets, insetMs, compact = false, w
         const st = useStudio.getState();
         e.setInsets(insetsRef.current, true);
         e.onMoved((m) => useStudio.getState().setViewMoved(m));
-        e.setView(scenePreset(st), shownCut(st), true);
+        // The sun first: the framing includes the shadows of the sun study's day.
         applySun(e, st);
+        e.setView(scenePreset(st), shownCut(st), true);
         engine.current = e;
         shown.current = latest.current;
         walkBridge.attach(e);
@@ -243,7 +250,7 @@ export function Viewer3D({ resolved, active, insets, insetMs, compact = false, w
       {/* North, bottom-right on desktop; phones have no free corner for it (the toolbar is there). */}
       {status === 'ready' && active && !walk && !compact && (
         <div
-          className="glass pointer-events-none absolute right-6 bottom-6 grid size-12 place-items-center rounded-full"
+          className="pointer-events-none absolute right-6 bottom-6 grid size-12 place-items-center text-ink-2"
           role="img"
           aria-label={t('north')}
         >
@@ -253,7 +260,6 @@ export function Viewer3D({ resolved, active, insets, insetMs, compact = false, w
             </text>
             <path d="M16 10.5 19.6 21 16 19.4 12.4 21Z" fill="currentColor" />
             <path d="M16 10.5 16 19.4 12.4 21Z" fill="var(--color-accent)" />
-            <circle cx="16" cy="16" r="13.5" fill="none" stroke="var(--color-hairline)" strokeWidth="1" />
           </svg>
         </div>
       )}

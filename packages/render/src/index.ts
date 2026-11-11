@@ -4,7 +4,7 @@ export { bakeScene, CLIP_GROUP, type BakeResult } from './style/batch.js';
 export { featureEdgePositions } from './style/edges.js';
 export { Sun, sunDirection } from './style/sun.js';
 export { createGround } from './style/ground.js';
-export { applyFrameInsets, cameraForView, fitParallelCamera, fitEyeLevelCamera, type FrameInsets, freeAspect, NO_INSETS, type ViewPreset, type ViewKind } from './style/cameras.js';
+export { applyFrameInsets, cameraForView, fitParallelCamera, fitEyeLevelCamera, fitEyeLevelFrom, type FrameInsets, freeAspect, NO_INSETS, type ViewPreset, type ViewKind } from './style/cameras.js';
 export { growHeight, GROW_DURATION, type GrowLevel, type GrowOptions } from './grow.js';
 export { IllustrationViewer, type SceneStats, type ViewerOptions, type ViewerLevel, type WalkOptions } from './viewer.js';
 export { WalkController, type WalkState } from './walk/controller.js';

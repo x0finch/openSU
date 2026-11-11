@@ -41,6 +41,11 @@ function useSheets(derived: Derived): SheetSnapshot {
   return snap;
 }
 
+/** A file-name-safe form of a name (no path or reserved characters, no spaces). */
+export function fileStem(name: string): string {
+  return name.replace(/[\\/:*?"<>|\u0000-\u001f]+/g, '').trim().replace(/\s+/g, '-').slice(0, 60) || 'opensu';
+}
+
 function downloadFile(f: SheetFile, name: string): void {
   const a = document.createElement('a');
   a.href = f.url;
@@ -82,12 +87,13 @@ export default function SheetGallery({ derived, desktop }: { derived: Derived; d
   const metas: SheetMeta[] = useMemo(() => {
     const view = (id: string) => t(`view.${id}` as MessageKey);
     const heroes = levelHeroViews(derived.resolved);
-    const out = derived.levels.map((l, i) => ({
-      title: t('sheets.level', { level: levelName(lang, l.name, l.index, l.isAttic) }),
-      sub: view(heroes[i % heroes.length]!),
-      file: `opensu-${i + 1}-${l.id}.png`,
-    }));
-    out.push({ title: t('sheets.views'), sub: VIEWS_SHEET_VIEWS.map(view).join(' · '), file: `opensu-${out.length + 1}-views.png` });
+    // Files carry the house's name: "白墙坡顶小院-1-一层.png".
+    const stem = fileStem(sheetTitle(derived.resolved.name));
+    const out = derived.levels.map((l, i) => {
+      const level = levelName(lang, l.name, l.index, l.isAttic);
+      return { title: t('sheets.level', { level }), sub: view(heroes[i % heroes.length]!), file: `${stem}-${i + 1}-${fileStem(level)}.png` };
+    });
+    out.push({ title: t('sheets.views'), sub: VIEWS_SHEET_VIEWS.map(view).join(' · '), file: `${stem}-${out.length + 1}-${fileStem(t('sheets.views'))}.png` });
     return out;
   }, [derived.levels, derived.resolved, lang, t]);
 
@@ -108,7 +114,7 @@ export default function SheetGallery({ derived, desktop }: { derived: Derived; d
   return (
     <div className="absolute inset-0" data-testid="sheets">
       <div className="absolute inset-0 overflow-y-auto">
-      <div className={cx('mx-auto flex min-h-full flex-col', desktop ? 'max-w-[1600px] px-12 pt-24 pb-28' : 'px-4 pt-[84px] pb-20')}>
+      <div className={cx('mx-auto flex min-h-full flex-col', desktop ? 'max-w-[1600px] px-12 pt-24 pb-44' : 'px-4 pt-[84px] pb-36')}>
         <ul
           className={cx(desktop ? 'flex flex-1 flex-wrap content-center items-start justify-center gap-6' : 'grid flex-1 grid-cols-2 content-center gap-x-3 gap-y-4')}
           aria-label={t('sheets.label')}
@@ -123,7 +129,8 @@ export default function SheetGallery({ derived, desktop }: { derived: Derived; d
       </div>
       </div>
 
-      <div className={cx('pointer-events-none absolute inset-x-0 flex justify-center', desktop ? 'bottom-6' : 'bottom-3')}>
+      {/* Above the conversation input, which stays at the bottom. */}
+      <div className={cx('pointer-events-none absolute inset-x-0 flex justify-center', desktop ? 'bottom-[96px]' : 'bottom-[80px]')}>
         <div className="glass pointer-events-auto flex items-center gap-1 rounded-ui p-1 pl-4" role="group" aria-label={t('sheets.label')}>
           <p className="tnum mr-3 text-xs whitespace-nowrap text-ink-2" aria-live="polite">
             {snap.error ? t('sheets.error') : snap.done ? t('sheets.ready', { n: ready }) : t('sheets.generating', { n: Math.min(ready + 1, snap.count), total: snap.count })}

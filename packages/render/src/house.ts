@@ -103,6 +103,8 @@ export interface HouseObject {
   root: Group;
   /** Architecture vertices (scene space), for camera framing. */
   framePoints: Vector3[];
+  /** The building alone (the levels' parts; no fence, paving or garden), scene space. */
+  buildingPoints: Vector3[];
 }
 
 /**
@@ -115,6 +117,7 @@ export function createHouseObject(geometry: HouseGeometry, pal: Palette): HouseO
   const root = new Group();
   root.name = 'house';
   const framePoints: Vector3[] = [];
+  const buildingPoints: Vector3[] = [];
   const seen = new Set<string>();
   for (const part of geometry.parts) {
     const positions = toScene(part.positions);
@@ -149,6 +152,7 @@ export function createHouseObject(geometry: HouseGeometry, pal: Palette): HouseO
       if (seen.has(key)) continue;
       seen.add(key);
       framePoints.push(new Vector3(positions[i]!, positions[i + 1]!, positions[i + 2]!));
+      if (part.level) buildingPoints.push(framePoints[framePoints.length - 1]!);
     }
   }
   if (geometry.floorLines.length) {
@@ -173,7 +177,7 @@ export function createHouseObject(geometry: HouseGeometry, pal: Palette): HouseO
   root.userData.site = geometry.site;
   root.userData.levels = geometry.levels;
   root.userData.walk = geometry.walk;
-  return { root, framePoints };
+  return { root, framePoints, buildingPoints };
 }
 
 const PLANTS = new Set<EntouragePlacement['kind']>(['ginkgo', 'maple-red', 'maple-green', 'bamboo', 'grass']);

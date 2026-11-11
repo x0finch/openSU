@@ -19,10 +19,10 @@ import {
 import type { LineMaterial } from 'three/addons/lines/LineMaterial.js';
 import { bakeScene, CLIP_GROUP } from './style/batch.js';
 import { applyFrameInsets, applyLensShift, applyOrthoAspect, cameraForView, type FrameInsets, freeAspect, NO_INSETS, type ViewPreset } from './style/cameras.js';
-import { defaultLighting, type LightingMode, sunForView } from './style/lighting.js';
+import { defaultLighting, type LightingMode, presentationSun, sunForView } from './style/lighting.js';
 import { createGround } from './style/ground.js';
 import { createLineMaterial, createPalette, type Palette, setShadowFade, setToneFactors, toneFactor, toneToward } from './style/materials.js';
-import { Sun } from './style/sun.js';
+import { Sun, sunDirection } from './style/sun.js';
 import { cutaway as cutTokens, cutawayLight, lines, materials as matTokens, physical as physTokens, shading, stage, walk as walkTokens, walkLight } from './style/tokens.js';
 import { type StudySite, studySun, type StudySun } from './sun/study.js';
 import type { WalkData } from '@opensu/kernel';
@@ -40,6 +40,32 @@ export interface WalkOptions {
   pitchDeg?: number;
 }
 import { GROW_DURATION, growHeight, type GrowOptions } from './grow.js';
+
+/**
+ * Shadow framing (`setFrameShadows`): a sun lower than `minElevationDeg`
+ * is framed as if it stood that high (its long shadows fade out), and no
+ * shadow is framed longer than `maxLength` times the subject's height.
+ */
+const SHADOW_FRAME = { minElevationDeg: 15, maxLength: 3.8 } as const;
+
+/** Convex hull of plan points (monotone chain). */
+function convexHull(pts: [number, number][]): [number, number][] {
+  if (pts.length < 3) return pts;
+  const p = [...pts].sort((a, b) => a[0] - b[0] || a[1] - b[1]);
+  const cross = (o: [number, number], a: [number, number], b: [number, number]) => (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0]);
+  const lower: [number, number][] = [];
+  for (const q of p) {
+    while (lower.length >= 2 && cross(lower[lower.length - 2]!, lower[lower.length - 1]!, q) <= 0) lower.pop();
+    lower.push(q);
+  }
+  const upper: [number, number][] = [];
+  for (let i = p.length - 1; i >= 0; i--) {
+    const q = p[i]!;
+    while (upper.length >= 2 && cross(upper[upper.length - 2]!, upper[upper.length - 1]!, q) <= 0) upper.pop();
+    upper.push(q);
+  }
+  return lower.slice(0, -1).concat(upper.slice(0, -1));
+}
 
 /** A storey as the kernel reports it (metres). */
 export interface ViewerLevel {
@@ -86,6 +112,9 @@ export class IllustrationViewer {
   camera: Camera = new PerspectiveCamera();
   private content: Object3D | null = null;
   private framePoints: Vector3[] = [];
+  private frameShadows = false;
+  private chosenInsets: FrameInsets = { ...NO_INSETS };
+  private shadowCache: { key: string; points: Vector3[] } | null = null;
   private bounds = new Box3();
   private pending = false;
   private preset: ViewPreset | null = null;
@@ -381,9 +410,20 @@ export class IllustrationViewer {
     if (!this.beforeWalk) this.beforeWalk = { cut: this.cutLevel, preset: this.preset };
     this.cutLevel = null;
     let at = { x: pos[0], y: pos[1], z: lv?.elevation ?? 0, headingDeg: opts.headingDeg ?? base.headingDeg };
-    const settled = world.settle(at.x, at.y, at.z);
+    let settled = world.settle(at.x, at.y, at.z);
+    let chosen = false;
+    if (settled && !opts.position && !arrival && opts.headingDeg === undefined) {
+      // The entrance: step to a spot with room ahead, looking down the
+      // longest open sightline into the house (never wedged in the door).
+      const start = world.bestStart(settled, at.headingDeg);
+      if (start) {
+        settled = start.pose;
+        at = { ...at, x: start.pose.x, y: start.pose.y, headingDeg: start.headingDeg };
+        chosen = true;
+      }
+    }
     // Start facing into the room, not at a wall (unless a heading was asked for).
-    if (settled && opts.headingDeg === undefined) at.headingDeg = world.openHeading(settled, at.headingDeg);
+    if (settled && opts.headingDeg === undefined && !chosen) at.headingDeg = world.openHeading(settled, at.headingDeg);
     if (!settled) {
       // Nowhere to stand there (a removed room, a bad position): the entrance.
       const s = data.start;
@@ -505,7 +545,7 @@ export class IllustrationViewer {
       // Never leave less than a third of the canvas free.
       if (width - i.left - i.right < width / 3) i.left = i.right = 0;
       if (height - i.top - i.bottom < height / 3) i.top = i.bottom = 0;
-      const cam = cameraForView(preset, this.viewPoints(), freeAspect(i, width, height));
+      const cam = cameraForView(preset, this.viewPoints(preset), freeAspect(i, width, height));
       applyFrameInsets(cam, i, width, height);
       // Screen pixels per unit of the frustum's height: larger = a larger subject.
       let scale = 0;
@@ -514,6 +554,7 @@ export class IllustrationViewer {
       if (scale > bestScale + 1e-9) {
         bestScale = scale;
         best = cam;
+        this.chosenInsets = i;
       }
     }
     return best!;
@@ -534,15 +575,85 @@ export class IllustrationViewer {
     return this.insets;
   }
 
-  /** Framing points: in a cutaway, only what stays below the cut plane. */
-  viewPoints(): Vector3[] {
+  /** The insets the last framed camera was fitted into (the alternative that won). */
+  get framedInsets(): FrameInsets {
+    return this.chosenInsets;
+  }
+
+  /**
+   * Frame the ground shadow with the subject (axonometric views): the
+   * presentation shadow of the preset, or in the sun study the shadows of
+   * the date's day (see `shadowSuns`). Off by default (the renderer's shots
+   * frame the architecture alone).
+   */
+  setFrameShadows(on: boolean): void {
+    if (on === this.frameShadows) return;
+    this.frameShadows = on;
+    if (this.preset && !this.walker) this.setView(this.preset);
+  }
+
+  /** Framing points: in a cutaway, only what stays below the cut plane; with `setFrameShadows`, their ground shadow. */
+  viewPoints(preset: ViewPreset | null = this.preset): Vector3[] {
     let pts = this.framePoints;
     const level = this.levels.find((l) => l.id === this.cutLevel);
     if (level) {
       const below = pts.filter((p) => p.y <= level.cutZ + 0.01);
       if (below.length > 3) pts = below;
     }
-    return pts.length ? pts : [new Vector3(-1, 0, -1), new Vector3(1, 1, 1)];
+    if (!pts.length) return [new Vector3(-1, 0, -1), new Vector3(1, 1, 1)];
+    if (!this.frameShadows || !preset || preset.kind !== 'axo') return pts;
+    return pts.concat(this.shadowOutline(pts, this.shadowSuns(preset)));
+  }
+
+  /**
+   * Suns whose ground shadow is framed: the presentation sun of the preset,
+   * or the sun study's sun at its date and time (the studio re-frames when
+   * the time has settled, not while it is dragged or played). Shadows of a
+   * sun lower than SHADOW_FRAME.minElevationDeg are framed as if it stood
+   * that high: they fade out beyond the plot anyway.
+   */
+  private shadowSuns(preset: ViewPreset): Vector3[] {
+    const mode = this.lighting;
+    if (mode.mode === 'presentation') {
+      const s = presentationSun(preset.kind, preset.azimuthDeg, mode.facadeAxisDeg, mode.side);
+      return [sunDirection(s.azimuthDeg, s.elevationDeg)];
+    }
+    if ('sun' in mode) return [sunDirection(mode.sun.azimuthDeg, Math.max(mode.sun.elevationDeg, SHADOW_FRAME.minElevationDeg))];
+    if (!this.site) return [];
+    const s = studySun(this.site, mode.date, mode.minutes);
+    return s.trueElevationDeg > 0 ? [sunDirection(s.azimuthDeg, Math.max(s.trueElevationDeg, SHADOW_FRAME.minElevationDeg))] : [];
+  }
+
+  /**
+   * The plan outline (convex hull on the ground) of the shadows the points
+   * cast for these suns; each shadow at most SHADOW_FRAME.maxLength times
+   * the subject's height long.
+   */
+  private shadowOutline(pts: readonly Vector3[], suns: readonly Vector3[]): Vector3[] {
+    if (!suns.length) return [];
+    const key = `${pts.length}:${pts[0]!.x},${pts[pts.length - 1]!.z}:${suns.map((d) => `${d.x.toFixed(4)},${d.y.toFixed(4)},${d.z.toFixed(4)}`).join(';')}`;
+    if (this.shadowCache?.key === key) return this.shadowCache.points;
+    let ground = Infinity, height = 0;
+    for (const p of pts) {
+      ground = Math.min(ground, p.y);
+      height = Math.max(height, p.y);
+    }
+    ground = Math.max(0, ground);
+    height -= ground;
+    const flat: [number, number][] = [];
+    for (const d of suns) {
+      const horiz = Math.hypot(d.x, d.z);
+      if (d.y <= 1e-3 || horiz < 1e-6) continue;
+      for (const p of pts) {
+        const h = p.y - ground;
+        if (h < 0.05) continue;
+        const len = Math.min((h * horiz) / d.y, SHADOW_FRAME.maxLength * height);
+        flat.push([p.x - (d.x / horiz) * len, p.z - (d.z / horiz) * len]);
+      }
+    }
+    const points = convexHull(flat).map(([x, z]) => new Vector3(x, ground, z));
+    this.shadowCache = { key, points };
+    return points;
   }
 
   /** Point on the view axis nearest to the scene centre (orbit target). */

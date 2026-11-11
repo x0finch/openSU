@@ -30,12 +30,38 @@ export function hhmm(minutes: number): string {
   return `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`;
 }
 
-/** Whole hours to label on a sunrise..sunset slider (every 2 h, or 3 h on long days). */
-export function hourTicks(sunrise: number, sunset: number): number[] {
-  const step = sunset - sunrise > 12 * 60 ? 3 : 2;
-  const out: number[] = [];
-  for (let h = Math.ceil(sunrise / 60 + 0.25); h * 60 <= sunset - 15; h++) if (h % step === 0) out.push(h);
-  return out;
+/**
+ * Clock time of a sun-study minute that may fall on the day before or after
+ * (sunset after midnight in a northern summer): "次日 00:04" / "00:04 next
+ * day". Never "24:04".
+ */
+export function clock(minutes: number, lang: 'zh' | 'en'): string {
+  const m = Math.round(minutes);
+  if (m >= 1440) return lang === 'zh' ? `次日 ${hhmm(m - 1440)}` : `${hhmm(m - 1440)} next day`;
+  if (m < 0) return lang === 'zh' ? `前日 ${hhmm(m + 1440)}` : `${hhmm(m + 1440)} day before`;
+  return hhmm(m);
+}
+
+/**
+ * Whole hours to label on a lo..hi slider `width` CSS px wide, leaving
+ * `endGap` px free next to each end label and at least `minGap` px between
+ * two labels (every 1, 2, 3, 4 or 6 h, the first step that fits). Hours
+ * past midnight are labelled 0, 1, ...
+ */
+export function hourTicks(lo: number, hi: number, width = 260, endGap = 44, minGap = 26): number[] {
+  const span = Math.max(1, hi - lo);
+  const x = (m: number) => ((m - lo) / span) * width;
+  for (const step of [1, 2, 3, 4, 6, 12]) {
+    if ((step * 60 * width) / span < minGap) continue;
+    const out: number[] = [];
+    for (let h = Math.ceil(lo / 60); h * 60 <= hi; h++) {
+      if (h % step !== 0) continue;
+      if (x(h * 60) < endGap || width - x(h * 60) < endGap) continue;
+      out.push(h);
+    }
+    return out;
+  }
+  return [];
 }
 
 /** Compass point (8-wind, Chinese or English) of a bearing in degrees. */

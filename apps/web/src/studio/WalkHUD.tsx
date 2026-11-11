@@ -92,8 +92,8 @@ function Levels({ derived, size = 'md' }: { derived: Derived; size?: 'md' | 'lg'
             aria-label={on ? name : t('walk.goto', { level: name })}
             onClick={() => !on && walkBridge.toLevel(l.id)}
             className={cx(
-              'rounded-[6px] px-2.5 font-medium whitespace-nowrap transition-colors',
-              size === 'lg' ? 'h-9 text-sm' : 'h-7 text-xs',
+              'hit min-w-11 rounded-[6px] px-2.5 font-medium whitespace-nowrap transition-colors',
+              size === 'lg' ? 'h-11 text-sm' : 'h-7 text-xs',
               on ? 'bg-ink text-white' : 'bg-wash text-ink-2 hover:text-ink',
             )}
           >
