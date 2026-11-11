@@ -39,7 +39,7 @@ function Landing() {
           <div className="max-w-[480px]">
             <p className="text-xs font-medium tracking-[0.2em] text-ink-2 uppercase">{t('brand.tagline')}</p>
             <h1 className="mt-4 text-[34px] leading-[1.15] font-semibold tracking-[-0.02em] text-balance md:text-[48px]">{t('landing.title')}</h1>
-            <p className="mt-5 text-[15px] leading-7 text-ink-2 md:text-base md:leading-7">{t('landing.lead')}</p>
+            <p className="mt-5 text-[15px] leading-7 text-pretty text-ink-2 md:text-base md:leading-7">{t('landing.lead')}</p>
             <div className="mt-8 flex flex-wrap items-center gap-x-6 gap-y-4">
               <Link
                 to="/studio"
@@ -63,7 +63,7 @@ function Landing() {
             <div key={f.n}>
               <p className="tnum text-xs text-ink-3">{f.n}</p>
               <h2 className="mt-2 text-base font-semibold">{t(f.title)}</h2>
-              <p className="mt-1.5 text-sm leading-6 text-ink-2">{t(f.body)}</p>
+              <p className="mt-1.5 text-sm leading-6 text-pretty text-ink-2">{t(f.body)}</p>
             </div>
           ))}
         </section>

@@ -25,6 +25,12 @@ export function Viewer3D({ resolved, active }: { resolved: ResolvedHouse; active
   const t = useT();
   const ref = useRef<HTMLDivElement>(null);
   const engine = useRef<Engine | null>(null);
+  const needle = useRef<SVGSVGElement | null>(null);
+  const northDeg = useRef(0);
+  const setNeedle = (el: SVGSVGElement | null) => {
+    needle.current = el;
+    if (el) el.style.transform = `rotate(${northDeg.current.toFixed(1)}deg)`;
+  };
   const view = useStudio((s) => s.view);
   const nonce = useStudio((s) => s.viewNonce);
   const [status, setStatus] = useState<'loading' | 'ready' | 'error'>('loading');
@@ -39,7 +45,13 @@ export function Viewer3D({ resolved, active }: { resolved: ResolvedHouse; active
       if (!alive || !ref.current) return;
       try {
         const dpr = new URLSearchParams(location.search).get('dpr');
-        const e = m.createEngine(ref.current, resolved, { pixelRatio: dpr ? Number(dpr) : undefined });
+        const e = m.createEngine(ref.current, resolved, {
+          pixelRatio: dpr ? Number(dpr) : undefined,
+          onNorth: (deg) => {
+            northDeg.current = deg;
+            if (needle.current) needle.current.style.transform = `rotate(${deg.toFixed(1)}deg)`;
+          },
+        });
         e.setView(presetById(useStudio.getState().view), true);
         engine.current = e;
         window.__studio = { ...window.__studio, engine: e, ready3d: true };
@@ -72,6 +84,22 @@ export function Viewer3D({ resolved, active }: { resolved: ResolvedHouse; active
   return (
     <div className="absolute inset-0" aria-hidden={!active} data-active={active}>
       <div ref={ref} className="absolute inset-0 [&>canvas]:h-full! [&>canvas]:w-full!" data-testid="viewer" />
+      {status === 'ready' && active && (
+        <div
+          className="glass pointer-events-none absolute bottom-6 left-6 hidden size-12 place-items-center rounded-full md:grid"
+          role="img"
+          aria-label={t('north')}
+        >
+          <svg ref={setNeedle} viewBox="0 0 32 32" className="size-9" aria-hidden="true">
+            <text x="16" y="8.5" textAnchor="middle" fontSize="8" fontWeight="600" fill="currentColor">
+              N
+            </text>
+            <path d="M16 10.5 19.6 21 16 19.4 12.4 21Z" fill="currentColor" />
+            <path d="M16 10.5 16 19.4 12.4 21Z" fill="var(--color-accent)" />
+            <circle cx="16" cy="16" r="13.5" fill="none" stroke="var(--color-hairline)" strokeWidth="1" />
+          </svg>
+        </div>
+      )}
       {status === 'loading' && <Loading label={t('loading3d')} />}
       {status === 'error' && (
         <div className="absolute inset-0 grid place-items-center px-8 text-center text-sm text-ink-2">{t('error.webgl')}</div>

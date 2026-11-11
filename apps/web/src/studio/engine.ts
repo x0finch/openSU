@@ -75,8 +75,26 @@ function applyOrthoPose(cam: OrthographicCamera, pose: OrthoPose, aspect: number
   cam.updateMatrixWorld();
 }
 
-export function createEngine(container: HTMLElement, resolved: ResolvedHouse, opts: { pixelRatio?: number } = {}): Engine {
+export interface EngineOptions {
+  pixelRatio?: number;
+  /** Called after each frame with the on-screen direction of north (degrees clockwise from up). */
+  onNorth?: (deg: number) => void;
+}
+
+export function createEngine(container: HTMLElement, resolved: ResolvedHouse, opts: EngineOptions = {}): Engine {
   const viewer = new IllustrationViewer(container, { pixelRatio: opts.pixelRatio });
+  if (opts.onNorth) {
+    const onNorth = opts.onNorth;
+    const right = new Vector3();
+    const up = new Vector3();
+    const north = new Vector3(0, 0, -1); // model +Y in scene axes
+    viewer.onAfterRender = () => {
+      const m = viewer.camera.matrixWorld;
+      right.setFromMatrixColumn(m, 0);
+      up.setFromMatrixColumn(m, 1);
+      onNorth((Math.atan2(right.dot(north), up.dot(north)) * 180) / Math.PI);
+    };
+  }
   const canvas = viewer.renderer.domElement;
   canvas.style.transition = `opacity ${FADE}ms ease`;
   canvas.style.touchAction = 'none';

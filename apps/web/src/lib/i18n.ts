@@ -58,6 +58,7 @@ const zh = {
   'plan.fit': '适应窗口',
   'plan.gesture': '双指缩放，单指拖动平移。',
   'view.reset': '复位视角',
+  'north': '指北针',
   'view.resetShort': '复位',
 
   'sun.label': '日照',
@@ -100,7 +101,7 @@ const en: Record<MessageKey, string> = {
   'landing.f3.body': 'Axonometric on top, coloured plan below, ready to share.',
   'landing.footer': 'openSU · AGPL-3.0',
 
-  'project.title.modern-pitched': 'Modern pitched-roof house',
+  'project.title.modern-pitched': 'Pitched-roof house',
   'project.sample': 'Sample',
   'facts.plot': 'Plot',
   'facts.area': 'Floor area',
@@ -143,6 +144,7 @@ const en: Record<MessageKey, string> = {
   'plan.fit': 'Fit to window',
   'plan.gesture': 'Pinch to zoom, drag to pan.',
   'view.reset': 'Reset view',
+  'north': 'North arrow',
   'view.resetShort': 'Reset',
 
   'sun.label': 'Sun',
