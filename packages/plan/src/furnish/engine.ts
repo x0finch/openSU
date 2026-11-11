@@ -17,7 +17,8 @@ export interface LocalItem {
   /** Rect in the group frame: u along the wall, v away from it. */
   u: number; v: number; w: number; d: number;
   /** Which way the item faces relative to the group front. */
-  turn?: 'front' | 'back' | 'left' | 'right';
+  /** 'u+' / 'u-': facing along the wall, towards growing / shrinking u. */
+  turn?: 'front' | 'back' | 'left' | 'right' | 'u+' | 'u-';
   layer?: Placement['layer'];
   priority?: number;
   variant?: string;
@@ -194,7 +195,9 @@ export class Room {
     if (!commit) return true;
     for (const it of g.items) {
       const r = this.toWorld(side, u0, it.u, it.v, it.w, it.d);
-      const facing = turnSide(frontOf(side), it.turn ?? 'front');
+      const t = it.turn ?? 'front';
+      const ns = side === 'N' || side === 'S';
+      const facing: Side = t === 'u+' ? (ns ? 'E' : 'N') : t === 'u-' ? (ns ? 'W' : 'S') : turnSide(frontOf(side), t);
       const alongX = facing === 'N' || facing === 'S';
       this.add({
         kind: it.kind, x: (r.x0 + r.x1) / 2, y: (r.y0 + r.y1) / 2,

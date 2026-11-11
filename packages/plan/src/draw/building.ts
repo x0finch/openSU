@@ -1,5 +1,5 @@
 // Walls (poche with clean joins), the heavy outer line, openings and rails.
-import { EXTERIOR_WALL_THICKNESS, type ResolvedWall, type Side } from '@opensu/model';
+import type { ResolvedWall, Side } from '@opensu/model';
 import type { LevelPlan, OpeningInfo } from '../analyse';
 import { rect, rectUnionRings, type Pt, type Rect } from '../geom';
 import { attrs, f, line, pathOfRings, rectEl, type View } from '../svg';
@@ -41,7 +41,7 @@ export function wallRects(plan: LevelPlan): Rect[] {
 /** Fence along the plot boundary (ground floor), minus gates. */
 export function fenceRects(plan: LevelPlan): { rects: Rect[]; gates: { side: Side; r: Rect; kind: string }[] } {
   if (!plan.plot || !plan.house.site.fence) return { rects: [], gates: [] };
-  const t = EXTERIOR_WALL_THICKNESS / 2;
+  const t = mm.fence / 2;
   const { x0, y0, x1, y1 } = plan.plot;
   const rects = [rect(x0 - t, y0 - t, x1 + t, y0 + t), rect(x0 - t, y1 - t, x1 + t, y1 + t), rect(x0 - t, y0 - t, x0 + t, y1 + t), rect(x1 - t, y0 - t, x1 + t, y1 + t)];
   return { rects, gates: plan.gates.map((g) => ({ side: g.side, r: g.gap, kind: g.kind })) };
@@ -77,33 +77,31 @@ function clipSegment(p: Pt, q: Pt, cut: readonly Rect[]): [Pt, Pt][] {
   return parts.filter(([s, e]) => e - s > 1).map(([s, e]) => (vertical ? [[c, s], [c, e]] : [[s, c], [e, c]]) as [Pt, Pt]);
 }
 
-export interface BuildingSvg { poche: string; outline: string; wallBoxes: Rect[] }
+export interface BuildingSvg { poche: string; fence: string; outline: string; wallBoxes: Rect[] }
 
 export function drawWalls(plan: LevelPlan, v: View): BuildingSvg {
   const walls = wallRects(plan);
   const fence = fenceRects(plan);
   const gaps = plan.openings.filter((o) => o.thickness > 0).map((o) => o.gap);
   const gateGaps = fence.gates.map((g) => g.r);
-  const rings = rectUnionRings([...walls, ...fence.rects], [...gaps, ...gateGaps]);
-  const poche = `<path${attrs({ d: pathOfRings(rings, v), fill: color.wallFill, stroke: color.wallLine, 'stroke-width': stroke.wallOutline, 'stroke-linejoin': 'miter', 'fill-rule': 'nonzero' })}/>`;
+  const rings = rectUnionRings(walls, gaps);
+  const poche = `<path${attrs({ d: pathOfRings(rings, v), fill: color.wallFill, stroke: color.wallLine, 'stroke-width': stroke.wallOutline, 'stroke-linejoin': 'miter' })}/>`;
+  // The plot fence is a site element: thinner, lighter, drawn under the house walls.
+  const fenceRings = fence.rects.length ? rectUnionRings(fence.rects, gateGaps) : [];
+  const fenceSvg = fenceRings.length
+    ? `<path${attrs({ d: pathOfRings(fenceRings, v), fill: color.fenceFill, stroke: color.fenceLine, 'stroke-width': stroke.fence, 'stroke-linejoin': 'miter' })}/>`
+    : '';
 
-  // Heavy line on the outside faces: the building mass (interior floors +
-  // walls) and the outer face of the plot fence, interrupted at openings.
+  // Heavy line on the outside faces of the building mass (interior floors +
+  // walls), interrupted at openings and where it runs inside the fence.
   const interior = plan.spaces.filter((s) => !s.outdoor).flatMap((s) => s.parts.length ? cellsOfRings(s.rings) : []);
   const mass = rectUnionRings([...walls, ...interior]);
-  const cut = [...gaps, ...gateGaps, ...fence.rects];
+  const cut = [...gaps, ...fence.rects];
   const segs: [Pt, Pt][] = [];
   for (const r of mass) for (let i = 0; i < r.length; i++) segs.push(...clipSegment(r[i]!, r[(i + 1) % r.length]!, cut));
-  if (fence.rects.length && plan.plot) {
-    const t = EXTERIOR_WALL_THICKNESS / 2;
-    const { x0, y0, x1, y1 } = plan.plot;
-    const o: Pt[] = [[x0 - t, y0 - t], [x1 + t, y0 - t], [x1 + t, y1 + t], [x0 - t, y1 + t]];
-    const gateCut = gateGaps.map((g) => ({ x0: g.x0 - 1, y0: g.y0 - 1, x1: g.x1 + 1, y1: g.y1 + 1 }));
-    for (let i = 0; i < 4; i++) segs.push(...clipSegment(o[i]!, o[(i + 1) % 4]!, gateCut));
-  }
   const d = segs.map(([p, q]) => `M${f(v.x(p[0]))},${f(v.y(p[1]))}L${f(v.x(q[0]))},${f(v.y(q[1]))}`).join('');
   const outline = d ? `<path${attrs({ d, fill: 'none', stroke: color.wallOuter, 'stroke-width': stroke.wallOuter, 'stroke-linecap': 'square' })}/>` : '';
-  return { poche, outline, wallBoxes: [...walls, ...fence.rects] };
+  return { poche, fence: fenceSvg, outline, wallBoxes: [...walls, ...fence.rects] };
 }
 
 /** Interior cells of rings as rects (for the building mass union). */

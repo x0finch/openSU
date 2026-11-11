@@ -56,13 +56,17 @@ describe('golden floor plans', () => {
 
   it('matches the reference dimension chains where the drawings are unambiguous', () => {
     const gf = analyseLevel(house, 0);
-    expect(chainPositions(gf, 'N')).toEqual([0, 3700, 5500, 9100, 13800, 15000]);
+    // ref-1 also ticks 3700 on top; that partition stops at an inner facade
+    // line (the planter wall), so by the rule it does not reach the outside.
+    expect(chainPositions(gf, 'N')).toEqual([0, 5500, 9100, 13800, 15000]);
+    expect(chainPositions(gf, 'W')).toEqual([0, 1800, 6900, 10500, 12000]);
     expect(chainPositions(gf, 'S')).toEqual([0, 3100, 5500, 13800, 15000]);
     expect(chainPositions(gf, 'E')).toEqual([0, 1800, 6900, 9200, 12000]);
     const l2 = analyseLevel(house, 1);
     expect(chainPositions(l2, 'E')).toEqual([300, 1800, 5300, 6900, 10500, 12000]);
     expect(chainPositions(l2, 'W')).toEqual([300, 1800, 6900, 10500, 12000]);
     expect(chainPositions(l2, 'S')).toEqual([0, 3100, 5500, 9100, 13800]);
+    expect(chainPositions(l2, 'N')).toEqual([0, 3700, 5500, 9100, 13800]);
   });
 
   it('stays collision-free at other drawing scales', () => {
@@ -88,6 +92,35 @@ describe('golden floor plans', () => {
       expect(rep.missingLabels, l.id).toEqual([]);
       expect(rep.svg).toContain('rotate(25)');
     }
+  });
+
+  it('uses outdoor surfaces and draws door canopies', () => {
+    const h: House = structuredClone(golden);
+    const garden = h.levels[0]!.spaces.find((x) => x.id === 'gf-garden-s')!;
+    Object.assign(garden, { surface: 'gravel' });
+    const door = h.levels[0]!.openings.find((o) => o.id === 'gf-d-entry')!;
+    Object.assign(door, { canopy: { depth: 1200 } });
+    const r = resolve(h);
+    const gf = renderPlanDetailed(r, 'L1');
+    expect(gf.svg).toContain('url(#gravel)');
+    expect(checkPlan(gf)).toEqual([]);
+    const l2 = renderPlanDetailed(r, 'L2');
+    expect(checkPlan(l2)).toEqual([]);
+  });
+
+  it('keeps the living group, labels off rugs and no stub island in a smaller house', () => {
+    const h: House = structuredClone(golden);
+    for (const g of h.grid.x) {
+      if (g.id === '7') g.pos = 8300;
+      if (g.id === '8') g.pos = 10300;
+      if (g.id === '9') g.pos = 10600;
+      if (g.id === '10') g.pos = 12800;
+    }
+    const rep = renderPlanDetailed(resolve(h), 'L1');
+    expect(checkPlan(rep)).toEqual([]);
+    const living = rep.furniture.filter((p) => p.space === 'gf-living').map((p) => p.kind).sort();
+    expect(living).toEqual(expect.arrayContaining(['armchair', 'armchair', 'coffee-table', 'sofa', 'tv-unit']));
+    for (const p of rep.furniture.filter((x) => x.kind === 'island')) expect(Math.max(p.w, p.d)).toBeGreaterThanOrEqual(1600);
   });
 
   it('places furniture deterministically', () => {

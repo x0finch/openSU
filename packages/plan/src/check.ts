@@ -27,6 +27,8 @@ export function checkPlan(r: PlanReport): Overlap[] {
     if (b.kind !== 'label' && b.kind !== 'stair') continue;
     const fp = furnPx.find((x) => overlaps(x.r, b, 0.01));
     if (fp) out.push({ kind: 'text/furniture', a: b.text, b: fp.id });
+    const rug = r.furniture.filter((p) => p.layer === 'floor').find((p) => overlaps(v.rect(footprint(p)), b, 0.01));
+    if (rug) out.push({ kind: 'text/rug', a: b.text, b: rug.id });
     const sw = r.swings.map((s) => v.rect(s)).find((s) => overlaps(s, b, 0.01));
     if (sw) out.push({ kind: 'text/door-swing', a: b.text, b: rectName(sw) });
   }

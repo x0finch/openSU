@@ -13,6 +13,8 @@ export const color = {
   wallFill: '#A3A3A3',
   wallLine: '#383838',
   wallOuter: '#232323',
+  fenceFill: '#CFCFCD',
+  fenceLine: '#7A7A7A',
   floor: '#DCD9D4',
   floorWet: '#D6D6D3',
   /** Outdoor ground fills by kind. */
@@ -22,6 +24,8 @@ export const color = {
   deckLine: '#CBBCA6',
   lawn: '#E1EADA',
   lawnDot: '#B9CCAD',
+  gravel: '#E6E3DD',
+  gravelDot: '#BDB7AC',
   ground: '#EEF1EB',
   carBay: '#FAFAF8',
   canopyBelow: '#FFFFFF',
@@ -63,6 +67,7 @@ export const color = {
 export const stroke = {
   wallOutline: 1.25,
   wallOuter: 2.1,
+  fence: 0.8,
   window: 0.7,
   glass: 0.5,
   doorLeaf: 1.0,
@@ -127,7 +132,7 @@ export const layout = {
 
 /** Plan-space sizes in mm (drawn things that live in the building). */
 export const mm = {
-  fence: 160,
+  fence: 140,
   parapet: 120,
   railInset: 50,
   glassRail: 50,

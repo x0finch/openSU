@@ -1,8 +1,7 @@
 // Level analysis for the plan: everything the furniture rules and the SVG
 // drawing need, in model millimetres (X east, Y north). No SVG here.
-import {
-  EXTERIOR_WALL_THICKNESS,
-  type ResolvedHouse, type ResolvedLevel, type ResolvedOpening, type ResolvedSpace, type ResolvedWall, type Side, type SpaceType,
+import type {
+  ResolvedHouse, ResolvedLevel, ResolvedOpening, ResolvedSpace, ResolvedWall, Side, SpaceType,
 } from '@opensu/model';
 import {
   bboxOfPoints, cellRectsIn, largestRectIn, rect, type Pt, type Rect,
@@ -25,6 +24,8 @@ export interface SpaceInfo {
   /** Cell rectangles of the whole space, each inset like `clear`. */
   parts: Rect[];
   edge?: ResolvedSpace['edge'];
+  /** Outdoor finish when the model gives one (deck / paving / gravel / lawn). */
+  surface?: string;
   /** Space ids this one is open to (shared boundary without a wall). */
   openTo: string[];
 }
@@ -248,7 +249,7 @@ const bboxContains = (o: Rect, i: Rect) => i.x0 >= o.x0 - 1 && i.y0 >= o.y0 - 1 
 export function analyseLevel(house: ResolvedHouse, index: number): LevelPlan {
   const level = house.levels[index];
   if (!level) throw new Error(`No level at index ${index}`);
-  const walls = level.walls;
+  const walls = harmoniseWalls(level.walls);
   const fenced = index === 0 && !!house.site.fence;
   const spaces: SpaceInfo[] = level.spaces.filter((s) => s.polygon.length >= 3).map((s) => {
     const rings = s.rings.length ? s.rings : [s.polygon];
@@ -260,7 +261,7 @@ export function analyseLevel(house: ResolvedHouse, index: number): LevelPlan {
       if (fenced) {
         const pos = side === 'N' ? r.y1 : side === 'S' ? r.y0 : side === 'E' ? r.x1 : r.x0;
         const edge = side === 'N' ? house.site.depth : side === 'S' ? 0 : side === 'E' ? house.site.width : 0;
-        if (Math.abs(pos - edge) < 1) return EXTERIOR_WALL_THICKNESS / 2 + 40;
+        if (Math.abs(pos - edge) < 1) return mm.fence / 2 + 40;
       }
       // Rails sit inside outdoor spaces along their free edges.
       if (!s.edge || s.edge === 'none') return 0;
@@ -274,17 +275,30 @@ export function analyseLevel(house: ResolvedHouse, index: number): LevelPlan {
     };
     if (s.nameEn) info.nameEn = s.nameEn;
     if (s.edge) info.edge = s.edge;
+    const surface = (s as { surface?: string }).surface;
+    if (surface) info.surface = surface;
     return info;
   });
   const byId = new Map(spaces.map((s) => [s.id, s]));
   for (const s of spaces) s.openTo = openNeighbours(s, spaces, walls);
 
   const wallById = new Map(walls.map((w) => [w.id, w]));
-  const openings: OpeningInfo[] = level.openings.map((op) => {
-    const t = op.wall ? (wallById.get(op.wall)?.thickness ?? 0) : 0;
-    const gap = op.orient === 'EW'
-      ? rect(op.a[0], op.a[1] - t / 2, op.b[0], op.a[1] + t / 2)
-      : rect(op.a[0] - t / 2, op.a[1], op.a[0] + t / 2, op.b[1]);
+  const openings: OpeningInfo[] = level.openings.map((op0) => {
+    const t = op0.wall ? (wallById.get(op0.wall)?.thickness ?? 0) : 0;
+    const raw = op0.orient === 'EW'
+      ? rect(op0.a[0], op0.a[1] - t / 2, op0.b[0], op0.a[1] + t / 2)
+      : rect(op0.a[0] - t / 2, op0.a[1], op0.a[0] + t / 2, op0.b[1]);
+    const gap = t > 0 ? trimJambs({ op: op0, gap: raw, thickness: t }, walls) : raw;
+    // Drawn extents follow the trimmed gap (a door leaf hinges at the wall face).
+    const ew = op0.orient === 'EW';
+    const lo = ew ? gap.x0 : gap.y0, hi = ew ? gap.x1 : gap.y1;
+    const op: ResolvedOpening = (lo === (ew ? raw.x0 : raw.y0) && hi === (ew ? raw.x1 : raw.y1)) ? op0 : {
+      ...op0,
+      a: ew ? [lo, op0.a[1]] : [op0.a[0], lo],
+      b: ew ? [hi, op0.b[1]] : [op0.b[0], hi],
+      center: ew ? [(lo + hi) / 2, op0.a[1]] : [op0.a[0], (lo + hi) / 2],
+      width: hi - lo,
+    };
     const info: OpeningInfo = { op, thickness: t, gap, keepClear: [] };
     if (op.kind === 'door') {
       info.swing = swingOf(op, t, byId);
@@ -307,7 +321,7 @@ export function analyseLevel(house: ResolvedHouse, index: number): LevelPlan {
   if (plot) extent = { x0: Math.min(extent.x0, plot.x0), y0: Math.min(extent.y0, plot.y0), x1: Math.max(extent.x1, plot.x1), y1: Math.max(extent.y1, plot.y1) };
   const gates: GateInfo[] = [];
   if (plot && house.site.fence) {
-    const t = EXTERIOR_WALL_THICKNESS / 2;
+    const t = mm.fence / 2;
     const { x0, y0, x1, y1 } = plot;
     for (const g of house.site.fence.gates) {
       const len = g.side === 'N' || g.side === 'S' ? x1 - x0 : y1 - y0;
@@ -334,6 +348,72 @@ function onSide(e: { a: Pt; b: Pt; orient: string }, r: Rect, side: Side): boole
   if (e.orient !== 'NS') return false;
   const x = side === 'E' ? r.x1 : r.x0;
   return Math.abs(e.a[0] - x) < 1 && hi(e.a[1], e.b[1]) > r.y0 + 1 && lo(e.a[1], e.b[1]) < r.y1 - 1;
+}
+
+/**
+ * Short wall pieces continuing a thicker wall on the same line take its
+ * thickness, so a 600 mm partition stub between an exterior wall and a door
+ * does not read as a thin nib (drawing only; the model is unchanged).
+ */
+export function harmoniseWalls(walls: readonly ResolvedWall[]): ResolvedWall[] {
+  const SHORT = 900;
+  const same = (p: [number, number], q: [number, number]) => Math.abs(p[0] - q[0]) < 1 && Math.abs(p[1] - q[1]) < 1;
+  return walls.map((w) => {
+    if (w.length > SHORT) return w;
+    let t = w.thickness;
+    for (const o of walls) {
+      if (o === w || o.orient !== w.orient || o.thickness <= t) continue;
+      if (same(o.a, w.b) || same(o.b, w.a)) t = o.thickness;
+    }
+    return t === w.thickness ? w : { ...w, thickness: t };
+  });
+}
+
+/** Wall left between an opening and a crossing wall shorter than this is dropped. */
+const MIN_JAMB = 150;
+
+/**
+ * The opening gap, widened to the face of a crossing wall when the wall left
+ * between them would be a sliver: wall ends at openings stay square and
+ * substantial.
+ */
+function trimJambs(o: { op: ResolvedOpening; gap: Rect; thickness: number }, walls: readonly ResolvedWall[]): Rect {
+  const g = { ...o.gap };
+  const ew = o.op.orient === 'EW';
+  const c = ew ? o.op.a[1] : o.op.a[0];
+  for (const w of walls) {
+    if (w.orient === o.op.orient) continue;
+    const pos = ew ? w.a[0] : w.a[1];
+    const lo = Math.min(ew ? w.a[1] : w.a[0], ew ? w.b[1] : w.b[0]) - 1;
+    const hi = Math.max(ew ? w.a[1] : w.a[0], ew ? w.b[1] : w.b[0]) + 1;
+    // The crossing wall must reach the opening's wall line (a corner or T).
+    if (c < lo - o.thickness / 2 || c > hi + o.thickness / 2) continue;
+    const f0 = pos - w.thickness / 2, f1 = pos + w.thickness / 2;
+    if (ew) {
+      if (f1 <= g.x0 + 0.5 && g.x0 - f1 < MIN_JAMB) g.x0 = f1;
+      if (f0 >= g.x1 - 0.5 && f0 - g.x1 < MIN_JAMB) g.x1 = f0;
+    } else {
+      if (f1 <= g.y0 + 0.5 && g.y0 - f1 < MIN_JAMB) g.y0 = f1;
+      if (f0 >= g.y1 - 0.5 && f0 - g.y1 < MIN_JAMB) g.y1 = f0;
+    }
+  }
+  return g;
+}
+
+/** Plan rectangle of a canopy over an opening (`Opening.canopy`): `depth`
+ *  out from the wall face, 300 wider than the opening on each side. */
+export function openingCanopy(op: ResolvedOpening, thickness: number): Rect | null {
+  const c = (op as { canopy?: { depth?: number } }).canopy;
+  const facing = op.facing;
+  if (!c || !c.depth || !facing) return null;
+  const t = thickness / 2;
+  const ew = op.orient === 'EW';
+  const lo = (ew ? Math.min(op.a[0], op.b[0]) : Math.min(op.a[1], op.b[1])) - 300;
+  const hi = (ew ? Math.max(op.a[0], op.b[0]) : Math.max(op.a[1], op.b[1])) + 300;
+  const at = ew ? op.a[1] : op.a[0];
+  const sgn = facing === 'N' || facing === 'E' ? 1 : -1;
+  const a = at + sgn * t, b = at + sgn * (t + c.depth);
+  return ew ? rect(lo, a, hi, b) : rect(a, lo, b, hi);
 }
 
 export function levelIndexOf(house: ResolvedHouse, levelId: string): number {

@@ -11,10 +11,10 @@ import type { TextBox } from './labels';
 interface Seg { lo: number; hi: number; at: number }
 
 /** Merge collinear wall pieces (and rails) into runs per line. */
-function runs(plan: LevelPlan, orient: 'NS' | 'EW'): Seg[] {
+function runs(plan: LevelPlan, orient: 'NS' | 'EW', rails = true): Seg[] {
   const raw: Seg[] = [];
   for (const w of plan.walls) if (w.orient === orient) raw.push(seg(w.a, w.b, orient));
-  for (const e of plan.level.edges) if (e.orient === orient && e.treatment !== 'none') raw.push(seg(e.a, e.b, orient));
+  if (rails) for (const e of plan.level.edges) if (e.orient === orient && e.treatment !== 'none') raw.push(seg(e.a, e.b, orient));
   raw.sort((a, b) => a.at - b.at || a.lo - b.lo);
   const out: Seg[] = [];
   for (const s of raw) {
@@ -46,7 +46,8 @@ function extraRuns(plan: LevelPlan, orient: 'NS' | 'EW'): Seg[] {
 /**
  * Positions (mm along the side) of the lines bounding walls visible from
  * `side`: a wall or rail run counts when a ray from its end towards that side
- * meets no other run (plot fence and plain plot edges do not block).
+ * meets no other run (plot fence and plain plot edges do not block) and the
+ * run reaches the outside there (not a T into an inner facade line).
  */
 export function chainPositions(plan: LevelPlan, side: Side): number[] {
   const perpOrient = side === 'N' || side === 'S' ? 'NS' : 'EW';
@@ -56,10 +57,19 @@ export function chainPositions(plan: LevelPlan, side: Side): number[] {
   const dir = side === 'N' || side === 'E' ? 1 : -1;
   const pos = new Set<number>();
   // Runs perpendicular to the side: ray from their outer end.
+  // The building's outermost wall line on this side (walls only, not rails).
+  const wallCross = plan.walls.filter((w) => w.orient === crossOrient).map((w) => seg(w.a, w.b, crossOrient).at);
+  const wallRuns = runs(plan, crossOrient, false);
+  const extreme = wallCross.length ? (dir > 0 ? Math.max(...wallCross) : Math.min(...wallCross)) : null;
   for (const r of perp) {
     const start = dir > 0 ? r.hi : r.lo;
     const blocked = cross.some((c) => dir * (c.at - start) > 0.5 && c.lo < r.at - 0.5 && c.hi > r.at + 0.5);
-    if (!blocked) pos.add(r.at);
+    if (blocked) continue;
+    // A partition that stops in a T against a wall run reaches the outside
+    // only when that run is the outermost facade on this side.
+    const tee = wallRuns.find((c) => Math.abs(c.at - start) < 0.5 && c.lo < r.at - 0.5 && c.hi > r.at + 0.5);
+    if (tee && extreme !== null && Math.abs(tee.at - extreme) > 0.5) continue;
+    pos.add(r.at);
   }
   if (plan.plot) {
     const p = plan.plot;
@@ -68,7 +78,7 @@ export function chainPositions(plan: LevelPlan, side: Side): number[] {
   return [...pos].map((n) => Math.round(n)).sort((a, b) => a - b).filter((n, i, arr) => i === 0 || n - arr[i - 1]! > 1);
 }
 
-export interface DimResult { svg: string; boxes: TextBox[]; extentPx: Rect }
+export interface DimResult { svg: string; boxes: TextBox[]; extentPx: Rect; /** Extent of the plan plus dimension lines (no text). */ linesPx: Rect }
 
 /**
  * Draw the chains around `ext` (plan extent in px). `planBox` is the drawn
@@ -78,6 +88,7 @@ export function drawDims(plan: LevelPlan, v: View, ext: Rect, taken: TextBox[]):
   let svg = '';
   const boxes: TextBox[] = [];
   let outer: Rect = { ...ext };
+  let lines: Rect = { ...ext };
   for (const side of ['N', 'S', 'W', 'E'] as Side[]) {
     const pts = chainPositions(plan, side);
     if (pts.length < 2) continue;
@@ -148,8 +159,11 @@ export function drawDims(plan: LevelPlan, v: View, ext: Rect, taken: TextBox[]):
     drawTier(t1, pts);
     if (tiers.length > 1) drawTier(tLast, [pts[0]!, pts[pts.length - 1]!]);
     const reach = tLast + out * (font.dimSize + 8);
+    const lineReach = tLast + out * layout.dimExtOver;
+    if (horiz) lines = out < 0 ? { ...lines, y0: Math.min(lines.y0, lineReach) } : { ...lines, y1: Math.max(lines.y1, lineReach) };
+    else lines = out < 0 ? { ...lines, x0: Math.min(lines.x0, lineReach) } : { ...lines, x1: Math.max(lines.x1, lineReach) };
     if (horiz) outer = out < 0 ? { ...outer, y0: Math.min(outer.y0, reach) } : { ...outer, y1: Math.max(outer.y1, reach) };
     else outer = out < 0 ? { ...outer, x0: Math.min(outer.x0, reach) } : { ...outer, x1: Math.max(outer.x1, reach) };
   }
-  return { svg, boxes, extentPx: outer };
+  return { svg, boxes, extentPx: outer, linesPx: lines };
 }

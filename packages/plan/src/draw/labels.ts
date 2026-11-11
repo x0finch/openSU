@@ -129,7 +129,8 @@ function bestSpot(parts: Rect[], w: number, h: number, obstacles: Rect[], softs:
         const b = { x0: cx - w / 2, x1: cx + w / 2, y0: cy - h / 2, y1: cy + h / 2 };
         if (obstacles.some((o) => overlaps(o, b, 0.01))) continue;
         // Rugs: fully on or fully off, never across an edge.
-        if (softs.some((s) => overlaps(s, b, -6) && !contains(s, b, -6))) continue;
+        // Rugs read as furniture: labels stay off them (with a little air).
+        if (softs.some((s) => overlaps(s, b, -6))) continue;
         // Clearance to the nearest obstacle or part edge, capped so the
         // room centre wins once there is comfortable space.
         let clr = Math.min(b.x0 - part.x0, part.x1 - b.x1, b.y0 - part.y0, part.y1 - b.y1);

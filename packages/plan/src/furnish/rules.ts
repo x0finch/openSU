@@ -54,45 +54,60 @@ function bedroom(room: Room): void {
 // ---------------------------------------------------------------------------
 // Living / family
 
-function lounge(sofaW: number, sideTables: boolean, armchair: boolean, rug: boolean): Group {
-  const st = sideTables ? 520 : 0;
-  const W = sofaW + 2 * st;
-  const items: LocalItem[] = [{ kind: 'sofa', u: st, v: 0, w: sofaW, d: 880, priority: 9, variant: sofaW >= 2200 ? '3' : '2' }];
-  if (sideTables) {
-    items.push({ kind: 'side-table', u: 0, v: 160, w: 480, d: 480, priority: 2 });
-    items.push({ kind: 'side-table', u: W - 480, v: 160, w: 480, d: 480, priority: 2 });
+interface LoungeSpec { sofaW: number; chairs: boolean; chairW: number; gap: number; tableW: number; toTable: number }
+
+/**
+ * Sofa group facing a TV unit on a solid wall: the TV against the wall, the
+ * coffee table, the sofa facing the TV, armchairs either side of the table
+ * facing each other, and a rug under the table sized to the group. Group
+ * frame: u along the TV wall, v away from it.
+ */
+function tvLounge(o: LoungeSpec): Group {
+  const tvW = Math.min(1800, o.sofaW);
+  const chairsW = o.chairs ? o.tableW + 2 * (o.gap + o.chairW) : 0;
+  const W = Math.max(o.sofaW, chairsW, tvW);
+  const c = W / 2;
+  const tableV = 420 + o.toTable;
+  const sofaV = tableV + 600 + 420;
+  const items: LocalItem[] = [
+    { kind: 'tv-unit', u: c - tvW / 2, v: 0, w: tvW, d: 420, priority: 6 },
+    { kind: 'coffee-table', u: c - o.tableW / 2, v: tableV, w: o.tableW, d: 600, priority: 4 },
+    { kind: 'sofa', u: c - o.sofaW / 2, v: sofaV, w: o.sofaW, d: 880, turn: 'back', priority: 9, variant: o.sofaW >= 2200 ? '3' : '2' },
+  ];
+  let rugHalf = o.tableW / 2 + 450;
+  if (o.chairs) {
+    const off = o.tableW / 2 + o.gap;
+    const cv = tableV + 300 - o.chairW / 2;
+    items.push({ kind: 'armchair', u: c - off - o.chairW, v: cv, w: o.chairW, d: o.chairW, turn: 'u+', priority: 3 });
+    items.push({ kind: 'armchair', u: c + off, v: cv, w: o.chairW, d: o.chairW, turn: 'u-', priority: 3 });
+    rugHalf = off + o.chairW * 0.45;
   }
-  const tableW = Math.min(1200, sofaW - 600);
-  items.push({ kind: 'coffee-table', u: (W - tableW) / 2, v: 880 + 420, w: tableW, d: 600, priority: 4 });
-  let D = 880 + 420 + 600;
-  if (armchair) {
-    items.push({ kind: 'armchair', u: (W - 820) / 2, v: D + 420, w: 820, d: 820, turn: 'back', priority: 3 });
-    D += 420 + 820;
-  }
-  if (rug) items.unshift({ kind: 'rug', u: st - 150, v: 450, w: sofaW + 300, d: (armchair ? D - 300 : D + 350) - 450, layer: 'floor', priority: 1 });
-  return { items, W, D, clear: armchair ? 450 : 700, back: 'low' };
+  rugHalf = Math.max(rugHalf, o.sofaW / 2 - 100);
+  items.unshift({ kind: 'rug', u: c - rugHalf, v: tableV - 380, w: 2 * rugHalf, d: sofaV + 300 - (tableV - 380), layer: 'floor', priority: 1 });
+  return { items, W, D: sofaV + 880, clear: 0, back: 'solid', backLo: c - tvW / 2, backHi: c + tvW / 2 };
 }
 
 function livingRoom(room: Room, compact: boolean): void {
-  const sides = rankSides((s) => sideScore(room, s, 'low') + depthFrom(room.R, s) / 4);
-  const variants: [number, boolean, boolean, boolean][] = compact
-    ? [[2100, false, true, true], [2100, false, false, true], [1800, false, false, false]]
-    : [[2400, true, true, true], [2400, false, true, true], [2400, true, false, true], [2100, false, false, true], [1800, false, false, false]];
-  let side: Side | null = null;
-  for (const [w, st, ac, rug] of variants) {
-    side = room.place(lounge(w, st, ac, rug), sides, 'center');
-    if (side) break;
-  }
-  if (!side) return;
-  // TV unit on the opposite wall, centred on the sofa when possible.
-  const opp = opposite(side);
-  const sofa = room.items.find((p) => p.kind === 'sofa');
-  const tv: Group = { items: [{ kind: 'tv-unit', u: 0, v: 0, w: 1800, d: 420, priority: 4 }], W: 1800, D: 420, clear: 0, back: 'solid' };
-  if (sofa) {
-    const c = opp === 'N' || opp === 'S' ? sofa.x : sofa.y;
-    if (room.tryGroup(tv, opp, c - 900)) return;
-  }
-  room.place(tv, [opp], 'center');
+  // TV wall: a long solid wall, preferably without a door or tall glazing,
+  // with enough depth in front of it for the whole group.
+  const sides = rankSides((s) => {
+    const st = room.sideStats(s, 'solid');
+    return st.longest - (st.door ? 2000 : 0) - (st.tall ? 800 : 0) + Math.min(depthFrom(room.R, s), 5000) / 5;
+  });
+  const specs: LoungeSpec[] = compact
+    ? [
+      { sofaW: 2100, chairs: true, chairW: 700, gap: 250, tableW: 1000, toTable: 800 },
+      { sofaW: 2100, chairs: false, chairW: 0, gap: 0, tableW: 1000, toTable: 800 },
+      { sofaW: 1800, chairs: false, chairW: 0, gap: 0, tableW: 900, toTable: 700 },
+    ]
+    : [
+      { sofaW: 2400, chairs: true, chairW: 820, gap: 350, tableW: 1200, toTable: 900 },
+      { sofaW: 2400, chairs: true, chairW: 760, gap: 300, tableW: 1100, toTable: 850 },
+      { sofaW: 2200, chairs: true, chairW: 700, gap: 250, tableW: 1000, toTable: 800 },
+      { sofaW: 2200, chairs: false, chairW: 0, gap: 0, tableW: 1100, toTable: 800 },
+      { sofaW: 1800, chairs: false, chairW: 0, gap: 0, tableW: 900, toTable: 700 },
+    ];
+  for (const sp of specs) if (room.place(tvLounge(sp), sides, 'center')) return;
 }
 
 // ---------------------------------------------------------------------------
@@ -123,7 +138,7 @@ function diningRoom(room: Room): void {
     items.push({ kind: 'dining-table', dx: 0, dy: 0, w: tl, d: tw, facing: facingA, priority: 9 });
     for (let k = 0; k < per; k++) {
       const t = (k - (per - 1) / 2) * (tl / per);
-      const off = tw / 2 + 200;
+      const off = tw / 2 + 230;
       if (alongX) {
         items.push({ kind: 'chair', dx: t, dy: off, w: 440, d: 440, facing: 'S', priority: 7 });
         items.push({ kind: 'chair', dx: t, dy: -off, w: 440, d: 440, facing: 'N', priority: 7 });
@@ -198,13 +213,27 @@ function kitchen(room: Room): void {
     for (let len = Math.min(to - from, 2400); len >= 900; len -= 100) {
       const u0 = startNearPrimary ? from : to - len;
       const g: Group = { items: [{ kind: 'counter', u: 0, v: 0, w: len, d: 600, priority: 7 }], W: len, D: 600, clear: 900, back: 'low', shareClear: true };
-      if (room.tryGroup(g, side, u0)) { extra++; break; }
+      if (room.tryGroup(g, side, u0)) {
+        extra++;
+        // No room for the hob on the main run: it goes on this one.
+        if (!Number.isFinite(hobC) && len >= 900) {
+          hobC = 0;
+          const v = 300;
+          const along = u0 + len / 2;
+          const [x, y] = side === 'N' || side === 'S'
+            ? [along, side === 'S' ? R.y0 + v : R.y1 - v]
+            : [side === 'W' ? R.x0 + v : R.x1 - v, along];
+          room.add({ kind: 'hob', x, y, w: 700, d: 460, facing: frontOf(side), layer: 'top', priority: 8 });
+        }
+        break;
+      }
     }
   }
   // Island towards an open side for open kitchens.
   const openSide = (['N', 'E', 'S', 'W'] as Side[]).find((x) => room.profile[x].every((sp) => sp.kind === 'open'));
   if (openSide && depthFrom(R, openSide) >= 650 + 900 + 600) {
-    for (let len = Math.min(2000, sideLength(R, openSide) - 900); len >= 1200; len -= 200) {
+    // An island must read as one (at least 1600 long); otherwise there is none.
+    for (let len = Math.min(2000, sideLength(R, openSide) - 900); len >= 1600; len -= 200) {
       const g: Group = { items: [{ kind: 'island', u: 0, v: 120, w: len, d: 650, priority: 5 }], W: len, D: 770, clear: 900, back: 'any', shareClear: true };
       if (room.place(g, [openSide], ['center', 'start', 'end'])) break;
     }

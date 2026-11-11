@@ -1,6 +1,6 @@
 // renderPlan: ResolvedHouse + level -> presentation floor plan as SVG.
 import type { ResolvedHouse } from '@opensu/model';
-import { analyseLevel, levelIndexOf, type LevelPlan } from './analyse';
+import { analyseLevel, levelIndexOf, openingCanopy, type LevelPlan } from './analyse';
 import { drawDims } from './draw/dims';
 import { drawGates, drawOpenings, drawRails, drawSlabEdges, drawWalls } from './draw/building';
 import { northArrow, titleBlock } from './draw/decor';
@@ -46,12 +46,21 @@ const ORDINAL = ['GROUND FLOOR', 'SECOND FLOOR', 'THIRD FLOOR', 'FOURTH FLOOR', 
 function lowerCanopies(house: ResolvedHouse, idx: number): Rect[] {
   if (idx === 0) return [];
   const below = house.levels[idx - 1]!.id;
-  return house.roofs
+  const roofs = house.roofs
     .filter((r) => r.kind === ('canopy' as typeof r.kind) && r.onLevel === below && r.rings.length)
     .map((r) => inflate(bboxOfPoints(r.rings.flat()), r.overhang ?? 0));
+  // Canopies over doors of the level below.
+  const lower = analyseLevel(house, idx - 1);
+  const doors = lower.openings.map((o) => openingCanopy(o.op, o.thickness)).filter((r): r is Rect => !!r);
+  return [...roofs, ...doors];
 }
 
-function groundFill(plan: LevelPlan, type: string): string | null {
+const SURFACE: Record<string, string> = {
+  deck: 'url(#deck)', paving: color.paving, gravel: 'url(#gravel)', lawn: 'url(#lawn)',
+};
+
+function groundFill(plan: LevelPlan, type: string, surface?: string): string | null {
+  if (surface && SURFACE[surface]) return SURFACE[surface]!;
   switch (type) {
     case 'courtyard': return color.paving;
     case 'porch': return color.pavingLight;
@@ -85,7 +94,9 @@ export function renderPlanDetailed(house: ResolvedHouse, levelId: string, option
   for (const st of plan.stairs) stairSvg += drawStair(st, v, texts);
 
   // --- Labels first so furniture can yield; then draw what is left.
-  const labels = placeLabels(plan, v, items0, openings.swings, texts, walls.wallBoxes);
+  const ownCanopies = plan.openings.map((o) => openingCanopy(o.op, o.thickness)).filter((r): r is Rect => !!r);
+  // Labels keep clear of walls and of canopy outlines drawn over the floor.
+  const labels = placeLabels(plan, v, items0, openings.swings, texts, [...walls.wallBoxes, ...ownCanopies]);
   const items = items0.filter((p) => !labels.removed.has(p.id));
   texts.push(...labels.boxes);
 
@@ -97,7 +108,8 @@ export function renderPlanDetailed(house: ResolvedHouse, levelId: string, option
   const title = options.title ?? `${levelName}平面图`;
   const subtitle = options.subtitle === false ? '' : (options.subtitle ?? `${ORDINAL[idx] ?? `LEVEL ${idx + 1}`} PLAN`);
   const width = Math.ceil(extPx.x1 + pad);
-  const tb = titleBlock(width / 2, dims.extentPx.y1 + layout.titleGap, title, subtitle, texts);
+  // Title centred on the drawing's extents (plan plus dimension chains).
+  const tb = titleBlock((dims.linesPx.x0 + dims.linesPx.x1) / 2, dims.extentPx.y1 + layout.titleGap, title, subtitle, texts);
   const height = Math.ceil(tb.bottom + layout.margin);
 
   // --- Assemble, bottom to top.
@@ -108,6 +120,7 @@ export function renderPlanDetailed(house: ResolvedHouse, levelId: string, option
     + `<filter id="soft" x="-20%" y="-20%" width="140%" height="140%"><feDropShadow${attrs({ dx: 0, dy: layout.furnitureShadowDy, stdDeviation: layout.furnitureShadowBlur, 'flood-color': color.shadow, 'flood-opacity': layout.furnitureShadowOpacity })}/></filter>`
     + `<pattern id="lawn" patternUnits="userSpaceOnUse" width="16" height="16"><rect width="16" height="16" fill="${color.lawn}"/><circle cx="4" cy="5" r="0.7" fill="${color.lawnDot}"/><circle cx="12" cy="13" r="0.7" fill="${color.lawnDot}"/></pattern>`
     + `<pattern id="deck" patternUnits="userSpaceOnUse" width="${f(v.len(600))}" height="${f(v.len(150))}"><rect width="${f(v.len(600))}" height="${f(v.len(150))}" fill="${color.deck}"/><path d="M0,0.25H${f(v.len(600))}" stroke="${color.deckLine}" stroke-width="${stroke.furnitureDetail}"/></pattern>`
+    + `<pattern id="gravel" patternUnits="userSpaceOnUse" width="9" height="9"><rect width="9" height="9" fill="${color.gravel}"/><circle cx="2" cy="2.5" r="0.6" fill="${color.gravelDot}"/><circle cx="6.5" cy="6" r="0.5" fill="${color.gravelDot}"/></pattern>`
     + '</defs>');
   out.push(rectEl({ x0: 0, y0: 0, x1: width, y1: height }, { fill: color.page }));
 
@@ -116,14 +129,22 @@ export function renderPlanDetailed(house: ResolvedHouse, levelId: string, option
   for (const c of canopies) out.push(rectEl(v.rect(c), { fill: color.canopyBelow, stroke: color.canopyLine, 'stroke-width': stroke.canopy }));
 
   // Floors.
-  // One path per fill: adjacent rooms of the same tone show no anti-aliasing seam.
-  const byFill = new Map<string, string>();
-  for (const sp of plan.spaces) {
-    const fill = sp.outdoor ? groundFill(plan, sp.type) : (sp.type === 'bathroom' || sp.type === 'laundry' ? color.floorWet : color.floor);
-    if (!fill) continue;
-    byFill.set(fill, (byFill.get(fill) ?? '') + pathOfRings(sp.rings, v));
-  }
-  for (const [fill, d] of byFill) out.push(`<path${attrs({ d, fill })}/>`);
+  // One path per fill: adjacent rooms of the same tone show no anti-aliasing
+  // seam. Outdoor ground first, then the outlines of door canopies (overhead:
+  // only the part outside the house shows), then the room floors.
+  const fills = (outdoor: boolean) => {
+    const byFill = new Map<string, string>();
+    for (const sp of plan.spaces) {
+      if (sp.outdoor !== outdoor) continue;
+      const fill = sp.outdoor ? groundFill(plan, sp.type, sp.surface) : (sp.type === 'bathroom' || sp.type === 'laundry' ? color.floorWet : color.floor);
+      if (!fill) continue;
+      byFill.set(fill, (byFill.get(fill) ?? '') + pathOfRings(sp.rings, v));
+    }
+    for (const [fill, d] of byFill) out.push(`<path${attrs({ d, fill })}/>`);
+  };
+  fills(true);
+  for (const c of ownCanopies) out.push(rectEl(v.rect(c), { fill: 'none', stroke: color.canopyLine, 'stroke-width': stroke.canopy }));
+  fills(false);
   out.push(drawSlabEdges(plan, v));
 
   // Furniture: floor layer, then pieces, then counter tops; soft shadow on each group.
@@ -139,6 +160,7 @@ export function renderPlanDetailed(house: ResolvedHouse, levelId: string, option
 
   out.push(`<g>${stairSvg}</g>`);
   out.push(drawRails(plan, v));
+  out.push(walls.fence);
   out.push(walls.poche);
   out.push(openings.below);
   out.push(walls.outline);
