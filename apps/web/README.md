@@ -6,8 +6,10 @@ cutaway and a sun study (time of day, date presets, play the day), as
 floor plans (`@opensu/plan`), and as a shareable sheet set (`图册`,
 `@opensu/sheet`, rendered in the browser). The prompt bar at the bottom
 (the studio's primary action) talks to an AI assistant that edits the house through validated commands (`@opensu/agent`, see "AI
-assistant" below). The house and the chat transcript are autosaved in the
-browser (`localStorage` key `opensu.autosave.v1`; quota errors are ignored)
+assistant" below). The house, the chat transcript and the last 12 undo / redo steps are
+autosaved in the browser (`localStorage` key `opensu.autosave.v1`; quota
+errors are ignored; after a reload the changes card and the prompt bar
+still offer undo)
 until "恢复为模板 / Reset to template" (the project menu under the house name) clears it;
 an explicitly opened template (`?sample=t1|t2|t3`, the share page's
 "open in studio") always shows that template, never the save, and leaves
@@ -88,7 +90,12 @@ string formatting (well inside the 10 ms free-tier budget).
   framing inside the floating chrome (`setInsets`: the studio passes the
   space of the title and mode switch, the dock (its real top, an open tray
   included) and the left column (assistant or site panel) when open; a
-  change re-frames with the preset transition), double-click / double-tap
+  change re-frames with the preset transition; a house swapped in during a
+  transition lands on its target; phones frame the house with its trees
+  and entourage so the picture is centred; the eye-level preset looks from
+  the south-east instead when a tree hides the facade's centre from the
+  south-west: `treeHidesFacade` in `@opensu/furnish`, the sheets' rule),
+  double-click / double-tap
   resets the view, animated preset transitions (orbit morph between parallel views,
   short dissolve to / from the eye-level perspective; a cutaway clips at
   once and the camera tilts to the steeper cutaway axonometric), sun study
@@ -111,7 +118,11 @@ string formatting (well inside the 10 ms free-tier budget).
   computed from the latitude). Both apply `update_site` through
   `applyEdit` in `chat-store.ts`: validated, one undo step on the same
   history as the assistant's turns, listed in the conversation, autosaved.
-  A template picked from the project menu asks for the place (or skip).
+  A template picked from the project menu (or a reset) starts whole, in
+  presentation light, at the default view, and asks for the place (or skip).
+  A new place, time zone or orientation refreshes the sun strip, the slider
+  range and the shadows at once (the clock time is kept while it is
+  daylight there, else clamped).
 - `src/lib/places/` the built-in place list (lazy chunk, ~370 KB gzip,
   loaded on first use; no network at runtime), see "Place list" below.
   `src/lib/site.ts` display helpers (the default "杭州附近（默认）" /
@@ -146,7 +157,11 @@ string formatting (well inside the 10 ms free-tier budget).
   of truth: model -> resolve -> kernel -> render / plan.
 - `src/lib/i18n.ts` zh (default) and en dictionaries.
 - `src/styles.css` UI tokens (the only place chrome colours, radius,
-  shadow and type are defined) + Tailwind v4.
+  shadow and type are defined) + Tailwind v4. Nothing over the canvas uses
+  `backdrop-filter`: surfaces are opaque white with a soft shadow and a
+  hairline (a blur under a caret or a running indicator re-filters the WebGL
+  canvas every frame, very costly with software GL; task 014). Indicator
+  animations are transform / opacity on small boxes.
 - `public/hero-t1.webp`, `public/og-default.png` the landing hero and the
   default link preview: real renders of the default house (T1), made by
   `pnpm --filter @opensu/web hero` (`scripts/hero.mjs`); re-run and commit
@@ -266,9 +281,12 @@ credentials. "Remove my key" deletes it from the browser.
   It recognises fixed sentences and replays canned answers. It is not a
   model.
 - `scripts/chat-e2e.mjs` (`pnpm --filter @opensu/web chat`): the built app
-  in workerd with the relay pointed at the stub. "把客厅加宽 600" -> text
-  streams before the tool call -> edit applied (area 244.8 -> 257.0 m², 3D
-  pixels change, grow plays) -> undo restores area and pixels exactly; a
+  in workerd with the relay pointed at the stub. The four suggestion chips
+  (zh and en) each have their own scripted answer for T1. "把北侧房间加深
+  600" -> text streams before the tool call -> edit applied (area +13.3 m²,
+  3D pixels change, grow plays; the indicator reads thinking / editing /
+  writing as the turn goes and is gone when it completes) -> undo restores
+  area and pixels exactly; undo and redo survive a reload; a
   wrong id is rejected and repaired; a hopeless edit gives up after 3
   repairs with the house unchanged; HTTP 429 and "no key" show calm inline
   messages; the BYO key goes in a header (intercepted in the browser, since
