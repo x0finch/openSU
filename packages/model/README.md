@@ -44,6 +44,14 @@ preinstalled Playwright Chromium; without it only SVGs are written.
   inferred, see below). Output order and ids are deterministic. It
   assumes a schema-valid house; openings that cannot be placed are left out
   (`validate` explains why).
+- `applyCommands(house, commands): { ok, house, issues, applied }` - atomic,
+  validated edits (see Commands). `Command` (zod), `COMMAND_OPS`,
+  `EditHouseInput`, `commandsJsonSchema()` and `editHouseTool()` (name,
+  description and JSON Schema of the LLM tool `edit_house`).
+- `History` - snapshot undo / redo with a bounded stack (`apply`, `push`,
+  `undo`, `redo`).
+- `describeHouse(house, issues?)` - compact plain-text description for LLM
+  context (see Description format).
 - `debugSvg(resolved, levelIndex)` - the checking view as an SVG string.
 - Constants: wall thicknesses (exterior 240, interior 120), minimum sizes.
 - `golden` - the reference house (`src/samples/golden.ts`).
@@ -58,12 +66,18 @@ preinstalled Playwright Chromium; without it only SVGs are written.
   nothing = an edge with the space's `edge` treatment; outdoor | outdoor =
   nothing. Walls are merged along a grid line while the spaces on both sides
   stay the same.
-- Openings hosted on `{ space, side }`: `at.offset` is measured from the
-  space's overall extent (west or south end for `start`). For an L-shaped
-  space the opening lands on the side edge that contains it (the outermost
-  one if several do); `center` centres on the outermost, longest edge.
-  `{ between: [a, b] }` uses the shared boundary, measured from its west or
-  south end. An opening must fit on one wall segment.
+- Opening hosts name a concrete edge: `{ space, side, span? }` (the
+  `side`-facing boundary of a space) or `{ between: [a, b], span? }` (the
+  boundary two spaces share). `span: { from, to }` is the stretch between
+  two grid lines that cross that boundary (X lines for N/S sides, Y lines
+  for E/W); either order, any part of one edge. `at` offsets are measured
+  from the span's west / south end (`start`) or east / north end (`end`);
+  `center` centres on the span. `span` may be omitted only when there is
+  exactly one such edge (else `ambiguous-host`, listing the spans). Because
+  offsets hang on grid lines, editing a space's cells does not move its
+  openings; if the span is no longer on that side, `opening-span` names the
+  opening and the valid spans. An opening must fit inside its span and on
+  one wall segment (walls split wherever the space on either side changes).
 - `spanLevels: n` makes a window continue through the same wall on the next
   n - 1 levels (checked for a wall there and for overlaps).
 - Stairs connect their level to the next. A stair's footprint is the
@@ -98,10 +112,11 @@ preinstalled Playwright Chromium; without it only SVGs are written.
 
 ## Validation rules
 
-Errors: `schema`, `duplicate-id`, `unknown-grid-line`, `unknown-space`,
-`unknown-level`, `empty-rect`, `outside-plot`, `space-overlap`,
-`space-disconnected`, `unreachable`, `no-exterior-window` (bedroom, living,
-kitchen), `opening-off-edge`, `opening-not-adjacent`, `opening-too-wide`,
+Errors: `schema`, `duplicate-id`, `unknown-grid-line` (also span ids on
+the wrong axis), `unknown-space`, `unknown-level`, `empty-rect`,
+`outside-plot`, `space-overlap`, `space-disconnected`, `unreachable`,
+`no-exterior-window` (bedroom, living, kitchen), `ambiguous-host`,
+`opening-span`, `opening-off-edge`, `opening-not-adjacent`, `opening-too-wide`,
 `opening-no-wall`, `opening-overlap`, `span-no-wall`, `stair-misaligned`,
 `stair-space-type`, `min-size` (bedroom short side 2700, bathroom 1500,
 stair flight 900, door 700), `roof-params` (also canopies higher than their
@@ -113,7 +128,88 @@ Warnings: `unsupported`, `roof-gap`, `open-to-not-adjacent`,
 `opening-too-tall` (against the level height, or the underside of a pitched
 roof on that level), `outdoor-only`, `unreachable` for upper outdoor spaces,
 `roof-params` for ignored roof fields, `swing` on non-doors,
-`unsupported-attribute` (canopy on a window, panel on a void).
+`unsupported-attribute` (canopy on a window, panel on a void),
+`interior-window` (a window between two interior spaces).
+
+Messages name ids, grid ranges (`cells 4-6/D-E`), numbers and the fix;
+cross-level ones (stairs, `spanLevels`, overlaps of tall windows, support,
+roof gaps) name both levels and what is on the other one.
+
+No cascades: when spaces overlap, the overlap is reported and issues on
+that level and the levels next to it (and all `unreachable`) are skipped
+until it is fixed. While an opening cannot be placed, `unreachable` and the
+`no-exterior-window` of the spaces an unplaced window would serve are
+skipped.
+
+## Commands
+
+`applyCommands(house, commands)` parses each command (zod, discriminated on
+`op`), applies them in order to a copy, then validates. If a command fails,
+or the result has an error the original house did not already have, it
+returns the original house (`ok: false`) with the issues and a final
+`rolled-back` issue. Warnings never block. Pre-existing errors do not block,
+so a broken imported house can be repaired step by step. `applied` says
+what each command did (generated ids in `created`, cascaded removals in
+`removed`); on rollback none of it was kept. Command errors carry
+`where.command` (the index in the batch).
+
+| op | fields (`?` optional, `null` clears) | notes |
+| --- | --- | --- |
+| `add_grid_line` | `axis`, `pos` or `relativeTo {line, offset}`, `id?` | id default: west/south neighbour + letter ("6a"); changes no space |
+| `move_grid_line` | `line`, `by` or `to`, `axis?` | main way to resize; everything on the line follows on all levels; cannot cross a neighbour; reports band widths and resized spaces; skylights / entourage stretch with their cell |
+| `remove_grid_line` | `line`, `axis?` | fails while any cells or span use it (lists them) |
+| `add_level` | `name`, `height?`, `after?`, `copyFrom?`, `id?` | copy re-prefixes ids (`l2-bath` -> `l4-bath`) and remaps references; roofs not copied |
+| `remove_level` / `update_level` | `level` / `level`, `name?`, `height?` | removing drops its roofs |
+| `add_space` | `level`, `name`, `type`, `cells`, `nameEn? openTo? edge? cover? surface? id?` | id default `<level>-<type>` ("l2-bedroom") |
+| `update_space` | `space`, any field | `cells` replaces all cells |
+| `remove_space` | `space` | also removes its openings and stairs, drops it from `openTo`, resets swings into it |
+| `add_opening` | `kind`, `host`, `width`, `at?` (center), `height? sill?` (by kind), extras, `id?` | level follows from the host; omitted span is filled in when unambiguous; id default `<space>-<d|w|sd|v>` |
+| `update_opening` | `opening`, any field, or `move {dir, by}` | `move` slides along the wall (E/W on N/S walls, N/S on E/W walls) and stays in the span |
+| `remove_opening` | `opening` | |
+| `add_stair` / `remove_stair` | `space, kind, up, id?` / `stair` | id default `stair-<level>` |
+| `add_roof` / `update_roof` / `remove_roof` | `kind, cells, onLevel, ...` / `roof, ...` / `roof` | overhang default: canopy 0, flat 300, pitched 500 |
+| `update_site`, `set_style`, `rename_house` | site fields (`fence: null` removes) / `style` / `name` | |
+
+Unknown ids fail with the nearest valid ids ("Unknown space "l2-bedrom".
+Nearest space ids: l2-bed-n, l2-bed-w, ..."); unknown ops suggest the right
+one. After all commands, openings the batch did not add or update must not
+jump to another wall because a space's cells changed (`opening-moved`):
+re-host or remove them in the same batch.
+
+`commandsJsonSchema()` is the JSON Schema (draft 7, no `$ref`) of
+`{ commands: Command[] }`, with field descriptions written for an LLM;
+`editHouseTool()` wraps it with the tool name and description.
+
+## Description format
+
+`describeHouse(golden)` is about 8.9k characters. Lines:
+
+```
+HOUSE "<name>" style <preset>
+<3 legend lines>
+SITE <width> x <depth>, north <deg>, lat .. lon ..; fence h<height>, gates: <id> <side> <at> w<width> <kind>
+GRID X 1=0 2=3100 ...          (id=position)
+GRID Y A=0 B=300 ...
+
+LEVEL <id> "<name>" height <mm>, floor +<elevation>, below <next level>|top
+spaces:
+- <id> <type> <cells x0-x1/y0-y1[+...]> <W>x<D> m <area> m² "<name>" [openTo ..; edge ..; cover ..; surface ..]
+    | N@<line> <span>:<neighbour> ...; N@<other line> ... | E@... | S@... | W@...
+openings:
+- <id> <kind> <space>:<side>|<a>|<b> <span> <start+off|end+off|center> <width>[x<height> sill<sill>] [extras] => <from>-<to>
+stair <id>: <kind>, in <space>, first flight up <side>, to <level>
+
+ROOFS
+- <id> <kind> on <level> <cells>, pitch .., fall .., overhang .., ...
+Interior floor area ...
+ISSUES none | <n> errors, <m> warnings + one line each
+```
+
+Walls are listed for interior spaces: per side, per grid line, each wall
+segment with the space beyond (`out` = outside, `~id` = open, no wall); a
+side with one segment prints just the neighbour (no span needed there).
+Opening heights / sills are printed only when they differ from the kind's
+default; `=>` is the absolute range along the wall.
 
 ## Golden sample
 
@@ -125,6 +221,10 @@ Total interior floor area 243.4 m² (ground 92.7, level 2 87.3, attic 63.4;
 balconies, terrace, porch and carport excluded).
 
 ## Schema changes
+
+Adopted in task 009: opening `host.span` with offsets from the span start
+(the golden sample now names every span; `resolve(golden)` is unchanged,
+see `test/golden-snapshot.test.ts`).
 
 Adopted in task 003 (review round): opening `canopy` and `panel`, corner
 windows, outdoor `surface`, roof `vergeOverhang`, `opening-spacing`.
