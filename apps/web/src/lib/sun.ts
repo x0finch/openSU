@@ -3,10 +3,25 @@
 import { datePresets } from '@opensu/render/sun';
 import type { SunDateId } from './store';
 
-/** Local calendar date (YYYY-MM-DD) of a sun study preset, this year. */
-export function sunDate(id: SunDateId, now = new Date()): string {
-  const p = datePresets(now.getFullYear(), now).find((d) => d.id === id);
-  return p?.date ?? datePresets(now.getFullYear(), now)[0]!.date;
+/** In the southern hemisphere the seasons swap calendar dates. */
+const SOUTH: Partial<Record<SunDateId, SunDateId>> = { winter: 'summer', summer: 'winter', spring: 'autumn', autumn: 'spring' };
+
+/**
+ * Local calendar date (YYYY-MM-DD) of a sun study preset, this year. The
+ * presets are seasons of the site: "winter" is the winter solstice where
+ * the house stands (21 December in the north, 21 June in the south).
+ */
+export function sunDate(id: SunDateId, latitude = 30, now = new Date()): string {
+  const key = latitude < 0 ? (SOUTH[id] ?? id) : id;
+  const list = datePresets(now.getFullYear(), now);
+  return (list.find((d) => d.id === key) ?? list[0]!).date;
+}
+
+/** "12月21日" / "Dec 21" of an ISO date. */
+export function dayText(iso: string, lang: 'zh' | 'en'): string {
+  const [, m, d] = iso.split('-').map(Number);
+  if (lang === 'zh') return `${m}月${d}日`;
+  return `${['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][m! - 1]} ${d}`;
 }
 
 /** Clock time "HH:MM" from minutes after midnight. */

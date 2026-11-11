@@ -108,7 +108,7 @@ export default function SheetGallery({ derived, desktop }: { derived: Derived; d
   return (
     <div className="absolute inset-0" data-testid="sheets">
       <div className="absolute inset-0 overflow-y-auto">
-      <div className={cx('mx-auto flex min-h-full flex-col', desktop ? 'max-w-[1600px] pt-24 pr-12 pb-28 pl-[340px]' : 'px-4 pt-[112px] pb-20')}>
+      <div className={cx('mx-auto flex min-h-full flex-col', desktop ? 'max-w-[1600px] px-12 pt-24 pb-28' : 'px-4 pt-[84px] pb-20')}>
         <ul
           className={cx(desktop ? 'flex flex-1 flex-wrap content-center items-start justify-center gap-6' : 'grid flex-1 grid-cols-2 content-center gap-x-3 gap-y-4')}
           aria-label={t('sheets.label')}
@@ -179,7 +179,7 @@ function SheetCard({ index, meta, file, desktop, onOpen }: { index: number; meta
   return (
     <li
       className="group flex min-w-0 flex-col"
-      style={desktop ? { width: 'min(calc((100vw - 388px - (var(--n) - 1) * 24px) / var(--n)), calc((100dvh - 96px - 112px - 52px) * 0.75), 420px)' } : undefined}
+      style={desktop ? { width: 'min(calc((100vw - 96px - (var(--n) - 1) * 24px) / var(--n)), calc((100dvh - 96px - 112px - 52px) * 0.75), 420px)' } : undefined}
     >
       <div className="relative">
         <button

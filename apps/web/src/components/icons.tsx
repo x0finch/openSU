@@ -216,6 +216,73 @@ export function ArrowRightIcon(p: P) {
   );
 }
 
+/** An isometric box: "views". */
+export function CubeIcon(p: P) {
+  return (
+    <Svg {...p}>
+      <path d="m12 4 7 4v8l-7 4-7-4V8Z" />
+      <path d="m5 8 7 4 7-4M12 12v8" />
+    </Svg>
+  );
+}
+
+/** Map pin: location. */
+export function PinIcon(p: P) {
+  return (
+    <Svg {...p}>
+      <path d="M12 20.5s6-5.6 6-10.5a6 6 0 1 0-12 0c0 4.9 6 10.5 6 10.5Z" />
+      <circle cx={12} cy={10} r={2.2} />
+    </Svg>
+  );
+}
+
+/** Compass needle in a ring: orientation. */
+export function CompassIcon(p: P) {
+  return (
+    <Svg {...p}>
+      <circle cx={12} cy={12} r={8} />
+      <path d="m12 6.5 2.2 5.5L12 17.5 9.8 12Z" />
+      <path d="m12 6.5 2.2 5.5H9.8Z" fill="currentColor" stroke="none" />
+    </Svg>
+  );
+}
+
+export function ChevronDownSmallIcon(p: P) {
+  return (
+    <Svg {...p}>
+      <path d="m8 10 4 4 4-4" />
+    </Svg>
+  );
+}
+
+export function CheckIcon(p: P) {
+  return (
+    <Svg {...p}>
+      <path d="m6 12.5 4 4 8-9" />
+    </Svg>
+  );
+}
+
+export function SearchIcon(p: P) {
+  return (
+    <Svg {...p}>
+      <circle cx={11} cy={11} r={5.5} />
+      <path d="m15 15 4 4" />
+    </Svg>
+  );
+}
+
+/** Crosshair: "use my location". */
+export function LocateIcon(p: P) {
+  return (
+    <Svg {...p}>
+      <circle cx={12} cy={12} r={5.5} />
+      <circle cx={12} cy={12} r={1.6} fill="currentColor" stroke="none" />
+      <path d="M12 3.5v3M12 17.5v3M3.5 12h3M17.5 12h3" />
+    </Svg>
+  );
+}
+
 /** The openSU mark: a pitched roof over a plan square, drawn in two strokes. */
 export function Mark(p: P) {
   return (
