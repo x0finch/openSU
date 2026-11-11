@@ -57,3 +57,15 @@ Still error-prone for an LLM author:
   automatically (only warnings).
 - `describeHouse(golden)` is ~8.9k characters; measure real token counts
   when the AI is connected and trim if needed.
+
+## App polish (from tasks 008, 010, 011 reviews)
+- Starter house is a plain box; needs designed templates.
+- Desktop chat panel covers the drawing; reframe the camera around it.
+- Grow transition shows hollow wall tops.
+- Sofas/armchairs boxy; no upper kitchen cabinets; interior doors have no
+  leaves; entrance door leaf is walk-through.
+- Portrait phone walk FOV reaches 90 deg (stretched).
+- Physical-sun cutaway uses a second light (double shadow work).
+- Sheet plans reach ~69% of page width (target 75-80%).
+- "Download all" triggers four downloads; no zip. Web Share untested.
+- Change-card details are English while summaries follow the user.
