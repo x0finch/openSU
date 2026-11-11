@@ -192,8 +192,9 @@ function checkGeometry(house: House, an: Analysis): Issue[] {
       if ((o.kind === 'door' || o.kind === 'sliding-door') && o.width < MIN_DOOR_WIDTH) {
         err('min-size', `Door "${o.id}" is ${fmt(o.width)} mm wide; doors need at least ${MIN_DOOR_WIDTH} mm.`, { level: level.id, opening: o.id });
       }
-      if ((o.spanLevels ?? 1) === 1 && o.sill + o.height > level.height) {
-        warn('opening-too-tall', `Opening "${o.id}" reaches ${fmt(o.sill + o.height)} mm above the floor but level "${level.id}" is ${fmt(level.height)} mm high. Lower it or set spanLevels.`, { level: level.id, opening: o.id });
+      const limit = headroom(house, an, ctx.index, o.id);
+      if ((o.spanLevels ?? 1) === 1 && o.sill + o.height > limit) {
+        warn('opening-too-tall', `Opening "${o.id}" reaches ${fmt(o.sill + o.height)} mm above the floor but ${limit > level.height ? `the roof underside there is ${fmt(limit)} mm above the floor of level "${level.id}"` : `level "${level.id}" is ${fmt(level.height)} mm high`}. Lower it or set spanLevels.`, { level: level.id, opening: o.id });
       }
     }
   }
@@ -226,6 +227,33 @@ function checkSwings(an: Analysis, issues: Issue[]): void {
       }
     }
   }
+}
+
+/**
+ * Clear height above the floor at an opening: the level height, or under a
+ * pitched roof sitting on this level, the roof underside at the opening's
+ * wall line (walls of the roofed level rise to it).
+ */
+function headroom(house: House, an: Analysis, li: number, openingId: string): number {
+  const ctx = an.ctxs[li]!;
+  const level = ctx.level;
+  const p = ctx.placed.find((q) => q.opening.id === openingId);
+  if (!p) return level.height;
+  const [x, y] = p.resolved.center;
+  let best = level.height;
+  for (const r of house.roofs) {
+    if (r.onLevel !== level.id || r.kind === 'flat' || r.kind === 'canopy' || r.pitchDeg === undefined) continue;
+    const bb = bboxOf(an.grid, cellsOf(an.grid, r.cells));
+    if (!bb || x < bb.x0 - 120 || x > bb.x1 + 120 || y < bb.y0 - 120 || y > bb.y1 + 120) continue;
+    const t = Math.tan((r.pitchDeg * Math.PI) / 180);
+    const run = { N: bb.y1 - y, S: y - bb.y0, E: bb.x1 - x, W: x - bb.x0 };
+    let rise: number;
+    if (r.kind === 'mono') rise = run[r.fall ?? 'S'];
+    else if (r.kind === 'gable') rise = r.ridge === 'NS' ? Math.min(run.E, run.W) : Math.min(run.N, run.S);
+    else rise = Math.min(run.N, run.S, run.E, run.W);
+    best = Math.max(best, level.height + (r.eaveOffset ?? 0) + Math.max(0, rise) * t);
+  }
+  return best;
 }
 
 function checkOpeningOverlaps(an: Analysis, issues: Issue[]): void {

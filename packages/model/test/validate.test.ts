@@ -178,6 +178,14 @@ describe('validate: one deliberately broken house per rule', () => {
     expect(codes(issues)).toEqual(['warning:opening-too-tall']);
   });
 
+  it('opening-too-tall: under a pitched roof the limit is the roof underside', () => {
+    // r-top falls S from y = 8000 over 4000 mm at 10 deg: 705 mm above the level at the N wall.
+    const ok = broken((h) => { const w = L(h, 1).openings.find((o) => o.id === 'w-bed2')!; w.sill = 900; w.height = 2700; });
+    expect(ok).toEqual([]);
+    const tall = broken((h) => { const w = L(h, 1).openings.find((o) => o.id === 'w-bed2')!; w.sill = 900; w.height = 2900; });
+    expect(codes(tall)).toEqual(['warning:opening-too-tall']);
+  });
+
   it('stair-misaligned: no stair space above', () => {
     const issues = broken((h) => {
       L(h, 1).spaces.find((s) => s.id === 'stair2')!.type = 'hall';

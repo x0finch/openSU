@@ -40,6 +40,8 @@
 //   canopy over the west courtyard door is off the grid and left out.
 // - Roof split between the two mono-pitch roofs is taken on grid line F
 //   (main wall); pitches and eave offsets are estimated from the elevations.
+//   The attic (level 3) is 1.8 m to the eaves; openings there are checked
+//   against the roof underside, not the level height.
 // - Site latitude/longitude are not given; a generic east-China location is
 //   assumed.
 import type { CellRect, House } from '../schema';
@@ -202,7 +204,9 @@ export const golden: House = {
     {
       id: 'L3',
       name: '阁楼',
-      height: 3000,
+      // Attic: wall height at the eaves (the elevations put both eaves about
+      // 1.8 m above the attic floor); walls rise to the roofs above that.
+      height: 1800,
       spaces: [
         { id: 'l3-bed', name: '次卧', nameEn: 'Second bedroom', type: 'bedroom', cells: [c('1', '3', 'F', 'K')] },
         { id: 'l3-bath', name: '卫生间', nameEn: 'Bathroom', type: 'bathroom', cells: [c('3', '6', 'H', 'K')] },
@@ -222,22 +226,22 @@ export const golden: House = {
         { id: 'l3-d-bed', kind: 'door', host: { space: 'l3-bed', side: 'E' }, at: start(200), width: 900, height: 2100, sill: 0 },
         { id: 'l3-w-bed', kind: 'window', host: { space: 'l3-bed', side: 'S' }, at: start(500), width: 1800, height: 1500, sill: 900 },
         { id: 'l3-d-bath', kind: 'door', host: { space: 'l3-bath', side: 'S' }, at: start(200), width: 800, height: 2100, sill: 0 },
-        { id: 'l3-w-bath', kind: 'window', host: { space: 'l3-bath', side: 'N' }, at: start(200), width: 600, height: 600, sill: 1500 },
+        { id: 'l3-w-bath', kind: 'window', host: { space: 'l3-bath', side: 'N' }, at: start(200), width: 600, height: 600, sill: 1000 },
         { id: 'l3-d-study', kind: 'door', host: { space: 'l3-study', side: 'S' }, at: start(200), width: 850, height: 2100, sill: 0 },
-        { id: 'l3-w-study', kind: 'window', host: { space: 'l3-study', side: 'N' }, at: start(900), width: 1800, height: 1500, sill: 900 },
+        { id: 'l3-w-study', kind: 'window', host: { space: 'l3-study', side: 'N' }, at: start(900), width: 1800, height: 1300, sill: 300 },
         { id: 'l3-w-hall-w', kind: 'window', host: { space: 'l3-hall', side: 'W' }, at: start(600), width: 800, height: 1500, sill: 900 },
         { id: 'l3-d-terrace', kind: 'door', host: { space: 'l3-hall', side: 'E' }, at: start(500), width: 850, height: 2100, sill: 0 },
         // Wide strip under the south eave: one part over the stair, one over the
         // family room with a timber insert at its west end (3D views).
-        { id: 'l3-w-stair', kind: 'window', host: { space: 'l3-stair', side: 'S' }, at: start(1000), width: 1200, height: 1100, sill: 1300 },
-        { id: 'l3-w-family', kind: 'window', host: { space: 'l3-family', side: 'S' }, at: start(200), width: 3200, height: 1100, sill: 1300, insert: 'wood-panel' },
+        { id: 'l3-w-stair', kind: 'window', host: { space: 'l3-stair', side: 'S' }, at: start(1000), width: 1200, height: 900, sill: 350 },
+        { id: 'l3-w-family', kind: 'window', host: { space: 'l3-family', side: 'S' }, at: start(200), width: 3200, height: 900, sill: 350, insert: 'wood-panel' },
       ],
       stairs: [],
     },
   ],
   roofs: [
     // North mono-pitch roof: high edge on line F, falls north; the higher one.
-    { id: 'roof-n', kind: 'mono', cells: [c('1', '7', 'F', 'K')], onLevel: 'L3', pitchDeg: 25, fall: 'N', eaveOffset: 600, overhang: 600 },
+    { id: 'roof-n', kind: 'mono', cells: [c('1', '7', 'F', 'K')], onLevel: 'L3', pitchDeg: 25, fall: 'N', eaveOffset: 300, overhang: 600 },
     // South mono-pitch roof: falls south, lower, leaving a clerestory strip
     // under the north roof's high edge. Three-pane skylight over the family room.
     {
