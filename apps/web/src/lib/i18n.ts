@@ -1,4 +1,5 @@
 // Tiny i18n: one flat dictionary per language. Chinese is the default.
+import { chatEn, chatZh } from '../chat/messages';
 import { useStudio } from './store';
 
 const zh = {
@@ -102,6 +103,7 @@ const zh = {
   'chat.body': '很快你就可以在这里用一句话修改房子：加一间卧室、把客厅朝南、换成双坡屋顶。',
   'chat.placeholder': '描述你想要的改动…',
   'chat.send': '发送',
+  ...chatZh,
 
   'sheet.expand': '展开控制面板',
   'sheet.collapse': '收起控制面板',
@@ -219,6 +221,7 @@ const en: Record<MessageKey, string> = {
   'chat.body': 'Soon you will edit the house here in one sentence: add a bedroom, turn the living room south, switch to a gable roof.',
   'chat.placeholder': 'Describe a change…',
   'chat.send': 'Send',
+  ...chatEn,
 
   'sheet.expand': 'Expand controls',
   'sheet.collapse': 'Collapse controls',

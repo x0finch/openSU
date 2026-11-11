@@ -8,10 +8,12 @@ import { gzipSync } from 'node:zlib';
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const client = join(root, 'dist/client');
 const assets = join(client, 'assets');
-const BUDGET = { studioInitial: 200 * 1024, viewer: 300 * 1024 };
+const BUDGET = { studioInitial: 200 * 1024, viewer: 300 * 1024, assistant: 150 * 1024 };
 
 const gz = new Map();
 const deps = new Map();
+/** The chunk with the assistant (TanStack AI + the relay adapter), found by its adapter name. */
+let assistantEntry = null;
 for (const f of readdirSync(assets)) {
   if (!f.endsWith('.js') && !f.endsWith('.css')) continue;
   const src = readFileSync(join(assets, f));
@@ -20,6 +22,7 @@ for (const f of readdirSync(assets)) {
     const text = src.toString();
     const stat = new Set();
     for (const m of text.matchAll(/(?:from|import)\s*["'`]\.\/([^"'`]+\.js)["'`]/g)) stat.add(m[1]);
+    if (text.includes('opensu-relay')) assistantEntry = f;
     deps.set(f, stat);
   }
 }
@@ -70,6 +73,7 @@ const model = lazy(/^house-data-.*\.js$/);
 const plan = lazy(/^plan-data-.*\.js$/, model);
 // The sheet chunk shares three.js, the kernel and the plans with the others.
 const sheets = lazy(/^SheetGallery-.*\.js$/, viewer, model, plan);
+const assistant = assistantEntry ? lazy(new RegExp(`^${assistantEntry.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`), model) : new Set();
 
 console.log('\nBundle size report (gzip -9)\n');
 report('/ initial JS', landing.js);
@@ -78,6 +82,7 @@ report('viewer chunk (lazy, 3D)', viewer, BUDGET.viewer);
 report('model chunk (lazy)', model);
 report('plan chunk (lazy)', plan);
 report('sheet chunk (lazy, on top)', sheets);
+report('assistant chunk (lazy, chat)', assistant, BUDGET.assistant);
 report('CSS', studio.css);
 // The Worker (dist/server) must stay small and never carry viewer code.
 const server = join(root, 'dist/server');
@@ -92,15 +97,19 @@ walk(server);
 let serverBytes = 0;
 let serverGz = 0;
 const withThree = [];
+const withAgent = [];
 for (const f of serverJs) {
   const src = readFileSync(f);
   serverBytes += src.length;
   serverGz += gzipSync(src, { level: 9 }).length;
   if (/WebGLRenderer|ShaderChunk/.test(src.toString())) withThree.push(f.slice(server.length + 1));
+  // The agent loop and the provider SDK run in the browser only.
+  if (/opensu-relay|dangerouslyAllowBrowser/.test(src.toString())) withAgent.push(f.slice(server.length + 1));
 }
-if (withThree.length) failed = true;
+if (withThree.length || withAgent.length) failed = true;
 rows.push(`Worker bundle (dist/server JS)  ${kb(serverBytes)} raw, ${kb(serverGz).trim()} gzip, ${serverJs.length} files`);
 rows.push(withThree.length ? `    contains three.js: ${withThree.join(', ')}  FAIL` : '    no three.js  ok');
+rows.push(withAgent.length ? `    contains the agent / provider SDK: ${withAgent.join(', ')}  FAIL` : '    no agent or provider SDK  ok');
 console.log(rows.join('\n'));
 console.log(failed ? '\nSize budget exceeded.' : '\nAll size budgets met.');
 process.exit(failed ? 1 : 0);

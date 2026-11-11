@@ -17,6 +17,9 @@ export default defineConfig({
       '@opensu/render/tokens': fileURLToPath(new URL('../../packages/render/src/style/tokens.ts', import.meta.url)),
       // Solar position and date presets only (no three.js), for the time bar.
       '@opensu/render/sun': fileURLToPath(new URL('../../packages/render/src/sun/study.ts', import.meta.url)),
+      // The starter house alone (no TanStack AI), for the model chunk.
+      '@opensu/agent/starter': fileURLToPath(new URL('../../packages/agent/src/starter.ts', import.meta.url)),
+      '@opensu/agent': src('agent'),
       '@opensu/model': src('model'),
       '@opensu/kernel': src('kernel'),
       '@opensu/render': src('render'),

@@ -180,7 +180,8 @@ async function compareWithRenderShots() {
   }
   const { ctx, page } = await open({ viewport: { width: 1600, height: 1200 }, deviceScaleFactor: 1 }, '/');
   for (const v of views) {
-    await page.goto(`${base}/studio?view=${v}`, { waitUntil: 'networkidle' });
+    // The renderer demo draws the golden reference house.
+    await page.goto(`${base}/studio?sample=golden&view=${v}`, { waitUntil: 'networkidle' });
     await page.waitForFunction(() => window.__studio?.ready3d === true, null, { timeout: 180000 });
     const ref = `data:image/png;base64,${readFileSync(resolve(shotsDir, `${v}.png`)).toString('base64')}`;
     const diff = await page.evaluate(async (src) => {
@@ -301,8 +302,9 @@ async function sheets(opts, name) {
   console.log(`  sheet set rendered in ${(res.ms / 1000).toFixed(1)} s (page open to done ${((Date.now() - t0) / 1000).toFixed(1)} s)`);
   check(!res.error, `${name}: no render error`);
   check(
-    res.files.length === 4 && res.files.every((f) => f && f.w === 1500 && f.h === 2000 && f.type === 'image/png' && f.bytes > 100000),
-    `${name}: 4 PNG blobs of 1500x2000 (${res.files.map((f) => f && `${f.w}x${f.h} ${(f.bytes / 1e6).toFixed(2)} MB`).join(', ')})`,
+    // One sheet per level plus the axonometric (starter: 3, golden: 4).
+    res.files.length >= 3 && res.files.every((f) => f && f.w === 1500 && f.h === 2000 && f.type === 'image/png' && f.bytes > 100000),
+    `${name}: ${res.files.length} PNG blobs of 1500x2000 (${res.files.map((f) => f && `${f.w}x${f.h} ${(f.bytes / 1e6).toFixed(2)} MB`).join(', ')})`,
   );
   await page.waitForTimeout(500);
   await noHorizontalScroll(page, name);
@@ -335,7 +337,8 @@ try {
     });
     await studio3d(DESKTOP, 'studio-3d-desktop-en', '?lang=en&view=axo-ne');
     await studioPlan(DESKTOP, 'studio-plan-desktop-l2', '&level=L2');
-    await studioPlan(PHONE, 'studio-plan-phone-attic', '&level=L3');
+    await studioPlan(PHONE, 'studio-plan-phone-attic', '&sample=golden&level=L3');
+    await studio3d(DESKTOP, 'studio-golden-desktop', '?sample=golden');
     await studio3d(PHONE, 'studio-3d-phone-expanded', '', async (p) => {
       await p.getByRole('button', { name: '展开控制面板' }).click();
       await p.waitForTimeout(450);

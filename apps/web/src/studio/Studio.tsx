@@ -103,9 +103,7 @@ export function Studio() {
             <LangToggle size="sm" />
           </div>
           <div className="absolute top-1/2 right-6 -translate-y-1/2">{mode === '3d' ? <ViewRail /> : mode === 'plan' && derived && <LevelRail levels={derived.levels} />}</div>
-          <div className="absolute top-1/2 left-6 -translate-y-1/2">
-            <ChatRail />
-          </div>
+          <ChatRail />
           {mode === '3d' && (
             <div className="absolute inset-x-0 bottom-6 flex justify-center">
               <SceneDock levels={derived?.levels ?? null} />

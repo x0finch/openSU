@@ -4,7 +4,10 @@ The openSU web app: a TanStack Start app deployed to Cloudflare Workers.
 The studio shows the house model in 3D (`@opensu/render`) with a level
 cutaway and a sun study (time of day, date presets, play the day), as
 floor plans (`@opensu/plan`), and as a shareable sheet set (`图册`,
-`@opensu/sheet`, rendered in the browser). No AI and no persistence yet.
+`@opensu/sheet`, rendered in the browser). An AI assistant in the left rail
+edits the house through validated commands (`@opensu/agent`, see "AI
+assistant" below). No persistence yet. The studio opens with our own
+starter house; the golden reference house is internal (`?sample=golden`).
 
 ## Run
 
@@ -16,7 +19,8 @@ pnpm dev                                # vite dev with the Cloudflare plugin (w
 pnpm build                              # all packages, then this app + the bundle size report
 pnpm --filter @opensu/web preview       # the built app in the local Workers runtime (workerd)
 pnpm --filter @opensu/web shots         # checks + screenshots -> artifacts/web/*.png
-pnpm --filter @opensu/web test          # the checks with a minimal set of shots (needs a build)
+pnpm --filter @opensu/web test          # smoke checks + chat e2e + relay checks (needs a build)
+pnpm --filter @opensu/web chat          # chat e2e against the scripted stub -> artifacts/web/chat-*.png
 node scripts/shots.mjs --only studio-sheets,check-sun   # just some shots / checks (name prefixes)
 ```
 
@@ -24,18 +28,19 @@ Workspace packages resolve to their TypeScript sources (Vite aliases and
 `tsconfig` paths), so `pnpm dev` needs no prior package build.
 
 Studio deep links: `/studio?mode=plan&level=L2`, `/studio?view=axo-ne`,
-`?lang=en`, sun study `?sun=winter|spring|summer|autumn|today&time=10:00`,
+`?lang=en`, `?sample=golden`, sun study `?sun=winter|spring|summer|autumn|today&time=10:00`,
 cutaway `?cut=L1`, sheets `?mode=sheet`, phone controls expanded
 `?panel=open`.
 
 Besides screenshots, `shots` checks: the time slider changes the shadows
 (pixel diff 10:00 vs 15:00) and drives the physical sun, a cutaway hides
 the roof, leaving the sun study returns to presentation light, and the
-sheet set yields 4 PNG blobs of 1500 x 2000.
+sheet set yields one 1500 x 2000 PNG blob per level plus the axonometric.
 
 `shots` needs the preinstalled Playwright + Chromium (headless WebGL via
 SwiftShader). When `artifacts/shots/*.png` from `pnpm shots` exist it also
-checks that the app's 3D view matches the renderer demo pixel for pixel.
+checks that the app's 3D view of the golden house matches the renderer demo
+pixel for pixel.
 
 ## Routes
 
@@ -45,6 +50,7 @@ checks that the app's 3D view matches the renderer demo pixel for pixel.
 | `/studio` | `ssr: false`; the build prerenders only the HTML shell (head + a loading fallback) | static asset (`studio.html`) |
 | `/s/$id` | `ssr: 'data-only'`: the Worker runs a trivial loader so the `<head>` carries title / description / `og:*` metadata; the body renders on the client | Worker |
 | `/api/health` | server route, `{ ok: true }` | Worker |
+| `/api/chat` | server route: `POST` relays one Chat Completions call, `GET` says whether a server key exists | Worker |
 
 Static assets are matched before the Worker runs, so the landing page and
 the studio never cost Worker CPU. The share route does no work beyond
@@ -74,6 +80,13 @@ string formatting (well inside the 10 ms free-tier budget).
   derived facts; `plan-data.ts` (lazy chunk) SVG plans.
 - `src/studio/PlanView.tsx` plan fitted to the free viewport, pan (drag),
   zoom (wheel, pinch, double click, buttons).
+- `src/chat/` the assistant: `ChatPanel.tsx` (desktop panel, phone sheet
+  with a peek state), `SettingsSheet.tsx` (bring-your-own key),
+  `chat-store.ts` (chat state; runs `@opensu/agent` from a lazy chunk and
+  pushes house changes into the studio store), `messages.ts` (its zh / en
+  strings), `settings.ts` (key storage, request headers).
+- `src/server/chat-relay.ts` the `/api/chat` relay (no app imports; checked
+  by `scripts/relay-check.mjs`).
 - `src/lib/store.ts` the zustand store. The house model is the single source
   of truth: model -> resolve -> kernel -> render / plan.
 - `src/lib/i18n.ts` zh (default) and en dictionaries.
@@ -86,11 +99,110 @@ string formatting (well inside the 10 ms free-tier budget).
 ## Size budgets
 
 `pnpm build` prints gzip sizes and fails when a budget is exceeded:
-initial JS for `/studio` < 200 KB, the lazy viewer chunk < 300 KB. It also
-reports the Worker bundle (`dist/server`) and fails if it contains
-three.js: the lazy imports of the studio are guarded with
+initial JS for `/studio` < 200 KB, the lazy viewer chunk < 300 KB, the lazy
+assistant chunk (TanStack AI + the OpenAI-compatible adapter) < 150 KB. It
+also reports the Worker bundle (`dist/server`) and fails if it contains
+three.js or the agent / provider SDK: the lazy imports of the studio are guarded with
 `import.meta.env.SSR`, so the server build never emits the viewer, model,
 plan or sheet chunks.
+
+## AI assistant
+
+**Status: verified only against a local scripted stub. No real model has
+been called from this code; nothing here says anything about how well a
+real model edits houses.**
+
+### Architecture
+
+- Browser: `@opensu/agent` runs TanStack AI's `chat()` (agent loop, SSE
+  parsing, tool-call assembly, tool execution) with
+  `openaiCompatibleText` from `@tanstack/ai-openai/compatible`, whose fetch
+  is pointed at `/api/chat`. The tools (`edit_house`, `get_house`,
+  `new_house`) run here, on the model package, and every kept edit updates
+  the studio at once; the 3D view swaps the house in and plays
+  `viewer.playGrow()` (levels rise in sequence, ~1.5 s; a new house grows
+  from the ground, an edit from the lowest changed level).
+- Worker (`src/server/chat-relay.ts`): picks the key and model, parses the
+  small request body only to set `model` / `stream: true` (and an output cap
+  on the owner's key), forwards it, and returns the provider's response
+  body untouched. The stream is never parsed or re-encoded. One hook,
+  `checkCredits`, is where per-user credits / rate limits will go.
+
+Why not `useChat` from `@tanstack/ai-react` with a connection adapter: its
+connection adapters (`fetchServerSentEvents`, `fetchHttpStream`, `stream()`)
+consume TanStack's own AG-UI `StreamChunk` events, which a TanStack server
+handler (`toServerSentEventsResponse(chat(...))`) produces. Our Worker
+relays the provider's raw OpenAI SSE instead (CPU budget), so the client
+runs `chat()` itself. Docs read: <https://tanstack.com/ai/latest/docs/chat/connection-adapters.md>,
+the `ai-core` skills shipped in `@tanstack/ai@1.4.0` (`tool-calling`,
+`middleware`, `custom-backend-integration`). The tools use `.server()`
+implementations even though they run in the browser: in this setup the
+"server" of `chat()` is the browser.
+
+### Configuration
+
+Worker variables (Cloudflare secrets in production; for `pnpm dev` put
+them in `apps/web/.dev.vars`, git-ignored; `vite preview` reads
+`dist/server/.dev.vars`, copied there at build time):
+
+| Variable | Meaning |
+|---|---|
+| `OPENROUTER_API_KEY` | owner's key; base URL `https://openrouter.ai/api/v1` (wins over OpenAI) |
+| `OPENAI_API_KEY` | owner's key for OpenAI or any OpenAI-compatible server |
+| `OPENAI_BASE_URL` | with `OPENAI_API_KEY`; default `https://api.openai.com/v1` |
+| `OPENSU_MODEL` | model id; defaults below |
+
+```sh
+pnpm dlx wrangler secret put OPENROUTER_API_KEY   # production
+pnpm dlx wrangler secret put OPENSU_MODEL         # optional
+```
+
+Default model: `anthropic/claude-sonnet-5.5` on OpenRouter (strong tool
+calling; listed with `tools` and `tool_choice` support in OpenRouter's
+`/api/v1/models` on 2026-11-11; $2 / $10 per M input / output tokens), and
+`gpt-6.1-sol` with `OPENAI_API_KEY` (taken from OpenRouter's `openai/`
+listing; not checked against OpenAI's own model list). Change it with
+`OPENSU_MODEL`; any model that supports `tools` on
+<https://openrouter.ai/models?supported_parameters=tools> works with the
+relay. With the owner's key the relay always uses the configured model and
+caps output at 4096 tokens per call.
+
+### Bring your own key
+
+The assistant's settings sheet (slider icon) takes a key, a provider
+(OpenRouter, OpenAI, or another https OpenAI-compatible base URL) and an
+optional model. They are stored only in this browser (`localStorage`
+`opensu.ai`) and sent per request in `x-opensu-key` / `x-opensu-base-url`
+headers to `/api/chat`, which uses them instead of the owner's key and
+forwards only `Authorization: Bearer <key>` to the provider. The relay
+never logs, stores or echoes keys; base URLs must be `https://` without
+credentials. "Remove my key" deletes it from the browser.
+
+### Verification (what was and was not done)
+
+- `scripts/chat-stub.mjs`: a scripted OpenAI-compatible server (SSE text
+  and tool-call deltas, OpenRouter-style keep-alive comment, HTTP errors).
+  It recognises fixed sentences and replays canned answers. It is not a
+  model.
+- `scripts/chat-e2e.mjs` (`pnpm --filter @opensu/web chat`): the built app
+  in workerd with the relay pointed at the stub. "把客厅加宽 600" -> text
+  streams before the tool call -> edit applied (area 244.8 -> 257.0 m², 3D
+  pixels change, grow plays) -> undo restores area and pixels exactly; a
+  wrong id is rejected and repaired; a hopeless edit gives up after 3
+  repairs with the house unchanged; HTTP 429 and "no key" show calm inline
+  messages; the BYO key goes in a header (intercepted in the browser, since
+  the relay only forwards to https); every upstream call carried the server
+  key and the configured model; the key never appears in the Worker log.
+  Screenshots at 1440 x 900 and 390 x 844.
+- `scripts/relay-check.mjs`: the relay function in Node with the upstream
+  mocked: key selection, BYO, refused base URLs, no header leaks, byte-for-
+  byte pass-through, and a CPU estimate (about 0.4-0.5 ms per request with a
+  ~45 KB body in Node's V8; workerd has no local per-request CPU readout, so
+  the 10 ms free-tier limit can only be confirmed on Cloudflare).
+- Not verified: any real provider or model (no credentials here), real
+  OpenRouter / OpenAI streaming quirks beyond what the stub imitates,
+  token counts and cost, CPU time on Cloudflare, the BYO path through the
+  relay to a real https provider, behaviour on real phones / WeChat.
 
 ## Deployment (not done yet)
 

@@ -17,6 +17,9 @@ importers:
       '@fontsource-variable/inter':
         specifier: 5.3.0
         version: 5.3.0
+      '@opensu/agent':
+        specifier: workspace:*
+        version: link:../../packages/agent
       '@opensu/kernel':
         specifier: workspace:*
         version: link:../../packages/kernel
