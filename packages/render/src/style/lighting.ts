@@ -23,6 +23,8 @@ export type LightingMode =
       facadeAxisDeg?: number;
       /** Which side of the viewer the sun comes from; 'auto' lights the facade facing the camera most. */
       side?: 'auto' | 'left' | 'right';
+      /** Explicit sun (e.g. while a camera transition interpolates between two presentation suns). */
+      sun?: SunPosition;
     }
   | { mode: 'physical'; sun: SunPosition }
   | { mode: 'physical'; date: SolarDate; minutes: number };
@@ -63,5 +65,6 @@ export function sunForView(mode: LightingMode, kind: ViewKind, cameraAzimuthDeg:
     if (!physical) throw new Error('sunForView: a physical sun by date needs the computed sun position');
     return physical;
   }
+  if (mode.sun) return mode.sun;
   return presentationSun(kind, cameraAzimuthDeg, mode.facadeAxisDeg, mode.side);
 }

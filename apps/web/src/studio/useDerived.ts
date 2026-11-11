@@ -4,7 +4,7 @@ import type { Derived } from './house-data';
 
 type HouseData = typeof import('./house-data');
 let mod: Promise<HouseData> | null = null;
-export const loadHouseData = () => (mod ??= import('./house-data'));
+export const loadHouseData = () => (mod ??= import.meta.env.SSR ? new Promise<HouseData>(() => {}) : import('./house-data'));
 
 /**
  * Loads the model chunk, puts the sample house into the store (once) and

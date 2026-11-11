@@ -4,11 +4,26 @@ import { OrthographicCamera, Vector3 } from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { buildHouse } from '@opensu/kernel';
 import type { ResolvedHouse } from '@opensu/model';
-import { cameraForView, createHouseObject, defaultLighting, IllustrationViewer, sunForView, type SceneStats, type ViewPreset } from '@opensu/render';
+import {
+  cameraForView, createHouseObject, defaultLighting, IllustrationViewer, type LightingMode, type SceneStats, type StudySite, studySun, type StudySun, sunForView,
+  type ViewPreset,
+} from '@opensu/render';
 
 export interface Engine {
-  /** Shows a preset; animated (~400 ms) unless `instant`. */
-  setView(preset: ViewPreset, instant?: boolean): void;
+  /**
+   * Shows a preset with a level cutaway (null = whole house); animated
+   * (~400 ms) unless `instant`. A changed cutaway clips at once and the
+   * camera then moves to the new framing.
+   */
+  setView(preset: ViewPreset, cut?: string | null, instant?: boolean): void;
+  /**
+   * Sun study: the physical sun of the site at `date` / `minutes`, or back
+   * to presentation lighting with `null`. Returns the sun for that date and
+   * time (sunrise, sunset, position), also when switched off.
+   */
+  setSun(sun: { date: string; minutes: number } | null): void;
+  /** The site's sun for a date and time (no change to the view). */
+  sunAt(date: string, minutes: number): StudySun;
   resize(): void;
   /** Renders a frame now and returns the share of non-white pixels (0..1). */
   inkCoverage(): number;
@@ -103,6 +118,9 @@ export function createEngine(container: HTMLElement, resolved: ResolvedHouse, op
   const geometry = buildHouse(resolved);
   const house = createHouseObject(geometry, viewer.palette);
   viewer.setContent(house.root, house.framePoints);
+  const site = house.root.userData.site as StudySite;
+  /** Current lighting: presentation, or the physical sun by date and time. */
+  let lighting: LightingMode = defaultLighting;
 
   const points = house.framePoints;
   const min = new Vector3(Infinity, Infinity, Infinity);
@@ -142,7 +160,7 @@ export function createEngine(container: HTMLElement, resolved: ResolvedHouse, op
   }
 
   function snap(preset: ViewPreset): void {
-    viewer.setLighting(defaultLighting);
+    viewer.setLighting(lighting);
     viewer.setView(preset);
     attachControls();
     moved = false;
@@ -166,15 +184,21 @@ export function createEngine(container: HTMLElement, resolved: ResolvedHouse, op
     canvas.style.opacity = '1';
   }
 
-  function setView(preset: ViewPreset, instant = false): void {
+  function setView(preset: ViewPreset, cut: string | null = viewer.cutaway, instant = false): void {
     stop();
     const from = viewer.camera;
+    if (cut !== viewer.cutaway) {
+      // Clip now; the viewer re-frames its current preset, the morph below
+      // starts from where the camera was.
+      viewer.setCutaway(cut);
+      viewer.camera = from;
+    }
     const reduceMotion = typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
     if (instant || reduceMotion || !viewer.currentView) {
       snap(preset);
       return;
     }
-    const target = cameraForView(preset, points, aspect());
+    const target = cameraForView(preset, viewer.viewPoints(), aspect());
     if (!(from instanceof OrthographicCamera) || !(target instanceof OrthographicCamera)) {
       // Perspective <-> parallel: a short dissolve instead of a morph.
       controls?.dispose();
@@ -192,6 +216,7 @@ export function createEngine(container: HTMLElement, resolved: ResolvedHouse, op
     const a = orthoPose(from, sceneCenter);
     const b = orthoPose(target, sceneCenter);
     const dAz = angleDelta(a.az, b.az);
+    // Presentation light follows the camera; the physical sun stays put.
     const sunA = { az: viewer.sun.azimuthDeg, el: viewer.sun.elevationDeg };
     const sunB = sunForView(defaultLighting, preset.kind, preset.azimuthDeg);
     const dSun = angleDelta(sunA.az, sunB.azimuthDeg);
@@ -213,7 +238,8 @@ export function createEngine(container: HTMLElement, resolved: ResolvedHouse, op
         radius,
       );
       viewer.camera = cam;
-      viewer.setLighting({ mode: 'physical', sun: { azimuthDeg: sunA.az + dSun * k, elevationDeg: sunA.el + (sunB.elevationDeg - sunA.el) * k } });
+      if (lighting.mode === 'presentation') viewer.setLighting({ mode: 'presentation', sun: { azimuthDeg: sunA.az + dSun * k, elevationDeg: sunA.el + (sunB.elevationDeg - sunA.el) * k } });
+      else viewer.requestRender();
       if (t < 1) anim = requestAnimationFrame(step);
       else {
         anim = 0;
@@ -226,6 +252,12 @@ export function createEngine(container: HTMLElement, resolved: ResolvedHouse, op
   return {
     viewer,
     setView,
+    setSun(sun) {
+      lighting = sun ? { mode: 'physical', date: sun.date, minutes: sun.minutes } : defaultLighting;
+      // Mid-transition the presentation sun is interpolated; the last frame applies `lighting`.
+      if (!anim || lighting.mode === 'physical') viewer.setLighting(lighting);
+    },
+    sunAt: (date, minutes) => studySun(site, date, minutes),
     resize,
     inkCoverage() {
       viewer.renderNow();

@@ -79,6 +79,22 @@ describe('golden floor plans', () => {
     }
   });
 
+  it('stays collision-free with sheet-sized text (textScale)', () => {
+    for (const textScale of [1.4, 1.75, 2]) {
+      for (const l of house.levels) {
+        const base = renderPlanDetailed(house, l.id);
+        const r = renderPlanDetailed(house, l.id, { textScale });
+        expect(checkPlan(r), `${l.id} @ text ${textScale}`).toEqual([]);
+        expect(r.missingLabels, `${l.id} @ text ${textScale}`).toEqual([]);
+        // Title, dimension figures and north arrow grow together.
+        const size = (rep: typeof r, kind: string) => Math.max(...rep.texts.filter((t) => t.kind === kind).map((t) => t.y1 - t.y0));
+        for (const kind of ['title', 'north', 'dim']) expect(size(r, kind) / size(base, kind), `${l.id} ${kind}`).toBeCloseTo(textScale, 1);
+        // Every dimension figure is still placed.
+        expect(r.texts.filter((t) => t.kind === 'dim').length, `${l.id} dims`).toBe(base.texts.filter((t) => t.kind === 'dim').length);
+      }
+    }
+  });
+
   it('handles a rotated north, no fence and an authored door swing', () => {
     const h: House = structuredClone(golden);
     h.site.northDeg = 25;

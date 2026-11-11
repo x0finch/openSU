@@ -37,9 +37,9 @@ export interface ShadedOptions {
 }
 
 const ILLUSTRATION_PARS = /* glsl */ `
-uniform float uSunTone;
-uniform float uAwayTone;
-uniform float uShadowTone;
+uniform vec3 uSunTone;
+uniform vec3 uAwayTone;
+uniform vec3 uShadowTone;
 uniform float uSunFullAt;
 uniform float uAwayBelow;
 float gSunDot = -1.0;
@@ -55,16 +55,61 @@ void RE_Direct_Illustration( const in IncidentLight directLight, const in vec3 g
 const ILLUSTRATION_OUT = /* glsl */ `
 {
   float litBand = smoothstep( uAwayBelow, uSunFullAt, gSunDot );
-  float sunBand = mix( uShadowTone, uSunTone, gSunVis );
-  float tone = mix( uAwayTone, sunBand, litBand );
+  vec3 sunBand = mix( uShadowTone, uSunTone, gSunVis );
+  vec3 tone = mix( uAwayTone, sunBand, litBand );
   outgoingLight = diffuseColor.rgb * tone;
 }
 #include <envmap_fragment>
 `;
 
-/** Converts an sRGB grey hex to the linear value used in the shader. */
-function linearGrey(hex: string): number {
-  return new Color(hex).r;
+/** Converts an sRGB hex to the linear colour used in the shader. */
+function linearTone(hex: string): Color {
+  return new Color(hex);
+}
+
+/** Linear tone factors of a material's three bands (shared with its clipping twins). */
+interface ToneUniforms {
+  uSunTone: { value: Color };
+  uAwayTone: { value: Color };
+  uShadowTone: { value: Color };
+  /** The bands the material was created with. */
+  base: { sun: Color; away: Color; shadow: Color };
+}
+
+const toneUniforms = new WeakMap<Material, ToneUniforms>();
+
+/**
+ * Tone bands as colour factors (linear), for `setToneFactors`. A factor is
+ * what the albedo is multiplied by; `toneToward(albedo, target)` gives the
+ * factor that turns an albedo into a target colour.
+ */
+export interface ToneFactors {
+  sun?: Color;
+  away?: Color;
+  shadow?: Color;
+}
+
+/** Linear factor that turns `albedo` into `target` (both sRGB hex). */
+export function toneToward(albedo: string, target: string): Color {
+  const a = new Color(albedo), t = new Color(target);
+  return new Color(t.r / Math.max(1e-4, a.r), t.g / Math.max(1e-4, a.g), t.b / Math.max(1e-4, a.b));
+}
+
+/** Linear factor of an sRGB tone hex. */
+export function toneFactor(hex: string): Color {
+  return linearTone(hex);
+}
+
+/**
+ * Overrides the tone bands of a shaded material (and its clipping twins)
+ * without recompiling; omitted bands return to the material's own.
+ */
+export function setToneFactors(mat: Material, f: ToneFactors | null): void {
+  const u = toneUniforms.get(mat);
+  if (!u) return;
+  u.uSunTone.value.copy(f?.sun ?? u.base.sun);
+  u.uAwayTone.value.copy(f?.away ?? u.base.away);
+  u.uShadowTone.value.copy(f?.shadow ?? u.base.shadow);
 }
 
 /**
@@ -96,10 +141,19 @@ export function createShadedMaterial(color: string, opts: ShadedOptions = {}): M
   };
   const sunFullAt = opts.sunFullAt ?? shading.sunFullAt;
   const awayBelow = opts.awayBelow ?? shading.awayBelow;
+  const base = { sun: linearTone(tones.sun), away: linearTone(tones.away), shadow: linearTone(tones.shadow) };
+  const uniforms: ToneUniforms = {
+    uSunTone: { value: base.sun.clone() },
+    uAwayTone: { value: base.away.clone() },
+    uShadowTone: { value: base.shadow.clone() },
+    base,
+  };
+  toneUniforms.set(mat, uniforms);
   mat.onBeforeCompile = (shader) => {
-    shader.uniforms.uSunTone = { value: linearGrey(tones.sun) };
-    shader.uniforms.uAwayTone = { value: linearGrey(tones.away) };
-    shader.uniforms.uShadowTone = { value: linearGrey(tones.shadow) };
+    // Shared uniform objects: tone overrides reach every twin without a recompile.
+    shader.uniforms.uSunTone = uniforms.uSunTone;
+    shader.uniforms.uAwayTone = uniforms.uAwayTone;
+    shader.uniforms.uShadowTone = uniforms.uShadowTone;
     shader.uniforms.uSunFullAt = { value: sunFullAt };
     shader.uniforms.uAwayBelow = { value: awayBelow };
     shader.fragmentShader = shader.fragmentShader
@@ -188,6 +242,8 @@ export function twinMaterial<T extends Material>(m: T): T {
   t.onBeforeCompile = m.onBeforeCompile;
   t.customProgramCacheKey = m.customProgramCacheKey;
   t.name = m.name ? `${m.name}:clip` : 'clip';
+  const u = toneUniforms.get(m);
+  if (u) toneUniforms.set(t, u);
   return t;
 }
 

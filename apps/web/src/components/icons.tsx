@@ -140,6 +140,58 @@ export function ResetViewIcon(p: P) {
   );
 }
 
+export function PlayIcon(p: P) {
+  return (
+    <Svg {...p}>
+      <path d="M8.5 6.3v11.4l9-5.7Z" fill="currentColor" strokeWidth={1.2} />
+    </Svg>
+  );
+}
+
+export function PauseIcon(p: P) {
+  return (
+    <Svg {...p}>
+      <path d="M8.5 6.5v11M15.5 6.5v11" strokeWidth={2.2} />
+    </Svg>
+  );
+}
+
+export function DownloadIcon(p: P) {
+  return (
+    <Svg {...p}>
+      <path d="M12 4.5v10M7.5 10.5 12 15l4.5-4.5M5 19.5h14" />
+    </Svg>
+  );
+}
+
+export function ShareIcon(p: P) {
+  return (
+    <Svg {...p}>
+      <path d="M12 14.5v-10M8 8.5l4-4 4 4" />
+      <path d="M8.5 11.5H6.5v8h11v-8h-2" />
+    </Svg>
+  );
+}
+
+/** Stacked floor slabs with the top one lifted: the level cutaway. */
+export function LayersIcon(p: P) {
+  return (
+    <Svg {...p}>
+      <path d="m12 4.5 7.5 3.8-7.5 3.8-7.5-3.8Z" strokeDasharray="2 1.6" />
+      <path d="m4.5 12.6 7.5 3.8 7.5-3.8" />
+      <path d="m4.5 16.4 7.5 3.8 7.5-3.8" />
+    </Svg>
+  );
+}
+
+export function ChevronLeftIcon(p: P) {
+  return (
+    <Svg {...p}>
+      <path d="m14 7-5 5 5 5" />
+    </Svg>
+  );
+}
+
 export function ChevronRightIcon(p: P) {
   return (
     <Svg {...p}>

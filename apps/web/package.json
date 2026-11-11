@@ -20,6 +20,7 @@
     "@opensu/model": "workspace:*",
     "@opensu/plan": "workspace:*",
     "@opensu/render": "workspace:*",
+    "@opensu/sheet": "workspace:*",
     "@tanstack/react-router": "1.170.46",
     "@tanstack/react-start": "1.169.5",
     "react": "19.3.1",

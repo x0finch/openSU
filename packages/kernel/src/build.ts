@@ -64,7 +64,7 @@ export function buildHouseDetailed(house: ResolvedHouse, opts: BuildOptions = {}
 
   buildOutdoorLevels(ctx);
   buildFlatRoofsAndCanopies(ctx);
-  buildOpenings(ctx);
+  const frameCaps = buildOpenings(ctx);
   const stairs = buildStairs(ctx);
   buildSite(ctx);
 
@@ -107,6 +107,9 @@ export function buildHouseDetailed(house: ResolvedHouse, opts: BuildOptions = {}
     for (const r of ctx.massing.section(z, (s) => s.part.level !== undefined && s.part.role !== 'stair')) {
       cap.polygon([[r[0], r[1], z], [r[2], r[1], z], [r[2], r[3], z], [r[0], r[3], z]]);
     }
+    // Window and door frames cut by the plane: solid caps in the frame colour.
+    const frameCap = ctx.parts.get({ id: `${lv.level.id}:cut-frame`, level: lv.level.id, role: 'cut', material: 'frame' });
+    for (const c of frameCaps) if (c.levelId === lv.level.id) frameCap.polygon(c.poly);
   }
   const capEx = extractEdges(ctx.parts.list.slice(capFirst).flatMap((p) => p.loops), { featureAngleDeg: opts.featureAngleDeg ?? 25, floorLevels: [] });
   for (const [k, v] of capEx.edges) ex.edges.set(k, v);

@@ -31,6 +31,7 @@ export function PlanView({ resolved, levelId, active }: { resolved: ResolvedHous
 
   useEffect(() => {
     let alive = true;
+    if (import.meta.env.SSR) return;
     void (planMod ??= import('./plan-data')).then((m) => {
       if (!alive) return;
       setPlan(m.planDrawing(resolved, levelId));

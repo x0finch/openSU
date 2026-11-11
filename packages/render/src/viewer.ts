@@ -20,9 +20,9 @@ import { bakeScene } from './style/batch.js';
 import { applyLensShift, applyOrthoAspect, cameraForView, type ViewPreset } from './style/cameras.js';
 import { defaultLighting, type LightingMode, sunForView } from './style/lighting.js';
 import { createGround } from './style/ground.js';
-import { createLineMaterial, createPalette, type Palette } from './style/materials.js';
+import { createLineMaterial, createPalette, type Palette, setToneFactors, toneFactor, toneToward } from './style/materials.js';
 import { Sun } from './style/sun.js';
-import { cutaway as cutTokens, lines, physical as physTokens, stage } from './style/tokens.js';
+import { cutaway as cutTokens, cutawayLight, lines, materials as matTokens, physical as physTokens, shading, stage } from './style/tokens.js';
 import { type StudySite, studySun, type StudySun } from './sun/study.js';
 
 /** A storey as the kernel reports it (metres). */
@@ -215,7 +215,27 @@ export class IllustrationViewer {
       else if (name.startsWith('level:')) visible = !level || this.levels.findIndex((l) => l.id === name.slice(6)) <= li;
       for (const o of objs) o.visible = visible;
     }
+    this.applyInteriorTones(!!level && physical);
     this.shadowsDirty = true;
+  }
+
+  /**
+   * Light, calm interior for the sun study in a cutaway (`cutawayLight`
+   * tokens): lifted floor shade with warm sun patches, walls in cast shadow
+   * at the turned-away tone, outdoor surfaces at the ground-shadow tone.
+   */
+  private applyInteriorTones(on: boolean): void {
+    const p = this.palette;
+    if (!on) {
+      for (const m of [p.floor, p.wall, p.paving, p.gravel, p.deck]) setToneFactors(m, null);
+      return;
+    }
+    const shade = toneToward(matTokens.floor, cutawayLight.floorShade);
+    const sun = toneToward(matTokens.floor, cutawayLight.floorSunBase).multiply(toneFactor(cutawayLight.floorSunTint));
+    setToneFactors(p.floor, { sun, away: shade, shadow: shade });
+    setToneFactors(p.wall, { shadow: toneFactor(shading.awayTone) });
+    const ground = { shadow: toneFactor(shading.groundShadowTone) };
+    for (const m of [p.paving, p.gravel, p.deck]) setToneFactors(m, ground);
   }
 
   /** Re-render the shadow map with the next frame (after external scene edits). */
@@ -233,7 +253,7 @@ export class IllustrationViewer {
   }
 
   /** Framing points: in a cutaway, only what stays below the cut plane. */
-  private viewPoints(): Vector3[] {
+  viewPoints(): Vector3[] {
     let pts = this.framePoints;
     const level = this.levels.find((l) => l.id === this.cutLevel);
     if (level) {

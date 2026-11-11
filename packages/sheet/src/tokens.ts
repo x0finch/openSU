@@ -17,6 +17,7 @@ export const color = {
   fact: plan.color.ink,
   divider: plan.color.ink,
   footer: plan.color.subtitle,
+  groundLine: plan.color.ink,
 } as const;
 
 /** Latin first so digits and ASCII come from the Latin face; CJK falls through. */
@@ -54,7 +55,7 @@ export const layout = {
   /** Widest the lower view of a views sheet may be drawn. */
   lowerViewMaxWidth: 1260,
   /** Divider position as a fraction of the page height, per sheet kind. */
-  dividerLevel: 0.49,
+  dividerLevel: 0.46,
   dividerViews: 0.5,
   divider: 1.2,
   /** White space between a drawing and the divider. */
@@ -72,6 +73,11 @@ export const layout = {
   probeSize: 720,
   /** Camera margin of the probe (wider than the viewer's, so entourage is not clipped). */
   probeMargin: 0.16,
+  /** Ground line under elevation views: thickness and run past the drawing on each side. */
+  groundLine: 1.6,
+  groundLineOverhang: 36,
+  /** Plan text size relative to the screen plan (`@opensu/plan` textScale). */
+  planTextScale: 1.7,
 } as const;
 
 /** A pixel counts as ink when any channel is below this. */

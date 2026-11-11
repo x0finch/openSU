@@ -39,6 +39,8 @@ const SHOTS = {
   'cut-L1': 'view=cut-L1',
   'cut-L2': 'view=cut-L2',
   'cut-L1-sun-winter-15': 'view=cut-L1&sun=winter&time=15:00&year=2026',
+  'cut-L1-sun-winter-10': 'view=cut-L1&sun=winter&time=10:00&year=2026',
+  'cut-L2-sun-winter-10': 'view=cut-L2&sun=winter&time=10:00&year=2026',
 };
 const VIEWS = process.argv[2] ? process.argv[2].split(',') : Object.keys(SHOTS);
 const EXTRA = process.argv[3] ? `&${process.argv[3]}` : '';

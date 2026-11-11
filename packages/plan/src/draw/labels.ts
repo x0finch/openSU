@@ -6,7 +6,7 @@ import { footprint, isSolid, type Placement } from '../furnish/types';
 import { contains, overlaps, type Rect } from '../geom';
 import { attrs, f, type View } from '../svg';
 import { escapeXml, textWidth } from '../text';
-import { font, color } from '../tokens';
+import { color, font as baseFont, type Typography, typography } from '../tokens';
 
 export interface TextBox extends Rect {
   text: string;
@@ -17,7 +17,12 @@ export interface TextBox extends Rect {
 /** `vertical`: the Chinese name stacked one character per line (narrow rooms). */
 interface Variant { cn: number; en: number | null; vertical?: boolean }
 
-const VARIANTS: Variant[] = [
+/** Enlarged text (sheets): the screen plan's smaller forms, tried only after furniture has yielded. */
+const lastResort = (font: Typography['font']): Variant[] => font.cnSizeTiny > baseFont.cnSizeTiny
+  ? [{ cn: baseFont.cnSize, en: null }, { cn: baseFont.cnSizeSmall, en: null }, { cn: baseFont.cnSizeTiny, en: null }, { cn: baseFont.cnSizeTiny, en: null, vertical: true }]
+  : [];
+
+const variants = (font: Typography['font']): Variant[] => [
   { cn: font.cnSize, en: font.enSize },
   { cn: font.cnSizeSmall, en: font.enSizeSmall },
   { cn: font.cnSize, en: null },
@@ -27,15 +32,15 @@ const VARIANTS: Variant[] = [
   { cn: font.cnSizeTiny, en: null, vertical: true },
 ];
 
-function boxSize(sp: SpaceInfo, va: Variant) {
+function boxSize(sp: SpaceInfo, va: Variant, ty: Typography) {
   if (va.vertical) {
     const n = [...sp.name].length;
     return { w: va.cn, h: n * va.cn * 1.08, en: null, cnW: va.cn, enW: 0 };
   }
   const cnW = textWidth(sp.name, va.cn);
   const en = va.en && sp.nameEn ? sp.nameEn.toUpperCase() : null;
-  const enW = en ? textWidth(en, va.en!, font.enTracking) : 0;
-  const h = va.cn + (en ? font.labelGap + va.en! * 0.8 : 0);
+  const enW = en ? textWidth(en, va.en!, ty.font.enTracking) : 0;
+  const h = va.cn + (en ? ty.font.labelGap + va.en! * 0.8 : 0);
   return { w: Math.max(cnW, enW), h, en, cnW, enW };
 }
 
@@ -53,12 +58,13 @@ function wantsLabel(sp: SpaceInfo): boolean {
 
 export interface LabelResult { svg: string; boxes: TextBox[]; removed: Set<string>; missing: string[] }
 
-export function placeLabels(plan: LevelPlan, v: View, items: Placement[], swings: Rect[], taken: TextBox[], wallBoxes: Rect[]): LabelResult {
+export function placeLabels(plan: LevelPlan, v: View, items: Placement[], swings: Rect[], taken: TextBox[], wallBoxes: Rect[], ty: Typography = typography()): LabelResult {
+  const VARIANTS = variants(ty.font);
   const removed = new Set<string>();
   const boxes: TextBox[] = [];
   const missing: string[] = [];
   let svg = '';
-  const pad = font.labelPad;
+  const pad = ty.font.labelPad;
   const stairs = plan.stairs.map((s) => v.rect(s.clip));
   const swingPx = swings.map((r) => v.rect(r));
   const wallPx = wallBoxes.map((r) => v.rect(r));
@@ -80,11 +86,11 @@ export function placeLabels(plan: LevelPlan, v: View, items: Placement[], swings
         // Outdoor labels are optional: only the full form. Stacked names only in niches.
         if (sp.outdoor && va.en === null) continue;
         if (va.vertical && Math.min(sp.clear.x1 - sp.clear.x0, sp.clear.y1 - sp.clear.y0) > 900) continue;
-        const { w, h } = boxSize(sp, va);
+        const { w, h } = boxSize(sp, va, ty);
         const best = bestSpot(parts, w + 2 * pad, h + 2 * pad, obstacles, softs, centroid);
         if (!best) continue;
         const cx = best[0], top = best[1] - h / 2;
-        svg += labelSvg(sp, va, cx, top);
+        svg += labelSvg(sp, va, cx, top, ty);
         boxes.push({ x0: cx - w / 2, x1: cx + w / 2, y0: top, y1: top + h, text: sp.name, kind: 'label', space: sp.id });
         return true;
       }
@@ -111,6 +117,7 @@ export function placeLabels(plan: LevelPlan, v: View, items: Placement[], swings
       // Items on top of a removed piece go with it.
       for (const p of live) if (p.layer === 'top' && victim.kind === 'counter' && overlaps(footprint(p), footprint(victim))) removed.add(p.id);
     }
+    if (!done && lastResort(ty.font).length) done = attemptWith(removed, lastResort(ty.font));
     if (!done && !sp.outdoor) missing.push(sp.id);
   }
   return { svg, boxes, removed, missing };
@@ -146,15 +153,15 @@ function bestSpot(parts: Rect[], w: number, h: number, obstacles: Rect[], softs:
   return best;
 }
 
-function labelSvg(sp: SpaceInfo, va: Variant, cx: number, top: number): string {
-  const lb = boxSize(sp, va);
+function labelSvg(sp: SpaceInfo, va: Variant, cx: number, top: number, ty: Typography): string {
+  const lb = boxSize(sp, va, ty);
   if (va.vertical) {
-    return [...sp.name].map((ch, i) => `<text${attrs({ x: cx, y: top + va.cn * (1.08 * i + 0.88), 'text-anchor': 'middle', 'font-family': font.cjk, 'font-size': va.cn, fill: color.labelCn })}>${escapeXml(ch)}</text>`).join('');
+    return [...sp.name].map((ch, i) => `<text${attrs({ x: cx, y: top + va.cn * (1.08 * i + 0.88), 'text-anchor': 'middle', 'font-family': ty.font.cjk, 'font-size': va.cn, fill: color.labelCn })}>${escapeXml(ch)}</text>`).join('');
   }
-  let s = `<text${attrs({ x: cx, y: top + va.cn * 0.88, 'text-anchor': 'middle', 'font-family': font.cjk, 'font-size': va.cn, fill: color.labelCn })}>${escapeXml(sp.name)}</text>`;
+  let s = `<text${attrs({ x: cx, y: top + va.cn * 0.88, 'text-anchor': 'middle', 'font-family': ty.font.cjk, 'font-size': va.cn, fill: color.labelCn })}>${escapeXml(sp.name)}</text>`;
   if (lb.en && va.en) {
-    const tr = font.enTracking * va.en;
-    s += `<text${attrs({ x: cx + tr / 2, y: top + va.cn + font.labelGap + va.en * 0.8, 'text-anchor': 'middle', 'font-family': font.latin, 'font-size': va.en, 'letter-spacing': f(tr), fill: color.labelEn })}>${escapeXml(lb.en)}</text>`;
+    const tr = ty.font.enTracking * va.en;
+    s += `<text${attrs({ x: cx + tr / 2, y: top + va.cn + ty.font.labelGap + va.en * 0.8, 'text-anchor': 'middle', 'font-family': ty.font.latin, 'font-size': va.en, 'letter-spacing': f(tr), fill: color.labelEn })}>${escapeXml(lb.en)}</text>`;
   }
   return s;
 }

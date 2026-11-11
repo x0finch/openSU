@@ -30,6 +30,14 @@ export function presetById(id: ViewId): ViewPreset {
   return VIEW_PRESETS.find((v) => v.id === id)!;
 }
 
+/**
+ * The camera of a level cutaway: the axonometric looks down steeper (50 deg,
+ * VISUAL_SPEC) with a little more margin, as the render demo's cut views.
+ */
+export function cutawayPreset(p: ViewPreset): ViewPreset {
+  return p.kind === 'axo' ? { ...p, elevationDeg: 50, margin: 0.15 } : p;
+}
+
 export function isViewId(s: unknown): s is ViewId {
   return VIEW_PRESETS.some((v) => v.id === s);
 }

@@ -154,6 +154,26 @@ export const physical = {
 } as const;
 
 /**
+ * Physical sun study with a level cutaway: the interior reads light and calm
+ * so sun patches are the hero. Applied only while both are active; every
+ * other mode keeps the bands of `shading`.
+ * - interior floors in shade show `floorShade`; sunlit floor patches are
+ *   `floorSunBase` with the warm `floorSunTint` multiplied over it;
+ * - walls in a cast shadow use the "turned away" tone (`shading.awayTone`),
+ *   not the darker cast-shadow tone;
+ * - outdoor surfaces (paving, gravel, decks) in a cast shadow use the light
+ *   ground-shadow tone (`shading.groundShadowTone`).
+ */
+export const cutawayLight = {
+  /** Interior floor in shade (final colour). */
+  floorShade: '#CBC8C3',
+  /** Sunlit interior floor before the warm tint (final colour = base x tint). */
+  floorSunBase: '#F5F3EF',
+  /** Warm tint multiplied over sunlit interior floor. */
+  floorSunTint: '#FFF3D9',
+} as const;
+
+/**
  * Procedural surface patterns. Canvas units: one texture covers 1 m x 1 m
  * on a 512 px canvas.
  */
@@ -225,5 +245,5 @@ export const cameras = {
   margin: 0.12,
 } as const;
 
-export const tokens = { stage, shading, lighting, sun, lines, materials, patterns, entourage, cameras, cutaway, physical } as const;
+export const tokens = { stage, shading, lighting, sun, lines, materials, patterns, entourage, cameras, cutaway, physical, cutawayLight } as const;
 export type Tokens = typeof tokens;
