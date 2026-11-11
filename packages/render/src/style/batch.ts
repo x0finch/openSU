@@ -2,7 +2,7 @@ import { BufferGeometry, Float32BufferAttribute, Group, type Material, Mesh, typ
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import type { LineMaterial } from 'three/addons/lines/LineMaterial.js';
 import { appendDirections, appendSegments, createLineObject, dedupeSegments, EdgeAdjacency, featureEdgePositions } from './edges.js';
-import { twinMaterial } from './materials.js';
+import { setShadowLight, twinMaterial } from './materials.js';
 
 /**
  * Per-object flags read by the baker (set on `object.userData`):
@@ -19,6 +19,9 @@ import { twinMaterial } from './materials.js';
  *                          its own. The group 'house' is clippable: its
  *                          materials are twins that can take clipping planes.
  * - `noFrame: true`       not part of framing and shadow bounds
+ * - `interior: true`      inside the house though not clippable (stairs): it
+ *                          takes the interior sun's shadows (see
+ *                          `setShadowLight`), as the clippable group does
  */
 export interface BakeResult {
   group: Group;
@@ -38,6 +41,7 @@ const DEFAULT_GROUP = 'site';
 
 interface Bucket {
   material: Material;
+  interior: boolean;
   cast: boolean;
   receive: boolean;
   group: string;
@@ -87,7 +91,19 @@ export function bakeScene(root: Object3D, edgeMaterial: LineMaterial, floorMater
   const twins = new Map<Material, Material>();
   const twin = (m: Material) => {
     let t = twins.get(m);
-    if (!t) twins.set(m, (t = twinMaterial(m)));
+    if (!t) {
+      twins.set(m, (t = twinMaterial(m)));
+      setShadowLight(t, 0);
+    }
+    return t;
+  };
+  const interiorTwins = new Map<Material, Material>();
+  const interiorTwin = (m: Material) => {
+    let t = interiorTwins.get(m);
+    if (!t) {
+      interiorTwins.set(m, (t = twinMaterial(m)));
+      setShadowLight(t, 0);
+    }
     return t;
   };
   const tagEdges = (group: string) => {
@@ -122,11 +138,12 @@ export function bakeScene(root: Object3D, edgeMaterial: LineMaterial, floorMater
     if (obj.userData.edges !== false) featureEdgePositions(geo, obj.matrixWorld, edgePos, obj.userData.edgeAngle as number | undefined);
     tagEdges(group);
     const noFrame = !!obj.userData.noFrame;
+    const interior = !!obj.userData.interior && group !== CLIP_GROUP && !material.transparent;
     const bucketGroup = material.transparent ? '*' : group;
-    const key = `${bucketGroup}:${material.uuid}:${obj.castShadow}:${obj.receiveShadow}:${noFrame}`;
+    const key = `${bucketGroup}:${material.uuid}:${obj.castShadow}:${obj.receiveShadow}:${noFrame}:${interior}`;
     let bucket = buckets.get(key);
     if (!bucket) {
-      bucket = { material, cast: obj.castShadow, receive: obj.receiveShadow, group, noFrame, geos: [] };
+      bucket = { material, interior, cast: obj.castShadow, receive: obj.receiveShadow, group, noFrame, geos: [] };
       buckets.set(key, bucket);
     }
     if (material.transparent && group === CLIP_GROUP) bucket.group = CLIP_GROUP;
@@ -155,6 +172,7 @@ export function bakeScene(root: Object3D, edgeMaterial: LineMaterial, floorMater
     merged.computeBoundingBox();
     merged.computeBoundingSphere();
     let material = b.material;
+    if (b.interior) material = interiorTwin(material);
     if (b.group === CLIP_GROUP) {
       // Transparent buckets keep their material (house only); opaque ones get a twin.
       if (!material.transparent) material = twin(material);

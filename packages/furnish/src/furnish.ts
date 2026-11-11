@@ -1,7 +1,7 @@
 // Furniture placement for one level. Independent of SVG: it returns plain
 // placements the plan draws and the 3D interior can reuse.
-import type { LevelPlan, SpaceInfo } from '../analyse';
-import type { Pt, Rect } from '../geom';
+import type { LevelPlan, SpaceInfo } from './analyse';
+import type { Pt, Rect } from './geom';
 import { Room } from './engine';
 import { furnishRoom } from './rules';
 import type { Placement } from './types';

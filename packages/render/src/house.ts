@@ -23,6 +23,11 @@ export const MATERIAL_SLOTS: Record<MaterialSlot, PaletteKey> = {
   soil: 'soil',
   floor: 'floor',
   cut: 'cut',
+  furniture: 'furniture',
+  furnitureWood: 'furnitureWood',
+  textile: 'textile',
+  fixture: 'fixture',
+  furnitureDark: 'furnitureDark',
 };
 
 /** Shadow flags per slot: transparent glazing neither casts nor receives. */
@@ -123,6 +128,7 @@ export function createHouseObject(geometry: HouseGeometry, pal: Palette): HouseO
     mesh.userData.partId = part.id;
     mesh.userData.role = part.role;
     if (part.level) mesh.userData.level = part.level;
+    if (part.role === 'stair') mesh.userData.interior = true;
     mesh.userData.bakeGroup = !part.level ? BAKE_GROUP.site
       : part.role === 'cut' ? BAKE_GROUP.cut(part.level)
       : part.role === 'stair' ? BAKE_GROUP.level(part.level)
@@ -132,9 +138,9 @@ export function createHouseObject(geometry: HouseGeometry, pal: Palette): HouseO
       mesh.userData.lineNormals = Array.from(toScene(part.edgeNormals));
     }
     root.add(mesh);
-    // Floor finishes (partly below grade) and section caps lie inside the
-    // building: they never take part in framing or shadow fitting.
-    if (part.role === 'floor' || part.role === 'cut') {
+    // Floor finishes (partly below grade), section caps and furniture lie
+    // inside the building: they never take part in framing or shadow fitting.
+    if (part.role === 'floor' || part.role === 'cut' || part.role === 'furniture') {
       mesh.userData.noFrame = true;
       continue;
     }
@@ -161,19 +167,23 @@ export function createHouseObject(geometry: HouseGeometry, pal: Palette): HouseO
     if (upper) obj.userData.level = upper;
     obj.position.set(e.position[0], e.position[2], -e.position[1]);
     obj.rotation.y += e.rotation;
-    if (e.clip) clipFoliage(obj, e.clip);
+    if (e.clip || PLANTS.has(e.kind)) clipFoliage(obj, e.clip, PLANTS.has(e.kind) ? geometry.interiors ?? [] : []);
     root.add(obj);
   }
   root.userData.site = geometry.site;
   root.userData.levels = geometry.levels;
+  root.userData.walk = geometry.walk;
   return { root, framePoints };
 }
 
+const PLANTS = new Set<EntouragePlacement['kind']>(['ginkgo', 'maple-red', 'maple-green', 'bamboo', 'grass']);
+
 /**
  * Drops triangles whose centroid lies below `clip.below` and outside the
- * plan box (model metres): stray leaves through fence or wall faces.
+ * plan box (model metres), or inside the house (`interiors`): stray leaves
+ * through fence or wall faces, never a branch growing into a room.
  */
-function clipFoliage(obj: Object3D, clip: NonNullable<EntouragePlacement['clip']>): void {
+function clipFoliage(obj: Object3D, clip: EntouragePlacement['clip'] | undefined, interiors: HouseGeometry['interiors']): void {
   obj.updateMatrixWorld(true);
   const v = new Vector3();
   obj.traverse((m) => {
@@ -188,8 +198,9 @@ function clipFoliage(obj: Object3D, clip: NonNullable<EntouragePlacement['clip']
         v.fromBufferAttribute(pos, t + k).applyMatrix4(m.matrixWorld);
         x += v.x / 3; y += -v.z / 3; z += v.y / 3;
       }
-      const out = x < clip.min[0] || x > clip.max[0] || y < clip.min[1] || y > clip.max[1];
-      if (!(out && z < clip.below)) keep.push(t);
+      const out = !!clip && (x < clip.min[0] || x > clip.max[0] || y < clip.min[1] || y > clip.max[1]) && z < clip.below;
+      const indoors = interiors.some((b) => x > b.rect[0] && x < b.rect[2] && y > b.rect[1] && y < b.rect[3] && z > b.z0 && z < b.z1);
+      if (!out && !indoors) keep.push(t);
     }
     if (keep.length * 3 === pos.count) return;
     const ng = new BufferGeometry();

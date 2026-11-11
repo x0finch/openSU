@@ -1,7 +1,7 @@
 // Walls (poche with clean joins), the heavy outer line, openings and rails.
 import type { ResolvedWall, Side } from '@opensu/model';
-import type { LevelPlan, OpeningInfo } from '../analyse';
-import { rect, rectUnionRings, type Pt, type Rect } from '../geom';
+import type { LevelPlan, OpeningInfo } from '@opensu/furnish';
+import { rect, rectUnionRings, type Pt, type Rect } from '@opensu/furnish';
 import { attrs, f, line, pathOfRings, rectEl, type View } from '../svg';
 import { color, mm, stroke } from '../tokens';
 

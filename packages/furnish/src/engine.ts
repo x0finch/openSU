@@ -1,7 +1,7 @@
 // Placement engine: rooms, wall profiles and collision-checked groups.
 import type { Side } from '@opensu/model';
-import type { LevelPlan, SpaceInfo } from '../analyse';
-import { contains, intersection, overlaps, type Rect } from '../geom';
+import type { LevelPlan, SpaceInfo } from './analyse';
+import { contains, intersection, overlaps, type Rect } from './geom';
 import type { FurnitureKind, Placement } from './types';
 
 /** What a stretch of a room side is made of. */

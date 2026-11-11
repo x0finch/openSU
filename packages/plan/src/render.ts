@@ -1,15 +1,15 @@
 // renderPlan: ResolvedHouse + level -> presentation floor plan as SVG.
 import type { ResolvedHouse } from '@opensu/model';
-import { analyseLevel, levelIndexOf, openingCanopy, type LevelPlan } from './analyse';
+import { analyseLevel, levelIndexOf, openingCanopy, type LevelPlan } from '@opensu/furnish';
 import { drawDims } from './draw/dims';
 import { drawGates, drawOpenings, drawRails, drawSlabEdges, drawWalls } from './draw/building';
 import { northArrow, titleBlock } from './draw/decor';
 import { placeLabels, type TextBox } from './draw/labels';
 import { drawStair } from './draw/stairs';
 import { symbol } from './draw/symbols';
-import { furnishLevel } from './furnish/index';
-import { footprint, type Placement } from './furnish/types';
-import { bboxOfPoints, inflate, unionBox, type Rect } from './geom';
+import { furnishLevel } from '@opensu/furnish';
+import { footprint, type Placement } from '@opensu/furnish';
+import { bboxOfPoints, inflate, unionBox, type Rect } from '@opensu/furnish';
 import { attrs, f, pathOfRings, rectEl, View } from './svg';
 import { color, layout, SCALE, stroke, typography } from './tokens';
 

@@ -1,7 +1,7 @@
 // Furniture and planting symbols. Each symbol is drawn in a local px frame
 // centred on the piece: x along its width, y front-to-back with the back at
 // -d/2 (top) and the front at +d/2; the caller rotates it to its facing.
-import type { Placement } from '../furnish/types';
+import type { Placement } from '@opensu/furnish';
 import { attrs, f } from '../svg';
 import { color, stroke } from '../tokens';
 

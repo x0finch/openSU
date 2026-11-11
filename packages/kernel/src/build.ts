@@ -2,11 +2,13 @@
 import type { PartSpec } from './mesh';
 import type { ResolvedEdge, ResolvedHouse } from '@opensu/model';
 import {
-  BAR_SIZE, BAR_SPACING, CUT_HEIGHT, DECK, DEFAULT_UTC_OFFSET, FLOOR_SLAB, GROUND_FLOOR, KERB_HEIGHT, OUTDOOR_SLAB, OUTDOOR_SLAB_OUT, RAIL_BAR, RAIL_HEIGHT,
+  BAR_SIZE, BAR_SPACING, CUT_HEIGHT, RISER, STEP_SLAB, DECK, DEFAULT_UTC_OFFSET, FLOOR_SLAB, GROUND_FLOOR, KERB_HEIGHT, OUTDOOR_SLAB, OUTDOOR_SLAB_OUT, RAIL_BAR, RAIL_HEIGHT,
 } from './constants';
 import { Ctx, type Rect, pointInRings } from './context';
 import { extractEdges } from './edges';
 import { placeEntourage } from './entourage';
+import { buildFurniture, inFurniture, planFurniture } from './furniture';
+import { buildWalk } from './walk';
 import { evalPlane, flat } from './massing';
 import { buildOpenings } from './openings';
 import { addRoofWalls, buildFlatRoofsAndCanopies, buildRoofSlabs, pitchedRoofs } from './roof';
@@ -20,6 +22,8 @@ const MM = 0.001;
 export interface BuildOptions {
   /** Fold angle (degrees) above which an edge is drawn. */
   featureAngleDeg?: number;
+  /** Furnish the rooms (default true). */
+  furniture?: boolean;
 }
 
 export interface BuildDetails {
@@ -70,7 +74,15 @@ export function buildHouseDetailed(house: ResolvedHouse, opts: BuildOptions = {}
 
   const covered = (x: number, y: number) =>
     ctx.house.roofs.some((r) => pointInRings(r.rings, x, y)) || ctx.levels.slice(1).some((l) => !!ctx.spaceAt(l.index, x, y));
-  const entourage = placeEntourage(ctx, covered);
+  // Furniture placements first: entourage people keep out of them, and pots
+  // give way to the entourage's own planters.
+  const furnished = opts.furniture === false ? ctx.levels.map(() => []) : planFurniture(ctx);
+  const entourage = placeEntourage(ctx, covered, (li, x, y, r) => inFurniture(furnished[li] ?? [], x, y, r));
+  for (const [li, pieces] of furnished.entries()) {
+    const z = ctx.levels[li]!.elev * MM;
+    furnished[li] = pieces.filter((p) => p.kind !== 'pot-plant' || !entourage.some((e) =>
+      e.kind !== 'car' && !e.kind.startsWith('person') && Math.abs(e.position[2] - z) < 1.2 && Math.hypot(e.position[0] - p.x * MM, e.position[1] - p.y * MM) < 1.2));
+  }
 
   // Massing faces, then pitched roof slabs. Wall tops in a doorway at an
   // upper floor are floor finish.
@@ -81,6 +93,15 @@ export function buildHouseDetailed(house: ResolvedHouse, opts: BuildOptions = {}
       const lv = ctx.levels.find((l) => l.index > 0 && Math.abs(l.elev - z) < 0.5);
       const s = lv && ctx.spaceAt(lv.index, x, y);
       return lv && s && !s.outdoor ? floorSpec(lv.level.id, false) : undefined;
+    },
+    // A terrace or balcony slab over a room is that room's ceiling.
+    bottomPart: (solid, z, x, y) => {
+      if (solid.part.role !== 'slab' || solid.part.material !== 'slab' || !solid.part.level) return undefined;
+      const li = ctx.levelIndex(solid.part.level);
+      const below = ctx.levels[li - 1];
+      const s = below && ctx.spaceAt(below.index, x, y);
+      if (!s || s.outdoor || Math.abs(z - (ctx.levels[li]!.elev - OUTDOOR_SLAB)) > 1) return undefined;
+      return { id: `${solid.part.level}:slab`, level: solid.part.level, role: 'slab', material: 'wall' };
     },
     inside: (x, y, z) => {
       const lv = ctx.levelAtZ(z);
@@ -114,6 +135,45 @@ export function buildHouseDetailed(house: ResolvedHouse, opts: BuildOptions = {}
   const capEx = extractEdges(ctx.parts.list.slice(capFirst).flatMap((p) => p.loops), { featureAngleDeg: opts.featureAngleDeg ?? 25, floorLevels: [] });
   for (const [k, v] of capEx.edges) ex.edges.set(k, v);
 
+  // Furniture: built after the architecture's edges, with edges of its own
+  // (it never changes a line of the house).
+  const furnFirst = ctx.parts.list.length;
+  // Nothing stands taller than the stair flights above it (storerooms under stairs).
+  for (const [li, pieces] of furnished.entries()) {
+    const ramps = stairs.filter((st) => st.walk.level === li).flatMap((st) => st.walk.ramps);
+    if (!ramps.length) continue;
+    furnished[li] = pieces.flatMap((p) => {
+      const ex = Math.abs(Math.cos(p.rotation)) * p.w / 2 + Math.abs(Math.sin(p.rotation)) * p.d / 2;
+      const ey = Math.abs(Math.sin(p.rotation)) * p.w / 2 + Math.abs(Math.cos(p.rotation)) * p.d / 2;
+      let room = Infinity;
+      for (const r of ramps) {
+        if (p.x + ex <= r.rect[0] || p.x - ex >= r.rect[2] || p.y + ey <= r.rect[1] || p.y - ey >= r.rect[3]) continue;
+        // Lowest point of the flight over the piece, less the step slab.
+        const lo = r.axis === 'x' ? [Math.max(p.x - ex, r.rect[0]), Math.min(p.x + ex, r.rect[2])] : [Math.max(p.y - ey, r.rect[1]), Math.min(p.y + ey, r.rect[3])];
+        const zAt = (v: number) => {
+          const span = r.to - r.from;
+          const t = span === 0 ? 0 : Math.min(1, Math.max(0, (v - r.from) / span));
+          return r.z0 + (r.z1 - r.z0) * t;
+        };
+        room = Math.min(room, zAt(lo[0]!), zAt(lo[1]!));
+      }
+      if (room === Infinity) return [p];
+      const h = Math.min(p.h, room - 2 * RISER - STEP_SLAB);
+      return h >= 350 ? [{ ...p, h }] : [];
+    });
+  }
+  const furn = buildFurniture(ctx, furnished);
+  const furnEx = extractEdges(ctx.parts.list.slice(furnFirst).filter((p) => p.spec.castsEdges !== false).flatMap((p) => p.loops), { featureAngleDeg: opts.featureAngleDeg ?? 25, floorLevels: [] });
+  for (const [k, v] of furnEx.edges) ex.edges.set(k, v);
+  // Pots on terraces and balconies get a tuft of planting.
+  furn.pots.forEach((p, i) => {
+    const r = p.size / 2 + 300;
+    entourage.push({
+      kind: 'grass', position: [p.x * MM, p.y * MM, p.z * MM], rotation: 0, scale: Math.max(0.35, Math.min(0.75, p.size * MM * 0.9)), seed: (ctx.seed + 7919 * (i + 1)) >>> 0,
+      clip: { min: [(p.x - r) * MM, (p.y - r) * MM], max: [(p.x + r) * MM, (p.y + r) * MM], below: p.z * MM },
+    });
+  });
+
   const parts: Part[] = [];
   let triangles = 0;
   let edgeCount = 0;
@@ -124,7 +184,7 @@ export function buildHouseDetailed(house: ResolvedHouse, opts: BuildOptions = {}
     const positions = new Float32Array(p.pos.length);
     // Floor finishes (partly below grade) and section caps lie inside the
     // building: they do not count for the bounds.
-    const inner = p.spec.role === 'floor' || p.spec.role === 'cut';
+    const inner = p.spec.role === 'floor' || p.spec.role === 'cut' || p.spec.role === 'furniture';
     for (let i = 0; i < p.pos.length; i++) {
       positions[i] = p.pos[i]! * MM;
       if (inner) continue;
@@ -157,6 +217,12 @@ export function buildHouseDetailed(house: ResolvedHouse, opts: BuildOptions = {}
     levels,
     floorLines: new Float32Array(ex.floorLines.map((v) => v * MM)),
     entourage,
+    furniture: furn.boxes,
+    walk: buildWalk(ctx, stairs, furn.boxes, entourage),
+    interiors: ctx.levels.flatMap((lv, i) => {
+      const z1 = (ctx.levels[i + 1]?.elev ?? lv.top) * MM;
+      return ctx.rects(ctx.cellsOf(lv.index, (s) => !s.outdoor)).map((r) => ({ rect: [r[0] * MM, r[1] * MM, r[2] * MM, r[3] * MM] as [number, number, number, number], z0: lv.elev * MM, z1 }));
+    }),
     bounds: { min: min.map((v) => v * MM) as [number, number, number], max: max.map((v) => v * MM) as [number, number, number] },
     stats: { triangles, edges: edgeCount },
   };

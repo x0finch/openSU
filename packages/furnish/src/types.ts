@@ -1,7 +1,7 @@
 // Furniture placements: plain data shared by the plan drawing and (later)
 // the 3D interior. Millimetres, model axes (X east, Y north).
 import type { Side } from '@opensu/model';
-import type { Rect } from '../geom';
+import type { Rect } from './geom';
 
 export type FurnitureKind =
   | 'bed' | 'nightstand' | 'wardrobe' | 'rug' | 'rug-round'

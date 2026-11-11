@@ -9,6 +9,7 @@ declare global {
     __shotReady?: boolean;
     __stats?: SceneStats;
     __measureShadows?: (frames?: number) => { withShadows: number; withoutShadows: number };
+    __walk?: (forward: number, strafe?: number) => unknown;
   }
 }
 
@@ -150,9 +151,37 @@ window.addEventListener('resize', () => viewer.resize());
 applyView(initial.id);
 applyLighting();
 
+// ---- walk: ?walk=L1 (start or the level's stair arrival), &at=x,y (metres), &heading=deg, &pitch=deg
+const walkParam = params.get('walk');
+if (walkParam) {
+  const at = (params.get('at') ?? '').split(',').map(Number);
+  const heading = params.get('heading');
+  const pitch = params.get('pitch');
+  viewer.enterWalk({
+    level: walkParam === 'start' ? undefined : walkParam,
+    ...(at.length === 2 && at.every(Number.isFinite) ? { position: [at[0]!, at[1]!] as [number, number] } : {}),
+    ...(heading ? { headingDeg: Number(heading) } : {}),
+    ...(pitch ? { pitchDeg: Number(pitch) } : {}),
+  });
+  (controls as OrbitControls | null)?.dispose();
+  const w = viewer.walk!;
+  const walkEl = document.getElementById('walk');
+  const show = () => {
+    const st = w.state;
+    if (walkEl) walkEl.textContent = `walk ${st.level} x ${st.x.toFixed(2)} y ${st.y.toFixed(2)} z ${st.z.toFixed(2)} heading ${st.headingDeg.toFixed(0)}`;
+  };
+  w.onChange = show;
+  show();
+}
+
 const stats = viewer.renderNow();
 console.log(`[openSU] ${stats.triangles} triangles, ${stats.drawCalls} draw calls (${stats.drawCallsWithShadows} incl. shadow pass)`);
 window.__stats = stats;
 window.__measureShadows = (frames) => viewer.measureShadowUpdate(frames);
 (window as unknown as { __viewer: IllustrationViewer }).__viewer = viewer;
+window.__walk = (forward, strafe = 0) => {
+  viewer.walk?.step(forward, strafe);
+  viewer.renderNow();
+  return viewer.walkState;
+};
 window.__shotReady = true;

@@ -72,6 +72,18 @@ locked in `packages/render/src/style/tokens.ts`.
   grey `#9A9A9A` (the plan's wall fill) with their outline. Stairs stay
   whole; site and garden are never cut. Cutaway axonometrics look down
   steeper (50 deg).
+- Cutaway with the physical sun: hidden parts shade the inside of the house
+  only, never the garden or the ground outside.
+- Furniture: white-model volumes with edge lines, accents in warm wood
+  (tables), light textile grey (sofas, beds, rugs), dark details (screens,
+  hobs); cut at the section plane like the walls.
+
+### Walk mode (eye level inside)
+- First person, 1.6 m eye, ~65 deg vertical field of view, horizontal view
+  axis by default (verticals vertical).
+- Calm light interior: white surfaces out of the sun `#E6E4E0`, ceilings
+  `#EEECE8`, floors in shade `#D2CEC8`, warm sun patches; window glass
+  light from inside so the garden reads; no people silhouettes close up.
 
 ## Floor plans (SVG)
 - Walls: mid-grey fill `#9A9A9A` with dark outline `#3A3A3A`; exterior walls

@@ -21,6 +21,7 @@ export default defineConfig({
       '@opensu/agent/starter': fileURLToPath(new URL('../../packages/agent/src/starter.ts', import.meta.url)),
       '@opensu/agent': src('agent'),
       '@opensu/model': src('model'),
+      '@opensu/furnish': src('furnish'),
       '@opensu/kernel': src('kernel'),
       '@opensu/render': src('render'),
       '@opensu/plan': src('plan'),

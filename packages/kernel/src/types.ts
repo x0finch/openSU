@@ -20,7 +20,15 @@ export type MaterialSlot =
   /** Interior floor finish. */
   | 'floor'
   /** Cut face of a level cutaway (section through walls). */
-  | 'cut';
+  | 'cut'
+  /** Furniture: white body, warm wood (tables), light textiles (sofas,
+   *  beds, rugs), light grey fixtures (worktops, basins), dark details
+   *  (screens, hobs, frames). */
+  | 'furniture'
+  | 'furnitureWood'
+  | 'textile'
+  | 'fixture'
+  | 'furnitureDark';
 
 export type PartRole =
   | 'wall'
@@ -40,7 +48,9 @@ export type PartRole =
   | 'skylight'
   | 'floor'
   /** Section caps at the level's cut height; shown only in a cutaway. */
-  | 'cut';
+  | 'cut'
+  /** Furniture (from `@opensu/furnish`); never clipped, hidden with its level. */
+  | 'furniture';
 
 export interface Part {
   /** Stable id derived from model ids, e.g. "L2:wall", "roof-n:tile". */
@@ -109,6 +119,51 @@ export interface LevelSpan {
   cutZ: number;
 }
 
+/** A built piece of furniture (for tests, picking and collision). */
+export interface FurnitureBox {
+  id: string;
+  level: string;
+  kind: string;
+  /** Axis-aligned bounds, metres, model axes. */
+  min: [number, number, number];
+  max: [number, number, number];
+}
+
+/** Plan rectangle [x0, y0, x1, y1], metres. */
+export type PlanRect = [number, number, number, number];
+
+/**
+ * A walkable surface: a plan rectangle at a height, flat or (stair flights)
+ * rising linearly along one axis.
+ */
+export interface WalkSurface {
+  level: string;
+  rect: PlanRect;
+  /** Height of a flat surface (metres). */
+  z: number;
+  /** Stair flight: height `z0` at `from` rising to `z1` at `to` along `axis`. */
+  ramp?: { axis: 'x' | 'y'; from: number; to: number; z0: number; z1: number };
+}
+
+/** Something that stops a walker whose body overlaps its height range. */
+export interface WalkBlocker {
+  rect: PlanRect;
+  z0: number;
+  z1: number;
+  kind: 'wall' | 'window' | 'rail' | 'fence' | 'furniture' | 'car';
+}
+
+/** Collision and ground data for walking through the house (metres). */
+export interface WalkData {
+  surfaces: WalkSurface[];
+  blockers: WalkBlocker[];
+  /** Inside the main entrance, looking into the house. `headingDeg` is a
+   *  bearing in model axes (0 = +Y, 90 = +X). */
+  start: { level: string; position: [number, number]; headingDeg: number };
+  /** Per level: a good arrival point (stair top or start) for level jumps. */
+  arrivals: { level: string; position: [number, number]; headingDeg: number }[];
+}
+
 export interface HouseGeometry {
   parts: Part[];
   site: SiteInfo;
@@ -117,7 +172,16 @@ export interface HouseGeometry {
   /** Floor-level marker lines on facades (segment pairs), metres. */
   floorLines: Float32Array;
   entourage: EntouragePlacement[];
-  /** Metres, Z up. Architecture only (entourage excluded). */
+  /** Furniture pieces (their meshes are parts with role `furniture`). */
+  furniture: FurnitureBox[];
+  /** Collision and ground data for walk mode. */
+  walk: WalkData;
+  /**
+   * Interior volumes (plan rect on wall centre lines, z range), metres: the
+   * renderer keeps foliage out of them so no leaf grows through a wall.
+   */
+  interiors: { rect: PlanRect; z0: number; z1: number }[];
+  /** Metres, Z up. Architecture only (entourage and furniture excluded). */
   bounds: { min: [number, number, number]; max: [number, number, number] };
   stats: { triangles: number; edges: number };
 }

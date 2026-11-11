@@ -3,6 +3,7 @@ import {
   type Camera,
   Color,
   Mesh,
+  MeshDepthMaterial,
   NoToneMapping,
   type Object3D,
   OrthographicCamera,
@@ -16,14 +17,28 @@ import {
   WebGLRenderer,
 } from 'three';
 import type { LineMaterial } from 'three/addons/lines/LineMaterial.js';
-import { bakeScene } from './style/batch.js';
+import { bakeScene, CLIP_GROUP } from './style/batch.js';
 import { applyLensShift, applyOrthoAspect, cameraForView, type ViewPreset } from './style/cameras.js';
 import { defaultLighting, type LightingMode, sunForView } from './style/lighting.js';
 import { createGround } from './style/ground.js';
 import { createLineMaterial, createPalette, type Palette, setToneFactors, toneFactor, toneToward } from './style/materials.js';
 import { Sun } from './style/sun.js';
-import { cutaway as cutTokens, cutawayLight, lines, materials as matTokens, physical as physTokens, shading, stage } from './style/tokens.js';
+import { cutaway as cutTokens, cutawayLight, lines, materials as matTokens, physical as physTokens, shading, stage, walk as walkTokens, walkLight } from './style/tokens.js';
 import { type StudySite, studySun, type StudySun } from './sun/study.js';
+import type { WalkData } from '@opensu/kernel';
+import { WalkController, type WalkState } from './walk/controller.js';
+import { WalkWorld } from './walk/world.js';
+
+/** Where to start walking (defaults: the main entrance, or a level's arrival point). */
+export interface WalkOptions {
+  /** Storey to start on (its stair arrival point unless `position` is given). */
+  level?: string;
+  /** Plan position, metres (model axes). */
+  position?: [number, number];
+  /** Bearing to look towards (0 = model north). */
+  headingDeg?: number;
+  pitchDeg?: number;
+}
 import { GROW_DURATION, growHeight, type GrowOptions } from './grow.js';
 
 /** A storey as the kernel reports it (metres). */
@@ -86,6 +101,12 @@ export class IllustrationViewer {
   private shadowsDirty = true;
   private billboardAngle = NaN;
   private study: StudySun | null = null;
+  private walkData: WalkData | null = null;
+  private walker: WalkController | null = null;
+  /** Cutaway and view to return to after walking. */
+  private beforeWalk: { cut: string | null; preset: ViewPreset | null } | null = null;
+  /** Presentation sun bearing while walking (fixed at entry, so turning never moves shadows). */
+  private walkSunAzimuth = 0;
   /** Height of the grow clip plane while `playGrow` runs (scene metres). */
   private growZ: number | null = null;
   private growFrame = 0;
@@ -111,7 +132,7 @@ export class IllustrationViewer {
     this.edgeMaterial = createLineMaterial(lines.color, lines.width, lines.profileWidth);
     this.floorMaterial = createLineMaterial(lines.floorLineColor, lines.floorLineWidth);
     this.scene.background = new Color(stage.background);
-    this.scene.add(this.sun.light, this.sun.target);
+    this.scene.add(this.sun.light, this.sun.outdoor, this.sun.target);
     this.resize();
   }
 
@@ -130,7 +151,29 @@ export class IllustrationViewer {
     this.levels = (root.userData.levels as ViewerLevel[] | undefined) ?? [];
     const site = root.userData.site as StudySite | undefined;
     if (site) this.site = site;
+    this.walkData = (root.userData.walk as WalkData | undefined) ?? null;
+    // Walking through a house that changes (an edit, a new house): keep
+    // walking in the new one from the same spot when it is still free,
+    // else from its entrance. The walker is replaced (`walk` changes).
+    const resume = this.walker ? this.walker.state : null;
+    if (this.walker) {
+      this.walker.dispose();
+      this.walker = null;
+    }
     for (const m of this.clipLineMaterials) m.resolution.copy(this.edgeMaterial.resolution);
+    // The outdoor sun never sees what a cutaway hides: clippable meshes clip
+    // their shadow-depth pass for that light only.
+    const outdoorCam = this.sun.outdoor.shadow.camera;
+    const plane = this.clipPlane;
+    for (const o of this.groups.get(CLIP_GROUP) ?? []) {
+      if (!isSurface(o) || !o.castShadow) continue;
+      o.customDepthMaterial = new MeshDepthMaterial();
+      o.onBeforeShadow = (_r, _o, _c, shadowCamera, _g, depth) => {
+        if (shadowCamera !== outdoorCam || !this.sun.outdoor.visible) return;
+        depth.clippingPlanes = [plane];
+        depth.clipShadows = true;
+      };
+    }
     if (this.cutLevel && !this.levels.some((l) => l.id === this.cutLevel)) this.cutLevel = null;
     this.scene.add(baked.group);
     this.bounds.makeEmpty();
@@ -161,10 +204,26 @@ export class IllustrationViewer {
     });
     const ground = createGround(this.bounds, this.palette.ground);
     baked.group.add(ground);
+    if (resume && this.walkData) {
+      const lv = this.levels.find((l) => l.id === resume.level);
+      this.enterWalk({ ...(lv ? { level: lv.id, position: [resume.x, resume.y] as [number, number] } : {}), headingDeg: resume.headingDeg, pitchDeg: resume.pitchDeg });
+      return;
+    }
+    if (resume && this.beforeWalk) {
+      // The new content cannot be walked: back to the view shown before.
+      this.cutLevel = this.beforeWalk.cut;
+      this.preset = this.beforeWalk.preset;
+      this.beforeWalk = null;
+    }
     this.applyCutaway();
     this.applySun();
     if (this.preset) this.setView(this.preset);
     this.requestRender();
+  }
+
+  /** Per level, the walk's arrival point (stair top; the entrance on the ground floor). */
+  get walkArrivals(): WalkData['arrivals'] {
+    return this.walkData?.arrivals ?? [];
   }
 
   /** Site of the sun study (taken from the content when it carries one). */
@@ -226,9 +285,14 @@ export class IllustrationViewer {
         const idx = this.levels.findIndex((l) => l.id === name.slice(6));
         visible = (!level || idx <= li) && (growZ === null || (this.levels[idx]?.elevation ?? 0) < growZ);
       }
-      for (const o of objs) o.visible = visible;
+      // People are flat silhouettes for the views from outside; at eye
+      // level, close up, they would read as cardboard: hidden while walking.
+      for (const o of objs) o.visible = visible && !(this.walker && o.userData.billboard);
     }
-    this.applyInteriorTones(!!level && physical);
+    this.applyInteriorTones(this.walker ? 'walk' : !!level && physical ? 'cutaway' : null);
+    // Cutaway shadow rule: with the physical sun the hidden parts shade the
+    // inside of the house but never the garden (a second, outdoor sun).
+    this.sun.outdoor.visible = !!level && physical;
     this.shadowsDirty = true;
   }
 
@@ -237,18 +301,100 @@ export class IllustrationViewer {
    * tokens): lifted floor shade with warm sun patches, walls in cast shadow
    * at the turned-away tone, outdoor surfaces at the ground-shadow tone.
    */
-  private applyInteriorTones(on: boolean): void {
+  private applyInteriorTones(mode: 'cutaway' | 'walk' | null): void {
     const p = this.palette;
-    if (!on) {
-      for (const m of [p.floor, p.wall, p.paving, p.gravel, p.deck]) setToneFactors(m, null);
-      return;
-    }
-    const shade = toneToward(matTokens.floor, cutawayLight.floorShade);
+    const furniture = [p.furniture, p.furnitureWood, p.textile, p.fixture, p.furnitureDark];
+    for (const m of [p.floor, p.wall, p.paving, p.gravel, p.deck, ...furniture]) setToneFactors(m, null);
+    for (const [m, o] of [[p.glass, matTokens.glassOpacity], [p.balustrade, matTokens.balustradeOpacity]] as const) m.opacity = mode === 'walk' ? (m === p.glass ? walkTokens.glassOpacity : walkTokens.balustradeOpacity) : o;
+    if (!mode) return;
     const sun = toneToward(matTokens.floor, cutawayLight.floorSunBase).multiply(toneFactor(cutawayLight.floorSunTint));
-    setToneFactors(p.floor, { sun, away: shade, shadow: shade });
-    setToneFactors(p.wall, { shadow: toneFactor(shading.awayTone) });
     const ground = { shadow: toneFactor(shading.groundShadowTone) };
     for (const m of [p.paving, p.gravel, p.deck]) setToneFactors(m, ground);
+    if (mode === 'cutaway') {
+      const shade = toneToward(matTokens.floor, cutawayLight.floorShade);
+      setToneFactors(p.floor, { sun, away: shade, shadow: shade });
+      setToneFactors(p.wall, { shadow: toneFactor(shading.awayTone) });
+      for (const m of furniture) setToneFactors(m, { shadow: toneFactor(shading.awayTone) });
+      return;
+    }
+    // Walk: a light interior; sun patches are the accent.
+    const shade = toneToward(matTokens.floor, walkLight.floorShade);
+    setToneFactors(p.floor, { sun, away: shade, shadow: shade });
+    const white = { away: toneFactor(walkLight.wallShade), shadow: toneFactor(walkLight.wallShadow) };
+    setToneFactors(p.wall, { ...white, ceiling: toneFactor(walkLight.ceiling) });
+    for (const m of furniture) setToneFactors(m, white);
+  }
+
+  /** True while walking. */
+  get walking(): boolean {
+    return !!this.walker;
+  }
+
+  /** The walk controller while walking (input, position, events). */
+  get walk(): WalkController | null {
+    return this.walker;
+  }
+
+  /** Whether the content can be walked (it carries the kernel's walk data). */
+  get canWalk(): boolean {
+    return !!this.walkData;
+  }
+
+  /**
+   * First-person walk: a perspective camera at eye height (1.6 m), wide
+   * field of view, collisions with walls, windows, rails and furniture;
+   * doors and stairs are passable. Clears the cutaway (restored by
+   * `exitWalk`). Either lighting mode works.
+   */
+  enterWalk(opts: WalkOptions = {}): WalkController {
+    if (!this.walkData) throw new Error('enterWalk: the content has no walk data (use createHouseObject on kernel output)');
+    this.walker?.dispose();
+    const data = this.walkData;
+    const arrival = opts.level ? data.arrivals.find((a) => a.level === opts.level) : undefined;
+    const base = arrival ?? data.start;
+    const lv = this.levels.find((l) => l.id === (opts.level ?? base.level)) ?? this.levels[0];
+    const pos = opts.position ?? base.position;
+    const world = new WalkWorld(data, { radius: walkTokens.bodyRadius, stepUp: walkTokens.stepUp });
+    if (!this.beforeWalk) this.beforeWalk = { cut: this.cutLevel, preset: this.preset };
+    this.cutLevel = null;
+    let at = { x: pos[0], y: pos[1], z: lv?.elevation ?? 0, headingDeg: opts.headingDeg ?? base.headingDeg };
+    if (!world.settle(at.x, at.y, at.z)) {
+      // Nowhere to stand there (a removed room, a bad position): the entrance.
+      const s = data.start;
+      at = { x: s.position[0], y: s.position[1], z: this.levels.find((l) => l.id === s.level)?.elevation ?? 0, headingDeg: s.headingDeg };
+    }
+    const walker = new WalkController({ renderNow: () => this.renderNow(), requestRender: () => this.requestRender(), levels: this.levels }, world, { ...at, pitchDeg: opts.pitchDeg ?? 0 });
+    this.walker = walker;
+    this.preset = null;
+    this.walkSunAzimuth = ((walker.state.headingDeg + 180) % 360);
+    const { width, height } = this.size();
+    walker.setAspect(width / height);
+    this.camera = walker.camera;
+    this.applyCutaway();
+    this.applySun();
+    walker.attach(this.renderer.domElement);
+    this.requestRender();
+    return walker;
+  }
+
+  /** Back to the view (and cutaway) shown before walking. */
+  exitWalk(): void {
+    const w = this.walker;
+    if (!w) return;
+    w.dispose();
+    this.walker = null;
+    const prev = this.beforeWalk;
+    this.beforeWalk = null;
+    this.cutLevel = prev?.cut ?? null;
+    this.applyCutaway();
+    if (prev?.preset) this.setView(prev.preset);
+    else this.applySun();
+    this.requestRender();
+  }
+
+  /** The walker's state (null unless walking). */
+  get walkState(): WalkState | null {
+    return this.walker?.state ?? null;
   }
 
   /**
@@ -306,6 +452,13 @@ export class IllustrationViewer {
   }
 
   setView(preset: ViewPreset): void {
+    if (this.walker) {
+      this.walker.dispose();
+      this.walker = null;
+      this.cutLevel = this.beforeWalk?.cut ?? null;
+      this.beforeWalk = null;
+      this.applyCutaway();
+    }
     this.preset = preset;
     const { width, height } = this.size();
     this.camera = cameraForView(preset, this.viewPoints(), width / height);
@@ -350,8 +503,8 @@ export class IllustrationViewer {
   }
 
   private applySun(): void {
-    const kind = this.preset?.kind ?? 'axo';
-    const az = this.preset?.azimuthDeg ?? 135;
+    const kind = this.walker ? 'eye' : this.preset?.kind ?? 'axo';
+    const az = this.walker ? this.walkSunAzimuth : this.preset?.azimuthDeg ?? 135;
     const mode = this.lighting;
     this.study = null;
     if (mode.mode === 'physical' && !('sun' in mode)) {
@@ -414,7 +567,8 @@ export class IllustrationViewer {
     // Adapt the current camera in place (controls keep their reference).
     const cam = this.camera;
     const aspect = width / height;
-    if (cam instanceof PerspectiveCamera) {
+    if (this.walker && cam === this.walker.camera) this.walker.setAspect(aspect);
+    else if (cam instanceof PerspectiveCamera) {
       if (cam.userData.lensShift) applyLensShift(cam, aspect);
       else {
         cam.aspect = aspect;
@@ -440,8 +594,9 @@ export class IllustrationViewer {
     const dir = new Vector3();
     this.camera.getWorldDirection(dir);
     const angle = Math.atan2(-dir.x, -dir.z);
-    // Billboards cast shadows: turning them changes the shadow map.
-    if (angle !== this.billboardAngle) this.shadowsDirty = true;
+    // Billboards cast shadows: turning them changes the shadow map (not
+    // while walking: every turn of the head would redraw the shadows).
+    if (angle !== this.billboardAngle && !this.walker) this.shadowsDirty = true;
     this.billboardAngle = angle;
     this.scene.traverse((o) => {
       if (o.userData.billboard) {
@@ -480,6 +635,8 @@ export class IllustrationViewer {
   }
 
   dispose(): void {
+    this.walker?.dispose();
+    this.walker = null;
     this.stopGrow();
     this.renderer.dispose();
     this.renderer.domElement.remove();

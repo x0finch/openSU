@@ -67,6 +67,8 @@ export interface MassingOptions {
   inside: (x: number, y: number, z: number) => boolean;
   /** Part for an up-facing top face at height z over plan point (x, y), overriding the solid's (e.g. floor finish in a doorway). */
   topPart?: (solid: Solid, z: number, x: number, y: number) => PartSpec | undefined;
+  /** Part for a down-facing bottom face (e.g. a ceiling under a terrace slab). */
+  bottomPart?: (solid: Solid, z: number, x: number, y: number) => PartSpec | undefined;
 }
 
 /** Column grid kept after `emit` for section queries. */
@@ -125,9 +127,10 @@ export class Massing {
     const hGroups = new Map<string, { part: PartSpec; plane: Plane; up: boolean; cells: number[] }>();
     const addH = (solid: Solid, plane: Plane, up: boolean, cell: number) => {
       let part = up && solid.topPart ? solid.topPart : solid.part;
-      if (up && opts.topPart) {
+      const over = up ? opts.topPart : opts.bottomPart;
+      if (over) {
         const x = (xs[Math.floor(cell / ny)]! + xs[Math.floor(cell / ny) + 1]!) / 2, y = (ys[cell % ny]! + ys[(cell % ny) + 1]!) / 2;
-        part = opts.topPart(solid, evalPlane(plane, x, y), x, y) ?? part;
+        part = over(solid, evalPlane(plane, x, y), x, y) ?? part;
       }
       const key = `${part.id}|${up ? 'u' : 'd'}|${planeKey(plane)}`;
       let g = hGroups.get(key);

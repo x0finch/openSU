@@ -1,7 +1,7 @@
 // Automated overlap checks on a rendered plan: text/text, text/wall,
 // furniture/wall, furniture/door swing, furniture/furniture.
-import { footprint, isSolid } from './furnish/types';
-import { overlaps, type Rect } from './geom';
+import { footprint, isSolid } from '@opensu/furnish';
+import { overlaps, type Rect } from '@opensu/furnish';
 import type { PlanReport } from './render';
 
 export interface Overlap { kind: string; a: string; b: string }

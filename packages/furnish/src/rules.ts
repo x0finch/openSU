@@ -1,8 +1,8 @@
 // Rule-based furniture by space type and size. Deterministic: candidates are
 // tried in a fixed order and the first that fits wins.
 import type { Side } from '@opensu/model';
-import type { SpaceInfo } from '../analyse';
-import { center, contains, height, overlaps, width, type Rect } from '../geom';
+import type { SpaceInfo } from './analyse';
+import { center, contains, height, overlaps, width, type Rect } from './geom';
 import {
   depthFrom, frontOf, isPerp, opposite, rankSides, sideLength, type Group, type LocalItem, type Room,
 } from './engine';

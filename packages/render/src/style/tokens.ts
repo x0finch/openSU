@@ -210,6 +210,23 @@ export const patterns = {
   },
 } as const;
 
+/**
+ * Furniture (white model): mostly white volumes with a few soft accents.
+ * No textures, no gloss; the same tone bands as the architecture.
+ */
+export const furniture = {
+  /** Bodies, cabinets, beds, sanitary ware. */
+  body: '#FFFFFF',
+  /** Table tops, headboards, shelves accents: warm light oak. */
+  wood: '#C9A27B',
+  /** Sofas, armchairs, throws, rugs: light warm grey textile. */
+  textile: '#E2DED8',
+  /** Worktops, basins, shower trays: light cool grey. */
+  fixture: '#D5D9DC',
+  /** Screens, hobs, plinths, chair frames, lamp stems. */
+  dark: '#3C3E41',
+} as const;
+
 /** Entourage: trees, people, cars. */
 export const entourage = {
   ginkgo: '#F2D40F',
@@ -245,5 +262,53 @@ export const cameras = {
   margin: 0.12,
 } as const;
 
-export const tokens = { stage, shading, lighting, sun, lines, materials, patterns, entourage, cameras, cutaway, physical, cutawayLight } as const;
+/** Walk mode: a first-person camera inside the house. */
+export const walk = {
+  /** Eye height above the floor, metres. */
+  eyeHeight: 1.6,
+  /** Vertical field of view on landscape screens, degrees. */
+  fovDeg: 65,
+  /** On portrait screens the vertical field grows until the horizontal one reaches this. */
+  minHorizontalFovDeg: 58,
+  /** Near plane, metres (the body keeps ~0.25 m from walls). */
+  near: 0.05,
+  far: 400,
+  /** Body radius for collisions, metres. */
+  bodyRadius: 0.25,
+  /** Walking and running (Shift) speed, metres per second. */
+  speed: 1.5,
+  fastSpeed: 3.4,
+  /** Turning speed with the arrow keys, degrees per second. */
+  turnSpeedDeg: 95,
+  /** Highest step up or down taken without a stair, metres. */
+  stepUp: 0.45,
+  /** Look sensitivity, degrees per CSS pixel of drag. */
+  lookDegPerPx: 0.22,
+  /** Pitch limits (degrees): verticals stay close to vertical. */
+  maxPitchDeg: 40,
+  /** Seconds the eye takes to settle onto a new floor height (stairs). */
+  heightSmoothing: 0.12,
+  /** Window glass seen from inside: light enough to show the garden. */
+  glassOpacity: 0.18,
+  /** Glass balustrades from inside. */
+  balustradeOpacity: 0.4,
+} as const;
+
+/**
+ * Interior tone bands in walk mode: a calm, light interior where sun
+ * patches are the accent. Final colours of white surfaces (walls, ceilings,
+ * white furniture) out of the sun; floors use the cutaway floor tones.
+ */
+export const walkLight = {
+  /** White surfaces turned away from the sun or in shade. */
+  wallShade: '#E6E4E0',
+  /** White surfaces facing the sun but in a cast shadow. */
+  wallShadow: '#DEDCD8',
+  /** Interior floor in shade (final colour). */
+  floorShade: '#D2CEC8',
+  /** Ceilings (white surfaces facing down). */
+  ceiling: '#EEECE8',
+} as const;
+
+export const tokens = { stage, shading, lighting, sun, lines, materials, furniture, patterns, entourage, cameras, cutaway, physical, cutawayLight, walk, walkLight } as const;
 export type Tokens = typeof tokens;

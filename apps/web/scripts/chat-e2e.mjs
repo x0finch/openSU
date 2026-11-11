@@ -287,6 +287,28 @@ try {
     await shot(page, 'chat-new-house-grow-desktop');
     await waitDone(page, 6);
     await waitGrown(page);
+
+    // 9. Walk through the house the assistant just made: the walk button
+    //    tucks the chat away and starts at the new house's entrance.
+    await page.getByRole('button', { name: '进入室内漫游' }).click();
+    await page.waitForFunction(() => window.__studio?.engine?.viewer?.walking === true, null, { timeout: 30000 });
+    await page.waitForTimeout(400);
+    check((await page.getByTestId('chat-panel').count()) === 0, 'walk mode tucks the chat panel away');
+    const walk = await page.evaluate(() => {
+      const v = window.__studio.engine.viewer;
+      const s0 = v.walkState;
+      const start = v.walkArrivals[0];
+      v.walk.step(0.6);
+      const s1 = v.walkState;
+      return { s0, s1, start };
+    });
+    const atStart = walk.start && Math.hypot(walk.s0.x - walk.start.position[0], walk.s0.y - walk.start.position[1]) < 0.5;
+    check(atStart && Math.hypot(walk.s1.x - walk.s0.x, walk.s1.y - walk.s0.y) > 0.3, `walk follows the edited house: starts at its entrance and moves (${JSON.stringify(walk.s0)})`);
+    await settle(page);
+    await shot(page, 'chat-walk-after-edit-desktop');
+    await page.getByRole('button', { name: '打开 AI 助手' }).click();
+    await page.waitForTimeout(500);
+    check((await page.evaluate(() => window.__studio.engine.viewer.walking)) === false, 'opening the assistant ends the walk');
     await ctx.close();
   }
 

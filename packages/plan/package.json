@@ -19,6 +19,7 @@
     "shots": "tsx --tsconfig tsconfig.tools.json scripts/shots.ts"
   },
   "dependencies": {
+    "@opensu/furnish": "workspace:*",
     "@opensu/model": "workspace:*"
   },
   "devDependencies": {

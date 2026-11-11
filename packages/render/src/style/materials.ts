@@ -9,7 +9,7 @@ import {
   type Texture,
 } from 'three';
 import { LineMaterial } from 'three/addons/lines/LineMaterial.js';
-import { entourage, lines, materials as matTokens, shading } from './tokens.js';
+import { entourage, furniture as furnTokens, lines, materials as matTokens, shading } from './tokens.js';
 import { createRoofTileTexture, createWoodTexture } from './textures.js';
 
 /** Grey-level tones for the three shading bands, as sRGB hex strings. */
@@ -42,11 +42,20 @@ uniform vec3 uAwayTone;
 uniform vec3 uShadowTone;
 uniform float uSunFullAt;
 uniform float uAwayBelow;
+uniform int uShadowLight;
+uniform vec3 uCeilingTone;
+uniform float uCeilingMix;
 float gSunDot = -1.0;
 float gSunVis = 1.0;
+int gLightIndex = 0;
 void RE_Direct_Illustration( const in IncidentLight directLight, const in vec3 geometryPosition, const in vec3 geometryNormal, const in vec3 geometryViewDir, const in vec3 geometryClearcoatNormal, const in LambertMaterial material, inout ReflectedLight reflectedLight ) {
-  gSunDot = dot( geometryNormal, directLight.direction );
-  gSunVis = directLight.color.r;
+  // The sun may come as two lights with the same direction but different
+  // shadow casters (level cutaway): the material picks whose shadows it takes.
+  if ( gLightIndex == 0 || gLightIndex == uShadowLight ) {
+    gSunDot = dot( geometryNormal, directLight.direction );
+    gSunVis = directLight.color.r;
+  }
+  gLightIndex ++;
 }
 #undef RE_Direct
 #define RE_Direct RE_Direct_Illustration
@@ -57,6 +66,9 @@ const ILLUSTRATION_OUT = /* glsl */ `
   float litBand = smoothstep( uAwayBelow, uSunFullAt, gSunDot );
   vec3 sunBand = mix( uShadowTone, uSunTone, gSunVis );
   vec3 tone = mix( uAwayTone, sunBand, litBand );
+  // Ceilings (faces looking straight down) may take their own tone.
+  vec3 worldNormal = inverseTransformDirection( normal, viewMatrix );
+  tone = mix( tone, uCeilingTone, uCeilingMix * step( 0.9, - worldNormal.y ) );
   outgoingLight = diffuseColor.rgb * tone;
 }
 #include <envmap_fragment>
@@ -72,11 +84,33 @@ interface ToneUniforms {
   uSunTone: { value: Color };
   uAwayTone: { value: Color };
   uShadowTone: { value: Color };
+  uCeilingTone: { value: Color };
+  uCeilingMix: { value: number };
   /** The bands the material was created with. */
   base: { sun: Color; away: Color; shadow: Color };
 }
 
 const toneUniforms = new WeakMap<Material, ToneUniforms>();
+const shadowLights = new WeakMap<Material, { value: number }>();
+
+/**
+ * Which sun light's shadows a shaded material receives when the sun comes
+ * as two lights (0 = the interior sun, whose shadows include parts hidden
+ * by a cutaway; 1 = the outdoor sun, whose do not). With one light every
+ * material uses it. Takes effect without a recompile.
+ */
+export function setShadowLight(mat: Material, index: 0 | 1): void {
+  let u = shadowLights.get(mat);
+  if (!u) shadowLights.set(mat, (u = { value: index }));
+  u.value = index;
+}
+
+function shadowLightUniform(mat: Material): { value: number } {
+  let u = shadowLights.get(mat);
+  // Materials of the site (palette originals) take the outdoor sun.
+  if (!u) shadowLights.set(mat, (u = { value: 1 }));
+  return u;
+}
 
 /**
  * Tone bands as colour factors (linear), for `setToneFactors`. A factor is
@@ -87,6 +121,8 @@ export interface ToneFactors {
   sun?: Color;
   away?: Color;
   shadow?: Color;
+  /** Faces looking straight down (ceilings), whatever the sun does. */
+  ceiling?: Color;
 }
 
 /** Linear factor that turns `albedo` into `target` (both sRGB hex). */
@@ -110,6 +146,8 @@ export function setToneFactors(mat: Material, f: ToneFactors | null): void {
   u.uSunTone.value.copy(f?.sun ?? u.base.sun);
   u.uAwayTone.value.copy(f?.away ?? u.base.away);
   u.uShadowTone.value.copy(f?.shadow ?? u.base.shadow);
+  u.uCeilingMix.value = f?.ceiling ? 1 : 0;
+  if (f?.ceiling) u.uCeilingTone.value.copy(f.ceiling);
 }
 
 /**
@@ -146,14 +184,19 @@ export function createShadedMaterial(color: string, opts: ShadedOptions = {}): M
     uSunTone: { value: base.sun.clone() },
     uAwayTone: { value: base.away.clone() },
     uShadowTone: { value: base.shadow.clone() },
+    uCeilingTone: { value: base.away.clone() },
+    uCeilingMix: { value: 0 },
     base,
   };
   toneUniforms.set(mat, uniforms);
-  mat.onBeforeCompile = (shader) => {
+  mat.onBeforeCompile = function (this: Material, shader) {
     // Shared uniform objects: tone overrides reach every twin without a recompile.
+    shader.uniforms.uShadowLight = shadowLightUniform(this);
     shader.uniforms.uSunTone = uniforms.uSunTone;
     shader.uniforms.uAwayTone = uniforms.uAwayTone;
     shader.uniforms.uShadowTone = uniforms.uShadowTone;
+    shader.uniforms.uCeilingTone = uniforms.uCeilingTone;
+    shader.uniforms.uCeilingMix = uniforms.uCeilingMix;
     shader.uniforms.uSunFullAt = { value: sunFullAt };
     shader.uniforms.uAwayBelow = { value: awayBelow };
     shader.fragmentShader = shader.fragmentShader
@@ -274,6 +317,11 @@ export function createPalette() {
     gravel: createShadedMaterial(matTokens.gravel),
     floor: createShadedMaterial(matTokens.floor, { tones: { shadow: shading.floorShadowTone } }),
     cut: createFlatMaterial(matTokens.cut),
+    furniture: createShadedMaterial(furnTokens.body),
+    furnitureWood: createShadedMaterial(furnTokens.wood),
+    textile: createShadedMaterial(furnTokens.textile),
+    fixture: createShadedMaterial(furnTokens.fixture),
+    furnitureDark: createShadedMaterial(furnTokens.dark),
     glassBacking: createFlatMaterial(matTokens.glassBacking),
     recess: createFlatMaterial(matTokens.recess),
     trunk: createShadedMaterial(entourage.trunk),

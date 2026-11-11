@@ -45,6 +45,8 @@ export interface StudioState {
   cut: string | null;
   sun: SunState;
   sunInfo: SunInfo | null;
+  /** First-person walk through the 3D view. */
+  walk: boolean;
   chatOpen: boolean;
   sheetOpen: boolean;
   house: House | null;
@@ -58,6 +60,7 @@ export interface StudioState {
   setCut: (level: string | null) => void;
   setSun: (patch: Partial<SunState>) => void;
   setSunInfo: (info: SunInfo | null) => void;
+  setWalk: (on: boolean) => void;
   setChatOpen: (open: boolean) => void;
   setSheetOpen: (open: boolean) => void;
   /** Replaces the house; `grow` asks the 3D view to play the grow transition. */
@@ -93,6 +96,7 @@ export const useStudio = create<StudioState>((set) => ({
   cut: null,
   sun: { on: false, dateId: 'winter', minutes: 10 * 60, playing: false },
   sunInfo: null,
+  walk: false,
   chatOpen: false,
   // Phones start with the drawing large and the controls collapsed.
   sheetOpen: false,
@@ -107,14 +111,16 @@ export const useStudio = create<StudioState>((set) => ({
     if (typeof document !== 'undefined') document.documentElement.lang = lang === 'zh' ? 'zh-CN' : 'en';
     set({ lang });
   },
-  setMode: (mode) => set({ mode }),
-  setView: (view) => set((s) => ({ view, viewNonce: s.viewNonce + 1, cut: isAxo(view) ? s.cut : null })),
-  resetView: () => set((s) => ({ viewNonce: s.viewNonce + 1 })),
+  setMode: (mode) => set(mode === '3d' ? { mode } : { mode, walk: false }),
+  setView: (view) => set((s) => ({ view, viewNonce: s.viewNonce + 1, cut: isAxo(view) ? s.cut : null, walk: false })),
+  resetView: () => set((s) => ({ viewNonce: s.viewNonce + 1, walk: false })),
   setLevel: (level) => set({ level }),
-  setCut: (cut) => set((s) => (cut && !isAxo(s.view) ? { cut, view: DEFAULT_VIEW, viewNonce: s.viewNonce + 1 } : { cut })),
+  setCut: (cut) => set((s) => (cut && !isAxo(s.view) ? { cut, view: DEFAULT_VIEW, viewNonce: s.viewNonce + 1, walk: false } : { cut, walk: false })),
   setSun: (patch) => set((s) => ({ sun: { ...s.sun, ...patch } })),
   setSunInfo: (sunInfo) => set({ sunInfo }),
-  setChatOpen: (chatOpen) => set({ chatOpen }),
+  // Walking and the assistant panel take turns: entering walk mode tucks the chat away.
+  setWalk: (walk) => set(walk ? { walk, mode: '3d', chatOpen: false } : { walk }),
+  setChatOpen: (chatOpen) => set(chatOpen ? { chatOpen, walk: false } : { chatOpen }),
   setSheetOpen: (sheetOpen) => set({ sheetOpen }),
   setHouse: (house, grow) =>
     set((s) => ({

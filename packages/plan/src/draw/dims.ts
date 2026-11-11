@@ -1,8 +1,8 @@
 // Dimension chains on all four sides: tier 1 = segments between the grid
 // lines that bound walls seen from that side, tier 2 = overall.
 import type { Side } from '@opensu/model';
-import type { LevelPlan } from '../analyse';
-import { overlaps, type Rect } from '../geom';
+import type { LevelPlan } from '@opensu/furnish';
+import { overlaps, type Rect } from '@opensu/furnish';
 import { attrs, f, line, type View } from '../svg';
 import { textWidth } from '../text';
 import { color, stroke, type Typography, typography } from '../tokens';

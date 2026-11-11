@@ -31,6 +31,18 @@ metres, model axes (X east, Y north, Z up; the renderer converts once).
   normals per segment so the renderer can widen outer profiles.
 - `floorLines` mark each floor level on exterior walls.
 - `entourage` placements `{ kind, position, rotation, scale, seed }`.
+- `furniture` built pieces `{ id, level, kind, min, max }` (their meshes are
+  parts with role `furniture`, materials `furniture`, `furnitureWood`,
+  `textile`, `fixture`, `furnitureDark`, plus `glass` for shower screens
+  and mirrors; section caps in role `cut`).
+- `walk` collision data for walk mode: `surfaces` (floor rectangles of every
+  space minus stair holes, stair flights as linear ramps, landings),
+  `blockers` (wall pieces minus doorways, windows closed, rails, the plot
+  fence, furniture, cars; each with a height range), `start` (inside the
+  main entrance, looking in) and `arrivals` (one per level, the top of its
+  stair).
+- `interiors` interior volumes (plan rect on wall centre lines, z range):
+  the renderer drops foliage inside them.
 
 ## How it works
 
@@ -97,6 +109,23 @@ metres, model axes (X east, Y north, Z up; the renderer converts once).
   Plants carry a clip box: the renderer drops low foliage outside the fence
   (or terrace rails), so no stray leaves show on fence faces. Explicit model `entourage` replaces the
   rules.
+
+- **Furniture** (`furniture.ts`): the placements of `@opensu/furnish` (the
+  plan's furniture) built from simple recipes per kind in a local frame
+  (front at -y): beds with mattress, throw, pillows and headboard, sofas
+  and armchairs with cushions, tables on legs, kitchen runs with worktop,
+  sink and hob, sanitary ware, shelving with a few books, outdoor sets,
+  loungers, pots (with a grass tuft), pendant lamps over dining tables.
+  Footprints shrink by 5 mm so no face is coplanar with a wall; nothing is
+  taller than a stair flight above it; pieces crossing the cut plane get
+  section caps. Edges are extracted on their own, so the house's lines
+  never change. Entourage people keep out of furniture; pots yield to the
+  entourage's planters. `buildHouse(house, { furniture: false })` leaves
+  the rooms empty.
+- **Walk** (`walk.ts`): walls inside a stairwell only stop someone on the
+  floor below (the flights pass over them); a thin rail separates the two
+  flights of a U stair. Terrace and balcony slabs over rooms are those
+  rooms' ceilings (white, not the slab colour).
 
 Construction defaults (frame sizes, slab and roof depths, fence sizes) are
 in `src/constants.ts`.
