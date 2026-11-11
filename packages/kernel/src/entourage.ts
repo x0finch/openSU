@@ -168,6 +168,8 @@ export function placeEntourage(ctx: Ctx, covered: (x: number, y: number) => bool
         const y = entry.orient === 'NS' ? cy + off : cy + sgn * d;
         const sp = ctx.spaceAt(0, x, y);
         if (!sp || !sp.outdoor || sp.type === 'garden') continue;
+        // Walkable floor all round: clear of walls, the fence and rails.
+        if ([[550, 0], [-550, 0], [0, 550], [0, -550]].some(([a, b]) => !ctx.spaceAt(0, x + a!, y + b!)?.outdoor)) continue;
         if ([[0, 0], [400, 0], [-400, 0], [0, 400], [0, -400]].some(([a, b]) => covered(x + a!, y + b!))) continue;
         // Clear of parked cars (4.9 x 1.9 m plus a margin).
         if (out.some((e) => e.kind === 'car' && Math.abs(e.position[0] / MM - x) < 2850 && Math.abs(e.position[1] / MM - y) < 1350)) continue;

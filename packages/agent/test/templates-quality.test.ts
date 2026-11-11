@@ -3,7 +3,7 @@
 // scene show the same planting (task 012, B1/B3/B4).
 import { describe, expect, it } from 'vitest';
 import { golden, resolve, type House } from '@opensu/model';
-import { analyseLevel, furnishLevel, isEntryHall, plantSite } from '@opensu/furnish';
+import { analyseLevel, crownRadius, frontSide, furnishLevel, isEntryHall, plantSite, pointInRings } from '@opensu/furnish';
 import { checkPlan, renderPlanDetailed } from '@opensu/plan';
 import { buildHouse } from '@opensu/kernel';
 import { TEMPLATE_IDS, templateHouse } from '../src/index';
@@ -93,6 +93,80 @@ describe('planting', () => {
       expect(kinds.some((k) => k.startsWith('person')), id).toBe(true);
       const carport = h.levels[0]!.spaces.some((s) => s.type === 'carport');
       expect(kinds.includes('car'), id).toBe(carport);
+    }
+  });
+});
+
+// Task 016, item 1: the planting is decided by the house, never by where it
+// stands or which way it is turned, and it keeps clear of the house.
+describe('planting follows the house', () => {
+  const places = [
+    { latitude: 30.3, longitude: 120.2, northDeg: 0 },
+    { latitude: -33.87, longitude: 151.21, northDeg: 0 },
+    { latitude: 69.65, longitude: 18.96, northDeg: 0 },
+    { latitude: 0.5, longitude: 32.6, northDeg: 0 },
+    { latitude: 30.3, longitude: 120.2, northDeg: 90 },
+    { latitude: -33.87, longitude: 151.21, northDeg: -135 },
+  ];
+  const key = (e: { kind: string; position: number[]; scale: number; rotation: number }) =>
+    `${e.kind}@${e.position.map((v) => v.toFixed(3)).join(',')}x${e.scale.toFixed(3)}r${e.rotation.toFixed(3)}`;
+
+  it.each(houses)('%s: location and orientation never move plants or people', (_id, house) => {
+    const ref = buildHouse(resolve(house)).entourage.map(key);
+    for (const p of places) {
+      const moved = buildHouse(resolve({ ...house, site: { ...house.site, ...p } })).entourage.map(key);
+      expect(moved, JSON.stringify(p)).toEqual(ref);
+    }
+  });
+
+  it.each(houses)('%s: trees stand clear of the main glazing, balconies and terraces', (_id, house) => {
+    const r = resolve(house);
+    const side = frontSide(r);
+    const upperOutdoor = (x: number, y: number) =>
+      r.levels.slice(1).some((lv) => lv.spaces.some((s) => s.outdoor && pointInRings(s.rings, x, y)));
+    const covered = (x: number, y: number) => r.levels.slice(1).some((lv) => lv.spaces.some((s) => pointInRings(s.rings, x, y)));
+    for (const p of plantSite(r)) {
+      if (p.level !== r.levels[0]!.id || (p.kind !== 'ginkgo' && p.kind !== 'maple-red' && p.kind !== 'maple-green')) continue;
+      // Only crowns that reach the upper floors (low maples may stand under a balcony).
+      if (!r.levels.slice(1).some((lv) => p.height * 1000 > lv.elevation + 500)) continue;
+      expect(covered(p.x, p.y), `${p.kind} at ${p.x},${p.y} under an upper floor`).toBe(false);
+      const R = crownRadius(p) * 0.75;
+      for (let k = 0; k < 8; k++) {
+        const a = (k * Math.PI) / 4;
+        expect(upperOutdoor(p.x + Math.cos(a) * R, p.y + Math.sin(a) * R), `${p.kind} at ${p.x},${p.y}: crown in a balcony / terrace`).toBe(false);
+      }
+      if (p.kind !== 'ginkgo') continue;
+      // Not in front of the middle of a large window or sliding door of the front.
+      for (const lv of r.levels) {
+        for (const o of lv.openings) {
+          if (o.kind === 'void' || !(o.kind === 'sliding-door' || o.width >= 1500)) continue;
+          const ew = o.orient === 'EW';
+          if (ew ? side === 'E' || side === 'W' : side === 'N' || side === 'S') continue;
+          const c = ew ? o.center[0] : o.center[1];
+          const along = ew ? p.x : p.y;
+          const out = side === 'S' ? o.center[1] - p.y : side === 'N' ? p.y - o.center[1] : side === 'W' ? o.center[0] - p.x : p.x - o.center[0];
+          expect(out > 0 && out < 6000 && Math.abs(along - c) < o.width * 0.3, `ginkgo at ${p.x},${p.y} in front of ${o.id}`).toBe(false);
+        }
+      }
+    }
+  });
+
+  it.each(houses)('%s: people stand on walkable outdoor floor, clear of furniture and rails', (_id, house) => {
+    const r = resolve(house);
+    const geo = buildHouse(r);
+    for (const e of geo.entourage.filter((x) => x.kind.startsWith('person'))) {
+      const [x, y, z] = e.position.map((v) => v * 1000) as [number, number, number];
+      const lv = [...r.levels].reverse().find((l) => z >= l.elevation - 50)!;
+      const space = lv.spaces.find((s) => pointInRings(s.rings, x, y));
+      expect(space?.outdoor, `${e.kind} at ${x},${y} on ${lv.id}`).toBe(true);
+      // Nearly half a metre of the same floor all round: no rail, wall or fence within reach.
+      for (const [dx, dy] of [[450, 0], [-450, 0], [0, 450], [0, -450]] as const) {
+        expect(lv.spaces.find((s) => pointInRings(s.rings, x + dx, y + dy))?.outdoor, `${e.kind} at ${x},${y}: wall, fence or rail within 0.45 m`).toBe(true);
+      }
+      for (const f of geo.furniture.filter((q) => q.level === lv.id)) {
+        const inside = e.position[0] > f.min[0] - 0.3 && e.position[0] < f.max[0] + 0.3 && e.position[1] > f.min[1] - 0.3 && e.position[1] < f.max[1] + 0.3;
+        expect(inside, `${e.kind} at ${x},${y} in ${f.id}`).toBe(false);
+      }
     }
   });
 });
