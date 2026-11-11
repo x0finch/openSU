@@ -48,6 +48,8 @@ export interface StudioState {
   chatOpen: boolean;
   sheetOpen: boolean;
   house: House | null;
+  /** How the 3D view should show the next house change (set with `setHouse`). */
+  grow: GrowHint | null;
   setLang: (lang: Lang) => void;
   setMode: (mode: Mode) => void;
   setView: (view: ViewId) => void;
@@ -58,7 +60,14 @@ export interface StudioState {
   setSunInfo: (info: SunInfo | null) => void;
   setChatOpen: (open: boolean) => void;
   setSheetOpen: (open: boolean) => void;
-  setHouse: (house: House) => void;
+  /** Replaces the house; `grow` asks the 3D view to play the grow transition. */
+  setHouse: (house: House, grow?: Omit<GrowHint, 'nonce'>) => void;
+}
+
+/** A requested grow transition: levels from `fromLevel` up rise in sequence. */
+export interface GrowHint {
+  fromLevel: number;
+  nonce: number;
 }
 
 const LANG_KEY = 'opensu.lang';
@@ -88,6 +97,7 @@ export const useStudio = create<StudioState>((set) => ({
   // Phones start with the drawing large and the controls collapsed.
   sheetOpen: false,
   house: null,
+  grow: null,
   setLang: (lang) => {
     try {
       globalThis.localStorage?.setItem(LANG_KEY, lang);
@@ -106,7 +116,13 @@ export const useStudio = create<StudioState>((set) => ({
   setSunInfo: (sunInfo) => set({ sunInfo }),
   setChatOpen: (chatOpen) => set({ chatOpen }),
   setSheetOpen: (sheetOpen) => set({ sheetOpen }),
-  setHouse: (house) => set((s) => ({ house, level: s.level ?? house.levels[0]?.id ?? null })),
+  setHouse: (house, grow) =>
+    set((s) => ({
+      house,
+      level: s.level && house.levels.some((l) => l.id === s.level) ? s.level : house.levels[0]?.id ?? null,
+      cut: s.cut && !house.levels.some((l) => l.id === s.cut) ? null : s.cut,
+      grow: grow ? { ...grow, nonce: (s.grow?.nonce ?? 0) + 1 } : s.grow,
+    })),
 }));
 
 /** Applies a stored language preference after hydration. */

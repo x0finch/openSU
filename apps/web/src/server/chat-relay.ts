@@ -1,0 +1,149 @@
+// `/api/chat`: a dumb relay to an OpenAI-compatible Chat Completions
+// endpoint. It picks the key and the model, forwards the request and pipes
+// the provider's response body back untouched (no parsing or re-encoding
+// of the stream; waiting on the network costs no Worker CPU). Everything
+// else - SSE parsing, tool calls, the agent loop - runs in the browser.
+//
+// Keys: the owner's key comes from the environment; a user may send their
+// own in `x-opensu-key` (with an optional `x-opensu-base-url`). Keys are
+// never logged, echoed, stored or put in URLs.
+
+export interface RelayEnv {
+  OPENROUTER_API_KEY?: string;
+  OPENAI_API_KEY?: string;
+  /** OpenAI-compatible base URL used with OPENAI_API_KEY (default https://api.openai.com/v1). */
+  OPENAI_BASE_URL?: string;
+  /** Model id for the configured provider. */
+  OPENSU_MODEL?: string;
+}
+
+export const OPENROUTER_BASE_URL = 'https://openrouter.ai/api/v1';
+export const OPENAI_BASE_URL = 'https://api.openai.com/v1';
+/** Default models (see apps/web/README.md "AI assistant"). */
+export const DEFAULT_MODELS = { openrouter: 'anthropic/claude-sonnet-5.5', openai: 'gpt-6.1-sol' } as const;
+
+/** Request headers of the bring-your-own-key flow. */
+export const BYO_KEY_HEADER = 'x-opensu-key';
+export const BYO_BASE_HEADER = 'x-opensu-base-url';
+
+/** Largest request body accepted (the house description plus a trimmed history fits easily). */
+const MAX_BODY = 256 * 1024;
+/** Output cap per model call on the owner's key. */
+const OWNER_MAX_TOKENS = 4096;
+
+interface Upstream {
+  url: string;
+  key: string;
+  model: string;
+  provider: 'openrouter' | 'openai' | 'custom';
+  owner: boolean;
+}
+
+function jsonError(status: number, code: string, message: string): Response {
+  return Response.json({ error: { code, message } }, { status, headers: { 'cache-control': 'no-store' } });
+}
+
+function serverUpstream(env: RelayEnv): Omit<Upstream, 'url'> & { base: string } | null {
+  if (env.OPENROUTER_API_KEY) return { base: OPENROUTER_BASE_URL, key: env.OPENROUTER_API_KEY, model: env.OPENSU_MODEL || DEFAULT_MODELS.openrouter, provider: 'openrouter', owner: true };
+  if (env.OPENAI_API_KEY) {
+    const base = env.OPENAI_BASE_URL || OPENAI_BASE_URL;
+    return { base, key: env.OPENAI_API_KEY, model: env.OPENSU_MODEL || DEFAULT_MODELS.openai, provider: base === OPENAI_BASE_URL ? 'openai' : 'custom', owner: true };
+  }
+  return null;
+}
+
+/** A user-supplied base URL: https only, no credentials or query. */
+function userBase(raw: string | null): string | null {
+  if (!raw) return OPENROUTER_BASE_URL;
+  try {
+    const u = new URL(raw);
+    if (u.protocol !== 'https:' || u.username || u.password || u.search || u.hash) return null;
+    return u.href.replace(/\/+$/, '');
+  } catch {
+    return null;
+  }
+}
+
+function pickUpstream(req: Request, env: RelayEnv): Upstream | Response {
+  const byoKey = req.headers.get(BYO_KEY_HEADER)?.trim();
+  if (byoKey) {
+    const base = userBase(req.headers.get(BYO_BASE_HEADER));
+    if (!base) return jsonError(400, 'bad_base_url', 'The base URL must be an https:// URL without credentials or query.');
+    const provider = base === OPENROUTER_BASE_URL ? 'openrouter' : base === OPENAI_BASE_URL ? 'openai' : 'custom';
+    const model = env.OPENSU_MODEL || (provider === 'openai' ? DEFAULT_MODELS.openai : DEFAULT_MODELS.openrouter);
+    return { url: `${base}/chat/completions`, key: byoKey, model, provider, owner: false };
+  }
+  const s = serverUpstream(env);
+  if (!s) return jsonError(401, 'no_key', 'No AI provider key is configured on this server. Add your own key in the assistant settings.');
+  return { url: `${s.base}/chat/completions`, key: s.key, model: s.model, provider: s.provider, owner: true };
+}
+
+/**
+ * Credits / rate limiting (later task, needs Cloudflare storage): decide
+ * here whether this request may use the owner's key. Return a Response to
+ * refuse (e.g. 429 with `{ error: { code: 'rate_limited' } }`).
+ */
+async function checkCredits(_req: Request, _upstream: Upstream): Promise<Response | null> {
+  return null;
+}
+
+/** GET /api/chat: what the assistant can use (no secrets). */
+export function relayStatus(env: RelayEnv): Response {
+  const s = serverUpstream(env);
+  return Response.json(
+    { serverKey: !!s, provider: s?.provider ?? null, model: s?.model ?? null },
+    { headers: { 'cache-control': 'no-store' } },
+  );
+}
+
+/** POST /api/chat: relay one Chat Completions call. */
+export async function relayChat(req: Request, env: RelayEnv): Promise<Response> {
+  const up = pickUpstream(req, env);
+  if (up instanceof Response) return up;
+  const refused = await checkCredits(req, up);
+  if (refused) return refused;
+
+  const text = await req.text();
+  if (text.length > MAX_BODY) return jsonError(413, 'too_large', 'The conversation is too long. Start a new chat.');
+  // The only look at the request: set the model (and an output cap on the
+  // owner's key). The response stream is never parsed.
+  let body: Record<string, unknown>;
+  try {
+    body = JSON.parse(text) as Record<string, unknown>;
+  } catch {
+    return jsonError(400, 'bad_request', 'Request body is not JSON.');
+  }
+  if (up.owner || typeof body.model !== 'string' || body.model === 'default') body.model = up.model;
+  body.stream = true;
+  if (up.owner && up.provider !== 'custom') {
+    // OpenRouter takes max_tokens; OpenAI's newer models only max_completion_tokens.
+    const key = up.provider === 'openai' ? 'max_completion_tokens' : 'max_tokens';
+    body[key] = Math.min(Number(body[key] ?? body.max_tokens) || OWNER_MAX_TOKENS, OWNER_MAX_TOKENS);
+    if (key !== 'max_tokens') delete body.max_tokens;
+  }
+
+  const headers: Record<string, string> = {
+    authorization: `Bearer ${up.key}`,
+    'content-type': 'application/json',
+    accept: 'text/event-stream',
+  };
+  if (up.provider === 'openrouter') {
+    headers['http-referer'] = new URL(req.url).origin;
+    headers['x-title'] = 'openSU';
+  }
+  let res: Response;
+  try {
+    res = await fetch(up.url, { method: 'POST', headers, body: JSON.stringify(body), signal: req.signal });
+  } catch {
+    return jsonError(502, 'upstream_unreachable', 'The AI provider could not be reached.');
+  }
+  // Pass the body through as is; keep only the content type of the upstream headers.
+  return new Response(res.body, {
+    status: res.status,
+    headers: {
+      'content-type': res.headers.get('content-type') ?? 'text/event-stream',
+      'cache-control': 'no-store',
+      'x-accel-buffering': 'no',
+    },
+  });
+}

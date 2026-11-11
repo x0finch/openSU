@@ -146,3 +146,10 @@
     transform: translateX(260%);
   }
 }
+
+/* Streaming text caret of the assistant. */
+@keyframes caret {
+  50% {
+    opacity: 0;
+  }
+}

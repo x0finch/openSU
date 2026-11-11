@@ -3,7 +3,7 @@
 import { Link } from '@tanstack/react-router';
 import { type PointerEvent as RPointerEvent, useEffect, useRef, useState } from 'react';
 import {
-  ChevronRightIcon, CloseIcon, FitIcon, LayersIcon, Mark, MinusIcon, PauseIcon, PlayIcon, PlusIcon, ResetViewIcon, SendIcon, SparkIcon, SunIcon, ViewIcon,
+  CloseIcon, FitIcon, LayersIcon, Mark, MinusIcon, PauseIcon, PlayIcon, PlusIcon, ResetViewIcon, SparkIcon, SunIcon, ViewIcon,
 } from '../components/icons';
 import { Caption, cx, IconButton, LangToggle, Segmented, Tip } from '../components/ui';
 import { levelName, type MessageKey, useT } from '../lib/i18n';
@@ -386,54 +386,8 @@ export function ZoomCluster({ className, size = 'md' }: { className?: string; si
   );
 }
 
-function ChatPanel({ onClose, className }: { onClose: () => void; className?: string }) {
-  const t = useT();
-  return (
-    <section aria-label={t('chat.title')} className={cx('glass pointer-events-auto flex flex-col rounded-ui', className)}>
-      <header className="flex h-12 items-center justify-between border-b border-hairline pr-1.5 pl-4">
-        <h2 className="flex items-center gap-2 text-sm font-semibold">
-          <SparkIcon accent width={18} height={18} />
-          {t('chat.title')}
-        </h2>
-        <IconButton label={t('chat.close')} tip={false} onClick={onClose}>
-          <CloseIcon width={18} height={18} />
-        </IconButton>
-      </header>
-      <div className="flex-1 px-4 py-4">
-        <span className="inline-block rounded-[5px] bg-wash px-1.5 py-0.5 text-2xs text-ink-2">{t('soon')}</span>
-        <p className="mt-2.5 text-sm leading-6 text-ink-2">{t('chat.body')}</p>
-      </div>
-      <div className="p-3 pt-0">
-        <div className="flex h-11 items-center gap-2 rounded-sm border border-hairline bg-white pr-1 pl-3">
-          <input disabled placeholder={t('chat.placeholder')} className="min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-ink-3" aria-label={t('chat.placeholder')} />
-          <button type="button" disabled aria-label={t('chat.send')} className="grid size-9 place-items-center rounded-[6px] bg-wash text-ink-3">
-            <SendIcon width={16} height={16} />
-          </button>
-        </div>
-      </div>
-    </section>
-  );
-}
-
-export function ChatRail() {
-  const t = useT();
-  const open = useStudio((s) => s.chatOpen);
-  const setOpen = useStudio((s) => s.setChatOpen);
-  if (open) return <ChatPanel onClose={() => setOpen(false)} className="w-[320px]" />;
-  return (
-    <button
-      type="button"
-      onClick={() => setOpen(true)}
-      aria-label={t('chat.open')}
-      aria-expanded={false}
-      className="glass group pointer-events-auto flex w-[52px] flex-col items-center gap-1.5 rounded-ui pt-3.5 pb-3 text-ink transition-colors hover:bg-white"
-    >
-      <SparkIcon accent width={22} height={22} className="transition-transform duration-300 ease-out-soft group-hover:rotate-12" />
-      <span className="text-xs font-medium text-ink-2 group-hover:text-ink">{t('chat.rail')}</span>
-      <ChevronRightIcon width={16} height={16} className="mt-1 text-ink-3 transition-transform duration-200 group-hover:translate-x-0.5" />
-    </button>
-  );
-}
+// The assistant (left rail on desktop, sheet on phones) lives in src/chat.
+export { ChatRail, MobileChat } from '../chat/ChatPanel';
 
 /* ------------------------------------------------------------------ */
 /* Phone                                                               */
@@ -467,19 +421,6 @@ export function MobileHeader({ derived }: { derived: Derived | null }) {
         </p>
       </div>
     </header>
-  );
-}
-
-export function MobileChat() {
-  const open = useStudio((s) => s.chatOpen);
-  const setOpen = useStudio((s) => s.setChatOpen);
-  if (!open) return null;
-  return (
-    <div className="absolute inset-0 z-30 flex items-end bg-black/10 p-2 pb-[max(8px,env(safe-area-inset-bottom))] animate-[fade-in_160ms_ease-out]" onClick={() => setOpen(false)}>
-      <div className="w-full" onClick={(e) => e.stopPropagation()}>
-        <ChatPanel onClose={() => setOpen(false)} className="w-full bg-white" />
-      </div>
-    </div>
   );
 }
 

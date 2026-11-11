@@ -81,6 +81,14 @@ renders a single view with debug switches.
   shadows (the light inside stays true); in presentation they do not.
   Window and door frames cut by the plane get frame-coloured caps
   (kernel `cut-frame` parts), so no hollow profiles show.
+- Grow transition: `viewer.playGrow({ fromLevel?, duration? })` after
+  `setContent` (an edit). The cutaway's clip plane sweeps up from the floor
+  of `fromLevel` past the roof (~1.5 s), each level in its own eased slot
+  (`src/grow.ts`, pure timing); stairs / entourage of a level appear once
+  the sweep reaches it. It takes the lower of grow and cutaway heights,
+  renders every frame only while it runs (shadow map included) and is
+  skipped under reduced motion. No hollow-wall caps are drawn while it
+  runs (the section caps exist only at the fixed cut height).
 - Physical sun + cutaway (`cutawayLight` tokens): interior floors in shade
   lift to `floorShade`, sunlit floor patches are warm (`floorSunBase` x
   `floorSunTint`), walls in a cast shadow use the turned-away tone and

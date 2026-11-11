@@ -10,7 +10,7 @@ import { Loading } from './Loading';
 declare global {
   interface Window {
     /** Test hooks for the smoke test / screenshot script. */
-    __studio?: { ready3d?: boolean; engine?: Engine; planReady?: boolean };
+    __studio?: { ready3d?: boolean; engine?: Engine; planReady?: boolean; growing?: boolean };
   }
 }
 
@@ -58,6 +58,11 @@ export function Viewer3D({ resolved, active }: { resolved: ResolvedHouse; active
   const nonce = useStudio((s) => s.viewNonce);
   const cut = useStudio((s) => s.cut);
   const [status, setStatus] = useState<'loading' | 'ready' | 'error'>('loading');
+  // The engine is created once; later houses are swapped in (see below).
+  const latest = useRef(resolved);
+  latest.current = resolved;
+  const shown = useRef<ResolvedHouse | null>(null);
+  const grown = useRef(useStudio.getState().grow?.nonce ?? 0);
 
   useEffect(() => {
     if (!hasWebGL2()) {
@@ -71,7 +76,7 @@ export function Viewer3D({ resolved, active }: { resolved: ResolvedHouse; active
       if (!alive || !ref.current) return;
       try {
         const dpr = new URLSearchParams(location.search).get('dpr');
-        const e = m.createEngine(ref.current, resolved, {
+        const e = m.createEngine(ref.current, latest.current, {
           pixelRatio: dpr ? Number(dpr) : undefined,
           onNorth: (deg) => {
             northDeg.current = deg;
@@ -82,6 +87,7 @@ export function Viewer3D({ resolved, active }: { resolved: ResolvedHouse; active
         e.setView(scenePreset(st), st.cut, true);
         applySun(e, st);
         engine.current = e;
+        shown.current = latest.current;
         window.__studio = { ...window.__studio, engine: e, ready3d: true };
         setStatus('ready');
       } catch (err) {
@@ -95,6 +101,22 @@ export function Viewer3D({ resolved, active }: { resolved: ResolvedHouse; active
       engine.current = null;
       if (window.__studio) window.__studio.ready3d = false;
     };
+  }, []);
+
+  // A changed house: swap it in and play the grow transition when asked.
+  useEffect(() => {
+    const e = engine.current;
+    if (!e || shown.current === resolved) return;
+    e.setHouse(resolved);
+    shown.current = resolved;
+    const g = useStudio.getState().grow;
+    if (g && g.nonce !== grown.current) {
+      grown.current = g.nonce;
+      if (window.__studio) window.__studio.growing = true;
+      void e.playGrow(g.fromLevel).then(() => {
+        if (window.__studio) window.__studio.growing = false;
+      });
+    }
   }, [resolved]);
 
   useEffect(() => {
