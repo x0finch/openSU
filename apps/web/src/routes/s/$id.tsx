@@ -1,4 +1,5 @@
 import { createFileRoute, Link, notFound } from '@tanstack/react-router';
+import { DEFAULT_TEMPLATE, TEMPLATE_META } from '@opensu/agent/templates-meta';
 import { createIsomorphicFn } from '@tanstack/react-start';
 import { getRequestUrl } from '@tanstack/react-start/server';
 import { useEffect } from 'react';
@@ -21,8 +22,11 @@ export const Route = createFileRoute('/s/$id')({
   ssr: 'data-only',
   loader: ({ params }) => {
     if (!ID.test(params.id)) throw notFound();
-    // Placeholder until sharing exists: no storage lookup yet.
-    return { id: params.id, title: '现代坡顶自建房', origin: origin() };
+    // Placeholder until sharing exists: no storage lookup yet. The title is
+    // the shared house's own name: a template id names that template, any
+    // other id shows the default house (the one the studio opens with).
+    const house = TEMPLATE_META.find((t) => t.id === params.id) ?? TEMPLATE_META.find((t) => t.id === DEFAULT_TEMPLATE)!;
+    return { id: params.id, title: house.name, origin: origin() };
   },
   head: ({ loaderData }) => {
     if (!loaderData) return {};

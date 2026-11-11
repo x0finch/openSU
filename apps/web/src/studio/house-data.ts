@@ -1,5 +1,5 @@
 // Lazy chunk: the model package (schema, resolver, samples).
-import { starterHouse } from '@opensu/agent/starter';
+import { isTemplateId, starterHouse, templateHouse } from '@opensu/agent/starter';
 import { golden, resolve, type House, type ResolvedHouse } from '@opensu/model';
 
 export interface LevelInfo {
@@ -24,12 +24,14 @@ export interface Derived {
 const ATTIC_HEIGHT = 2200;
 
 /**
- * The house the studio opens with: our own starter design. The golden
- * reference house is an internal benchmark, reachable with `?sample=golden`.
+ * The house the studio opens with: our own default design (template T1);
+ * `?sample=t2` / `t3` open the other templates. The golden reference house
+ * is an internal benchmark, reachable with `?sample=golden`.
  */
 export function loadSample(): House {
   const q = typeof location === 'undefined' ? null : new URLSearchParams(location.search).get('sample');
-  return q === 'golden' ? golden : starterHouse();
+  if (q === 'golden') return golden;
+  return isTemplateId(q) ? templateHouse(q) : starterHouse();
 }
 
 export function derive(house: House): Derived {

@@ -2,7 +2,7 @@
 // as each sheet is ready; tap one for the large preview; download one or
 // all; share through the Web Share API (files) where the browser has it.
 // Lazy chunk (it pulls in @opensu/sheet and with it three.js).
-import { LEVEL_HERO_VIEWS, VIEWS_SHEET_VIEWS } from '@opensu/sheet';
+import { levelHeroViews, VIEWS_SHEET_VIEWS } from '@opensu/sheet';
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import { ChevronLeftIcon, ChevronRightIcon, CloseIcon, DownloadIcon, ShareIcon } from '../components/icons';
 import { cx, IconButton } from '../components/ui';
@@ -11,8 +11,14 @@ import { useStudio } from '../lib/store';
 import type { Derived } from './house-data';
 import { type SheetFile, sheetJob, type SheetSnapshot } from './sheet-data';
 
-/** Header of the sheets: Chinese like the posts they are made for (facts and plans are Chinese too). */
-const SHEET_TITLE = '自建房';
+/**
+ * Header of the sheets: the house's own name (Chinese like the posts they
+ * are made for; facts and plans are Chinese too). The internal golden
+ * benchmark gets a generic title.
+ */
+export function sheetTitle(name: string): string {
+  return name.startsWith('Golden sample') ? '自建房' : name;
+}
 
 interface SheetMeta {
   title: string;
@@ -27,7 +33,7 @@ declare global {
 }
 
 function useSheets(derived: Derived): SheetSnapshot {
-  const job = useMemo(() => sheetJob(derived.resolved, SHEET_TITLE), [derived.resolved]);
+  const job = useMemo(() => sheetJob(derived.resolved, sheetTitle(derived.resolved.name)), [derived.resolved]);
   const snap = useSyncExternalStore(job.subscribe, job.snapshot, job.snapshot);
   useEffect(() => {
     window.__sheets = snap;
@@ -75,18 +81,19 @@ export default function SheetGallery({ derived, desktop }: { derived: Derived; d
 
   const metas: SheetMeta[] = useMemo(() => {
     const view = (id: string) => t(`view.${id}` as MessageKey);
+    const heroes = levelHeroViews(derived.resolved);
     const out = derived.levels.map((l, i) => ({
       title: t('sheets.level', { level: levelName(lang, l.name, l.index, l.isAttic) }),
-      sub: view(LEVEL_HERO_VIEWS[i % LEVEL_HERO_VIEWS.length]!),
+      sub: view(heroes[i % heroes.length]!),
       file: `opensu-${i + 1}-${l.id}.png`,
     }));
     out.push({ title: t('sheets.views'), sub: VIEWS_SHEET_VIEWS.map(view).join(' · '), file: `opensu-${out.length + 1}-views.png` });
     return out;
-  }, [derived.levels, lang, t]);
+  }, [derived.levels, derived.resolved, lang, t]);
 
   const ready = snap.files.filter(Boolean).length;
   const all = snap.files.flatMap((f, i) => (f ? [{ f, name: metas[i]!.file }] : []));
-  const title = t('project.title.modern-pitched');
+  const title = sheetTitle(derived.resolved.name);
 
   const downloadAll = async () => {
     for (const [i, x] of all.entries()) {
@@ -101,8 +108,14 @@ export default function SheetGallery({ derived, desktop }: { derived: Derived; d
   return (
     <div className="absolute inset-0" data-testid="sheets">
       <div className="absolute inset-0 overflow-y-auto">
-      <div className={cx('mx-auto flex min-h-full flex-col', desktop ? 'max-w-[1440px] px-28 pt-24 pb-28' : 'px-4 pt-[112px] pb-20')}>
-        <ul className={cx('grid flex-1 content-center', desktop ? 'grid-cols-4 gap-6' : 'grid-cols-2 gap-x-3 gap-y-4')} aria-label={t('sheets.label')}>
+      <div className={cx('mx-auto flex min-h-full flex-col', desktop ? 'max-w-[1600px] pt-24 pr-12 pb-28 pl-[340px]' : 'px-4 pt-[112px] pb-20')}>
+        <ul
+          className={cx(desktop ? 'flex flex-1 flex-wrap content-center items-start justify-center gap-6' : 'grid flex-1 grid-cols-2 content-center gap-x-3 gap-y-4')}
+          aria-label={t('sheets.label')}
+          // Desktop: one row of cards as large as the free area allows (right of
+          // the title block, between the top bar and the dock), centred in it.
+          style={desktop ? { ['--n' as string]: metas.length } : undefined}
+        >
           {metas.map((m, i) => (
             <SheetCard key={m.file} index={i} meta={m} file={snap.files[i]} desktop={desktop} onOpen={() => setPreview(i)} />
           ))}
@@ -164,7 +177,10 @@ function Spinner() {
 function SheetCard({ index, meta, file, desktop, onOpen }: { index: number; meta: SheetMeta; file: SheetFile | undefined; desktop: boolean; onOpen: () => void }) {
   const t = useT();
   return (
-    <li className="group flex min-w-0 flex-col">
+    <li
+      className="group flex min-w-0 flex-col"
+      style={desktop ? { width: 'min(calc((100vw - 388px - (var(--n) - 1) * 24px) / var(--n)), calc((100dvh - 96px - 112px - 52px) * 0.75), 420px)' } : undefined}
+    >
       <div className="relative">
         <button
           type="button"
