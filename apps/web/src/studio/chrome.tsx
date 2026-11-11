@@ -612,11 +612,11 @@ function DateChip() {
         data-testid="sun-date"
       >
         {t(`sun.date.${sun.dateId}`)}
-        {lang === 'zh' && <span className="tnum font-normal text-ink-2">{dayText(sunDate(sun.dateId, lat), lang)}</span>}
+        <span className="tnum font-normal text-ink-2">{dayText(sunDate(sun.dateId, lat), lang)}</span>
         <ChevronDownSmallIcon width={14} height={14} className="text-ink-3" />
       </button>
       {open && (
-        <div className="glass-solid absolute bottom-full left-0 z-10 mb-1.5 w-[168px] rounded-ui p-1" onKeyDown={(e) => e.key === 'Escape' && setOpen(false)}>
+        <div className="glass-solid absolute bottom-full left-0 z-10 mb-1.5 w-[216px] rounded-ui p-1" onKeyDown={(e) => e.key === 'Escape' && setOpen(false)}>
           <Segmented<SunDateId>
             label={t('sun.dates')}
             size="sm"

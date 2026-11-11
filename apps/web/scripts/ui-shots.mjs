@@ -98,6 +98,9 @@ for (const [vp, opts] of VPS) {
   };
   await page.goto(`${base}/studio`, { waitUntil: 'networkidle' });
   await page.waitForFunction(() => window.__studio?.ready3d === true, null, { timeout: 180000 });
+  // Software GL keeps the main thread busy: a CSS transition can still be half-way
+  // when the shot is taken. Shots show the settled state.
+  await page.addStyleTag({ content: '*, *::before, *::after { transition: none !important; animation-duration: 1ms !important; animation-delay: 0s !important; }' });
   await settle(page, 900);
   counts[vp] = { hints: await page.evaluate(countControls) };
   await shot('hints');
@@ -162,6 +165,26 @@ for (const [vp, opts] of VPS) {
       await shot('plan-zoomed');
     }
     await reset();
+  }
+  if (wanted('new-house')) {
+    // A template from the project menu: the new house asks where it stands (or skip).
+    await page.getByTestId('project-menu').click();
+    await page.getByRole('menuitem', { name: /换一个模板|Start from a template/ }).click();
+    await page.getByRole('menuitem', { name: /三合院/ }).click();
+    await page.waitForSelector('[data-testid=loc-skip]', { timeout: 60000 });
+    await page.waitForFunction(() => !window.__studio?.growing, null, { timeout: 30000 });
+    await shot('new-house');
+    await page.getByTestId('loc-skip').click();
+    await reset();
+  }
+  if (wanted('en')) {
+    await store(page, () => window.__studio.store.getState().setLang('en'));
+    await page.getByTestId('bar-sun').click();
+    await shot('en-sun');
+    await store(page, () => window.__studio.store.getState().setSitePanel({ kind: 'orientation' }));
+    await shot('en-orientation');
+    await reset();
+    await store(page, () => window.__studio.store.getState().setLang('zh'));
   }
   if (wanted('sheets')) {
     await store(page, () => window.__studio.store.getState().setMode('sheet'));

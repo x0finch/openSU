@@ -128,7 +128,8 @@ function pushCommitted(id: string): void {
  */
 export async function applyEdit(commands: unknown[], summary: string): Promise<boolean> {
   if (useChat.getState().running) return false;
-  const [m, model] = await Promise.all([loadAgent(), import('@opensu/model')]);
+  // Never on the server: keeps the model chunk out of the Worker bundle.
+  const [m, model] = await Promise.all([loadAgent(), import.meta.env.SSR ? new Promise<typeof import('@opensu/model')>(() => {}) : import('@opensu/model')]);
   const sess = syncSession(m);
   const r = model.applyCommands(sess.house, commands);
   if (!r.ok) {
