@@ -1,4 +1,7 @@
-.reference/
-artifacts/
 node_modules/
 dist/
+*.tsbuildinfo
+.vite/
+.reference/
+artifacts/
+.DS_Store

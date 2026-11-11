@@ -1,0 +1,13 @@
+export * as tokens from './style/tokens.js';
+export { createPalette, createShadedMaterial, createFlatMaterial, createLineMaterial, type Palette, type PaletteKey } from './style/materials.js';
+export { bakeScene, type BakeResult } from './style/batch.js';
+export { featureEdgePositions } from './style/edges.js';
+export { Sun, sunDirection } from './style/sun.js';
+export { createGround } from './style/ground.js';
+export { cameraForView, fitParallelCamera, fitEyeLevelCamera, type ViewPreset, type ViewKind } from './style/cameras.js';
+export { IllustrationViewer, type SceneStats, type ViewerOptions } from './viewer.js';
+export * from './geometry/primitives.js';
+export { createGinkgo, createMaple, createBamboo, createGrassTuft, type TreeMaterials, type TreeOptions } from './entourage/trees.js';
+export { createPerson, type PersonPose } from './entourage/person.js';
+export { createCar, type CarMaterials } from './entourage/car.js';
+export { createRand, type Rand } from './entourage/random.js';
