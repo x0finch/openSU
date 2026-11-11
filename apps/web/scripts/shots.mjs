@@ -338,6 +338,41 @@ async function siteChecks() {
     await page.waitForFunction((e) => window.__studio.store.getState().house.site.placeName === e, expect, { timeout: 30000 });
     await settle(page);
   };
+  // A new place refreshes the sun strip, the slider range and the shadows at
+  // once, without touching the time (task 014): Urumqi's winter day starts
+  // at 09:41 and solar noon is at 14:08 clock time (UTC+8).
+  await page.evaluate(() => window.__studio.store.getState().setSun({ on: true, dateId: 'winter', minutes: 600 }));
+  await settle(page);
+  const pxHz = await canvasPixels(page);
+  await pick('乌鲁木齐', '乌鲁木齐市');
+  await page.waitForTimeout(400);
+  await settle(page);
+  const urumqi = await page.evaluate(() => {
+    const s = window.__studio.store.getState();
+    const truth = window.__studio.engine.sunAt(s.sunInfo.date, s.sun.minutes);
+    const range = [...document.querySelectorAll('input[type=range]')].find((x) => x.offsetParent !== null);
+    return {
+      info: s.sunInfo, minutes: s.sun.minutes,
+      truth: { sunrise: truth.times.sunrise, sunset: truth.times.sunset, noon: truth.times.solarNoon, el: truth.trueElevationDeg },
+      light: window.__studio.engine.viewer.lightingMode,
+      range: range && [Number(range.min), Number(range.max), Number(range.value)],
+      noon: document.querySelector('[data-testid=sun-noon]')?.textContent ?? '',
+    };
+  });
+  check(Math.abs(urumqi.info.sunrise - urumqi.truth.sunrise) < 0.5 && Math.abs(urumqi.info.solarNoon - urumqi.truth.noon) < 0.5 && Math.abs(urumqi.info.elevation - urumqi.truth.el) < 0.05,
+    `a new place refreshes the sun at once (Urumqi: sunrise ${(urumqi.info.sunrise / 60).toFixed(2)} h, noon ${(urumqi.info.solarNoon / 60).toFixed(2)} h, sun ${urumqi.info.elevation.toFixed(1)} deg)`);
+  check(urumqi.noon.includes('14:08'), `the strip shows the new solar noon (${urumqi.noon})`);
+  check(urumqi.range && urumqi.range[0] === Math.ceil(urumqi.truth.sunrise) && urumqi.range[1] === Math.floor(urumqi.truth.sunset) && urumqi.range[2] === 600 && urumqi.minutes === 600,
+    `the slider takes the new day and keeps 10:00 (still daylight): ${JSON.stringify(urumqi.range)}`);
+  const pxUq = await canvasPixels(page);
+  let moved = 0;
+  for (let i = 0; i < pxHz.length; i += 4) if (Math.abs(pxHz[i] - pxUq[i]) > 30) moved++;
+  check(moved / (pxHz.length / 4) > 0.01, `the shadows follow the new place without moving the time (${((100 * moved) / (pxHz.length / 4)).toFixed(1)}% pixels differ)`);
+  // 08:00 is before sunrise in Urumqi in winter: the time is clamped to the day.
+  await page.evaluate(() => window.__studio.store.getState().setSun({ minutes: 480 }));
+  await settle(page);
+  const clamp = await page.evaluate(() => window.__studio.store.getState().sun.minutes);
+  check(clamp === Math.ceil(urumqi.truth.sunrise), `a time before sunrise is clamped to sunrise (${clamp})`);
   await pick('哈尔滨', '哈尔滨市');
   const hrb = await noonElevation(page);
   check(Math.abs(hrb.elevation - 20.8) < 0.3, `Harbin (searched in Chinese): noon sun ${hrb.elevation.toFixed(1)} deg (~20.8)`);
@@ -362,6 +397,13 @@ async function siteChecks() {
   await page.waitForTimeout(400);
   await settle(page);
   const az1 = await page.evaluate(() => window.__studio.engine.viewer.sunStudy.azimuthDeg);
+  // The engine's sun and the strip agree right after the turn (no time change).
+  const agree = await page.evaluate(() => {
+    const s = window.__studio.store.getState();
+    const t = window.__studio.engine.sunAt(s.sunInfo.date, s.sun.minutes);
+    return Math.abs(t.trueAzimuthDeg - s.sunInfo.azimuth) < 1e-6 && Math.abs(t.trueElevationDeg - s.sunInfo.elevation) < 1e-6;
+  });
+  check(agree, 'after turning north the strip still matches the engine sun');
   const d = ((az1 - az0 + 540) % 360) - 180;
   check(Math.abs(d - 90) < 0.01, `turning north by 90 deg turns the sun in model axes by ${d.toFixed(2)} deg`);
   const px1 = await canvasPixels(page);
@@ -379,6 +421,37 @@ async function siteChecks() {
   await page.waitForTimeout(900);
   const saved = await page.evaluate(() => JSON.parse(localStorage.getItem('opensu.autosave.v1') ?? '{}').house?.site ?? null);
   check(saved?.timeZone === 'Australia/Sydney' && saved?.northDeg === 90, `the site is autosaved (${JSON.stringify(saved && { placeName: saved.placeName, timeZone: saved.timeZone, northDeg: saved.northDeg })})`);
+  // A template opened from the menu starts whole, in presentation light, at the default view (task 014).
+  await page.evaluate(() => {
+    const s = window.__studio.store.getState();
+    s.setView('axo-nw');
+    s.setCut('L1');
+    s.setSun({ on: true, minutes: 600 });
+  });
+  await page.waitForTimeout(800);
+  await page.getByTestId('project-menu').click();
+  await page.getByRole('menuitem', { name: /换一个模板/ }).click();
+  await page.getByRole('menuitem', { name: /三合院/ }).click();
+  await page.waitForSelector('[data-testid=loc-skip]', { timeout: 60000 });
+  await page.waitForFunction(() => !window.__studio?.growing, null, { timeout: 60000 });
+  await page.waitForTimeout(600);
+  const fresh = await page.evaluate(() => {
+    const s = window.__studio.store.getState();
+    const v = window.__studio.engine.viewer;
+    return { view: s.view, cut: s.cut, sun: s.sun.on, viewerCut: v.cutaway, light: v.lightingMode.mode, preset: v.currentView?.id };
+  });
+  check(fresh.view === 'axo-se' && !fresh.cut && !fresh.sun && !fresh.viewerCut && fresh.light === 'presentation' && fresh.preset === 'axo-se', `a new template starts whole, in presentation light, at the default view (${JSON.stringify(fresh)})`);
+  await ctx.close();
+}
+
+/** The eye-level preset turns to the south-east when a tree hides the facade's centre from the south-west (task 014). */
+async function eyeLevelChecks() {
+  if (!wanted('check-eye')) return;
+  const { ctx, page } = await open(DESKTOP, '/studio?view=eye-sw');
+  await page.waitForFunction(() => window.__studio?.ready3d === true, null, { timeout: 180000 });
+  await settle(page);
+  const az = await page.evaluate(() => window.__studio.engine.viewer.currentView?.azimuthDeg);
+  check(az === 140, `T1 eye level looks from the unobstructed south-east (azimuth ${az})`);
   await ctx.close();
 }
 
@@ -529,6 +602,7 @@ try {
   await walkChecks();
   await sunAndCutChecks();
   await siteChecks();
+  await eyeLevelChecks();
   await sheets(DESKTOP, 'studio-sheets-desktop');
   if (!smoke) await sheets(PHONE, 'studio-sheets-phone');
 } finally {

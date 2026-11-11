@@ -1,11 +1,12 @@
-// Autosave: the current house and the assistant transcript are kept in this
+// Autosave: the current house, the assistant transcript and the last undo /
+// redo steps (bounded, `SAVED_STEPS`) are kept in this
 // browser (localStorage, one versioned key), so a reload continues where the
 // user left off. Quota and private-mode errors are ignored (nothing is lost
 // but the save). "Reset to template" clears it.
 import type { House } from '@opensu/model';
 import { useEffect } from 'react';
-import { type ChatItem, newChat, restoreItems, useChat } from '../chat/chat-store';
-import { useStudio } from './store';
+import { type ChatItem, newChat, restoreItems, type SavedHistory, undoHistory, useChat } from '../chat/chat-store';
+import { freshView, useStudio } from './store';
 
 const KEY = 'opensu.autosave.v1';
 const VERSION = 1;
@@ -16,6 +17,8 @@ interface Saved {
   savedAt: number;
   house: House;
   chat: ChatItem[];
+  /** Undo / redo steps of `house` (optional: saves before task 014 have none). */
+  history?: SavedHistory;
 }
 
 /** The saved state, or null (none, another version, or unreadable). */
@@ -40,13 +43,13 @@ export function clearSaved(): void {
 }
 
 function save(house: House, chat: ChatItem[]): void {
-  const data: Saved = { v: VERSION, savedAt: Date.now(), house, chat };
+  const data: Saved = { v: VERSION, savedAt: Date.now(), house, chat, history: undoHistory() };
   try {
     globalThis.localStorage?.setItem(KEY, JSON.stringify(data));
   } catch {
-    // Quota exceeded: try once more without the transcript, then give up quietly.
+    // Quota exceeded: try once more without the history and the transcript, then give up quietly.
     try {
-      globalThis.localStorage?.setItem(KEY, JSON.stringify({ ...data, chat: [] }));
+      globalThis.localStorage?.setItem(KEY, JSON.stringify({ ...data, chat: [], history: undefined }));
     } catch {
       /* private mode or full storage: keep working without a save */
     }
@@ -71,7 +74,7 @@ export function restoreChat(): void {
   if (restoredChat || sampleRequested()) return;
   restoredChat = true;
   const s = loadSaved();
-  if (s?.chat.length) restoreItems(s.chat);
+  if (s?.chat.length) restoreItems(s.chat, s.history, s.house);
 }
 
 /**
@@ -133,6 +136,7 @@ export async function resetToTemplate(): Promise<void> {
   const m = await (import.meta.env.SSR ? new Promise<never>(() => {}) : import('../studio/house-data'));
   newChat();
   clearSaved();
+  freshView();
   resetting = true;
   try {
     useStudio.getState().setHouse(m.loadSample(), { fromLevel: 0 });

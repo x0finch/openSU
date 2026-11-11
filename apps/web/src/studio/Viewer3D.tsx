@@ -52,6 +52,11 @@ function applySun(e: Engine, s: StudioState): void {
   };
   const cur = s.sunInfo;
   if (!cur || (Object.keys(info) as (keyof typeof info)[]).some((k) => info[k] !== cur[k])) s.setSunInfo(info);
+  // A new place, time zone or date can move sunrise / sunset: the same clock
+  // time is kept while it is daylight there, otherwise it is clamped (the
+  // store then calls this again with a time inside the day).
+  const clamped = Math.min(Math.floor(info.sunset), Math.max(Math.ceil(info.sunrise), s.sun.minutes));
+  if (!s.sun.playing && clamped !== s.sun.minutes && info.sunset > info.sunrise) s.setSun({ minutes: clamped });
 }
 
 export function Viewer3D({ resolved, active, insets, compact = false }: { resolved: ResolvedHouse; active: boolean; insets: readonly FrameInsets[]; compact?: boolean }) {
@@ -91,6 +96,7 @@ export function Viewer3D({ resolved, active, insets, compact = false }: { resolv
         const dpr = new URLSearchParams(location.search).get('dpr');
         const e = m.createEngine(ref.current, latest.current, {
           pixelRatio: dpr ? Number(dpr) : undefined,
+          wideFrame: compactFraming,
           onNorth: (deg) => {
             northDeg.current = deg;
             if (needle.current) needle.current.style.transform = `rotate(${deg.toFixed(1)}deg)`;
@@ -127,6 +133,10 @@ export function Viewer3D({ resolved, active, insets, compact = false }: { resolv
     if (!e || shown.current === resolved) return;
     e.setHouse(resolved);
     shown.current = resolved;
+    // The store's house changed before the engine had the new site (the
+    // subscription below ran too early): place, time zone and orientation
+    // reach the sun strip, the slider range and the shadows now.
+    applySun(e, useStudio.getState());
     const g = useStudio.getState().grow;
     if (g && g.nonce !== grown.current) {
       grown.current = g.nonce;
@@ -136,6 +146,11 @@ export function Viewer3D({ resolved, active, insets, compact = false }: { resolv
       });
     }
   }, [resolved]);
+
+  // Phones frame the house with its trees, so the whole picture is centred.
+  useEffect(() => {
+    engine.current?.setWideFrame(compact);
+  }, [compact]);
 
   useEffect(() => {
     const st = useStudio.getState();

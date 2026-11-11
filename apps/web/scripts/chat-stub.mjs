@@ -24,8 +24,9 @@ const cjk = (s) => /[一-鿿]/.test(s);
  */
 const SCRIPTS = [
   {
-    name: 'widen-living',
-    match: /北侧.*加深|客厅.*加宽|north rooms.*deeper|living room.*wider/i,
+    // The studio's first suggestion chip (chat.s1): T1's grid line F is its north wall.
+    name: 'north-deeper',
+    match: /北侧.*加深|north rooms.*deeper/i,
     steps: (zh) => [
       {
         text: zh
@@ -42,8 +43,9 @@ const SCRIPTS = [
     ],
   },
   {
+    // chat.s2: T1's upstairs family room (l2-family).
     name: 'study-to-bedroom',
-    match: /起居室.*卧室|书房.*卧室|family room.*bedroom|study.*bedroom/i,
+    match: /起居室.*卧室|family room.*bedroom/i,
     steps: (zh) => [
       // A deliberately wrong id: the validator answers with the nearest ids.
       { tools: [{ name: 'edit_house', args: { summary: zh ? '二楼起居室改为卧室' : 'Upstairs family room becomes a bedroom', commands: [{ op: 'update_space', space: 'l2-familyroom', type: 'bedroom', name: '卧室', nameEn: 'Bedroom' }] } }] },
@@ -111,6 +113,9 @@ const SCRIPTS = [
     steps: (zh) => [{ text: zh ? '（测试桩）这是预设的回答，没有调用真实模型。' : '(Test stub) This is a canned answer; no real model was called.' }],
   },
 ];
+
+/** The script a user message is answered with ('fallback' when none matches). */
+export const scriptFor = (text) => SCRIPTS.find((s) => s.match.test(text)).name;
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 

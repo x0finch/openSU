@@ -15,7 +15,7 @@ import { createRequire } from 'node:module';
 import { createServer } from 'node:net';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { STUB_KEY, STUB_MODEL, startStub } from './chat-stub.mjs';
+import { scriptFor, STUB_KEY, STUB_MODEL, startStub } from './chat-stub.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const appRoot = resolve(here, '..');
@@ -177,6 +177,14 @@ try {
     await page.waitForTimeout(300);
     check(await page.evaluate(() => document.activeElement?.dataset.testid === 'chat-input'), 'focusing the prompt bar opens the panel with the prompt focused');
     await shot(page, 'chat-empty-desktop');
+    // The suggestion chips and the stub's scripted answers agree for T1 (task 014).
+    const chips = async () => page.getByTestId('suggestions').getByRole('button').allTextContents();
+    const zhChips = await chips();
+    await page.evaluate(() => window.__studio.store.getState().setLang('en'));
+    const enChips = await chips();
+    await page.evaluate(() => window.__studio.store.getState().setLang('zh'));
+    const expected = ['north-deeper', 'study-to-bedroom', 'roof-pitch', 'new-house'];
+    check([zhChips, enChips].every((c) => c.length === 4 && c.every((t, i) => scriptFor(t) === expected[i])), `each suggestion chip has its own scripted answer (${zhChips.join(' / ')} | ${enChips.join(' / ')})`);
 
     const area0 = await shownArea(page);
     // Opening the panel re-frames the house (~0.4 s): wait until the camera has settled.
@@ -187,6 +195,14 @@ try {
     // 1. "把北侧房间加深 600": text streams first, then the tool call is applied.
     stub.config.holdMs = 2500;
     stub.config.delay = 20;
+    // The phases of the turn as the store goes through them (task 014: the indicator follows the phase).
+    await page.evaluate(() => {
+      window.__phases = [];
+      window.__studio.chat.subscribe((st) => {
+        const it = st.items.at(-1);
+        if (it?.role === 'assistant') window.__phases.push({ phase: it.phase, summary: /改好了/.test(it.text), changes: it.changes?.length ?? 0 });
+      });
+    });
     await sendMessage(page, '把北侧房间加深 600');
     await page.waitForFunction(() => document.querySelector('[data-testid=assistant-message]')?.textContent?.includes('轴线 F'), null, { timeout: 30000 });
     const midText = await page.getByTestId('assistant-message').first().textContent();
@@ -201,6 +217,11 @@ try {
     await waitDone(page, 1);
     await waitGrown(page);
     await settle(page);
+    const phases = await page.evaluate(() => window.__phases);
+    const order = phases.map((p) => p.phase).filter((p, i, a) => p !== a[i - 1]);
+    check(phases.some((p) => p.phase === 'working') && phases.filter((p) => p.summary && p.phase !== 'done').every((p) => p.phase === 'writing') && phases.some((p) => p.summary && p.phase === 'writing'),
+      `the indicator follows the phase: ${order.join(' -> ')} (writing while the summary streams)`);
+    check((await page.getByTestId('chat-panel').locator('[role=status]').count()) === 0, 'the working indicator is gone when the reply completes');
     const area1 = await shownArea(page);
     const px1 = await canvasPixels(page);
     check(Math.abs(area1 - area0 - 13.3) < 0.15, `edit applied: interior area ${area0} -> ${area1} m² (+13.3 expected)`);
@@ -336,6 +357,39 @@ try {
     await page.getByTestId('bar-summary').getByRole('button', { name: '展开对话' }).click();
     await page.waitForTimeout(500);
     check((await page.evaluate(() => window.__studio.engine.viewer.walking)) === false, 'opening the assistant ends the walk');
+    await ctx.close();
+  }
+
+  // --- Undo survives a reload (task 014) --------------------------------------
+  if (wanted('chat-reload')) {
+    const { ctx, page } = await open(preview.base, DESKTOP, '/studio');
+    const area0 = await shownArea(page);
+    await page.getByTestId('prompt-bar').click();
+    await sendMessage(page, '把北侧房间加深 600');
+    await waitDone(page, 1);
+    await waitGrown(page);
+    await page.getByTestId('chat-collapse').click();
+    // Autosave runs ~0.6 s after the last change.
+    await page.waitForTimeout(1200);
+    const saved = await page.evaluate(() => JSON.parse(localStorage.getItem('opensu.autosave.v1') ?? '{}').history ?? null);
+    check(saved?.undo?.length === 1 && saved.redo.length === 0, `the undo history is autosaved (${saved?.undo?.length ?? 0} undo step)`);
+    await page.reload({ waitUntil: 'networkidle' });
+    await page.waitForFunction(() => window.__studio?.ready3d === true, null, { timeout: 180000 });
+    const area1 = await shownArea(page);
+    const undo = page.getByTestId('bar-summary').getByRole('button', { name: '撤销' });
+    check(Math.abs(area1 - area0 - 13.3) < 0.15 && (await undo.count()) === 1, `after a reload the bar still offers undo (${area0} -> ${area1} m²)`);
+    await shot(page, 'chat-reload-undo-desktop');
+    await undo.click();
+    await page.waitForFunction((a) => document.querySelector('[data-testid=fact-area]')?.textContent?.startsWith(String(a)), area0, { timeout: 30000 });
+    check(true, `undo after the reload restores the house (${area0} m²)`);
+    const redo = page.getByTestId('bar-summary').getByRole('button', { name: '恢复' });
+    check((await redo.count()) === 1, 'and offers redo');
+    await page.waitForTimeout(1200);
+    await page.reload({ waitUntil: 'networkidle' });
+    await page.waitForFunction(() => window.__studio?.ready3d === true, null, { timeout: 180000 });
+    await page.getByTestId('bar-summary').getByRole('button', { name: '恢复' }).click();
+    await page.waitForFunction((a) => !document.querySelector('[data-testid=fact-area]')?.textContent?.startsWith(String(a)), area0, { timeout: 30000 });
+    check(Math.abs((await shownArea(page)) - area1) < 0.05, 'redo survives a reload too');
     await ctx.close();
   }
 

@@ -8,7 +8,12 @@ import { create } from 'zustand';
 import { useStudio } from '../lib/store';
 import { type AiSettings, loadSettings, relayHeaders, requestModel, saveSettings } from './settings';
 
-export type Phase = 'thinking' | 'working' | 'repairing' | 'done';
+/**
+ * Progress of a turn, as it actually is: `thinking` (waiting for the model,
+ * or it reads the house), `working` (an edit is being applied), `repairing`
+ * (an edit was rejected and is being fixed), `writing` (reply text streams).
+ */
+export type Phase = 'thinking' | 'working' | 'repairing' | 'writing' | 'done';
 /** Undo state of a turn's changes card. */
 export type UndoState = 'can-undo' | 'can-redo' | 'undone' | 'kept';
 
@@ -80,6 +85,19 @@ const past = new Map<string, PastTurn>();
 const committed: string[] = [];
 /** Assistant item ids undone and still redoable, most recent last. */
 const redoable: string[] = [];
+/** The house before and after each step on those stacks (autosaved, see `undoHistory`). */
+const steps = new Map<string, { before: House; after: House }>();
+/** Undo steps kept across a reload (each holds two houses of a few kB). */
+export const SAVED_STEPS = 12;
+
+/** The undo / redo history as autosaved: bounded, oldest first. */
+export interface SavedHistory {
+  undo: { id: string; before: House; after: House }[];
+  redo: { id: string; before: House; after: House }[];
+}
+
+/** A history restored from the autosave, rebuilt into a session once the agent chunk is there. */
+let pendingHistory: { houseJson: string } | null = null;
 let abort: AbortController | null = null;
 let seq = 0;
 const nextId = () => `m${++seq}`;
@@ -92,10 +110,17 @@ function patch(id: string, p: Partial<ChatItem> | ((it: ChatItem) => Partial<Cha
 function syncSession(m: AgentModule): HouseSession {
   const house = useStudio.getState().house;
   if (!house) throw new Error('No house loaded yet.');
+  if (!session && pendingHistory) {
+    // After a reload: the saved undo / redo steps, if the house is still the saved one.
+    const ok = JSON.stringify(house) === pendingHistory.houseJson;
+    pendingHistory = null;
+    if (ok) session = rebuildSession(m, house);
+  }
   if (!session || session.house !== house) {
     session = new m.HouseSession(house);
     committed.length = 0;
     redoable.length = 0;
+    steps.clear();
     useChat.setState((s) => ({ items: s.items.map((it) => (it.undo === 'can-undo' || it.undo === 'can-redo' ? { ...it, undo: 'kept' } : it)) }));
   }
   return session;
@@ -113,12 +138,38 @@ async function findPlace(query: string) {
   }));
 }
 
+/** A session whose undo / redo stacks hold the restored steps, `house` current. */
+function rebuildSession(m: AgentModule, house: House): HouseSession {
+  const undo = committed.map((id) => steps.get(id)!);
+  const redo = redoable.map((id) => steps.get(id)!);
+  const sess = new m.HouseSession(undo[0]?.before ?? house);
+  for (const st of undo.slice(1)) sess.commit(st.before);
+  if (undo.length) sess.commit(house);
+  // Push the redo houses (next redo first), then step back over them.
+  for (let i = redo.length - 1; i >= 0; i--) sess.commit(redo[i]!.after);
+  for (let i = 0; i < redo.length; i++) sess.undo();
+  return sess;
+}
+
 /** Marks a new undo step: earlier steps are kept, redo is gone. */
-function pushCommitted(id: string): void {
+function pushCommitted(id: string, before: House, after: House): void {
   for (const k of committed) patch(k, { undo: 'kept' });
-  for (const k of redoable) patch(k, { undo: 'undone' });
+  for (const k of redoable) {
+    patch(k, { undo: 'undone' });
+    steps.delete(k);
+  }
   redoable.length = 0;
   committed.push(id);
+  steps.set(id, { before, after });
+}
+
+/** The undo / redo history for the autosave (the newest `SAVED_STEPS` steps). */
+export function undoHistory(): SavedHistory {
+  const pick = (ids: string[]) => ids.slice(-SAVED_STEPS).flatMap((id) => {
+    const st = steps.get(id);
+    return st ? [{ id, ...st }] : [];
+  });
+  return { undo: pick(committed), redo: pick(redoable) };
 }
 
 /**
@@ -151,9 +202,10 @@ export async function replaceHouse(house: House, summary: string): Promise<void>
 }
 
 function commitManual(sess: HouseSession, house: House, batch: AppliedBatch): void {
+  const before = sess.house;
   sess.commit(house);
   const id = nextId();
-  pushCommitted(id);
+  pushCommitted(id, before, house);
   useChat.setState((s) => ({ items: [...s.items, { id, role: 'assistant', text: '', phase: 'done', changes: [batch], undo: 'can-undo', manual: true }] }));
   past.set(id, { user: '(The user edited the house in the studio, not in this chat.)', assistant: '', changes: [batch.summary] });
 }
@@ -183,7 +235,7 @@ export async function send(text: string): Promise<void> {
     const settings = useChat.getState().settings;
     const adapter = m.createRelayAdapter({ endpoint: endpoint(), model: requestModel(settings), headers: () => relayHeaders(settings) });
     const onEvent = (e: AgentEvent) => {
-      if (e.type === 'text') patch(id, (it) => ({ text: it.text + e.delta }));
+      if (e.type === 'text') patch(id, (it) => ({ text: it.text + e.delta, phase: 'writing' }));
       else if (e.type === 'tool-call') patch(id, { phase: e.name === 'get_house' ? 'thinking' : 'working' });
       else if (e.type === 'rejected') patch(id, { phase: 'repairing', lastErrors: e.errors });
       else if (e.type === 'house') {
@@ -201,7 +253,7 @@ export async function send(text: string): Promise<void> {
       threadId: 'studio',
       findPlace,
     });
-    if (r.committed) pushCommitted(id);
+    if (r.committed) pushCommitted(id, r.before, r.after);
     past.set(id, { user: prompt, assistant: r.text, changes: r.changes.map((c) => c.summary) });
     patch(id, {
       text: r.text,
@@ -226,6 +278,14 @@ export function stop(): void {
 
 /** Undo the latest turn's changes (one step per turn). */
 export function undoTurn(id: string): void {
+  if (!session && pendingHistory) {
+    // Restored after a reload: the session is rebuilt with the agent chunk.
+    void loadAgent().then((m) => {
+      syncSession(m);
+      if (session) undoTurn(id);
+    });
+    return;
+  }
   if (!session || committed[committed.length - 1] !== id) return;
   const before = session.house;
   const house = session.undo();
@@ -242,6 +302,13 @@ export function undoTurn(id: string): void {
 }
 
 export function redoTurn(id: string): void {
+  if (!session && pendingHistory) {
+    void loadAgent().then((m) => {
+      syncSession(m);
+      if (session) redoTurn(id);
+    });
+    return;
+  }
   if (!session || redoable[redoable.length - 1] !== id) return;
   const before = session.house;
   const house = session.redo();
@@ -275,17 +342,29 @@ export function retry(id: string): void {
 }
 
 /**
- * Puts a saved transcript back (after a reload). The undo history did not
- * survive, so its changes cards read as kept; the model gets the earlier
- * turns as text memory again.
+ * Puts a saved transcript back (after a reload), with the saved undo / redo
+ * steps of `house` (the saved house) when there are any: the changes cards
+ * then still offer undo and redo. Without them the cards read as kept. The
+ * model gets the earlier turns as text memory again.
  */
-export function restoreItems(items: ChatItem[]): void {
+export function restoreItems(items: ChatItem[], history?: SavedHistory | null, house?: House): void {
   if (useChat.getState().items.length) return;
   past.clear();
+  committed.length = 0;
+  redoable.length = 0;
+  steps.clear();
+  const ids = new Set(items.map((it) => it.id));
+  if (history && house) {
+    for (const st of history.undo) if (ids.has(st.id)) committed.push(st.id), steps.set(st.id, { before: st.before, after: st.after });
+    for (const st of history.redo) if (ids.has(st.id)) redoable.push(st.id), steps.set(st.id, { before: st.before, after: st.after });
+    pendingHistory = committed.length || redoable.length ? { houseJson: JSON.stringify(house) } : null;
+  }
+  const top = committed[committed.length - 1];
+  const next = redoable[redoable.length - 1];
   const restored = items.map((it): ChatItem => ({
     ...it,
     phase: it.role === 'assistant' ? 'done' : it.phase,
-    undo: it.undo === 'can-undo' || it.undo === 'can-redo' ? 'kept' : it.undo,
+    undo: it.id === top ? 'can-undo' : it.id === next ? 'can-redo' : redoable.includes(it.id) || it.undo === 'can-redo' ? 'undone' : it.undo === 'can-undo' ? 'kept' : it.undo,
   }));
   for (let i = 1; i < restored.length; i++) {
     const a = restored[i]!, u = restored[i - 1]!;
@@ -304,6 +383,8 @@ export function newChat(): void {
   past.clear();
   committed.length = 0;
   redoable.length = 0;
+  steps.clear();
+  pendingHistory = null;
   session = null;
   useChat.setState({ items: [] });
 }
