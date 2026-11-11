@@ -1,5 +1,5 @@
 export * as tokens from './style/tokens.js';
-export { createPalette, createShadedMaterial, createFlatMaterial, createLineMaterial, twinMaterial, type Palette, type PaletteKey } from './style/materials.js';
+export { createPalette, createShadedMaterial, createFlatMaterial, createLineMaterial, twinMaterial, setToneFactors, toneToward, toneFactor, type Palette, type PaletteKey, type ToneFactors } from './style/materials.js';
 export { bakeScene, CLIP_GROUP, type BakeResult } from './style/batch.js';
 export { featureEdgePositions } from './style/edges.js';
 export { Sun, sunDirection } from './style/sun.js';

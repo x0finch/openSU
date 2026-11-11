@@ -20,7 +20,8 @@ pnpm test       # solar position unit tests
 `pnpm shots` renders the presentation views `axo-se, axo-ne, eye-sw,
 elev-south, axo-sw`, the sun study `sun-winter-09, sun-winter-12,
 sun-winter-15, sun-summer-12` (SE axonometric, physical sun at the golden
-site), the cutaways `cut-L1, cut-L2` and `cut-L1-sun-winter-15`, and
+site), the cutaways `cut-L1, cut-L2`, `cut-L1-sun-winter-15`,
+`cut-L1-sun-winter-10` and `cut-L2-sun-winter-10`, and
 prints the sun position and the cost of a shadow update. Demo URL
 parameters: `view=`, `sun=winter|spring|summer|autumn|today|YYYY-MM-DD`,
 `time=HH:MM`, `year=`, `cut=L1|none`, `hide=`.
@@ -78,6 +79,13 @@ renders a single view with debug switches.
   (`level:<id>`) stay whole and are hidden above the cut; site and garden
   are never clipped. In physical lighting the clipped parts keep casting
   shadows (the light inside stays true); in presentation they do not.
+  Window and door frames cut by the plane get frame-coloured caps
+  (kernel `cut-frame` parts), so no hollow profiles show.
+- Physical sun + cutaway (`cutawayLight` tokens): interior floors in shade
+  lift to `floorShade`, sunlit floor patches are warm (`floorSunBase` x
+  `floorSunTint`), walls in a cast shadow use the turned-away tone and
+  outdoor paving / gravel / decks the ground-shadow tone. Tone bands are
+  shared uniforms (`setToneFactors`), so switching costs no recompile.
 - `src/style/ground.ts` - invisible ground that only shows received shadows.
 - `src/style/cameras.ts` - presets: parallel axonometric, eye-level two-point
   perspective (horizontal view axis + lens shift), straight elevation.

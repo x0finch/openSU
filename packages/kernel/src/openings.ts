@@ -3,7 +3,7 @@
 // with a flat dark backing, timber inserts and multi-level tall units.
 import type { ResolvedOpening } from '@opensu/model';
 import {
-  BAND_ABOVE, BAND_BELOW, DOOR_CANOPY, DOOR_CANOPY_ABOVE, DOOR_CANOPY_SIDE, FRAME_DEPTH, FRAME_SETBACK, FRAME_WIDTH, MAX_PANE, PANE_TARGET,
+  BAND_ABOVE, BAND_BELOW, CUT_HEIGHT, DOOR_CANOPY, DOOR_CANOPY_ABOVE, DOOR_CANOPY_SIDE, FRAME_DEPTH, FRAME_SETBACK, FRAME_WIDTH, MAX_PANE, PANE_TARGET,
 } from './constants';
 import type { Ctx } from './context';
 import { flat } from './massing';
@@ -35,7 +35,19 @@ function cornerEnds(ctx: Ctx): Map<string, { lo: boolean; hi: boolean }> {
   return out;
 }
 
-export function buildOpenings(ctx: Ctx): void {
+/** A section cap through a frame bar, at a level's cut height. */
+export interface FrameCap {
+  levelId: string;
+  poly: V3[];
+}
+
+/**
+ * Cuts the openings and builds their frames. Returns the section caps of
+ * frame bars that cross a level's cut height (the cutaway shows them as
+ * solid frame-coloured caps instead of hollow profiles).
+ */
+export function buildOpenings(ctx: Ctx): FrameCap[] {
+  const caps: FrameCap[] = [];
   const corners = cornerEnds(ctx);
   for (const lv of ctx.levels) {
     for (const o of lv.level.openings) {
@@ -68,7 +80,7 @@ export function buildOpenings(ctx: Ctx): void {
       const ext = half - FRAME_SETBACK;
       const flo = lo - (corner.lo ? ext : 0), fhi = hi + (corner.hi ? ext : 0);
       const outer = line + outSign * half;
-      frameUnit(ctx, lv.level.id, o, vertical, outer, outSign, flo, fhi, z0, z1, outside?.type === 'porch');
+      frameUnit(ctx, lv.level.id, o, vertical, outer, outSign, flo, fhi, z0, z1, outside?.type === 'porch', caps);
       if (o.canopy && (o.kind === 'door' || o.kind === 'sliding-door')) {
         const zb = z1 + (o.canopy.above ?? DOOR_CANOPY_ABOVE);
         const d0 = outer, d1 = outer + outSign * o.canopy.depth;
@@ -79,6 +91,7 @@ export function buildOpenings(ctx: Ctx): void {
       }
     }
   }
+  return caps;
 }
 
 function cellsFor(ctx: Ctx, o: ResolvedOpening, w: number, z0: number, z1: number, woodLeaf: boolean, startAtU0: boolean): Cell[] {
@@ -114,7 +127,7 @@ function cellsFor(ctx: Ctx, o: ResolvedOpening, w: number, z0: number, z1: numbe
 }
 
 function frameUnit(ctx: Ctx, levelId: string, o: ResolvedOpening, vertical: boolean, outer: number, outSign: number,
-  lo: number, hi: number, z0: number, z1: number, woodLeaf: boolean): void {
+  lo: number, hi: number, z0: number, z1: number, woodLeaf: boolean, caps: FrameCap[]): void {
   const frame = ctx.parts.get({ id: `${levelId}:frame`, level: levelId, role: 'frame', material: 'frame' });
   const wood = ctx.parts.get({ id: `${levelId}:insert`, level: levelId, role: 'insert', material: 'wood' });
   const glass = ctx.parts.get({ id: `${levelId}:glass`, level: levelId, role: 'glass', material: 'glass', castsEdges: false });
@@ -143,6 +156,18 @@ function frameUnit(ctx: Ctx, levelId: string, o: ResolvedOpening, vertical: bool
     for (const [p0, p1, q0, q1] of bars) {
       quad(frame, p0, p1, q0, q1, f0);
       quad(frame, p0, p1, q0, q1, f1, true);
+      // Section caps where the bar crosses a cut plane (any level: tall units span levels).
+      for (const cl of ctx.levels) {
+        const zc = cl.elev + CUT_HEIGHT - z0;
+        if (zc <= q0 || zc >= q1) continue;
+        const poly = [P(p0, zc, f0), P(p1, zc, f0), P(p1, zc, f1), P(p0, zc, f1)];
+        // Face up: counter-clockwise seen from above.
+        const area = poly.reduce((acc, p, i) => {
+          const q = poly[(i + 1) % poly.length]!;
+          return acc + p[0] * q[1] - q[0] * p[1];
+        }, 0);
+        caps.push({ levelId: cl.level.id, poly: area < 0 ? poly.reverse() : poly });
+      }
     }
     const iu0 = u0 + fw, iu1 = u1 - fw, ia = a + fw, ib = b - fw;
     // Inner sides face the pane centre.

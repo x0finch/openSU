@@ -116,8 +116,14 @@ let controls: OrbitControls | null = null;
 function resetControls(): void {
   controls?.dispose();
   if (shot) return;
+  // Read the focus first: OrbitControls' constructor calls update() with its
+  // default target (the origin), which re-aims the camera.
+  const focus = viewer.focusPoint();
+  const quaternion = viewer.camera.quaternion.clone();
   controls = new OrbitControls(viewer.camera, viewer.renderer.domElement);
-  controls.target.copy(viewer.focusPoint());
+  viewer.camera.quaternion.copy(quaternion);
+  viewer.camera.updateMatrixWorld();
+  controls.target.copy(focus);
   controls.update();
   controls.addEventListener('change', () => viewer.requestRender());
 }

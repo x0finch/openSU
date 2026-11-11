@@ -115,7 +115,8 @@ export function createHouseObject(geometry: HouseGeometry, pal: Palette): HouseO
     const positions = toScene(part.positions);
     const mesh = new Mesh(partGeometry(positions, part.indices), pal[MATERIAL_SLOTS[part.material]]);
     mesh.name = part.id;
-    const [cast, receive] = SHADOWS[part.material] ?? [true, true];
+    // Section caps (wall and frame) neither cast nor receive.
+    const [cast, receive] = part.role === 'cut' ? [false, false] : SHADOWS[part.material] ?? [true, true];
     mesh.castShadow = cast;
     mesh.receiveShadow = receive;
     mesh.userData.edges = false;
