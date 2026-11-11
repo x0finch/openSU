@@ -11,7 +11,12 @@ Update it when a milestone moves.
 - Edit commands, schema hardening, `describeHouse` (009).
 - Furniture in 3D and walk mode (010).
 - AI chat path: `packages/agent`, `/api/chat` pass-through relay, assistant
-  panel, grow transition, original starter house (011).
+  panel, grow transition (011).
+- Independent QA pass and its fixes (012): camera limits, clean low-sun
+  rendering, framing around the chrome, phone and landscape walk, URL state
+  and browser autosave, three original template houses (T1 default, T2,
+  T3), shared planting for plan and 3D, sheet and landing fixes, joined
+  pitched roofs, compact phone plans.
 
 ## Verified only locally (never on real infrastructure)
 - Nothing has been deployed. The Worker was run only in the local Workers
@@ -37,8 +42,9 @@ Update it when a milestone moves.
    `checkCredits()`), identity, storage.
 4. Share links: save a house to R2/D1, `/s/$id` viewer with OG image from
    a sheet.
-5. Original template houses of real design quality; landing page with a
-   real render (the reference/golden house must not be shown publicly).
+5. A second independent QA pass after 012 (none has been run on the
+   merged result yet), then raise the templates toward golden-sample
+   richness (see their listed weaknesses in the task 012 report).
 6. Later: style presets, rain, interior decoration, CLA + contributor docs.
 
 See `docs/BACKLOG.md` for accepted but unscheduled findings.
