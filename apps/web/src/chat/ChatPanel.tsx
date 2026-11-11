@@ -245,14 +245,9 @@ function UserMessage({ item }: { item: ChatItem }) {
   const [open, setOpen] = useState(false);
   return (
     <div className="flex flex-col items-end">
-      <p
-        className={cx(
-          'max-w-[85%] rounded-[12px] rounded-br-[4px] bg-ink px-3 py-2 text-[13.5px] leading-[1.5] break-words whitespace-pre-wrap text-white',
-          long && !open && 'line-clamp-5',
-        )}
-        data-testid="user-message"
-      >
-        {item.text}
+      <p className="max-w-[85%] rounded-[12px] rounded-br-[4px] bg-ink px-3 py-2 text-[13.5px] leading-[1.5] break-words whitespace-pre-wrap text-white" data-testid="user-message">
+        {/* Clamped inside the padding, so no half line peeks out. */}
+        <span className={cx(long && !open && 'line-clamp-5')}>{item.text}</span>
       </p>
       {long && (
         <button type="button" onClick={() => setOpen(!open)} aria-expanded={open} className="mt-1 h-7 rounded-[6px] px-1.5 text-xs text-ink-2 transition-colors hover:text-ink">
