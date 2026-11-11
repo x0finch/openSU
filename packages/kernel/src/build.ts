@@ -132,26 +132,21 @@ function buildOutdoorLevels(ctx: Ctx): void {
     if (lv.index === 0) continue;
     const id = lv.level.id;
     const slab = { id: `${id}:balcony-slab`, level: id, role: 'slab' as const, material: 'slab' as const };
-    const deck = { id: `${id}:deck`, level: id, role: 'deck' as const, material: 'deck' as const };
+
     const rail = { id: `${id}:rail`, level: id, role: 'rail' as const, material: 'metal' as const };
     const parapet = { id: `${id}:parapet`, level: id, role: 'wall' as const, material: 'wall' as const };
     const add = (part: PartSpec, r: Rect, z0: number, z1: number, prio: number, tag = 'outdoor') =>
       ctx.massing.add({ x0: r[0], y0: r[1], x1: r[2], y1: r[3], z0, top: flat(z1), part, prio, tag });
     for (const s of lv.level.spaces.filter((o) => o.outdoor)) {
+      const finish: 'paving' | 'gravel' | 'deck' = s.surface === 'paving' ? 'paving' : s.surface === 'gravel' || s.surface === 'lawn' ? 'gravel' : 'deck';
+      const deck = { id: `${id}:${finish === 'deck' ? 'deck' : `surface-${finish}`}`, level: id, role: 'deck' as const, material: finish };
       const cells = ctx.cellsOf(lv.index, (o) => o.id === s.id);
       for (const r of ctx.rects(cells)) {
         add(slab, r, lv.elev - OUTDOOR_SLAB, lv.elev, 30);
-        // Decking stops at the outer face of adjoining walls.
+        // Decking runs under adjoining walls and door thresholds; walls win
+        // where they overlap, so no deck edge shows in a doorway.
         const d: Rect = [...r];
-        const sideIs = (dx: number, dy: number, mx: number, my: number) => {
-          const o = ctx.spaceAt(lv.index, mx + dx, my + dy);
-          return o && !o.outdoor;
-        };
-        if (sideIs(-1, 0, r[0], (r[1] + r[3]) / 2)) d[0] += 120;
-        if (sideIs(1, 0, r[2], (r[1] + r[3]) / 2)) d[2] -= 120;
-        if (sideIs(0, -1, (r[0] + r[2]) / 2, r[1])) d[1] += 120;
-        if (sideIs(0, 1, (r[0] + r[2]) / 2, r[3])) d[3] -= 120;
-        add(deck, d, lv.elev, lv.elev + DECK, 20);
+        add(deck, d, lv.elev, lv.elev + DECK, 5);
       }
       for (const e of lv.level.edges.filter((o) => o.space === s.id)) {
         const g = edgeGeometry(ctx, lv.index, e);
@@ -170,13 +165,22 @@ function buildOutdoorLevels(ctx: Ctx): void {
         // Top rail.
         add(rail, strip(mid - RAIL_BAR / 2, mid + RAIL_BAR / 2, ext(g.ends[0]), ext(g.ends[1])), lv.elev + RAIL_HEIGHT - RAIL_BAR, lv.elev + RAIL_HEIGHT, 40, 'rail');
         const z0 = lv.elev + KERB_HEIGHT, z1 = lv.elev + RAIL_HEIGHT - RAIL_BAR;
-        const [a0, a1] = g.span(ext(g.ends[0]) - RAIL_BAR, ext(g.ends[1]) - RAIL_BAR);
+        // Panels end on the other edge's panel line at corners, at the wall face at walls.
+        const pext = (c: 'rail' | 'wall' | 'open') => (c === 'rail' ? mid : c === 'wall' ? -120 : 0);
+        const [a0, a1] = g.span(pext(g.ends[0]), pext(g.ends[1]));
         if (e.treatment === 'glass-rail') {
           const glass = ctx.parts.get({ id: `${id}:balustrade`, level: id, role: 'rail', material: 'balustrade', castsEdges: false });
+          // Panels butt against each other (no see-through slits); a slim
+          // dark post marks each joint.
+          const posts = ctx.parts.get({ id: `${id}:rail-bars`, level: id, role: 'rail', material: 'metal', castsEdges: false });
           const n = Math.max(1, Math.round((a1 - a0) / 1250));
           for (let k = 0; k < n; k++) {
-            const p0 = a0 + ((a1 - a0) * k) / n + 6, p1 = a0 + ((a1 - a0) * (k + 1)) / n - 6;
+            const p0 = a0 + ((a1 - a0) * k) / n, p1 = a0 + ((a1 - a0) * (k + 1)) / n;
             glass.polygon(g.panel(p0, p1, mid, z0, z1));
+            if (k > 0) {
+              const r = g.at(p0 - 10, p0 + 10, mid - 10, mid + 10);
+              posts.box(r[0], r[1], z0, r[2], r[3], z1);
+            }
           }
         } else {
           const bars = ctx.parts.get({ id: `${id}:rail-bars`, level: id, role: 'rail', material: 'metal', castsEdges: false });

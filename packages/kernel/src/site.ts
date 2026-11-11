@@ -3,7 +3,7 @@
 import type { PartSpec } from './mesh';
 import type { Gate } from '@opensu/model';
 import {
-  COPING, COPING_OUT, FENCE_HOLE, FENCE_THICKNESS, PAVING, PIER_DEPTH, PIER_LENGTH,
+  COPING, COPING_OUT, FENCE_HOLE, GROUND_DECK, FENCE_THICKNESS, PAVING, PIER_DEPTH, PIER_LENGTH,
 } from './constants';
 import type { Ctx, Rect } from './context';
 import { flat } from './massing';
@@ -59,15 +59,17 @@ function fenceRuns(ctx: Ctx, side: Side): [number, number][] {
 export function buildSite(ctx: Ctx): void {
   const fence = ctx.house.site.fence;
   if (fence) buildFence(ctx, fence.height, fence.gates);
-  // Ground surfaces of ground-floor outdoor spaces.
-  const paving = { id: 'site:paving', role: 'ground' as const, material: 'paving' as const };
-  const gravel = { id: 'site:gravel', role: 'ground' as const, material: 'gravel' as const };
+  // Ground surfaces of ground-floor outdoor spaces (authored or by type).
   const lv = ctx.levels[0]!;
   for (const s of lv.level.spaces) {
     if (!s.outdoor) continue;
-    const part = s.type === 'garden' ? gravel : paving;
+    const surface = s.surface ?? (s.type === 'garden' ? 'gravel' : 'paving');
+    // No lawn colour in the style: lawn reads as the light gravel finish.
+    const material = surface === 'deck' ? 'deck' : surface === 'paving' ? 'paving' : 'gravel';
+    const part = { id: `site:${surface}`, role: surface === 'deck' ? 'deck' as const : 'ground' as const, material: material as 'deck' | 'paving' | 'gravel' };
+    const top = surface === 'deck' ? GROUND_DECK : PAVING;
     for (const r of ctx.rects(ctx.cellsOf(0, (o) => o.id === s.id))) {
-      ctx.massing.add({ x0: r[0], y0: r[1], x1: r[2], y1: r[3], z0: lv.elev, top: flat(lv.elev + PAVING), part, prio: 5, tag: 'ground' });
+      ctx.massing.add({ x0: r[0], y0: r[1], x1: r[2], y1: r[3], z0: lv.elev, top: flat(lv.elev + top), part, prio: 5, tag: 'ground' });
     }
   }
 }

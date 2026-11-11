@@ -77,6 +77,10 @@ export interface EntouragePlacement {
   scale: number;
   /** Seed for the deterministic generator. */
   seed: number;
+  /** Foliage below `below` (metres) must stay inside this plan box, so no
+   *  stray leaves show through fence or wall faces; higher foliage may
+   *  overhang. */
+  clip?: { min: [number, number]; max: [number, number]; below: number };
 }
 
 export interface HouseGeometry {

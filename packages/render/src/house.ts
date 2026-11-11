@@ -128,9 +128,46 @@ export function createHouseObject(geometry: HouseGeometry, pal: Palette): HouseO
     const obj = createEntourage(e, pal);
     obj.position.set(e.position[0], e.position[2], -e.position[1]);
     obj.rotation.y += e.rotation;
+    if (e.clip) clipFoliage(obj, e.clip);
     root.add(obj);
   }
   return { root, framePoints };
+}
+
+/**
+ * Drops triangles whose centroid lies below `clip.below` and outside the
+ * plan box (model metres): stray leaves through fence or wall faces.
+ */
+function clipFoliage(obj: Object3D, clip: NonNullable<EntouragePlacement['clip']>): void {
+  obj.updateMatrixWorld(true);
+  const v = new Vector3();
+  obj.traverse((m) => {
+    if (!(m instanceof Mesh)) return;
+    const src = m.geometry as BufferGeometry;
+    const g = src.index ? src.toNonIndexed() : src;
+    const pos = g.getAttribute('position');
+    const keep: number[] = [];
+    for (let t = 0; t < pos.count; t += 3) {
+      let x = 0, y = 0, z = 0;
+      for (let k = 0; k < 3; k++) {
+        v.fromBufferAttribute(pos, t + k).applyMatrix4(m.matrixWorld);
+        x += v.x / 3; y += -v.z / 3; z += v.y / 3;
+      }
+      const out = x < clip.min[0] || x > clip.max[0] || y < clip.min[1] || y > clip.max[1];
+      if (!(out && z < clip.below)) keep.push(t);
+    }
+    if (keep.length * 3 === pos.count) return;
+    const ng = new BufferGeometry();
+    for (const name of Object.keys(g.attributes)) {
+      const a = g.getAttribute(name);
+      const arr = new Float32Array(keep.length * 3 * a.itemSize);
+      keep.forEach((t, i) => {
+        for (let k = 0; k < 3; k++) for (let c = 0; c < a.itemSize; c++) arr[(i * 3 + k) * a.itemSize + c] = a.getComponent(t + k, c);
+      });
+      ng.setAttribute(name, new Float32BufferAttribute(arr, a.itemSize));
+    }
+    m.geometry = ng;
+  });
 }
 
 function createEntourage(e: EntouragePlacement, pal: Palette): Object3D {

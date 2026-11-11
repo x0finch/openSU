@@ -108,8 +108,9 @@ export const materials = {
   glass: '#8B9196',
   glassOpacity: 0.55,
   slab: '#55585B',
-  balustradeGlass: '#70767B',
-  balustradeOpacity: 0.45,
+  /** Reads as ~130 grey over white: clearly visible, lighter than windows. */
+  balustradeGlass: '#6A7075',
+  balustradeOpacity: 0.85,
   metal: '#2E3033',
   paving: '#E9E7E3',
   /** Flat backing behind glazing: glass reads as one flat grey. */

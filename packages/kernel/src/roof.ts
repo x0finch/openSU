@@ -155,7 +155,7 @@ interface Edge { a: [number, number]; b: [number, number]; off: number; side: bo
 function outlineEdges(ctx: Ctx, r: PitchedRoof, all: PitchedRoof[]): Edge[] {
   const ring = r.roof.rings[0]!;
   const over = r.roof.overhang;
-  const verge = over > 0 ? Math.min(VERGE, over) : 0;
+  const verge = r.roof.vergeOverhang ?? (over > 0 ? Math.min(VERGE, over) : 0);
   const pieces: Edge[] = [];
   const upper = ctx.levels[r.li + 1];
   for (let i = 0; i < ring.length; i++) {

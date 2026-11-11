@@ -52,7 +52,11 @@ model axes (X east, Y north, Z up; the renderer converts once).
   units get a 50 mm frame per glazing cell, glass over a flat dark backing,
   mullions above 1300 mm, timber bands where a tall unit crosses a floor
   (`insert` + `spanLevels`), a timber panel at the start of single-level
-  units with an insert, and a timber leaf for a door onto a porch.
+  units with an insert, a timber side panel (`panel`, a quarter of the
+  width), and a timber leaf for a door onto a porch. Two windows of one
+  space that run to a shared corner become a corner window: the void runs
+  through the corner pier and the frames meet. A door `canopy` is a thin
+  slab 300 wider each side, `above` (150) over the head.
 - **Balconies / terraces**: dark slab projecting 180 mm past the edge line,
   kerb, decking, and the edge treatment (glass balustrade with top rail,
   metal bars, parapet).
@@ -61,18 +65,24 @@ model axes (X east, Y north, Z up; the renderer converts once).
 - **Site** (`site.ts`): plot fence with coping (skipped where the house
   stands on the boundary), gates (sliding bars or timber slats), a group of
   small openings on the longest stretch of each side except the one
-  opposite the main gate, an entrance pier with a number plate, paving for
-  courtyards / porch / carport and gravel for gardens.
+  opposite the main gate, an entrance pier with a number plate, and ground
+  finishes from `surface` (default paving for courtyards / porch / carport,
+  gravel for gardens; a deck is a 120 mm timber platform; lawn reads as
+  gravel since the style has no lawn colour).
 - **Feature edges** (`edges.ts`): every polygon outline segment goes on its
   supporting line; coplanar continuations of the same material cancel;
   what remains (free edges, folds over 25 degrees, material changes) is
   drawn. Wall faces continuing across a floor level give the floor lines.
 - **Entourage** (`entourage.ts`), seeded from the house: a large ginkgo in
-  the most open courtyard / garden; bamboo along fences in strips up to
+  the most open courtyard / garden, at its sunny-side corner away from the
+  fence; a green maple in a garden beside the porch; bamboo along fences in strips up to
   2 m deep (not on the sunny side, clear of gates, pier and doors), grass on
   the sunny side, a red maple in front of large glazing; a planter with a
   small tree and a runner on the largest terrace; a person at the main
-  entrance; a car in each carport. Explicit model `entourage` replaces the
+  entrance, in the open; a car in each carport. People are placed where no
+  tree crown is around or in front of them in the fixed presentation views.
+  Plants carry a clip box: the renderer drops low foliage outside the fence
+  (or terrace rails), so no stray leaves show on fence faces. Explicit model `entourage` replaces the
   rules.
 
 Construction defaults (frame sizes, slab and roof depths, fence sizes) are

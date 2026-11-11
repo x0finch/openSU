@@ -80,6 +80,35 @@ describe('kernel: golden sample', () => {
   });
 });
 
+describe('kernel: review round features', () => {
+  it('opens the corner pier of a corner window and frames both faces', () => {
+    const l3 = detail.ctx.levels[2]!;
+    const z = l3.elev + 600 + 800;
+    const corner = detail.ctx.massing.probe(-60, 6840);
+    expect(corner.some((s) => s.z0 < z && z < s.z1)).toBe(false);
+    // Below the sill the corner is solid wall.
+    expect(corner.some((s) => s.z0 < l3.elev + 300 && l3.elev + 300 < s.z1)).toBe(true);
+  });
+
+  it('builds door canopies, timber side panels and the courtyard deck', () => {
+    expect(geo.parts.find((p) => p.id === 'L1:door-canopy')?.material).toBe('slab');
+    expect(geo.parts.find((p) => p.id === 'L3:insert')?.indices.length).toBeGreaterThan(0);
+    expect(geo.parts.find((p) => p.id === 'site:deck')?.material).toBe('deck');
+    expect(geo.parts.some((p) => p.id === 'canopy:canopy-carport')).toBe(false);
+  });
+
+  it('keeps people clear of tree crowns and plants clipped to the fence', () => {
+    const trees = geo.entourage.filter((e) => ['ginkgo', 'maple-red', 'maple-green'].includes(e.kind));
+    for (const p of geo.entourage.filter((e) => e.kind.startsWith('person'))) {
+      for (const t of trees) {
+        const d = Math.hypot(t.position[0] - p.position[0], t.position[1] - p.position[1]);
+        expect(d, `${p.kind} vs ${t.kind}`).toBeGreaterThan(0.5 * t.scale);
+      }
+    }
+    for (const e of geo.entourage.filter((x) => x.kind !== 'car' && !x.kind.startsWith('person'))) expect(e.clip, e.kind).toBeDefined();
+  });
+});
+
 /** One-room house with a single roof of the given kind and fall. */
 function shed(kind: 'mono' | 'gable' | 'hip', fall: 'N' | 'S' | 'E' | 'W' = 'S'): House {
   return {

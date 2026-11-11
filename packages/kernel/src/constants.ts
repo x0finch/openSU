@@ -40,12 +40,18 @@ export const FLAT_ROOF = 200;
 /** Canopy slab thickness. */
 export const CANOPY = 120;
 export const POST = 100;
+/** Canopy over a single door: thickness, default gap above the head, side extension. */
+export const DOOR_CANOPY = 100;
+export const DOOR_CANOPY_ABOVE = 150;
+export const DOOR_CANOPY_SIDE = 300;
 
 /** Site. */
 export const FENCE_THICKNESS = 200;
 export const COPING = 60;
 export const COPING_OUT = 25;
 export const PAVING = 25;
+/** Timber deck on the ground (raised platform). */
+export const GROUND_DECK = 120;
 export const FENCE_HOLE = 320;
 export const PIER_LENGTH = 600;
 export const PIER_DEPTH = 450;
