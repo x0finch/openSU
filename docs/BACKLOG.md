@@ -126,3 +126,13 @@ entourage, sheet formats (4:5, 2:3), privacy policy when accounts arrive.
   dark scenes.
 - Phone 3D crops the house close to the left edge.
 Re-check each against the task 013 layout before fixing; some may be gone.
+
+## After task 014
+- Layout items 4, 6, 9 of task 014 were dropped: the studio layout is being
+  redesigned from mockups the owner is choosing between.
+- Cold-frame cost: the first frame after a panel opens or the house grows
+  takes 11-18 s on software GL with or without blur (probably pending 3D
+  work after re-framing). Not caused by backdrop-filter; uninvestigated.
+  Steady-state frames are 3-5x cheaper without blur (e.g. working
+  indicator 207 ms -> 41 ms, warmed up).
+- A redo that cannot be restored after a reload reads as "undone".
