@@ -69,3 +69,16 @@ Still error-prone for an LLM author:
 - Sheet plans reach ~69% of page width (target 75-80%).
 - "Download all" triggers four downloads; no zip. Web Share untested.
 - Change-card details are English while summaries follow the user.
+
+## After QA fixes part A
+- Phone plan text reaches ~7.5 px (target 10): needs a plan option to drop
+  dimension chains on narrow viewports. 1024x700 reaches ~11 px (target 12).
+- Phone portrait 3D is width-limited, so white bands remain above/below.
+- A thin light streak can remain inside the plot at very low sun in a
+  physical-sun cutaway.
+- `?sample=` sessions bypass autosave; URL sync uses history.pushState next
+  to TanStack Router (works in tests, not deeply tested).
+- From the walkthrough recording: no loading state when entering the
+  studio; the user's bubble scrolls under the chat header after a reply;
+  zoomed plan slides under the project facts; "loading model" flashes when
+  opening sheets; stair landing faces a blank wall for a second.
