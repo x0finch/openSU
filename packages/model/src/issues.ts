@@ -7,6 +7,8 @@ export interface IssueWhere {
   stair?: string;
   roof?: string;
   gate?: string;
+  /** Index of the command in an `applyCommands` batch that caused it. */
+  command?: number;
   /** Path into the authored JSON, e.g. ["levels", 0, "spaces", 2, "cells", 0]. */
   path?: (string | number)[];
 }

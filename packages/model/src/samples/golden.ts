@@ -51,6 +51,9 @@ import type { CellRect, House } from '../schema';
 
 const c = (x0: string, x1: string, y0: string, y1: string): CellRect => ({ x0, x1, y0, y1 });
 const start = (offset: number) => ({ from: 'start' as const, offset });
+/** Opening span: the stretch of the host edge between two grid lines; `at`
+ *  offsets are measured from its west or south end. */
+const span = (from: string, to: string) => ({ from, to });
 
 export const golden: House = {
   version: 1,
@@ -135,29 +138,29 @@ export const golden: House = {
         { id: 'gf-carport', name: '车位', nameEn: 'Carport', type: 'carport', cells: [c('7', '10', 'J', 'L')], edge: 'none' },
       ],
       openings: [
-        { id: 'gf-d-patio', kind: 'door', host: { space: 'gf-senior', side: 'N' }, at: start(2150), width: 800, height: 2100, sill: 0 },
-        { id: 'gf-d-senior', kind: 'door', host: { space: 'gf-senior', side: 'E' }, at: start(200), width: 900, height: 2100, sill: 0 },
-        { id: 'gf-w-senior', kind: 'window', host: { space: 'gf-senior', side: 'S' }, at: start(500), width: 1800, height: 1500, sill: 900 },
+        { id: 'gf-d-patio', kind: 'door', host: { space: 'gf-senior', side: 'N', span: span('1', '3') }, at: start(2150), width: 800, height: 2100, sill: 0 },
+        { id: 'gf-d-senior', kind: 'door', host: { space: 'gf-senior', side: 'E', span: span('F', 'K') }, at: start(200), width: 900, height: 2100, sill: 0 },
+        { id: 'gf-w-senior', kind: 'window', host: { space: 'gf-senior', side: 'S', span: span('1', '3') }, at: start(500), width: 1800, height: 1500, sill: 900 },
         // Small high window on the west face (3D views).
-        { id: 'gf-w-senior-w', kind: 'window', host: { space: 'gf-senior', side: 'W' }, at: start(1600), width: 600, height: 900, sill: 1300 },
-        { id: 'gf-d-bath', kind: 'door', host: { space: 'gf-bath', side: 'S' }, at: start(200), width: 800, height: 2100, sill: 0 },
-        { id: 'gf-w-bath', kind: 'window', host: { space: 'gf-bath', side: 'N' }, at: start(200), width: 600, height: 600, sill: 1500 },
+        { id: 'gf-w-senior-w', kind: 'window', host: { space: 'gf-senior', side: 'W', span: span('F', 'K') }, at: start(1600), width: 600, height: 900, sill: 1300 },
+        { id: 'gf-d-bath', kind: 'door', host: { space: 'gf-bath', side: 'S', span: span('3', '6') }, at: start(200), width: 800, height: 2100, sill: 0 },
+        { id: 'gf-w-bath', kind: 'window', host: { space: 'gf-bath', side: 'N', span: span('3', '6') }, at: start(200), width: 600, height: 600, sill: 1500 },
         // Courtyard door with a small canopy over it (south elevation).
-        { id: 'gf-d-court', kind: 'door', host: { space: 'gf-hall', side: 'W' }, at: start(600), width: 800, height: 2100, sill: 0, canopy: { depth: 900 } },
-        { id: 'gf-d-store', kind: 'door', host: { between: ['gf-hall', 'gf-store'] }, at: start(200), width: 800, height: 2100, sill: 0 },
+        { id: 'gf-d-court', kind: 'door', host: { space: 'gf-hall', side: 'W', span: span('E', 'F') }, at: start(600), width: 800, height: 2100, sill: 0, canopy: { depth: 900 } },
+        { id: 'gf-d-store', kind: 'door', host: { between: ['gf-hall', 'gf-store'], span: span('2', '4') }, at: start(200), width: 800, height: 2100, sill: 0 },
         // Two tall slot windows through the ground floor and level 2 (3D views),
         // with timber bands across the level-2 floor.
-        { id: 'gf-w-slot-w', kind: 'window', host: { space: 'gf-dining', side: 'S' }, at: start(600), width: 750, height: 5600, sill: 0, spanLevels: 2, insert: 'wood-panel' },
-        { id: 'gf-w-slot-e', kind: 'window', host: { space: 'gf-dining', side: 'S' }, at: start(1950), width: 750, height: 5600, sill: 0, spanLevels: 2, insert: 'wood-panel' },
-        { id: 'gf-sd-living', kind: 'sliding-door', host: { space: 'gf-living', side: 'S' }, at: start(300), width: 3600, height: 2400, sill: 0 },
-        { id: 'gf-w-living', kind: 'window', host: { space: 'gf-living', side: 'N' }, at: start(700), width: 900, height: 1500, sill: 900 },
+        { id: 'gf-w-slot-w', kind: 'window', host: { space: 'gf-dining', side: 'S', span: span('6', '7') }, at: start(600), width: 750, height: 5600, sill: 0, spanLevels: 2, insert: 'wood-panel' },
+        { id: 'gf-w-slot-e', kind: 'window', host: { space: 'gf-dining', side: 'S', span: span('6', '7') }, at: start(1950), width: 750, height: 5600, sill: 0, spanLevels: 2, insert: 'wood-panel' },
+        { id: 'gf-sd-living', kind: 'sliding-door', host: { space: 'gf-living', side: 'S', span: span('7', '10') }, at: start(300), width: 3600, height: 2400, sill: 0 },
+        { id: 'gf-w-living', kind: 'window', host: { space: 'gf-living', side: 'N', span: span('7', '10') }, at: start(700), width: 900, height: 1500, sill: 900 },
         // Main entrance, from the porch.
-        { id: 'gf-d-entry', kind: 'door', host: { space: 'gf-living', side: 'N' }, at: start(2550), width: 1000, height: 2400, sill: 0 },
-        { id: 'gf-w-wkitchen', kind: 'window', host: { space: 'gf-wkitchen', side: 'E' }, at: start(800), width: 800, height: 1200, sill: 1000 },
-        { id: 'gf-w-ckitchen-e', kind: 'window', host: { space: 'gf-ckitchen', side: 'E' }, at: start(600), width: 1500, height: 1200, sill: 1000 },
-        { id: 'gf-w-ckitchen-w', kind: 'window', host: { space: 'gf-ckitchen', side: 'W' }, at: start(1750), width: 600, height: 1200, sill: 1000 },
+        { id: 'gf-d-entry', kind: 'door', host: { space: 'gf-living', side: 'N', span: span('7', '10') }, at: start(2550), width: 1000, height: 2400, sill: 0 },
+        { id: 'gf-w-wkitchen', kind: 'window', host: { space: 'gf-wkitchen', side: 'E', span: span('F', 'J') }, at: start(800), width: 800, height: 1200, sill: 1000 },
+        { id: 'gf-w-ckitchen-e', kind: 'window', host: { space: 'gf-ckitchen', side: 'E', span: span('J', 'L') }, at: start(600), width: 1500, height: 1200, sill: 1000 },
+        { id: 'gf-w-ckitchen-w', kind: 'window', host: { space: 'gf-ckitchen', side: 'W', span: span('J', 'L') }, at: start(1750), width: 600, height: 1200, sill: 1000 },
         // Glazed partition with sliding doors between the two kitchens.
-        { id: 'gf-sd-kitchen', kind: 'sliding-door', host: { between: ['gf-wkitchen', 'gf-ckitchen'] }, at: start(700), width: 2100, height: 2400, sill: 0 },
+        { id: 'gf-sd-kitchen', kind: 'sliding-door', host: { between: ['gf-wkitchen', 'gf-ckitchen'], span: span('6', '7') }, at: start(700), width: 2100, height: 2400, sill: 0 },
       ],
       stairs: [
         // U stair: first flight climbs south from the hall, returns north over the storeroom.
@@ -186,24 +189,24 @@ export const golden: House = {
         { id: 'l2-balcony-s', name: '观景阳台', nameEn: 'Living balcony', type: 'balcony', cells: [c('7', '10', 'B', 'C')], edge: 'glass-rail' },
       ],
       openings: [
-        { id: 'l2-d-bed-w', kind: 'door', host: { space: 'l2-bed-w', side: 'E' }, at: start(200), width: 900, height: 2100, sill: 0 },
-        { id: 'l2-w-bed-w', kind: 'window', host: { space: 'l2-bed-w', side: 'S' }, at: start(500), width: 1800, height: 1500, sill: 900, panel: 'start' },
-        { id: 'l2-w-bed-w-w', kind: 'window', host: { space: 'l2-bed-w', side: 'W' }, at: start(1400), width: 1000, height: 900, sill: 1100, panel: 'start' },
-        { id: 'l2-d-bath', kind: 'door', host: { space: 'l2-bath', side: 'S' }, at: start(200), width: 800, height: 2100, sill: 0 },
-        { id: 'l2-w-bath', kind: 'window', host: { space: 'l2-bath', side: 'N' }, at: start(200), width: 600, height: 600, sill: 1500 },
-        { id: 'l2-d-bed-n', kind: 'door', host: { space: 'l2-bed-n', side: 'S' }, at: start(200), width: 850, height: 2100, sill: 0 },
+        { id: 'l2-d-bed-w', kind: 'door', host: { space: 'l2-bed-w', side: 'E', span: span('F', 'K') }, at: start(200), width: 900, height: 2100, sill: 0 },
+        { id: 'l2-w-bed-w', kind: 'window', host: { space: 'l2-bed-w', side: 'S', span: span('1', '3') }, at: start(500), width: 1800, height: 1500, sill: 900, panel: 'start' },
+        { id: 'l2-w-bed-w-w', kind: 'window', host: { space: 'l2-bed-w', side: 'W', span: span('F', 'K') }, at: start(1400), width: 1000, height: 900, sill: 1100, panel: 'start' },
+        { id: 'l2-d-bath', kind: 'door', host: { space: 'l2-bath', side: 'S', span: span('3', '6') }, at: start(200), width: 800, height: 2100, sill: 0 },
+        { id: 'l2-w-bath', kind: 'window', host: { space: 'l2-bath', side: 'N', span: span('3', '6') }, at: start(200), width: 600, height: 600, sill: 1500 },
+        { id: 'l2-d-bed-n', kind: 'door', host: { space: 'l2-bed-n', side: 'S', span: span('6', '7') }, at: start(200), width: 850, height: 2100, sill: 0 },
         // One glazed unit onto the north balcony (window + door, ref-1).
-        { id: 'l2-sd-balcony-n', kind: 'sliding-door', host: { space: 'l2-bed-n', side: 'N' }, at: start(900), width: 1800, height: 2400, sill: 0 },
+        { id: 'l2-sd-balcony-n', kind: 'sliding-door', host: { space: 'l2-bed-n', side: 'N', span: span('6', '7') }, at: start(900), width: 1800, height: 2400, sill: 0 },
         // Tall slot window with a timber band at the attic floor (east face, 3D views).
-        { id: 'l2-w-east-tall', kind: 'window', host: { space: 'l2-bed-n', side: 'E' }, at: start(800), width: 800, height: 4800, sill: 600, spanLevels: 2, insert: 'wood-panel' },
+        { id: 'l2-w-east-tall', kind: 'window', host: { space: 'l2-bed-n', side: 'E', span: span('F', 'K') }, at: start(800), width: 800, height: 4800, sill: 600, spanLevels: 2, insert: 'wood-panel' },
         // Tall slot on the west face of the middle bay with a timber band at the attic floor (ref-2).
-        { id: 'l2-w-hall-w', kind: 'window', host: { space: 'l2-hall', side: 'W' }, at: start(600), width: 800, height: 3900, sill: 600, spanLevels: 2, insert: 'wood-panel' },
-        { id: 'l2-w-hall-n', kind: 'window', host: { space: 'l2-hall', side: 'N' }, at: start(6700), width: 800, height: 1500, sill: 900 },
-        { id: 'l2-d-master', kind: 'door', host: { space: 'l2-master', side: 'N' }, at: start(760), width: 900, height: 2100, sill: 0 },
-        { id: 'l2-d-mbath', kind: 'door', host: { space: 'l2-master', side: 'N' }, at: start(1830), width: 850, height: 2100, sill: 0 },
-        { id: 'l2-w-mbath', kind: 'window', host: { space: 'l2-mbath', side: 'E' }, at: start(450), width: 850, height: 900, sill: 1200 },
+        { id: 'l2-w-hall-w', kind: 'window', host: { space: 'l2-hall', side: 'W', span: span('E', 'F') }, at: start(600), width: 800, height: 3900, sill: 600, spanLevels: 2, insert: 'wood-panel' },
+        { id: 'l2-w-hall-n', kind: 'window', host: { space: 'l2-hall', side: 'N', span: span('5', '8') }, at: start(5000), width: 800, height: 1500, sill: 900 },
+        { id: 'l2-d-master', kind: 'door', host: { space: 'l2-master', side: 'N', span: span('7', '10') }, at: start(760), width: 900, height: 2100, sill: 0 },
+        { id: 'l2-d-mbath', kind: 'door', host: { space: 'l2-master', side: 'N', span: span('7', '10') }, at: start(1830), width: 850, height: 2100, sill: 0 },
+        { id: 'l2-w-mbath', kind: 'window', host: { space: 'l2-mbath', side: 'E', span: span('E', 'F') }, at: start(450), width: 850, height: 900, sill: 1200 },
         // One glazed unit onto the south balcony; its head stays below the balcony canopy.
-        { id: 'l2-sd-master', kind: 'sliding-door', host: { space: 'l2-master', side: 'S' }, at: start(700), width: 3200, height: 2300, sill: 0 },
+        { id: 'l2-sd-master', kind: 'sliding-door', host: { space: 'l2-master', side: 'S', span: span('7', '10') }, at: start(700), width: 3200, height: 2300, sill: 0 },
       ],
       stairs: [
         { id: 'stair-2', space: 'l2-stair', kind: 'u', up: 'S' },
@@ -231,20 +234,20 @@ export const golden: House = {
         { id: 'l3-terrace', name: '露台', nameEn: 'Terrace', type: 'terrace', cells: [c('7', '10', 'C', 'F')], edge: 'glass-rail' },
       ],
       openings: [
-        { id: 'l3-d-bed', kind: 'door', host: { space: 'l3-bed', side: 'E' }, at: start(200), width: 900, height: 2100, sill: 0 },
+        { id: 'l3-d-bed', kind: 'door', host: { space: 'l3-bed', side: 'E', span: span('F', 'K') }, at: start(200), width: 900, height: 2100, sill: 0 },
         // Corner window wrapping the south-west corner (both parts run to the
         // corner), timber side panel at the north end of the west part.
-        { id: 'l3-w-bed', kind: 'window', host: { space: 'l3-bed', side: 'S' }, at: start(0), width: 1800, height: 1600, sill: 600 },
-        { id: 'l3-w-bed-w', kind: 'window', host: { space: 'l3-bed', side: 'W' }, at: start(0), width: 1300, height: 1600, sill: 600, panel: 'end' },
-        { id: 'l3-d-bath', kind: 'door', host: { space: 'l3-bath', side: 'S' }, at: start(200), width: 800, height: 2100, sill: 0 },
-        { id: 'l3-w-bath', kind: 'window', host: { space: 'l3-bath', side: 'N' }, at: start(200), width: 600, height: 600, sill: 1000 },
-        { id: 'l3-d-study', kind: 'door', host: { space: 'l3-study', side: 'S' }, at: start(200), width: 850, height: 2100, sill: 0 },
-        { id: 'l3-w-study', kind: 'window', host: { space: 'l3-study', side: 'N' }, at: start(900), width: 1800, height: 1300, sill: 300 },
-        { id: 'l3-d-terrace', kind: 'door', host: { space: 'l3-hall', side: 'E' }, at: start(500), width: 850, height: 2100, sill: 0 },
+        { id: 'l3-w-bed', kind: 'window', host: { space: 'l3-bed', side: 'S', span: span('1', '3') }, at: start(0), width: 1800, height: 1600, sill: 600 },
+        { id: 'l3-w-bed-w', kind: 'window', host: { space: 'l3-bed', side: 'W', span: span('F', 'K') }, at: start(0), width: 1300, height: 1600, sill: 600, panel: 'end' },
+        { id: 'l3-d-bath', kind: 'door', host: { space: 'l3-bath', side: 'S', span: span('3', '6') }, at: start(200), width: 800, height: 2100, sill: 0 },
+        { id: 'l3-w-bath', kind: 'window', host: { space: 'l3-bath', side: 'N', span: span('3', '6') }, at: start(200), width: 600, height: 600, sill: 1000 },
+        { id: 'l3-d-study', kind: 'door', host: { space: 'l3-study', side: 'S', span: span('6', '7') }, at: start(200), width: 850, height: 2100, sill: 0 },
+        { id: 'l3-w-study', kind: 'window', host: { space: 'l3-study', side: 'N', span: span('6', '7') }, at: start(900), width: 1800, height: 1300, sill: 300 },
+        { id: 'l3-d-terrace', kind: 'door', host: { space: 'l3-hall', side: 'E', span: span('E', 'F') }, at: start(500), width: 850, height: 2100, sill: 0 },
         // Wide strip under the south eave: one part over the stair, one over the
         // family room with a timber insert at its west end (3D views).
-        { id: 'l3-w-stair', kind: 'window', host: { space: 'l3-stair', side: 'S' }, at: start(1000), width: 1200, height: 900, sill: 350 },
-        { id: 'l3-w-family', kind: 'window', host: { space: 'l3-family', side: 'S' }, at: start(200), width: 3200, height: 900, sill: 350, insert: 'wood-panel' },
+        { id: 'l3-w-stair', kind: 'window', host: { space: 'l3-stair', side: 'S', span: span('2', '6') }, at: start(1000), width: 1200, height: 900, sill: 350 },
+        { id: 'l3-w-family', kind: 'window', host: { space: 'l3-family', side: 'S', span: span('6', '7') }, at: start(200), width: 3200, height: 900, sill: 350, insert: 'wood-panel' },
       ],
       stairs: [],
     },

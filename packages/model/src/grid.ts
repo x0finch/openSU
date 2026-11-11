@@ -230,6 +230,36 @@ export function rings(grid: Grid, cells: ReadonlySet<number>): Point[][] {
   return result;
 }
 
+/** Greedy decomposition of a cell set into index rects (row-major, each
+ *  rect grown east first, then north). Deterministic. */
+export function cellRects(grid: Grid, cells: ReadonlySet<number>): RectIndex[] {
+  const left = new Set(cells);
+  const out: RectIndex[] = [];
+  for (const k of [...cells].sort((a, b) => a - b)) {
+    if (!left.has(k)) continue;
+    const [i0, j0] = cellIJ(grid, k);
+    let i1 = i0 + 1;
+    while (i1 < grid.nx && left.has(cellKey(grid, i1, j0))) i1++;
+    let j1 = j0 + 1;
+    const rowFull = (j: number) => {
+      for (let i = i0; i < i1; i++) if (!left.has(cellKey(grid, i, j))) return false;
+      return true;
+    };
+    while (j1 < grid.ny && rowFull(j1)) j1++;
+    for (let j = j0; j < j1; j++) for (let i = i0; i < i1; i++) left.delete(cellKey(grid, i, j));
+    out.push({ i0, i1, j0, j1 });
+  }
+  return out;
+}
+
+/** Cell set as grid-id ranges, e.g. "6-7/F-K + 3-5/F-H". */
+export function cellsLabel(grid: Grid, cells: ReadonlySet<number>): string {
+  if (cells.size === 0) return '(none)';
+  return cellRects(grid, cells)
+    .map((r) => `${grid.xIds[r.i0]}-${grid.xIds[r.i1]}/${grid.yIds[r.j0]}-${grid.yIds[r.j1]}`)
+    .join(' + ');
+}
+
 /** Signed area (mm²): positive for counter-clockwise rings. */
 export function signedArea(ring: readonly Point[]): number {
   let s = 0;

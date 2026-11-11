@@ -5,10 +5,11 @@ import {
   MIN_OPENING_GAP, MIN_STAIR_WIDTH, NEEDS_EXTERIOR_WINDOW,
 } from './constants';
 import {
-  bboxOf, buildGrid, cellsOf, componentCount, largestRect, rectIndex, setArea,
+  bboxOf, buildGrid, cellsLabel, cellsOf, componentCount, largestRect, rectIndex, setArea,
+  type Grid,
 } from './grid';
 import type { Issue } from './issues';
-import { analyse, areAdjacent, type Analysis, type Piece } from './resolve';
+import { analyse, areAdjacent, runIds, type Analysis, type LevelCtx, type Piece } from './resolve';
 import { House, isOutdoorType, type CellRect } from './schema';
 
 const m2 = (mm2: number) => `${(mm2 / 1e6).toFixed(2)} m²`;
@@ -29,9 +30,59 @@ export function validate(input: unknown): Issue[] {
   const issues = checkReferences(house);
   if (issues.some((i) => i.severity === 'error')) return issues;
   const analysis = analyse(house);
-  issues.push(...analysis.problems);
-  issues.push(...checkGeometry(house, analysis));
-  return issues;
+  const found = suppressUnplacedNoise(analysis, [...analysis.problems, ...checkGeometry(house, analysis)]);
+  return [...issues, ...suppressOverlapNoise(analysis, found)];
+}
+
+/**
+ * An opening that cannot be placed is left out, so its spaces may look
+ * windowless or unreachable. While any opening fails to place, drop
+ * `unreachable` (it cascades through doors and stairs) and drop
+ * `no-exterior-window` for the spaces an unplaced window / sliding door
+ * would serve.
+ */
+function suppressUnplacedNoise(an: Analysis, issues: Issue[]): Issue[] {
+  const unplaced = new Set(an.problems.map((p) => p.where.opening).filter((id): id is string => id !== undefined));
+  if (unplaced.size === 0) return issues;
+  const served = new Set<string>();
+  for (const ctx of an.ctxs) {
+    for (const o of ctx.level.openings) {
+      if (!unplaced.has(o.id) || (o.kind !== 'window' && o.kind !== 'sliding-door')) continue;
+      for (const s of 'space' in o.host ? [o.host.space] : o.host.between) served.add(`${ctx.level.id}\u0000${s}`);
+    }
+  }
+  return issues.filter((i) => {
+    if (i.code === 'unreachable') return false;
+    if (i.code === 'no-exterior-window') return !served.has(`${i.where.level}\u0000${i.where.space}`);
+    return true;
+  });
+}
+
+/** Issue codes that an overlap cannot cause (kept when overlaps are reported). */
+const OVERLAP_SAFE = new Set(['space-overlap', 'space-disconnected', 'roof-params', 'gate-off-fence', 'outdoor-only']);
+
+/**
+ * When spaces overlap, the cells go to the first listed space and the other
+ * space's walls, openings and stairs come out wrong, which produces a cascade
+ * of confusing follow-on errors. Report the overlap and drop issues located
+ * on that level or the levels next to it (stairs, tall windows and supports
+ * cross one level), plus all reachability issues, until it is fixed.
+ */
+function suppressOverlapNoise(an: Analysis, issues: Issue[]): Issue[] {
+  const overlapping = an.ctxs.filter((ctx) => issues.some((i) => i.code === 'space-overlap' && i.where.level === ctx.level.id));
+  if (overlapping.length === 0) return issues;
+  const affected = new Set<string>();
+  for (const ctx of overlapping) {
+    for (const k of [-1, 0, 1]) {
+      const near = an.ctxs[ctx.index + k];
+      if (near) affected.add(near.level.id);
+    }
+  }
+  return issues.filter((i) => {
+    if (OVERLAP_SAFE.has(i.code)) return true;
+    if (i.code === 'unreachable') return false;
+    return !(i.where.level !== undefined && affected.has(i.where.level));
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -81,6 +132,28 @@ function checkReferences(house: House): Issue[] {
     }
   };
 
+  const checkSpanIds = (id: string, host: House['levels'][number]['openings'][number]['host'], where: Issue['where']) => {
+    const span = host.span!;
+    const ids = [span.from, span.to];
+    if ('space' in host) {
+      const ew = host.side === 'N' || host.side === 'S';
+      const [own, other] = ew ? [grid.xIndex, grid.yIndex] : [grid.yIndex, grid.xIndex];
+      const axis = ew ? 'X' : 'Y';
+      for (const g of ids) {
+        if (own.has(g)) continue;
+        err('unknown-grid-line', other.has(g)
+          ? `Opening "${id}" has span ${span.from}-${span.to}, but "${g}" is a ${ew ? 'Y' : 'X'} grid line. The ${host.side} side of a space runs ${ew ? 'west-east' : 'south-north'}, so its span is between two ${axis} lines (${ew ? xIds : yIds}).`
+          : `Opening "${id}" has span ${span.from}-${span.to}, but "${g}" is not a grid line. ${axis} lines: ${ew ? xIds : yIds}.`, where);
+      }
+    } else {
+      const bothX = ids.every((g) => grid.xIndex.has(g));
+      const bothY = ids.every((g) => grid.yIndex.has(g));
+      if (!bothX && !bothY) {
+        err('unknown-grid-line', `Opening "${id}" has span ${span.from}-${span.to}; both ends must be X grid lines (${xIds}) for a wall running west-east, or both Y grid lines (${yIds}) for a wall running south-north.`, where);
+      }
+    }
+  };
+
   const levelIds = new Set(house.levels.map((l) => l.id));
   house.levels.forEach((level, li) => {
     const spaceIds = new Set(level.spaces.map((s) => s.id));
@@ -104,6 +177,7 @@ function checkReferences(house: House): Issue[] {
         if (!spaceIds.has(r)) err('unknown-space', `Opening "${o.id}" refers to space "${r}", which is not on level "${level.id}". Spaces here: ${known}.`, where);
       }
       if ('between' in o.host && o.host.between[0] === o.host.between[1]) err('unknown-space', `Opening "${o.id}" is between "${o.host.between[0]}" and itself.`, where);
+      if (o.host.span) checkSpanIds(o.id, o.host, where);
     });
     level.stairs.forEach((st) => {
       if (!spaceIds.has(st.space)) err('unknown-space', `Stair "${st.id}" is in space "${st.space}", which is not on level "${level.id}". Spaces here: ${known}.`, { level: level.id, stair: st.id });
@@ -137,8 +211,8 @@ function checkGeometry(house: House, an: Analysis): Issue[] {
         const key = `${a.id}|${b.id}`;
         if (reported.has(key)) return;
         reported.add(key);
-        const bb = bboxOf(grid, new Set(common))!;
-        err('space-overlap', `Spaces "${a.id}" and "${b.id}" overlap on level "${level.id}" (${m2(setArea(grid, new Set(common)))} around x ${fmt(bb.x0)}..${fmt(bb.x1)}, y ${fmt(bb.y0)}..${fmt(bb.y1)}). Shrink one of them so each grid cell belongs to one space.`, { level: level.id, space: a.id });
+        const cs = new Set(common);
+        err('space-overlap', `Spaces "${a.id}" and "${b.id}" overlap on level "${level.id}" in cells ${cellsLabel(grid, cs)} (${m2(setArea(grid, cs))}). Each grid cell belongs to one space: remove those cells from one of them. Checks that depend on the layout of "${level.id}" (walls, openings, stairs, reachability) are skipped until this is fixed.`, { level: level.id, space: a.id });
       });
     });
     // Connectivity of each space.
@@ -300,22 +374,31 @@ function checkOpeningOverlaps(an: Analysis, issues: Issue[]): void {
         const li = ctx.index + k;
         const kk = key(li, p.orient, p.line);
         const list = occ.get(kk) ?? [];
-        list.push({ id: p.opening.id, lo: p.lo, hi: p.hi, from: ctx.level.id });
+        list.push({ id: p.opening.id, lo: p.lo, hi: p.hi, from: k === 0 ? '' : ` (from level "${ctx.level.id}", spanLevels ${span})` });
         occ.set(kk, list);
         if (k === 0) continue;
         const upper = ctxs[li];
         const where = { level: ctx.level.id, opening: p.opening.id };
         if (!upper) {
-          issues.push({ code: 'span-no-wall', severity: 'error', message: `Opening "${p.opening.id}" spans ${span} levels but there is no level ${li + 1} above "${ctx.level.id}". Reduce spanLevels.`, where });
-          continue;
+          issues.push({ code: 'span-no-wall', severity: 'error', message: `Opening "${p.opening.id}" on level "${ctx.level.id}" has spanLevels ${span}, but only ${k - 1} level(s) exist above "${ctx.level.id}". Set spanLevels to ${k} or less.`, where });
+          break;
         }
-        const wall = upper.pieces.find((q) => {
-          if (q.orient !== p.orient || q.line !== p.line || q.kind !== 'wall') return false;
-          const pos = q.orient === 'NS' ? grid.ys : grid.xs;
-          return pos[q.from]! <= p.lo + 0.5 && p.hi <= pos[q.to]! + 0.5;
-        });
+        const pos = p.orient === 'NS' ? grid.ys : grid.xs;
+        const lineId = p.orient === 'NS' ? grid.xIds[p.line]! : grid.yIds[p.line]!;
+        const there = upper.pieces.filter((q) => q.orient === p.orient && q.line === p.line && pos[q.from]! < p.hi - 0.5 && p.lo + 0.5 < pos[q.to]!);
+        const wall = there.find((q) => q.kind === 'wall' && pos[q.from]! <= p.lo + 0.5 && p.hi <= pos[q.to]! + 0.5);
         if (!wall) {
-          issues.push({ code: 'span-no-wall', severity: 'error', message: `Opening "${p.opening.id}" spans up into level "${upper.level.id}", but that level has no single wall on the same line at ${fmt(p.lo)}..${fmt(p.hi)}. Reduce spanLevels or add the space above.`, where });
+          const sid = (n: number) => (n >= 0 ? upper.level.spaces[n]!.id : 'outside');
+          const what = there.length === 0
+            ? 'there is no wall or boundary there at all'
+            : there.length > 1
+              ? `the wall there is split into ${there.length} segments (${there.map((q) => `${runIds(grid, q).from}-${runIds(grid, q).to}: ${sid(q.sides[0])} | ${sid(q.sides[1])}`).join(', ')})`
+              : there[0]!.kind === 'wall' ? 'the wall there is shorter than the opening' : `the boundary there has no wall (${there[0]!.kind === 'open' ? 'open between two spaces' : 'an outdoor edge'})`;
+          issues.push({
+            code: 'span-no-wall', severity: 'error',
+            message: `Opening "${p.opening.id}" on level "${ctx.level.id}" has spanLevels ${span}, so it continues up through level "${upper.level.id}" in the same wall (line ${lineId}, ${fmt(p.lo)}..${fmt(p.hi)}). But on "${upper.level.id}" ${what}. Set spanLevels to ${k} to stop below "${upper.level.id}", or change "${upper.level.id}" so a single wall runs there.`,
+            where,
+          });
         }
       }
     }
@@ -329,7 +412,7 @@ function checkOpeningOverlaps(an: Analysis, issues: Issue[]): void {
         const a = sorted[i]!;
         const b = sorted[j]!;
         if (b.lo < a.hi - 0.5) {
-          issues.push({ code: 'opening-overlap', severity: 'error', message: `Openings "${a.id}" and "${b.id}" overlap on level "${levelId}" (${fmt(a.lo)}..${fmt(a.hi)} and ${fmt(b.lo)}..${fmt(b.hi)} on the same wall line). Move or narrow one of them.`, where: { level: levelId, opening: b.id } });
+          issues.push({ code: 'opening-overlap', severity: 'error', message: `Openings "${a.id}"${a.from} and "${b.id}"${b.from} overlap on level "${levelId}" (${fmt(a.lo)}..${fmt(a.hi)} and ${fmt(b.lo)}..${fmt(b.hi)} on the same wall line). Move or narrow one of them${a.from || b.from ? ', or reduce spanLevels' : ''}.`, where: { level: levelId, opening: b.id } });
         }
       }
     }
@@ -349,22 +432,44 @@ function checkStairs(house: House, an: Analysis, issues: Issue[]): void {
       }
       const upper = ctxs[ctx.index + 1];
       if (!upper) {
-        issues.push({ code: 'stair-misaligned', severity: 'error', message: `Stair "${st.id}" on the top level "${ctx.level.id}" leads nowhere. Remove it or add a level above.`, where });
+        issues.push({ code: 'stair-misaligned', severity: 'error', message: `Stair "${st.id}" is on "${ctx.level.id}", the top level, so it leads nowhere (a stair climbs from its own level to the next level up). Remove it, or add a level above "${ctx.level.id}" with a "stair" space over ${cellsLabel(grid, ctx.spaceCells[si]!)}.`, where });
         continue;
       }
       const cells = ctx.spaceCells[si]!;
       const well = new Set<number>();
+      const upperStairs: string[] = [];
       upper.level.spaces.forEach((s, ui) => {
-        if (s.type === 'stair') for (const k of upper.spaceCells[ui]!) well.add(k);
+        if (s.type !== 'stair') return;
+        for (const k of upper.spaceCells[ui]!) well.add(k);
+        upperStairs.push(`"${s.id}" ${cellsLabel(grid, upper.spaceCells[ui]!)}`);
       });
-      const missing = [...cells].filter((k) => !well.has(k));
-      if (missing.length) {
-        const bb = bboxOf(grid, cells)!;
-        issues.push({ code: 'stair-misaligned', severity: 'error', message: `Stair "${st.id}" (space "${st.space}", x ${fmt(bb.x0)}..${fmt(bb.x1)}, y ${fmt(bb.y0)}..${fmt(bb.y1)}) is not covered by a stair space on level "${upper.level.id}" (${m2(setArea(grid, new Set(missing)))} uncovered). Add or move a "stair" space on "${upper.level.id}" over it.`, where });
+      const missing = new Set([...cells].filter((k) => !well.has(k)));
+      if (missing.size) {
+        issues.push({
+          code: 'stair-misaligned', severity: 'error',
+          message: `Stair "${st.id}" in "${st.space}" on level "${ctx.level.id}" (cells ${cellsLabel(grid, cells)}) climbs to level "${upper.level.id}", but on "${upper.level.id}" cells ${cellsLabel(grid, missing)} above it are ${occupants(grid, upper, missing)}, not a space of type "stair". Fix it on "${upper.level.id}" (make a "stair" space cover ${cellsLabel(grid, cells)}), or move "${st.space}" on "${ctx.level.id}" under a stair space of "${upper.level.id}" (${upperStairs.join(', ') || 'it has none'}).`,
+          where,
+        });
       }
     }
   }
   void house;
+}
+
+/** What occupies some cells of a level, e.g. '"l2-hall" (hall)' or 'empty'. */
+function occupants(grid: Grid, ctx: LevelCtx, cells: ReadonlySet<number>): string {
+  const names: string[] = [];
+  let empty = false;
+  for (const k of cells) {
+    const si = ctx.owner[k]!;
+    if (si < 0) { empty = true; continue; }
+    const s = ctx.level.spaces[si]!;
+    const n = `"${s.id}" (${s.type})`;
+    if (!names.includes(n)) names.push(n);
+  }
+  if (empty) names.push('empty');
+  void grid;
+  return names.join(' and ');
 }
 
 function checkReachability(house: House, an: Analysis, issues: Issue[]): void {
@@ -430,6 +535,13 @@ function checkReachability(house: House, an: Analysis, issues: Issue[]): void {
 function checkWindows(an: Analysis, issues: Issue[]): void {
   const needs: ReadonlySet<string> = new Set(NEEDS_EXTERIOR_WINDOW);
   for (const ctx of an.ctxs) {
+    // A window that ended up between two interior spaces (usually because a
+    // space was added outside it) lets in no daylight.
+    for (const p of ctx.placed) {
+      if (p.opening.kind !== 'window' || p.piece.kind !== 'wall' || p.piece.exterior) continue;
+      const [a, b] = p.piece.sides.map((n) => ctx.level.spaces[n]!.id);
+      issues.push({ code: 'interior-window', severity: 'warning', message: `Window "${p.opening.id}" on level "${ctx.level.id}" is in an interior wall between "${a}" and "${b}", so it gets no daylight. Keep it only if borrowed light is intended; otherwise move it to an exterior wall or remove it.`, where: { level: ctx.level.id, opening: p.opening.id } });
+    }
     ctx.level.spaces.forEach((s, si) => {
       if (!needs.has(s.type)) return;
       const ok = ctx.placed.some((p) =>
@@ -455,8 +567,7 @@ function checkSupport(an: Analysis, issues: Issue[]): void {
       if (isOutdoorType(s.type)) return;
       const free = new Set([...ctx.spaceCells[si]!].filter((k) => !supported.has(k)));
       if (free.size === 0) return;
-      const bb = bboxOf(grid, free)!;
-      issues.push({ code: 'unsupported', severity: 'warning', message: `Space "${s.id}" on level "${ctx.level.id}" has ${m2(setArea(grid, free))} (x ${fmt(bb.x0)}..${fmt(bb.x1)}, y ${fmt(bb.y0)}..${fmt(bb.y1)}) with no interior space below on "${below.level.id}". Check that this cantilever is intended.`, where: { level: ctx.level.id, space: s.id } });
+      issues.push({ code: 'unsupported', severity: 'warning', message: `Space "${s.id}" on level "${ctx.level.id}" has ${m2(setArea(grid, free))} (cells ${cellsLabel(grid, free)}) with no interior space below it on "${below.level.id}" (there: ${occupants(grid, below, free)}). Check that this overhang is intended.`, where: { level: ctx.level.id, space: s.id } });
     });
   }
 }
@@ -492,8 +603,8 @@ function checkRoofs(house: House, an: Analysis, issues: Issue[]): void {
       if (isOutdoorType(s.type)) return;
       const open = [...ctx.spaceCells[si]!].filter((k) => !coveredAbove.has(k) && !roofCells.has(k));
       if (open.length === 0) return;
-      const bb = bboxOf(grid, new Set(open))!;
-      issues.push({ code: 'roof-gap', severity: 'warning', message: `Space "${s.id}" on level "${ctx.level.id}" has ${m2(setArea(grid, new Set(open)))} (x ${fmt(bb.x0)}..${fmt(bb.x1)}, y ${fmt(bb.y0)}..${fmt(bb.y1)}) with neither a roof (onLevel "${ctx.level.id}") nor a space above it. Extend a roof over it.`, where: { level: ctx.level.id, space: s.id } });
+      const oc = new Set(open);
+      issues.push({ code: 'roof-gap', severity: 'warning', message: `Space "${s.id}" on level "${ctx.level.id}" has ${m2(setArea(grid, oc))} (cells ${cellsLabel(grid, oc)}) with neither a roof (onLevel "${ctx.level.id}") nor a space ${above ? `on "${above.level.id}" ` : ''}above it. Add or extend a roof with onLevel "${ctx.level.id}" over those cells.`, where: { level: ctx.level.id, space: s.id } });
     });
   }
 }

@@ -1,0 +1,5592 @@
+{
+ "name": "Golden sample: 12 x 15 m modern pitched-roof house",
+ "site": {
+  "width": 15000,
+  "depth": 12000,
+  "northDeg": 0,
+  "latitude": 30.3,
+  "longitude": 120.2,
+  "fence": {
+   "height": 1500,
+   "gates": [
+    {
+     "id": "gate-car",
+     "side": "E",
+     "at": {
+      "from": "start",
+      "offset": 7100
+     },
+     "width": 4500,
+     "kind": "sliding"
+    },
+    {
+     "id": "gate-garden",
+     "side": "S",
+     "at": {
+      "from": "start",
+      "offset": 3700
+     },
+     "width": 1200,
+     "kind": "swing"
+    }
+   ]
+  }
+ },
+ "grid": {
+  "x": [
+   {
+    "id": "1",
+    "pos": 0
+   },
+   {
+    "id": "2",
+    "pos": 3100
+   },
+   {
+    "id": "3",
+    "pos": 3700
+   },
+   {
+    "id": "4",
+    "pos": 4300
+   },
+   {
+    "id": "5",
+    "pos": 4800
+   },
+   {
+    "id": "6",
+    "pos": 5500
+   },
+   {
+    "id": "7",
+    "pos": 9100
+   },
+   {
+    "id": "8",
+    "pos": 10900
+   },
+   {
+    "id": "9",
+    "pos": 11200
+   },
+   {
+    "id": "10",
+    "pos": 13800
+   },
+   {
+    "id": "11",
+    "pos": 15000
+   }
+  ],
+  "y": [
+   {
+    "id": "A",
+    "pos": 0
+   },
+   {
+    "id": "B",
+    "pos": 300
+   },
+   {
+    "id": "C",
+    "pos": 1800
+   },
+   {
+    "id": "D",
+    "pos": 4000
+   },
+   {
+    "id": "E",
+    "pos": 5300
+   },
+   {
+    "id": "F",
+    "pos": 6900
+   },
+   {
+    "id": "G",
+    "pos": 8500
+   },
+   {
+    "id": "H",
+    "pos": 8700
+   },
+   {
+    "id": "J",
+    "pos": 9200
+   },
+   {
+    "id": "K",
+    "pos": 10500
+   },
+   {
+    "id": "L",
+    "pos": 12000
+   }
+  ]
+ },
+ "levels": [
+  {
+   "id": "L1",
+   "name": "一层",
+   "index": 0,
+   "elevation": 0,
+   "height": 3300,
+   "spaces": [
+    {
+     "id": "gf-senior",
+     "name": "老人房",
+     "type": "bedroom",
+     "outdoor": false,
+     "polygon": [
+      [
+       0,
+       6900
+      ],
+      [
+       3700,
+       6900
+      ],
+      [
+       3700,
+       10500
+      ],
+      [
+       0,
+       10500
+      ]
+     ],
+     "rings": [
+      [
+       [
+        0,
+        6900
+       ],
+       [
+        3700,
+        6900
+       ],
+       [
+        3700,
+        10500
+       ],
+       [
+        0,
+        10500
+       ]
+      ]
+     ],
+     "area": 13320000,
+     "nameEn": "Senior citizen's room"
+    },
+    {
+     "id": "gf-bath",
+     "name": "卫生间",
+     "type": "bathroom",
+     "outdoor": false,
+     "polygon": [
+      [
+       3700,
+       8700
+      ],
+      [
+       5500,
+       8700
+      ],
+      [
+       5500,
+       10500
+      ],
+      [
+       3700,
+       10500
+      ]
+     ],
+     "rings": [
+      [
+       [
+        3700,
+        8700
+       ],
+       [
+        5500,
+        8700
+       ],
+       [
+        5500,
+        10500
+       ],
+       [
+        3700,
+        10500
+       ]
+      ]
+     ],
+     "area": 3240000,
+     "nameEn": "Bathroom"
+    },
+    {
+     "id": "gf-nook",
+     "name": "洗衣台",
+     "type": "laundry",
+     "outdoor": false,
+     "polygon": [
+      [
+       4800,
+       6900
+      ],
+      [
+       5500,
+       6900
+      ],
+      [
+       5500,
+       8700
+      ],
+      [
+       4800,
+       8700
+      ]
+     ],
+     "rings": [
+      [
+       [
+        4800,
+        6900
+       ],
+       [
+        5500,
+        6900
+       ],
+       [
+        5500,
+        8700
+       ],
+       [
+        4800,
+        8700
+       ]
+      ]
+     ],
+     "area": 1260000,
+     "nameEn": "Vanity / laundry nook"
+    },
+    {
+     "id": "gf-hall",
+     "name": "过厅",
+     "type": "hall",
+     "outdoor": false,
+     "polygon": [
+      [
+       3100,
+       5300
+      ],
+      [
+       5500,
+       5300
+      ],
+      [
+       5500,
+       6900
+      ],
+      [
+       4800,
+       6900
+      ],
+      [
+       4800,
+       8700
+      ],
+      [
+       3700,
+       8700
+      ],
+      [
+       3700,
+       6900
+      ],
+      [
+       3100,
+       6900
+      ]
+     ],
+     "rings": [
+      [
+       [
+        3100,
+        5300
+       ],
+       [
+        5500,
+        5300
+       ],
+       [
+        5500,
+        6900
+       ],
+       [
+        4800,
+        6900
+       ],
+       [
+        4800,
+        8700
+       ],
+       [
+        3700,
+        8700
+       ],
+       [
+        3700,
+        6900
+       ],
+       [
+        3100,
+        6900
+       ]
+      ]
+     ],
+     "area": 5820000,
+     "nameEn": "Hall"
+    },
+    {
+     "id": "gf-stair",
+     "name": "楼梯",
+     "type": "stair",
+     "outdoor": false,
+     "polygon": [
+      [
+       4300,
+       4000
+      ],
+      [
+       5500,
+       4000
+      ],
+      [
+       5500,
+       5300
+      ],
+      [
+       4300,
+       5300
+      ]
+     ],
+     "rings": [
+      [
+       [
+        4300,
+        4000
+       ],
+       [
+        5500,
+        4000
+       ],
+       [
+        5500,
+        5300
+       ],
+       [
+        4300,
+        5300
+       ]
+      ]
+     ],
+     "area": 1560000,
+     "nameEn": "Stair"
+    },
+    {
+     "id": "gf-store",
+     "name": "储藏室",
+     "type": "storage",
+     "outdoor": false,
+     "polygon": [
+      [
+       3100,
+       1800
+      ],
+      [
+       5500,
+       1800
+      ],
+      [
+       5500,
+       4000
+      ],
+      [
+       4300,
+       4000
+      ],
+      [
+       4300,
+       5300
+      ],
+      [
+       3100,
+       5300
+      ]
+     ],
+     "rings": [
+      [
+       [
+        3100,
+        1800
+       ],
+       [
+        5500,
+        1800
+       ],
+       [
+        5500,
+        4000
+       ],
+       [
+        4300,
+        4000
+       ],
+       [
+        4300,
+        5300
+       ],
+       [
+        3100,
+        5300
+       ]
+      ]
+     ],
+     "area": 6840000,
+     "nameEn": "Storeroom"
+    },
+    {
+     "id": "gf-dining",
+     "name": "餐厅",
+     "type": "dining",
+     "outdoor": false,
+     "polygon": [
+      [
+       5500,
+       1800
+      ],
+      [
+       9100,
+       1800
+      ],
+      [
+       9100,
+       6900
+      ],
+      [
+       5500,
+       6900
+      ]
+     ],
+     "rings": [
+      [
+       [
+        5500,
+        1800
+       ],
+       [
+        9100,
+        1800
+       ],
+       [
+        9100,
+        6900
+       ],
+       [
+        5500,
+        6900
+       ]
+      ]
+     ],
+     "area": 18360000,
+     "nameEn": "Dining room"
+    },
+    {
+     "id": "gf-living",
+     "name": "客厅",
+     "type": "living",
+     "outdoor": false,
+     "polygon": [
+      [
+       9100,
+       1800
+      ],
+      [
+       13800,
+       1800
+      ],
+      [
+       13800,
+       6900
+      ],
+      [
+       9100,
+       6900
+      ]
+     ],
+     "rings": [
+      [
+       [
+        9100,
+        1800
+       ],
+       [
+        13800,
+        1800
+       ],
+       [
+        13800,
+        6900
+       ],
+       [
+        9100,
+        6900
+       ]
+      ]
+     ],
+     "area": 23970000,
+     "nameEn": "Living room"
+    },
+    {
+     "id": "gf-wkitchen",
+     "name": "西厨",
+     "type": "kitchen",
+     "outdoor": false,
+     "polygon": [
+      [
+       5500,
+       6900
+      ],
+      [
+       9100,
+       6900
+      ],
+      [
+       9100,
+       9200
+      ],
+      [
+       5500,
+       9200
+      ]
+     ],
+     "rings": [
+      [
+       [
+        5500,
+        6900
+       ],
+       [
+        9100,
+        6900
+       ],
+       [
+        9100,
+        9200
+       ],
+       [
+        5500,
+        9200
+       ]
+      ]
+     ],
+     "area": 8280000,
+     "nameEn": "Western kitchen"
+    },
+    {
+     "id": "gf-ckitchen",
+     "name": "中厨",
+     "type": "kitchen",
+     "outdoor": false,
+     "polygon": [
+      [
+       5500,
+       9200
+      ],
+      [
+       9100,
+       9200
+      ],
+      [
+       9100,
+       12000
+      ],
+      [
+       5500,
+       12000
+      ]
+     ],
+     "rings": [
+      [
+       [
+        5500,
+        9200
+       ],
+       [
+        9100,
+        9200
+       ],
+       [
+        9100,
+        12000
+       ],
+       [
+        5500,
+        12000
+       ]
+      ]
+     ],
+     "area": 10080000,
+     "nameEn": "Chinese kitchen"
+    },
+    {
+     "id": "gf-patio",
+     "name": "小院",
+     "type": "courtyard",
+     "outdoor": true,
+     "polygon": [
+      [
+       0,
+       10500
+      ],
+      [
+       3100,
+       10500
+      ],
+      [
+       3100,
+       12000
+      ],
+      [
+       0,
+       12000
+      ]
+     ],
+     "rings": [
+      [
+       [
+        0,
+        10500
+       ],
+       [
+        3100,
+        10500
+       ],
+       [
+        3100,
+        12000
+       ],
+       [
+        0,
+        12000
+       ]
+      ]
+     ],
+     "area": 4650000,
+     "nameEn": "Senior room patio",
+     "edge": "none"
+    },
+    {
+     "id": "gf-planter-n",
+     "name": "花池",
+     "type": "garden",
+     "outdoor": true,
+     "polygon": [
+      [
+       3100,
+       10500
+      ],
+      [
+       5500,
+       10500
+      ],
+      [
+       5500,
+       12000
+      ],
+      [
+       3100,
+       12000
+      ]
+     ],
+     "rings": [
+      [
+       [
+        3100,
+        10500
+       ],
+       [
+        5500,
+        10500
+       ],
+       [
+        5500,
+        12000
+       ],
+       [
+        3100,
+        12000
+       ]
+      ]
+     ],
+     "area": 3600000,
+     "nameEn": "Planter",
+     "edge": "none"
+    },
+    {
+     "id": "gf-court-w",
+     "name": "庭院",
+     "type": "courtyard",
+     "outdoor": true,
+     "polygon": [
+      [
+       0,
+       1800
+      ],
+      [
+       3100,
+       1800
+      ],
+      [
+       3100,
+       6900
+      ],
+      [
+       0,
+       6900
+      ]
+     ],
+     "rings": [
+      [
+       [
+        0,
+        1800
+       ],
+       [
+        3100,
+        1800
+       ],
+       [
+        3100,
+        6900
+       ],
+       [
+        0,
+        6900
+       ]
+      ]
+     ],
+     "area": 15810000,
+     "nameEn": "Courtyard",
+     "edge": "none",
+     "surface": "deck"
+    },
+    {
+     "id": "gf-garden-s",
+     "name": "花园",
+     "type": "garden",
+     "outdoor": true,
+     "polygon": [
+      [
+       0,
+       0
+      ],
+      [
+       5500,
+       0
+      ],
+      [
+       5500,
+       1800
+      ],
+      [
+       0,
+       1800
+      ]
+     ],
+     "rings": [
+      [
+       [
+        0,
+        0
+       ],
+       [
+        5500,
+        0
+       ],
+       [
+        5500,
+        1800
+       ],
+       [
+        0,
+        1800
+       ]
+      ]
+     ],
+     "area": 9900000,
+     "nameEn": "South garden",
+     "edge": "none"
+    },
+    {
+     "id": "gf-court-s",
+     "name": "庭院",
+     "type": "courtyard",
+     "outdoor": true,
+     "polygon": [
+      [
+       5500,
+       0
+      ],
+      [
+       9100,
+       0
+      ],
+      [
+       9100,
+       1800
+      ],
+      [
+       5500,
+       1800
+      ]
+     ],
+     "rings": [
+      [
+       [
+        5500,
+        0
+       ],
+       [
+        9100,
+        0
+       ],
+       [
+        9100,
+        1800
+       ],
+       [
+        5500,
+        1800
+       ]
+      ]
+     ],
+     "area": 6480000,
+     "nameEn": "Courtyard",
+     "edge": "none"
+    },
+    {
+     "id": "gf-planter-s",
+     "name": "花池",
+     "type": "garden",
+     "outdoor": true,
+     "polygon": [
+      [
+       9100,
+       0
+      ],
+      [
+       13800,
+       0
+      ],
+      [
+       13800,
+       1800
+      ],
+      [
+       9100,
+       1800
+      ]
+     ],
+     "rings": [
+      [
+       [
+        9100,
+        0
+       ],
+       [
+        13800,
+        0
+       ],
+       [
+        13800,
+        1800
+       ],
+       [
+        9100,
+        1800
+       ]
+      ]
+     ],
+     "area": 8460000,
+     "nameEn": "Planter",
+     "edge": "none"
+    },
+    {
+     "id": "gf-planter-e",
+     "name": "花池",
+     "type": "garden",
+     "outdoor": true,
+     "polygon": [
+      [
+       9100,
+       6900
+      ],
+      [
+       11200,
+       6900
+      ],
+      [
+       11200,
+       8500
+      ],
+      [
+       9100,
+       8500
+      ]
+     ],
+     "rings": [
+      [
+       [
+        9100,
+        6900
+       ],
+       [
+        11200,
+        6900
+       ],
+       [
+        11200,
+        8500
+       ],
+       [
+        9100,
+        8500
+       ]
+      ]
+     ],
+     "area": 3360000,
+     "nameEn": "Planter",
+     "edge": "none"
+    },
+    {
+     "id": "gf-porch",
+     "name": "入户",
+     "type": "porch",
+     "outdoor": true,
+     "polygon": [
+      [
+       11200,
+       6900
+      ],
+      [
+       13800,
+       6900
+      ],
+      [
+       13800,
+       8500
+      ],
+      [
+       11200,
+       8500
+      ]
+     ],
+     "rings": [
+      [
+       [
+        11200,
+        6900
+       ],
+       [
+        13800,
+        6900
+       ],
+       [
+        13800,
+        8500
+       ],
+       [
+        11200,
+        8500
+       ]
+      ]
+     ],
+     "area": 4160000,
+     "nameEn": "Entry porch",
+     "edge": "none"
+    },
+    {
+     "id": "gf-yard",
+     "name": "入户庭院",
+     "type": "courtyard",
+     "outdoor": true,
+     "polygon": [
+      [
+       13800,
+       0
+      ],
+      [
+       15000,
+       0
+      ],
+      [
+       15000,
+       12000
+      ],
+      [
+       13800,
+       12000
+      ],
+      [
+       13800,
+       9200
+      ],
+      [
+       9100,
+       9200
+      ],
+      [
+       9100,
+       8500
+      ],
+      [
+       13800,
+       8500
+      ]
+     ],
+     "rings": [
+      [
+       [
+        13800,
+        0
+       ],
+       [
+        15000,
+        0
+       ],
+       [
+        15000,
+        12000
+       ],
+       [
+        13800,
+        12000
+       ],
+       [
+        13800,
+        9200
+       ],
+       [
+        9100,
+        9200
+       ],
+       [
+        9100,
+        8500
+       ],
+       [
+        13800,
+        8500
+       ]
+      ]
+     ],
+     "area": 17690000,
+     "nameEn": "Entry yard",
+     "edge": "none"
+    },
+    {
+     "id": "gf-carport",
+     "name": "车位",
+     "type": "carport",
+     "outdoor": true,
+     "polygon": [
+      [
+       9100,
+       9200
+      ],
+      [
+       13800,
+       9200
+      ],
+      [
+       13800,
+       12000
+      ],
+      [
+       9100,
+       12000
+      ]
+     ],
+     "rings": [
+      [
+       [
+        9100,
+        9200
+       ],
+       [
+        13800,
+        9200
+       ],
+       [
+        13800,
+        12000
+       ],
+       [
+        9100,
+        12000
+       ]
+      ]
+     ],
+     "area": 13160000,
+     "nameEn": "Carport",
+     "edge": "none"
+    }
+   ],
+   "walls": [
+    {
+     "id": "L1:1:F-K",
+     "orient": "NS",
+     "line": "1",
+     "a": [
+      0,
+      6900
+     ],
+     "b": [
+      0,
+      10500
+     ],
+     "length": 3600,
+     "thickness": 240,
+     "exterior": true,
+     "sides": [
+      null,
+      "gf-senior"
+     ]
+    },
+    {
+     "id": "L1:2:C-E",
+     "orient": "NS",
+     "line": "2",
+     "a": [
+      3100,
+      1800
+     ],
+     "b": [
+      3100,
+      5300
+     ],
+     "length": 3500,
+     "thickness": 240,
+     "exterior": true,
+     "sides": [
+      "gf-court-w",
+      "gf-store"
+     ]
+    },
+    {
+     "id": "L1:2:E-F",
+     "orient": "NS",
+     "line": "2",
+     "a": [
+      3100,
+      5300
+     ],
+     "b": [
+      3100,
+      6900
+     ],
+     "length": 1600,
+     "thickness": 240,
+     "exterior": true,
+     "sides": [
+      "gf-court-w",
+      "gf-hall"
+     ]
+    },
+    {
+     "id": "L1:3:F-H",
+     "orient": "NS",
+     "line": "3",
+     "a": [
+      3700,
+      6900
+     ],
+     "b": [
+      3700,
+      8700
+     ],
+     "length": 1800,
+     "thickness": 120,
+     "exterior": false,
+     "sides": [
+      "gf-senior",
+      "gf-hall"
+     ]
+    },
+    {
+     "id": "L1:3:H-K",
+     "orient": "NS",
+     "line": "3",
+     "a": [
+      3700,
+      8700
+     ],
+     "b": [
+      3700,
+      10500
+     ],
+     "length": 1800,
+     "thickness": 120,
+     "exterior": false,
+     "sides": [
+      "gf-senior",
+      "gf-bath"
+     ]
+    },
+    {
+     "id": "L1:4:D-E",
+     "orient": "NS",
+     "line": "4",
+     "a": [
+      4300,
+      4000
+     ],
+     "b": [
+      4300,
+      5300
+     ],
+     "length": 1300,
+     "thickness": 120,
+     "exterior": false,
+     "sides": [
+      "gf-store",
+      "gf-stair"
+     ]
+    },
+    {
+     "id": "L1:6:C-D",
+     "orient": "NS",
+     "line": "6",
+     "a": [
+      5500,
+      1800
+     ],
+     "b": [
+      5500,
+      4000
+     ],
+     "length": 2200,
+     "thickness": 120,
+     "exterior": false,
+     "sides": [
+      "gf-store",
+      "gf-dining"
+     ]
+    },
+    {
+     "id": "L1:6:D-E",
+     "orient": "NS",
+     "line": "6",
+     "a": [
+      5500,
+      4000
+     ],
+     "b": [
+      5500,
+      5300
+     ],
+     "length": 1300,
+     "thickness": 120,
+     "exterior": false,
+     "sides": [
+      "gf-stair",
+      "gf-dining"
+     ]
+    },
+    {
+     "id": "L1:6:F-H",
+     "orient": "NS",
+     "line": "6",
+     "a": [
+      5500,
+      6900
+     ],
+     "b": [
+      5500,
+      8700
+     ],
+     "length": 1800,
+     "thickness": 120,
+     "exterior": false,
+     "sides": [
+      "gf-nook",
+      "gf-wkitchen"
+     ]
+    },
+    {
+     "id": "L1:6:H-J",
+     "orient": "NS",
+     "line": "6",
+     "a": [
+      5500,
+      8700
+     ],
+     "b": [
+      5500,
+      9200
+     ],
+     "length": 500,
+     "thickness": 120,
+     "exterior": false,
+     "sides": [
+      "gf-bath",
+      "gf-wkitchen"
+     ]
+    },
+    {
+     "id": "L1:6:J-K",
+     "orient": "NS",
+     "line": "6",
+     "a": [
+      5500,
+      9200
+     ],
+     "b": [
+      5500,
+      10500
+     ],
+     "length": 1300,
+     "thickness": 120,
+     "exterior": false,
+     "sides": [
+      "gf-bath",
+      "gf-ckitchen"
+     ]
+    },
+    {
+     "id": "L1:6:K-L",
+     "orient": "NS",
+     "line": "6",
+     "a": [
+      5500,
+      10500
+     ],
+     "b": [
+      5500,
+      12000
+     ],
+     "length": 1500,
+     "thickness": 240,
+     "exterior": true,
+     "sides": [
+      "gf-planter-n",
+      "gf-ckitchen"
+     ]
+    },
+    {
+     "id": "L1:7:F-G",
+     "orient": "NS",
+     "line": "7",
+     "a": [
+      9100,
+      6900
+     ],
+     "b": [
+      9100,
+      8500
+     ],
+     "length": 1600,
+     "thickness": 240,
+     "exterior": true,
+     "sides": [
+      "gf-wkitchen",
+      "gf-planter-e"
+     ]
+    },
+    {
+     "id": "L1:7:G-J",
+     "orient": "NS",
+     "line": "7",
+     "a": [
+      9100,
+      8500
+     ],
+     "b": [
+      9100,
+      9200
+     ],
+     "length": 700,
+     "thickness": 240,
+     "exterior": true,
+     "sides": [
+      "gf-wkitchen",
+      "gf-yard"
+     ]
+    },
+    {
+     "id": "L1:7:J-L",
+     "orient": "NS",
+     "line": "7",
+     "a": [
+      9100,
+      9200
+     ],
+     "b": [
+      9100,
+      12000
+     ],
+     "length": 2800,
+     "thickness": 240,
+     "exterior": true,
+     "sides": [
+      "gf-ckitchen",
+      "gf-carport"
+     ]
+    },
+    {
+     "id": "L1:10:C-F",
+     "orient": "NS",
+     "line": "10",
+     "a": [
+      13800,
+      1800
+     ],
+     "b": [
+      13800,
+      6900
+     ],
+     "length": 5100,
+     "thickness": 240,
+     "exterior": true,
+     "sides": [
+      "gf-living",
+      "gf-yard"
+     ]
+    },
+    {
+     "id": "L1:C:2-6",
+     "orient": "EW",
+     "line": "C",
+     "a": [
+      3100,
+      1800
+     ],
+     "b": [
+      5500,
+      1800
+     ],
+     "length": 2400,
+     "thickness": 240,
+     "exterior": true,
+     "sides": [
+      "gf-garden-s",
+      "gf-store"
+     ]
+    },
+    {
+     "id": "L1:C:6-7",
+     "orient": "EW",
+     "line": "C",
+     "a": [
+      5500,
+      1800
+     ],
+     "b": [
+      9100,
+      1800
+     ],
+     "length": 3600,
+     "thickness": 240,
+     "exterior": true,
+     "sides": [
+      "gf-court-s",
+      "gf-dining"
+     ]
+    },
+    {
+     "id": "L1:C:7-10",
+     "orient": "EW",
+     "line": "C",
+     "a": [
+      9100,
+      1800
+     ],
+     "b": [
+      13800,
+      1800
+     ],
+     "length": 4700,
+     "thickness": 240,
+     "exterior": true,
+     "sides": [
+      "gf-planter-s",
+      "gf-living"
+     ]
+    },
+    {
+     "id": "L1:D:4-6",
+     "orient": "EW",
+     "line": "D",
+     "a": [
+      4300,
+      4000
+     ],
+     "b": [
+      5500,
+      4000
+     ],
+     "length": 1200,
+     "thickness": 120,
+     "exterior": false,
+     "sides": [
+      "gf-store",
+      "gf-stair"
+     ]
+    },
+    {
+     "id": "L1:E:2-4",
+     "orient": "EW",
+     "line": "E",
+     "a": [
+      3100,
+      5300
+     ],
+     "b": [
+      4300,
+      5300
+     ],
+     "length": 1200,
+     "thickness": 120,
+     "exterior": false,
+     "sides": [
+      "gf-store",
+      "gf-hall"
+     ]
+    },
+    {
+     "id": "L1:F:1-2",
+     "orient": "EW",
+     "line": "F",
+     "a": [
+      0,
+      6900
+     ],
+     "b": [
+      3100,
+      6900
+     ],
+     "length": 3100,
+     "thickness": 240,
+     "exterior": true,
+     "sides": [
+      "gf-court-w",
+      "gf-senior"
+     ]
+    },
+    {
+     "id": "L1:F:2-3",
+     "orient": "EW",
+     "line": "F",
+     "a": [
+      3100,
+      6900
+     ],
+     "b": [
+      3700,
+      6900
+     ],
+     "length": 600,
+     "thickness": 120,
+     "exterior": false,
+     "sides": [
+      "gf-hall",
+      "gf-senior"
+     ]
+    },
+    {
+     "id": "L1:F:7-9",
+     "orient": "EW",
+     "line": "F",
+     "a": [
+      9100,
+      6900
+     ],
+     "b": [
+      11200,
+      6900
+     ],
+     "length": 2100,
+     "thickness": 240,
+     "exterior": true,
+     "sides": [
+      "gf-living",
+      "gf-planter-e"
+     ]
+    },
+    {
+     "id": "L1:F:9-10",
+     "orient": "EW",
+     "line": "F",
+     "a": [
+      11200,
+      6900
+     ],
+     "b": [
+      13800,
+      6900
+     ],
+     "length": 2600,
+     "thickness": 240,
+     "exterior": true,
+     "sides": [
+      "gf-living",
+      "gf-porch"
+     ]
+    },
+    {
+     "id": "L1:H:3-5",
+     "orient": "EW",
+     "line": "H",
+     "a": [
+      3700,
+      8700
+     ],
+     "b": [
+      4800,
+      8700
+     ],
+     "length": 1100,
+     "thickness": 120,
+     "exterior": false,
+     "sides": [
+      "gf-hall",
+      "gf-bath"
+     ]
+    },
+    {
+     "id": "L1:H:5-6",
+     "orient": "EW",
+     "line": "H",
+     "a": [
+      4800,
+      8700
+     ],
+     "b": [
+      5500,
+      8700
+     ],
+     "length": 700,
+     "thickness": 120,
+     "exterior": false,
+     "sides": [
+      "gf-nook",
+      "gf-bath"
+     ]
+    },
+    {
+     "id": "L1:J:6-7",
+     "orient": "EW",
+     "line": "J",
+     "a": [
+      5500,
+      9200
+     ],
+     "b": [
+      9100,
+      9200
+     ],
+     "length": 3600,
+     "thickness": 120,
+     "exterior": false,
+     "sides": [
+      "gf-wkitchen",
+      "gf-ckitchen"
+     ]
+    },
+    {
+     "id": "L1:K:1-2",
+     "orient": "EW",
+     "line": "K",
+     "a": [
+      0,
+      10500
+     ],
+     "b": [
+      3100,
+      10500
+     ],
+     "length": 3100,
+     "thickness": 240,
+     "exterior": true,
+     "sides": [
+      "gf-senior",
+      "gf-patio"
+     ]
+    },
+    {
+     "id": "L1:K:2-3",
+     "orient": "EW",
+     "line": "K",
+     "a": [
+      3100,
+      10500
+     ],
+     "b": [
+      3700,
+      10500
+     ],
+     "length": 600,
+     "thickness": 240,
+     "exterior": true,
+     "sides": [
+      "gf-senior",
+      "gf-planter-n"
+     ]
+    },
+    {
+     "id": "L1:K:3-6",
+     "orient": "EW",
+     "line": "K",
+     "a": [
+      3700,
+      10500
+     ],
+     "b": [
+      5500,
+      10500
+     ],
+     "length": 1800,
+     "thickness": 240,
+     "exterior": true,
+     "sides": [
+      "gf-bath",
+      "gf-planter-n"
+     ]
+    },
+    {
+     "id": "L1:L:6-7",
+     "orient": "EW",
+     "line": "L",
+     "a": [
+      5500,
+      12000
+     ],
+     "b": [
+      9100,
+      12000
+     ],
+     "length": 3600,
+     "thickness": 240,
+     "exterior": true,
+     "sides": [
+      "gf-ckitchen",
+      null
+     ]
+    }
+   ],
+   "edges": [
+    {
+     "id": "L1:1:A-C",
+     "orient": "NS",
+     "line": "1",
+     "a": [
+      0,
+      0
+     ],
+     "b": [
+      0,
+      1800
+     ],
+     "space": "gf-garden-s",
+     "treatment": "none"
+    },
+    {
+     "id": "L1:1:C-F",
+     "orient": "NS",
+     "line": "1",
+     "a": [
+      0,
+      1800
+     ],
+     "b": [
+      0,
+      6900
+     ],
+     "space": "gf-court-w",
+     "treatment": "none"
+    },
+    {
+     "id": "L1:1:K-L",
+     "orient": "NS",
+     "line": "1",
+     "a": [
+      0,
+      10500
+     ],
+     "b": [
+      0,
+      12000
+     ],
+     "space": "gf-patio",
+     "treatment": "none"
+    },
+    {
+     "id": "L1:11:A-L",
+     "orient": "NS",
+     "line": "11",
+     "a": [
+      15000,
+      0
+     ],
+     "b": [
+      15000,
+      12000
+     ],
+     "space": "gf-yard",
+     "treatment": "none"
+    },
+    {
+     "id": "L1:A:1-6",
+     "orient": "EW",
+     "line": "A",
+     "a": [
+      0,
+      0
+     ],
+     "b": [
+      5500,
+      0
+     ],
+     "space": "gf-garden-s",
+     "treatment": "none"
+    },
+    {
+     "id": "L1:A:6-7",
+     "orient": "EW",
+     "line": "A",
+     "a": [
+      5500,
+      0
+     ],
+     "b": [
+      9100,
+      0
+     ],
+     "space": "gf-court-s",
+     "treatment": "none"
+    },
+    {
+     "id": "L1:A:7-10",
+     "orient": "EW",
+     "line": "A",
+     "a": [
+      9100,
+      0
+     ],
+     "b": [
+      13800,
+      0
+     ],
+     "space": "gf-planter-s",
+     "treatment": "none"
+    },
+    {
+     "id": "L1:A:10-11",
+     "orient": "EW",
+     "line": "A",
+     "a": [
+      13800,
+      0
+     ],
+     "b": [
+      15000,
+      0
+     ],
+     "space": "gf-yard",
+     "treatment": "none"
+    },
+    {
+     "id": "L1:L:1-2",
+     "orient": "EW",
+     "line": "L",
+     "a": [
+      0,
+      12000
+     ],
+     "b": [
+      3100,
+      12000
+     ],
+     "space": "gf-patio",
+     "treatment": "none"
+    },
+    {
+     "id": "L1:L:2-6",
+     "orient": "EW",
+     "line": "L",
+     "a": [
+      3100,
+      12000
+     ],
+     "b": [
+      5500,
+      12000
+     ],
+     "space": "gf-planter-n",
+     "treatment": "none"
+    },
+    {
+     "id": "L1:L:7-10",
+     "orient": "EW",
+     "line": "L",
+     "a": [
+      9100,
+      12000
+     ],
+     "b": [
+      13800,
+      12000
+     ],
+     "space": "gf-carport",
+     "treatment": "none"
+    },
+    {
+     "id": "L1:L:10-11",
+     "orient": "EW",
+     "line": "L",
+     "a": [
+      13800,
+      12000
+     ],
+     "b": [
+      15000,
+      12000
+     ],
+     "space": "gf-yard",
+     "treatment": "none"
+    }
+   ],
+   "openings": [
+    {
+     "id": "gf-d-patio",
+     "kind": "door",
+     "wall": "L1:K:1-2",
+     "orient": "EW",
+     "a": [
+      2150,
+      10500
+     ],
+     "b": [
+      2950,
+      10500
+     ],
+     "center": [
+      2550,
+      10500
+     ],
+     "width": 800,
+     "height": 2100,
+     "sill": 0,
+     "spanLevels": 1,
+     "sides": [
+      "gf-senior",
+      "gf-patio"
+     ],
+     "facing": "N",
+     "swing": {
+      "into": "gf-senior",
+      "hinge": "end",
+      "inferred": true
+     }
+    },
+    {
+     "id": "gf-d-senior",
+     "kind": "door",
+     "wall": "L1:3:F-H",
+     "orient": "NS",
+     "a": [
+      3700,
+      7100
+     ],
+     "b": [
+      3700,
+      8000
+     ],
+     "center": [
+      3700,
+      7550
+     ],
+     "width": 900,
+     "height": 2100,
+     "sill": 0,
+     "spanLevels": 1,
+     "sides": [
+      "gf-senior",
+      "gf-hall"
+     ],
+     "facing": "E",
+     "swing": {
+      "into": "gf-senior",
+      "hinge": "start",
+      "inferred": true
+     }
+    },
+    {
+     "id": "gf-w-senior",
+     "kind": "window",
+     "wall": "L1:F:1-2",
+     "orient": "EW",
+     "a": [
+      500,
+      6900
+     ],
+     "b": [
+      2300,
+      6900
+     ],
+     "center": [
+      1400,
+      6900
+     ],
+     "width": 1800,
+     "height": 1500,
+     "sill": 900,
+     "spanLevels": 1,
+     "sides": [
+      "gf-court-w",
+      "gf-senior"
+     ],
+     "facing": "S"
+    },
+    {
+     "id": "gf-w-senior-w",
+     "kind": "window",
+     "wall": "L1:1:F-K",
+     "orient": "NS",
+     "a": [
+      0,
+      8500
+     ],
+     "b": [
+      0,
+      9100
+     ],
+     "center": [
+      0,
+      8800
+     ],
+     "width": 600,
+     "height": 900,
+     "sill": 1300,
+     "spanLevels": 1,
+     "sides": [
+      null,
+      "gf-senior"
+     ],
+     "facing": "W"
+    },
+    {
+     "id": "gf-d-bath",
+     "kind": "door",
+     "wall": "L1:H:3-5",
+     "orient": "EW",
+     "a": [
+      3900,
+      8700
+     ],
+     "b": [
+      4700,
+      8700
+     ],
+     "center": [
+      4300,
+      8700
+     ],
+     "width": 800,
+     "height": 2100,
+     "sill": 0,
+     "spanLevels": 1,
+     "sides": [
+      "gf-hall",
+      "gf-bath"
+     ],
+     "facing": "S",
+     "swing": {
+      "into": "gf-bath",
+      "hinge": "end",
+      "inferred": true
+     }
+    },
+    {
+     "id": "gf-w-bath",
+     "kind": "window",
+     "wall": "L1:K:3-6",
+     "orient": "EW",
+     "a": [
+      3900,
+      10500
+     ],
+     "b": [
+      4500,
+      10500
+     ],
+     "center": [
+      4200,
+      10500
+     ],
+     "width": 600,
+     "height": 600,
+     "sill": 1500,
+     "spanLevels": 1,
+     "sides": [
+      "gf-bath",
+      "gf-planter-n"
+     ],
+     "facing": "N"
+    },
+    {
+     "id": "gf-d-court",
+     "kind": "door",
+     "wall": "L1:2:E-F",
+     "orient": "NS",
+     "a": [
+      3100,
+      5900
+     ],
+     "b": [
+      3100,
+      6700
+     ],
+     "center": [
+      3100,
+      6300
+     ],
+     "width": 800,
+     "height": 2100,
+     "sill": 0,
+     "spanLevels": 1,
+     "sides": [
+      "gf-court-w",
+      "gf-hall"
+     ],
+     "canopy": {
+      "depth": 900
+     },
+     "facing": "W",
+     "swing": {
+      "into": "gf-hall",
+      "hinge": "end",
+      "inferred": true
+     }
+    },
+    {
+     "id": "gf-d-store",
+     "kind": "door",
+     "wall": "L1:E:2-4",
+     "orient": "EW",
+     "a": [
+      3300,
+      5300
+     ],
+     "b": [
+      4100,
+      5300
+     ],
+     "center": [
+      3700,
+      5300
+     ],
+     "width": 800,
+     "height": 2100,
+     "sill": 0,
+     "spanLevels": 1,
+     "sides": [
+      "gf-store",
+      "gf-hall"
+     ],
+     "swing": {
+      "into": "gf-store",
+      "hinge": "start",
+      "inferred": true
+     }
+    },
+    {
+     "id": "gf-w-slot-w",
+     "kind": "window",
+     "wall": "L1:C:6-7",
+     "orient": "EW",
+     "a": [
+      6100,
+      1800
+     ],
+     "b": [
+      6850,
+      1800
+     ],
+     "center": [
+      6475,
+      1800
+     ],
+     "width": 750,
+     "height": 5600,
+     "sill": 0,
+     "spanLevels": 2,
+     "sides": [
+      "gf-court-s",
+      "gf-dining"
+     ],
+     "insert": "wood-panel",
+     "facing": "S"
+    },
+    {
+     "id": "gf-w-slot-e",
+     "kind": "window",
+     "wall": "L1:C:6-7",
+     "orient": "EW",
+     "a": [
+      7450,
+      1800
+     ],
+     "b": [
+      8200,
+      1800
+     ],
+     "center": [
+      7825,
+      1800
+     ],
+     "width": 750,
+     "height": 5600,
+     "sill": 0,
+     "spanLevels": 2,
+     "sides": [
+      "gf-court-s",
+      "gf-dining"
+     ],
+     "insert": "wood-panel",
+     "facing": "S"
+    },
+    {
+     "id": "gf-sd-living",
+     "kind": "sliding-door",
+     "wall": "L1:C:7-10",
+     "orient": "EW",
+     "a": [
+      9400,
+      1800
+     ],
+     "b": [
+      13000,
+      1800
+     ],
+     "center": [
+      11200,
+      1800
+     ],
+     "width": 3600,
+     "height": 2400,
+     "sill": 0,
+     "spanLevels": 1,
+     "sides": [
+      "gf-planter-s",
+      "gf-living"
+     ],
+     "facing": "S"
+    },
+    {
+     "id": "gf-w-living",
+     "kind": "window",
+     "wall": "L1:F:7-9",
+     "orient": "EW",
+     "a": [
+      9800,
+      6900
+     ],
+     "b": [
+      10700,
+      6900
+     ],
+     "center": [
+      10250,
+      6900
+     ],
+     "width": 900,
+     "height": 1500,
+     "sill": 900,
+     "spanLevels": 1,
+     "sides": [
+      "gf-living",
+      "gf-planter-e"
+     ],
+     "facing": "N"
+    },
+    {
+     "id": "gf-d-entry",
+     "kind": "door",
+     "wall": "L1:F:9-10",
+     "orient": "EW",
+     "a": [
+      11650,
+      6900
+     ],
+     "b": [
+      12650,
+      6900
+     ],
+     "center": [
+      12150,
+      6900
+     ],
+     "width": 1000,
+     "height": 2400,
+     "sill": 0,
+     "spanLevels": 1,
+     "sides": [
+      "gf-living",
+      "gf-porch"
+     ],
+     "facing": "N",
+     "swing": {
+      "into": "gf-living",
+      "hinge": "start",
+      "inferred": true
+     }
+    },
+    {
+     "id": "gf-w-wkitchen",
+     "kind": "window",
+     "wall": "L1:7:F-G",
+     "orient": "NS",
+     "a": [
+      9100,
+      7700
+     ],
+     "b": [
+      9100,
+      8500
+     ],
+     "center": [
+      9100,
+      8100
+     ],
+     "width": 800,
+     "height": 1200,
+     "sill": 1000,
+     "spanLevels": 1,
+     "sides": [
+      "gf-wkitchen",
+      "gf-planter-e"
+     ],
+     "facing": "E"
+    },
+    {
+     "id": "gf-w-ckitchen-e",
+     "kind": "window",
+     "wall": "L1:7:J-L",
+     "orient": "NS",
+     "a": [
+      9100,
+      9800
+     ],
+     "b": [
+      9100,
+      11300
+     ],
+     "center": [
+      9100,
+      10550
+     ],
+     "width": 1500,
+     "height": 1200,
+     "sill": 1000,
+     "spanLevels": 1,
+     "sides": [
+      "gf-ckitchen",
+      "gf-carport"
+     ],
+     "facing": "E"
+    },
+    {
+     "id": "gf-w-ckitchen-w",
+     "kind": "window",
+     "wall": "L1:6:K-L",
+     "orient": "NS",
+     "a": [
+      5500,
+      10950
+     ],
+     "b": [
+      5500,
+      11550
+     ],
+     "center": [
+      5500,
+      11250
+     ],
+     "width": 600,
+     "height": 1200,
+     "sill": 1000,
+     "spanLevels": 1,
+     "sides": [
+      "gf-planter-n",
+      "gf-ckitchen"
+     ],
+     "facing": "W"
+    },
+    {
+     "id": "gf-sd-kitchen",
+     "kind": "sliding-door",
+     "wall": "L1:J:6-7",
+     "orient": "EW",
+     "a": [
+      6200,
+      9200
+     ],
+     "b": [
+      8300,
+      9200
+     ],
+     "center": [
+      7250,
+      9200
+     ],
+     "width": 2100,
+     "height": 2400,
+     "sill": 0,
+     "spanLevels": 1,
+     "sides": [
+      "gf-wkitchen",
+      "gf-ckitchen"
+     ]
+    }
+   ],
+   "stairs": [
+    {
+     "id": "stair-1",
+     "space": "gf-stair",
+     "kind": "u",
+     "up": "S",
+     "toLevel": "L2"
+    }
+   ],
+   "slab": [
+    [
+     [
+      0,
+      0
+     ],
+     [
+      15000,
+      0
+     ],
+     [
+      15000,
+      12000
+     ],
+     [
+      0,
+      12000
+     ]
+    ]
+   ],
+   "slabOpenings": [],
+   "interiorArea": 92730000
+  },
+  {
+   "id": "L2",
+   "name": "二层",
+   "index": 1,
+   "elevation": 3300,
+   "height": 3000,
+   "spaces": [
+    {
+     "id": "l2-bed-w",
+     "name": "次卧",
+     "type": "bedroom",
+     "outdoor": false,
+     "polygon": [
+      [
+       0,
+       6900
+      ],
+      [
+       3700,
+       6900
+      ],
+      [
+       3700,
+       10500
+      ],
+      [
+       0,
+       10500
+      ]
+     ],
+     "rings": [
+      [
+       [
+        0,
+        6900
+       ],
+       [
+        3700,
+        6900
+       ],
+       [
+        3700,
+        10500
+       ],
+       [
+        0,
+        10500
+       ]
+      ]
+     ],
+     "area": 13320000,
+     "nameEn": "Second bedroom"
+    },
+    {
+     "id": "l2-bath",
+     "name": "卫生间",
+     "type": "bathroom",
+     "outdoor": false,
+     "polygon": [
+      [
+       3700,
+       8700
+      ],
+      [
+       5500,
+       8700
+      ],
+      [
+       5500,
+       10500
+      ],
+      [
+       3700,
+       10500
+      ]
+     ],
+     "rings": [
+      [
+       [
+        3700,
+        8700
+       ],
+       [
+        5500,
+        8700
+       ],
+       [
+        5500,
+        10500
+       ],
+       [
+        3700,
+        10500
+       ]
+      ]
+     ],
+     "area": 3240000,
+     "nameEn": "Bathroom"
+    },
+    {
+     "id": "l2-nook",
+     "name": "洗衣台",
+     "type": "laundry",
+     "outdoor": false,
+     "polygon": [
+      [
+       4800,
+       6900
+      ],
+      [
+       5500,
+       6900
+      ],
+      [
+       5500,
+       8700
+      ],
+      [
+       4800,
+       8700
+      ]
+     ],
+     "rings": [
+      [
+       [
+        4800,
+        6900
+       ],
+       [
+        5500,
+        6900
+       ],
+       [
+        5500,
+        8700
+       ],
+       [
+        4800,
+        8700
+       ]
+      ]
+     ],
+     "area": 1260000,
+     "nameEn": "Vanity / laundry nook"
+    },
+    {
+     "id": "l2-bed-n",
+     "name": "次卧",
+     "type": "bedroom",
+     "outdoor": false,
+     "polygon": [
+      [
+       5500,
+       6900
+      ],
+      [
+       9100,
+       6900
+      ],
+      [
+       9100,
+       10500
+      ],
+      [
+       5500,
+       10500
+      ]
+     ],
+     "rings": [
+      [
+       [
+        5500,
+        6900
+       ],
+       [
+        9100,
+        6900
+       ],
+       [
+        9100,
+        10500
+       ],
+       [
+        5500,
+        10500
+       ]
+      ]
+     ],
+     "area": 12960000,
+     "nameEn": "Second bedroom"
+    },
+    {
+     "id": "l2-hall",
+     "name": "过道",
+     "type": "hall",
+     "outdoor": false,
+     "polygon": [
+      [
+       3100,
+       5300
+      ],
+      [
+       10900,
+       5300
+      ],
+      [
+       10900,
+       6900
+      ],
+      [
+       4800,
+       6900
+      ],
+      [
+       4800,
+       8700
+      ],
+      [
+       3700,
+       8700
+      ],
+      [
+       3700,
+       6900
+      ],
+      [
+       3100,
+       6900
+      ]
+     ],
+     "rings": [
+      [
+       [
+        3100,
+        5300
+       ],
+       [
+        10900,
+        5300
+       ],
+       [
+        10900,
+        6900
+       ],
+       [
+        4800,
+        6900
+       ],
+       [
+        4800,
+        8700
+       ],
+       [
+        3700,
+        8700
+       ],
+       [
+        3700,
+        6900
+       ],
+       [
+        3100,
+        6900
+       ]
+      ]
+     ],
+     "area": 14460000,
+     "nameEn": "Corridor"
+    },
+    {
+     "id": "l2-stair",
+     "name": "楼梯",
+     "type": "stair",
+     "outdoor": false,
+     "polygon": [
+      [
+       3100,
+       1800
+      ],
+      [
+       5500,
+       1800
+      ],
+      [
+       5500,
+       5300
+      ],
+      [
+       3100,
+       5300
+      ]
+     ],
+     "rings": [
+      [
+       [
+        3100,
+        1800
+       ],
+       [
+        5500,
+        1800
+       ],
+       [
+        5500,
+        5300
+       ],
+       [
+        3100,
+        5300
+       ]
+      ]
+     ],
+     "area": 8400000,
+     "nameEn": "Stair"
+    },
+    {
+     "id": "l2-family",
+     "name": "起居室",
+     "type": "family",
+     "outdoor": false,
+     "polygon": [
+      [
+       5500,
+       1800
+      ],
+      [
+       9100,
+       1800
+      ],
+      [
+       9100,
+       5300
+      ],
+      [
+       5500,
+       5300
+      ]
+     ],
+     "rings": [
+      [
+       [
+        5500,
+        1800
+       ],
+       [
+        9100,
+        1800
+       ],
+       [
+        9100,
+        5300
+       ],
+       [
+        5500,
+        5300
+       ]
+      ]
+     ],
+     "area": 12600000,
+     "nameEn": "Family room"
+    },
+    {
+     "id": "l2-master",
+     "name": "主卧",
+     "type": "bedroom",
+     "outdoor": false,
+     "polygon": [
+      [
+       9100,
+       1800
+      ],
+      [
+       13800,
+       1800
+      ],
+      [
+       13800,
+       5300
+      ],
+      [
+       9100,
+       5300
+      ]
+     ],
+     "rings": [
+      [
+       [
+        9100,
+        1800
+       ],
+       [
+        13800,
+        1800
+       ],
+       [
+        13800,
+        5300
+       ],
+       [
+        9100,
+        5300
+       ]
+      ]
+     ],
+     "area": 16450000,
+     "nameEn": "Master bedroom"
+    },
+    {
+     "id": "l2-mbath",
+     "name": "卫生间",
+     "type": "bathroom",
+     "outdoor": false,
+     "polygon": [
+      [
+       10900,
+       5300
+      ],
+      [
+       13800,
+       5300
+      ],
+      [
+       13800,
+       6900
+      ],
+      [
+       10900,
+       6900
+      ]
+     ],
+     "rings": [
+      [
+       [
+        10900,
+        5300
+       ],
+       [
+        13800,
+        5300
+       ],
+       [
+        13800,
+        6900
+       ],
+       [
+        10900,
+        6900
+       ]
+      ]
+     ],
+     "area": 4640000,
+     "nameEn": "Master bathroom"
+    },
+    {
+     "id": "l2-balcony-n",
+     "name": "观景阳台",
+     "type": "balcony",
+     "outdoor": true,
+     "polygon": [
+      [
+       5500,
+       10500
+      ],
+      [
+       9100,
+       10500
+      ],
+      [
+       9100,
+       12000
+      ],
+      [
+       5500,
+       12000
+      ]
+     ],
+     "rings": [
+      [
+       [
+        5500,
+        10500
+       ],
+       [
+        9100,
+        10500
+       ],
+       [
+        9100,
+        12000
+       ],
+       [
+        5500,
+        12000
+       ]
+      ]
+     ],
+     "area": 5400000,
+     "nameEn": "Living balcony",
+     "edge": "metal-rail"
+    },
+    {
+     "id": "l2-balcony-s",
+     "name": "观景阳台",
+     "type": "balcony",
+     "outdoor": true,
+     "polygon": [
+      [
+       9100,
+       300
+      ],
+      [
+       13800,
+       300
+      ],
+      [
+       13800,
+       1800
+      ],
+      [
+       9100,
+       1800
+      ]
+     ],
+     "rings": [
+      [
+       [
+        9100,
+        300
+       ],
+       [
+        13800,
+        300
+       ],
+       [
+        13800,
+        1800
+       ],
+       [
+        9100,
+        1800
+       ]
+      ]
+     ],
+     "area": 7050000,
+     "nameEn": "Living balcony",
+     "edge": "glass-rail"
+    }
+   ],
+   "walls": [
+    {
+     "id": "L2:1:F-K",
+     "orient": "NS",
+     "line": "1",
+     "a": [
+      0,
+      6900
+     ],
+     "b": [
+      0,
+      10500
+     ],
+     "length": 3600,
+     "thickness": 240,
+     "exterior": true,
+     "sides": [
+      null,
+      "l2-bed-w"
+     ]
+    },
+    {
+     "id": "L2:2:C-E",
+     "orient": "NS",
+     "line": "2",
+     "a": [
+      3100,
+      1800
+     ],
+     "b": [
+      3100,
+      5300
+     ],
+     "length": 3500,
+     "thickness": 240,
+     "exterior": true,
+     "sides": [
+      null,
+      "l2-stair"
+     ]
+    },
+    {
+     "id": "L2:2:E-F",
+     "orient": "NS",
+     "line": "2",
+     "a": [
+      3100,
+      5300
+     ],
+     "b": [
+      3100,
+      6900
+     ],
+     "length": 1600,
+     "thickness": 240,
+     "exterior": true,
+     "sides": [
+      null,
+      "l2-hall"
+     ]
+    },
+    {
+     "id": "L2:3:F-H",
+     "orient": "NS",
+     "line": "3",
+     "a": [
+      3700,
+      6900
+     ],
+     "b": [
+      3700,
+      8700
+     ],
+     "length": 1800,
+     "thickness": 120,
+     "exterior": false,
+     "sides": [
+      "l2-bed-w",
+      "l2-hall"
+     ]
+    },
+    {
+     "id": "L2:3:H-K",
+     "orient": "NS",
+     "line": "3",
+     "a": [
+      3700,
+      8700
+     ],
+     "b": [
+      3700,
+      10500
+     ],
+     "length": 1800,
+     "thickness": 120,
+     "exterior": false,
+     "sides": [
+      "l2-bed-w",
+      "l2-bath"
+     ]
+    },
+    {
+     "id": "L2:6:C-E",
+     "orient": "NS",
+     "line": "6",
+     "a": [
+      5500,
+      1800
+     ],
+     "b": [
+      5500,
+      5300
+     ],
+     "length": 3500,
+     "thickness": 120,
+     "exterior": false,
+     "sides": [
+      "l2-stair",
+      "l2-family"
+     ]
+    },
+    {
+     "id": "L2:6:F-H",
+     "orient": "NS",
+     "line": "6",
+     "a": [
+      5500,
+      6900
+     ],
+     "b": [
+      5500,
+      8700
+     ],
+     "length": 1800,
+     "thickness": 120,
+     "exterior": false,
+     "sides": [
+      "l2-nook",
+      "l2-bed-n"
+     ]
+    },
+    {
+     "id": "L2:6:H-K",
+     "orient": "NS",
+     "line": "6",
+     "a": [
+      5500,
+      8700
+     ],
+     "b": [
+      5500,
+      10500
+     ],
+     "length": 1800,
+     "thickness": 120,
+     "exterior": false,
+     "sides": [
+      "l2-bath",
+      "l2-bed-n"
+     ]
+    },
+    {
+     "id": "L2:7:C-E",
+     "orient": "NS",
+     "line": "7",
+     "a": [
+      9100,
+      1800
+     ],
+     "b": [
+      9100,
+      5300
+     ],
+     "length": 3500,
+     "thickness": 120,
+     "exterior": false,
+     "sides": [
+      "l2-family",
+      "l2-master"
+     ]
+    },
+    {
+     "id": "L2:7:F-K",
+     "orient": "NS",
+     "line": "7",
+     "a": [
+      9100,
+      6900
+     ],
+     "b": [
+      9100,
+      10500
+     ],
+     "length": 3600,
+     "thickness": 240,
+     "exterior": true,
+     "sides": [
+      "l2-bed-n",
+      null
+     ]
+    },
+    {
+     "id": "L2:8:E-F",
+     "orient": "NS",
+     "line": "8",
+     "a": [
+      10900,
+      5300
+     ],
+     "b": [
+      10900,
+      6900
+     ],
+     "length": 1600,
+     "thickness": 120,
+     "exterior": false,
+     "sides": [
+      "l2-hall",
+      "l2-mbath"
+     ]
+    },
+    {
+     "id": "L2:10:C-E",
+     "orient": "NS",
+     "line": "10",
+     "a": [
+      13800,
+      1800
+     ],
+     "b": [
+      13800,
+      5300
+     ],
+     "length": 3500,
+     "thickness": 240,
+     "exterior": true,
+     "sides": [
+      "l2-master",
+      null
+     ]
+    },
+    {
+     "id": "L2:10:E-F",
+     "orient": "NS",
+     "line": "10",
+     "a": [
+      13800,
+      5300
+     ],
+     "b": [
+      13800,
+      6900
+     ],
+     "length": 1600,
+     "thickness": 240,
+     "exterior": true,
+     "sides": [
+      "l2-mbath",
+      null
+     ]
+    },
+    {
+     "id": "L2:C:2-6",
+     "orient": "EW",
+     "line": "C",
+     "a": [
+      3100,
+      1800
+     ],
+     "b": [
+      5500,
+      1800
+     ],
+     "length": 2400,
+     "thickness": 240,
+     "exterior": true,
+     "sides": [
+      null,
+      "l2-stair"
+     ]
+    },
+    {
+     "id": "L2:C:6-7",
+     "orient": "EW",
+     "line": "C",
+     "a": [
+      5500,
+      1800
+     ],
+     "b": [
+      9100,
+      1800
+     ],
+     "length": 3600,
+     "thickness": 240,
+     "exterior": true,
+     "sides": [
+      null,
+      "l2-family"
+     ]
+    },
+    {
+     "id": "L2:C:7-10",
+     "orient": "EW",
+     "line": "C",
+     "a": [
+      9100,
+      1800
+     ],
+     "b": [
+      13800,
+      1800
+     ],
+     "length": 4700,
+     "thickness": 240,
+     "exterior": true,
+     "sides": [
+      "l2-balcony-s",
+      "l2-master"
+     ]
+    },
+    {
+     "id": "L2:E:7-8",
+     "orient": "EW",
+     "line": "E",
+     "a": [
+      9100,
+      5300
+     ],
+     "b": [
+      10900,
+      5300
+     ],
+     "length": 1800,
+     "thickness": 120,
+     "exterior": false,
+     "sides": [
+      "l2-master",
+      "l2-hall"
+     ]
+    },
+    {
+     "id": "L2:E:8-10",
+     "orient": "EW",
+     "line": "E",
+     "a": [
+      10900,
+      5300
+     ],
+     "b": [
+      13800,
+      5300
+     ],
+     "length": 2900,
+     "thickness": 120,
+     "exterior": false,
+     "sides": [
+      "l2-master",
+      "l2-mbath"
+     ]
+    },
+    {
+     "id": "L2:F:1-2",
+     "orient": "EW",
+     "line": "F",
+     "a": [
+      0,
+      6900
+     ],
+     "b": [
+      3100,
+      6900
+     ],
+     "length": 3100,
+     "thickness": 240,
+     "exterior": true,
+     "sides": [
+      null,
+      "l2-bed-w"
+     ]
+    },
+    {
+     "id": "L2:F:2-3",
+     "orient": "EW",
+     "line": "F",
+     "a": [
+      3100,
+      6900
+     ],
+     "b": [
+      3700,
+      6900
+     ],
+     "length": 600,
+     "thickness": 120,
+     "exterior": false,
+     "sides": [
+      "l2-hall",
+      "l2-bed-w"
+     ]
+    },
+    {
+     "id": "L2:F:6-7",
+     "orient": "EW",
+     "line": "F",
+     "a": [
+      5500,
+      6900
+     ],
+     "b": [
+      9100,
+      6900
+     ],
+     "length": 3600,
+     "thickness": 120,
+     "exterior": false,
+     "sides": [
+      "l2-hall",
+      "l2-bed-n"
+     ]
+    },
+    {
+     "id": "L2:F:7-8",
+     "orient": "EW",
+     "line": "F",
+     "a": [
+      9100,
+      6900
+     ],
+     "b": [
+      10900,
+      6900
+     ],
+     "length": 1800,
+     "thickness": 240,
+     "exterior": true,
+     "sides": [
+      "l2-hall",
+      null
+     ]
+    },
+    {
+     "id": "L2:F:8-10",
+     "orient": "EW",
+     "line": "F",
+     "a": [
+      10900,
+      6900
+     ],
+     "b": [
+      13800,
+      6900
+     ],
+     "length": 2900,
+     "thickness": 240,
+     "exterior": true,
+     "sides": [
+      "l2-mbath",
+      null
+     ]
+    },
+    {
+     "id": "L2:H:3-5",
+     "orient": "EW",
+     "line": "H",
+     "a": [
+      3700,
+      8700
+     ],
+     "b": [
+      4800,
+      8700
+     ],
+     "length": 1100,
+     "thickness": 120,
+     "exterior": false,
+     "sides": [
+      "l2-hall",
+      "l2-bath"
+     ]
+    },
+    {
+     "id": "L2:H:5-6",
+     "orient": "EW",
+     "line": "H",
+     "a": [
+      4800,
+      8700
+     ],
+     "b": [
+      5500,
+      8700
+     ],
+     "length": 700,
+     "thickness": 120,
+     "exterior": false,
+     "sides": [
+      "l2-nook",
+      "l2-bath"
+     ]
+    },
+    {
+     "id": "L2:K:1-3",
+     "orient": "EW",
+     "line": "K",
+     "a": [
+      0,
+      10500
+     ],
+     "b": [
+      3700,
+      10500
+     ],
+     "length": 3700,
+     "thickness": 240,
+     "exterior": true,
+     "sides": [
+      "l2-bed-w",
+      null
+     ]
+    },
+    {
+     "id": "L2:K:3-6",
+     "orient": "EW",
+     "line": "K",
+     "a": [
+      3700,
+      10500
+     ],
+     "b": [
+      5500,
+      10500
+     ],
+     "length": 1800,
+     "thickness": 240,
+     "exterior": true,
+     "sides": [
+      "l2-bath",
+      null
+     ]
+    },
+    {
+     "id": "L2:K:6-7",
+     "orient": "EW",
+     "line": "K",
+     "a": [
+      5500,
+      10500
+     ],
+     "b": [
+      9100,
+      10500
+     ],
+     "length": 3600,
+     "thickness": 240,
+     "exterior": true,
+     "sides": [
+      "l2-bed-n",
+      "l2-balcony-n"
+     ]
+    }
+   ],
+   "edges": [
+    {
+     "id": "L2:6:K-L",
+     "orient": "NS",
+     "line": "6",
+     "a": [
+      5500,
+      10500
+     ],
+     "b": [
+      5500,
+      12000
+     ],
+     "space": "l2-balcony-n",
+     "treatment": "metal-rail"
+    },
+    {
+     "id": "L2:7:B-C",
+     "orient": "NS",
+     "line": "7",
+     "a": [
+      9100,
+      300
+     ],
+     "b": [
+      9100,
+      1800
+     ],
+     "space": "l2-balcony-s",
+     "treatment": "glass-rail"
+    },
+    {
+     "id": "L2:7:K-L",
+     "orient": "NS",
+     "line": "7",
+     "a": [
+      9100,
+      10500
+     ],
+     "b": [
+      9100,
+      12000
+     ],
+     "space": "l2-balcony-n",
+     "treatment": "metal-rail"
+    },
+    {
+     "id": "L2:10:B-C",
+     "orient": "NS",
+     "line": "10",
+     "a": [
+      13800,
+      300
+     ],
+     "b": [
+      13800,
+      1800
+     ],
+     "space": "l2-balcony-s",
+     "treatment": "glass-rail"
+    },
+    {
+     "id": "L2:B:7-10",
+     "orient": "EW",
+     "line": "B",
+     "a": [
+      9100,
+      300
+     ],
+     "b": [
+      13800,
+      300
+     ],
+     "space": "l2-balcony-s",
+     "treatment": "glass-rail"
+    },
+    {
+     "id": "L2:L:6-7",
+     "orient": "EW",
+     "line": "L",
+     "a": [
+      5500,
+      12000
+     ],
+     "b": [
+      9100,
+      12000
+     ],
+     "space": "l2-balcony-n",
+     "treatment": "metal-rail"
+    }
+   ],
+   "openings": [
+    {
+     "id": "l2-d-bed-w",
+     "kind": "door",
+     "wall": "L2:3:F-H",
+     "orient": "NS",
+     "a": [
+      3700,
+      7100
+     ],
+     "b": [
+      3700,
+      8000
+     ],
+     "center": [
+      3700,
+      7550
+     ],
+     "width": 900,
+     "height": 2100,
+     "sill": 0,
+     "spanLevels": 1,
+     "sides": [
+      "l2-bed-w",
+      "l2-hall"
+     ],
+     "facing": "E",
+     "swing": {
+      "into": "l2-bed-w",
+      "hinge": "start",
+      "inferred": true
+     }
+    },
+    {
+     "id": "l2-w-bed-w",
+     "kind": "window",
+     "wall": "L2:F:1-2",
+     "orient": "EW",
+     "a": [
+      500,
+      6900
+     ],
+     "b": [
+      2300,
+      6900
+     ],
+     "center": [
+      1400,
+      6900
+     ],
+     "width": 1800,
+     "height": 1500,
+     "sill": 900,
+     "spanLevels": 1,
+     "sides": [
+      null,
+      "l2-bed-w"
+     ],
+     "panel": "start",
+     "facing": "S"
+    },
+    {
+     "id": "l2-w-bed-w-w",
+     "kind": "window",
+     "wall": "L2:1:F-K",
+     "orient": "NS",
+     "a": [
+      0,
+      8300
+     ],
+     "b": [
+      0,
+      9300
+     ],
+     "center": [
+      0,
+      8800
+     ],
+     "width": 1000,
+     "height": 900,
+     "sill": 1100,
+     "spanLevels": 1,
+     "sides": [
+      null,
+      "l2-bed-w"
+     ],
+     "panel": "start",
+     "facing": "W"
+    },
+    {
+     "id": "l2-d-bath",
+     "kind": "door",
+     "wall": "L2:H:3-5",
+     "orient": "EW",
+     "a": [
+      3900,
+      8700
+     ],
+     "b": [
+      4700,
+      8700
+     ],
+     "center": [
+      4300,
+      8700
+     ],
+     "width": 800,
+     "height": 2100,
+     "sill": 0,
+     "spanLevels": 1,
+     "sides": [
+      "l2-hall",
+      "l2-bath"
+     ],
+     "facing": "S",
+     "swing": {
+      "into": "l2-bath",
+      "hinge": "end",
+      "inferred": true
+     }
+    },
+    {
+     "id": "l2-w-bath",
+     "kind": "window",
+     "wall": "L2:K:3-6",
+     "orient": "EW",
+     "a": [
+      3900,
+      10500
+     ],
+     "b": [
+      4500,
+      10500
+     ],
+     "center": [
+      4200,
+      10500
+     ],
+     "width": 600,
+     "height": 600,
+     "sill": 1500,
+     "spanLevels": 1,
+     "sides": [
+      "l2-bath",
+      null
+     ],
+     "facing": "N"
+    },
+    {
+     "id": "l2-d-bed-n",
+     "kind": "door",
+     "wall": "L2:F:6-7",
+     "orient": "EW",
+     "a": [
+      5700,
+      6900
+     ],
+     "b": [
+      6550,
+      6900
+     ],
+     "center": [
+      6125,
+      6900
+     ],
+     "width": 850,
+     "height": 2100,
+     "sill": 0,
+     "spanLevels": 1,
+     "sides": [
+      "l2-hall",
+      "l2-bed-n"
+     ],
+     "facing": "S",
+     "swing": {
+      "into": "l2-bed-n",
+      "hinge": "start",
+      "inferred": true
+     }
+    },
+    {
+     "id": "l2-sd-balcony-n",
+     "kind": "sliding-door",
+     "wall": "L2:K:6-7",
+     "orient": "EW",
+     "a": [
+      6400,
+      10500
+     ],
+     "b": [
+      8200,
+      10500
+     ],
+     "center": [
+      7300,
+      10500
+     ],
+     "width": 1800,
+     "height": 2400,
+     "sill": 0,
+     "spanLevels": 1,
+     "sides": [
+      "l2-bed-n",
+      "l2-balcony-n"
+     ],
+     "facing": "N"
+    },
+    {
+     "id": "l2-w-east-tall",
+     "kind": "window",
+     "wall": "L2:7:F-K",
+     "orient": "NS",
+     "a": [
+      9100,
+      7700
+     ],
+     "b": [
+      9100,
+      8500
+     ],
+     "center": [
+      9100,
+      8100
+     ],
+     "width": 800,
+     "height": 4800,
+     "sill": 600,
+     "spanLevels": 2,
+     "sides": [
+      "l2-bed-n",
+      null
+     ],
+     "insert": "wood-panel",
+     "facing": "E"
+    },
+    {
+     "id": "l2-w-hall-w",
+     "kind": "window",
+     "wall": "L2:2:E-F",
+     "orient": "NS",
+     "a": [
+      3100,
+      5900
+     ],
+     "b": [
+      3100,
+      6700
+     ],
+     "center": [
+      3100,
+      6300
+     ],
+     "width": 800,
+     "height": 3900,
+     "sill": 600,
+     "spanLevels": 2,
+     "sides": [
+      null,
+      "l2-hall"
+     ],
+     "insert": "wood-panel",
+     "facing": "W"
+    },
+    {
+     "id": "l2-w-hall-n",
+     "kind": "window",
+     "wall": "L2:F:7-8",
+     "orient": "EW",
+     "a": [
+      9800,
+      6900
+     ],
+     "b": [
+      10600,
+      6900
+     ],
+     "center": [
+      10200,
+      6900
+     ],
+     "width": 800,
+     "height": 1500,
+     "sill": 900,
+     "spanLevels": 1,
+     "sides": [
+      "l2-hall",
+      null
+     ],
+     "facing": "N"
+    },
+    {
+     "id": "l2-d-master",
+     "kind": "door",
+     "wall": "L2:E:7-8",
+     "orient": "EW",
+     "a": [
+      9860,
+      5300
+     ],
+     "b": [
+      10760,
+      5300
+     ],
+     "center": [
+      10310,
+      5300
+     ],
+     "width": 900,
+     "height": 2100,
+     "sill": 0,
+     "spanLevels": 1,
+     "sides": [
+      "l2-master",
+      "l2-hall"
+     ],
+     "facing": "N",
+     "swing": {
+      "into": "l2-master",
+      "hinge": "end",
+      "inferred": true
+     }
+    },
+    {
+     "id": "l2-d-mbath",
+     "kind": "door",
+     "wall": "L2:E:8-10",
+     "orient": "EW",
+     "a": [
+      10930,
+      5300
+     ],
+     "b": [
+      11780,
+      5300
+     ],
+     "center": [
+      11355,
+      5300
+     ],
+     "width": 850,
+     "height": 2100,
+     "sill": 0,
+     "spanLevels": 1,
+     "sides": [
+      "l2-master",
+      "l2-mbath"
+     ],
+     "facing": "N",
+     "swing": {
+      "into": "l2-mbath",
+      "hinge": "start",
+      "inferred": true
+     }
+    },
+    {
+     "id": "l2-w-mbath",
+     "kind": "window",
+     "wall": "L2:10:E-F",
+     "orient": "NS",
+     "a": [
+      13800,
+      5750
+     ],
+     "b": [
+      13800,
+      6600
+     ],
+     "center": [
+      13800,
+      6175
+     ],
+     "width": 850,
+     "height": 900,
+     "sill": 1200,
+     "spanLevels": 1,
+     "sides": [
+      "l2-mbath",
+      null
+     ],
+     "facing": "E"
+    },
+    {
+     "id": "l2-sd-master",
+     "kind": "sliding-door",
+     "wall": "L2:C:7-10",
+     "orient": "EW",
+     "a": [
+      9800,
+      1800
+     ],
+     "b": [
+      13000,
+      1800
+     ],
+     "center": [
+      11400,
+      1800
+     ],
+     "width": 3200,
+     "height": 2300,
+     "sill": 0,
+     "spanLevels": 1,
+     "sides": [
+      "l2-balcony-s",
+      "l2-master"
+     ],
+     "facing": "S"
+    }
+   ],
+   "stairs": [
+    {
+     "id": "stair-2",
+     "space": "l2-stair",
+     "kind": "u",
+     "up": "S",
+     "toLevel": "L3"
+    }
+   ],
+   "slab": [
+    [
+     [
+      9100,
+      300
+     ],
+     [
+      13800,
+      300
+     ],
+     [
+      13800,
+      6900
+     ],
+     [
+      9100,
+      6900
+     ],
+     [
+      9100,
+      12000
+     ],
+     [
+      5500,
+      12000
+     ],
+     [
+      5500,
+      10500
+     ],
+     [
+      0,
+      10500
+     ],
+     [
+      0,
+      6900
+     ],
+     [
+      3100,
+      6900
+     ],
+     [
+      3100,
+      1800
+     ],
+     [
+      9100,
+      1800
+     ]
+    ]
+   ],
+   "slabOpenings": [
+    {
+     "stair": "stair-1",
+     "rings": [
+      [
+       [
+        3100,
+        1800
+       ],
+       [
+        5500,
+        1800
+       ],
+       [
+        5500,
+        5300
+       ],
+       [
+        3100,
+        5300
+       ]
+      ]
+     ]
+    }
+   ],
+   "interiorArea": 87330000
+  },
+  {
+   "id": "L3",
+   "name": "阁楼",
+   "index": 2,
+   "elevation": 6300,
+   "height": 1800,
+   "spaces": [
+    {
+     "id": "l3-bed",
+     "name": "次卧",
+     "type": "bedroom",
+     "outdoor": false,
+     "polygon": [
+      [
+       0,
+       6900
+      ],
+      [
+       3700,
+       6900
+      ],
+      [
+       3700,
+       10500
+      ],
+      [
+       0,
+       10500
+      ]
+     ],
+     "rings": [
+      [
+       [
+        0,
+        6900
+       ],
+       [
+        3700,
+        6900
+       ],
+       [
+        3700,
+        10500
+       ],
+       [
+        0,
+        10500
+       ]
+      ]
+     ],
+     "area": 13320000,
+     "nameEn": "Second bedroom"
+    },
+    {
+     "id": "l3-bath",
+     "name": "卫生间",
+     "type": "bathroom",
+     "outdoor": false,
+     "polygon": [
+      [
+       3700,
+       8700
+      ],
+      [
+       5500,
+       8700
+      ],
+      [
+       5500,
+       10500
+      ],
+      [
+       3700,
+       10500
+      ]
+     ],
+     "rings": [
+      [
+       [
+        3700,
+        8700
+       ],
+       [
+        5500,
+        8700
+       ],
+       [
+        5500,
+        10500
+       ],
+       [
+        3700,
+        10500
+       ]
+      ]
+     ],
+     "area": 3240000,
+     "nameEn": "Bathroom"
+    },
+    {
+     "id": "l3-nook",
+     "name": "洗衣台",
+     "type": "laundry",
+     "outdoor": false,
+     "polygon": [
+      [
+       4800,
+       6900
+      ],
+      [
+       5500,
+       6900
+      ],
+      [
+       5500,
+       8700
+      ],
+      [
+       4800,
+       8700
+      ]
+     ],
+     "rings": [
+      [
+       [
+        4800,
+        6900
+       ],
+       [
+        5500,
+        6900
+       ],
+       [
+        5500,
+        8700
+       ],
+       [
+        4800,
+        8700
+       ]
+      ]
+     ],
+     "area": 1260000,
+     "nameEn": "Vanity / laundry nook"
+    },
+    {
+     "id": "l3-study",
+     "name": "书房",
+     "type": "study",
+     "outdoor": false,
+     "polygon": [
+      [
+       5500,
+       6900
+      ],
+      [
+       9100,
+       6900
+      ],
+      [
+       9100,
+       10500
+      ],
+      [
+       5500,
+       10500
+      ]
+     ],
+     "rings": [
+      [
+       [
+        5500,
+        6900
+       ],
+       [
+        9100,
+        6900
+       ],
+       [
+        9100,
+        10500
+       ],
+       [
+        5500,
+        10500
+       ]
+      ]
+     ],
+     "area": 12960000,
+     "nameEn": "Study"
+    },
+    {
+     "id": "l3-hall",
+     "name": "过道",
+     "type": "hall",
+     "outdoor": false,
+     "polygon": [
+      [
+       3100,
+       5300
+      ],
+      [
+       9100,
+       5300
+      ],
+      [
+       9100,
+       6900
+      ],
+      [
+       4800,
+       6900
+      ],
+      [
+       4800,
+       8700
+      ],
+      [
+       3700,
+       8700
+      ],
+      [
+       3700,
+       6900
+      ],
+      [
+       3100,
+       6900
+      ]
+     ],
+     "rings": [
+      [
+       [
+        3100,
+        5300
+       ],
+       [
+        9100,
+        5300
+       ],
+       [
+        9100,
+        6900
+       ],
+       [
+        4800,
+        6900
+       ],
+       [
+        4800,
+        8700
+       ],
+       [
+        3700,
+        8700
+       ],
+       [
+        3700,
+        6900
+       ],
+       [
+        3100,
+        6900
+       ]
+      ]
+     ],
+     "area": 11580000,
+     "nameEn": "Corridor"
+    },
+    {
+     "id": "l3-stair",
+     "name": "楼梯",
+     "type": "stair",
+     "outdoor": false,
+     "polygon": [
+      [
+       3100,
+       1800
+      ],
+      [
+       5500,
+       1800
+      ],
+      [
+       5500,
+       5300
+      ],
+      [
+       3100,
+       5300
+      ]
+     ],
+     "rings": [
+      [
+       [
+        3100,
+        1800
+       ],
+       [
+        5500,
+        1800
+       ],
+       [
+        5500,
+        5300
+       ],
+       [
+        3100,
+        5300
+       ]
+      ]
+     ],
+     "area": 8400000,
+     "nameEn": "Stair"
+    },
+    {
+     "id": "l3-family",
+     "name": "家庭活动室",
+     "type": "family",
+     "outdoor": false,
+     "polygon": [
+      [
+       5500,
+       1800
+      ],
+      [
+       9100,
+       1800
+      ],
+      [
+       9100,
+       5300
+      ],
+      [
+       5500,
+       5300
+      ]
+     ],
+     "rings": [
+      [
+       [
+        5500,
+        1800
+       ],
+       [
+        9100,
+        1800
+       ],
+       [
+        9100,
+        5300
+       ],
+       [
+        5500,
+        5300
+       ]
+      ]
+     ],
+     "area": 12600000,
+     "nameEn": "Family room"
+    },
+    {
+     "id": "l3-terrace",
+     "name": "露台",
+     "type": "terrace",
+     "outdoor": true,
+     "polygon": [
+      [
+       9100,
+       1800
+      ],
+      [
+       13800,
+       1800
+      ],
+      [
+       13800,
+       6900
+      ],
+      [
+       9100,
+       6900
+      ]
+     ],
+     "rings": [
+      [
+       [
+        9100,
+        1800
+       ],
+       [
+        13800,
+        1800
+       ],
+       [
+        13800,
+        6900
+       ],
+       [
+        9100,
+        6900
+       ]
+      ]
+     ],
+     "area": 23970000,
+     "nameEn": "Terrace",
+     "edge": "glass-rail"
+    }
+   ],
+   "walls": [
+    {
+     "id": "L3:1:F-K",
+     "orient": "NS",
+     "line": "1",
+     "a": [
+      0,
+      6900
+     ],
+     "b": [
+      0,
+      10500
+     ],
+     "length": 3600,
+     "thickness": 240,
+     "exterior": true,
+     "sides": [
+      null,
+      "l3-bed"
+     ]
+    },
+    {
+     "id": "L3:2:C-E",
+     "orient": "NS",
+     "line": "2",
+     "a": [
+      3100,
+      1800
+     ],
+     "b": [
+      3100,
+      5300
+     ],
+     "length": 3500,
+     "thickness": 240,
+     "exterior": true,
+     "sides": [
+      null,
+      "l3-stair"
+     ]
+    },
+    {
+     "id": "L3:2:E-F",
+     "orient": "NS",
+     "line": "2",
+     "a": [
+      3100,
+      5300
+     ],
+     "b": [
+      3100,
+      6900
+     ],
+     "length": 1600,
+     "thickness": 240,
+     "exterior": true,
+     "sides": [
+      null,
+      "l3-hall"
+     ]
+    },
+    {
+     "id": "L3:3:F-H",
+     "orient": "NS",
+     "line": "3",
+     "a": [
+      3700,
+      6900
+     ],
+     "b": [
+      3700,
+      8700
+     ],
+     "length": 1800,
+     "thickness": 120,
+     "exterior": false,
+     "sides": [
+      "l3-bed",
+      "l3-hall"
+     ]
+    },
+    {
+     "id": "L3:3:H-K",
+     "orient": "NS",
+     "line": "3",
+     "a": [
+      3700,
+      8700
+     ],
+     "b": [
+      3700,
+      10500
+     ],
+     "length": 1800,
+     "thickness": 120,
+     "exterior": false,
+     "sides": [
+      "l3-bed",
+      "l3-bath"
+     ]
+    },
+    {
+     "id": "L3:6:C-E",
+     "orient": "NS",
+     "line": "6",
+     "a": [
+      5500,
+      1800
+     ],
+     "b": [
+      5500,
+      5300
+     ],
+     "length": 3500,
+     "thickness": 120,
+     "exterior": false,
+     "sides": [
+      "l3-stair",
+      "l3-family"
+     ]
+    },
+    {
+     "id": "L3:6:F-H",
+     "orient": "NS",
+     "line": "6",
+     "a": [
+      5500,
+      6900
+     ],
+     "b": [
+      5500,
+      8700
+     ],
+     "length": 1800,
+     "thickness": 120,
+     "exterior": false,
+     "sides": [
+      "l3-nook",
+      "l3-study"
+     ]
+    },
+    {
+     "id": "L3:6:H-K",
+     "orient": "NS",
+     "line": "6",
+     "a": [
+      5500,
+      8700
+     ],
+     "b": [
+      5500,
+      10500
+     ],
+     "length": 1800,
+     "thickness": 120,
+     "exterior": false,
+     "sides": [
+      "l3-bath",
+      "l3-study"
+     ]
+    },
+    {
+     "id": "L3:7:C-E",
+     "orient": "NS",
+     "line": "7",
+     "a": [
+      9100,
+      1800
+     ],
+     "b": [
+      9100,
+      5300
+     ],
+     "length": 3500,
+     "thickness": 240,
+     "exterior": true,
+     "sides": [
+      "l3-family",
+      "l3-terrace"
+     ]
+    },
+    {
+     "id": "L3:7:E-F",
+     "orient": "NS",
+     "line": "7",
+     "a": [
+      9100,
+      5300
+     ],
+     "b": [
+      9100,
+      6900
+     ],
+     "length": 1600,
+     "thickness": 240,
+     "exterior": true,
+     "sides": [
+      "l3-hall",
+      "l3-terrace"
+     ]
+    },
+    {
+     "id": "L3:7:F-K",
+     "orient": "NS",
+     "line": "7",
+     "a": [
+      9100,
+      6900
+     ],
+     "b": [
+      9100,
+      10500
+     ],
+     "length": 3600,
+     "thickness": 240,
+     "exterior": true,
+     "sides": [
+      "l3-study",
+      null
+     ]
+    },
+    {
+     "id": "L3:C:2-6",
+     "orient": "EW",
+     "line": "C",
+     "a": [
+      3100,
+      1800
+     ],
+     "b": [
+      5500,
+      1800
+     ],
+     "length": 2400,
+     "thickness": 240,
+     "exterior": true,
+     "sides": [
+      null,
+      "l3-stair"
+     ]
+    },
+    {
+     "id": "L3:C:6-7",
+     "orient": "EW",
+     "line": "C",
+     "a": [
+      5500,
+      1800
+     ],
+     "b": [
+      9100,
+      1800
+     ],
+     "length": 3600,
+     "thickness": 240,
+     "exterior": true,
+     "sides": [
+      null,
+      "l3-family"
+     ]
+    },
+    {
+     "id": "L3:F:1-2",
+     "orient": "EW",
+     "line": "F",
+     "a": [
+      0,
+      6900
+     ],
+     "b": [
+      3100,
+      6900
+     ],
+     "length": 3100,
+     "thickness": 240,
+     "exterior": true,
+     "sides": [
+      null,
+      "l3-bed"
+     ]
+    },
+    {
+     "id": "L3:F:2-3",
+     "orient": "EW",
+     "line": "F",
+     "a": [
+      3100,
+      6900
+     ],
+     "b": [
+      3700,
+      6900
+     ],
+     "length": 600,
+     "thickness": 120,
+     "exterior": false,
+     "sides": [
+      "l3-hall",
+      "l3-bed"
+     ]
+    },
+    {
+     "id": "L3:F:6-7",
+     "orient": "EW",
+     "line": "F",
+     "a": [
+      5500,
+      6900
+     ],
+     "b": [
+      9100,
+      6900
+     ],
+     "length": 3600,
+     "thickness": 120,
+     "exterior": false,
+     "sides": [
+      "l3-hall",
+      "l3-study"
+     ]
+    },
+    {
+     "id": "L3:H:3-5",
+     "orient": "EW",
+     "line": "H",
+     "a": [
+      3700,
+      8700
+     ],
+     "b": [
+      4800,
+      8700
+     ],
+     "length": 1100,
+     "thickness": 120,
+     "exterior": false,
+     "sides": [
+      "l3-hall",
+      "l3-bath"
+     ]
+    },
+    {
+     "id": "L3:H:5-6",
+     "orient": "EW",
+     "line": "H",
+     "a": [
+      4800,
+      8700
+     ],
+     "b": [
+      5500,
+      8700
+     ],
+     "length": 700,
+     "thickness": 120,
+     "exterior": false,
+     "sides": [
+      "l3-nook",
+      "l3-bath"
+     ]
+    },
+    {
+     "id": "L3:K:1-3",
+     "orient": "EW",
+     "line": "K",
+     "a": [
+      0,
+      10500
+     ],
+     "b": [
+      3700,
+      10500
+     ],
+     "length": 3700,
+     "thickness": 240,
+     "exterior": true,
+     "sides": [
+      "l3-bed",
+      null
+     ]
+    },
+    {
+     "id": "L3:K:3-6",
+     "orient": "EW",
+     "line": "K",
+     "a": [
+      3700,
+      10500
+     ],
+     "b": [
+      5500,
+      10500
+     ],
+     "length": 1800,
+     "thickness": 240,
+     "exterior": true,
+     "sides": [
+      "l3-bath",
+      null
+     ]
+    },
+    {
+     "id": "L3:K:6-7",
+     "orient": "EW",
+     "line": "K",
+     "a": [
+      5500,
+      10500
+     ],
+     "b": [
+      9100,
+      10500
+     ],
+     "length": 3600,
+     "thickness": 240,
+     "exterior": true,
+     "sides": [
+      "l3-study",
+      null
+     ]
+    }
+   ],
+   "edges": [
+    {
+     "id": "L3:10:C-F",
+     "orient": "NS",
+     "line": "10",
+     "a": [
+      13800,
+      1800
+     ],
+     "b": [
+      13800,
+      6900
+     ],
+     "space": "l3-terrace",
+     "treatment": "glass-rail"
+    },
+    {
+     "id": "L3:C:7-10",
+     "orient": "EW",
+     "line": "C",
+     "a": [
+      9100,
+      1800
+     ],
+     "b": [
+      13800,
+      1800
+     ],
+     "space": "l3-terrace",
+     "treatment": "glass-rail"
+    },
+    {
+     "id": "L3:F:7-10",
+     "orient": "EW",
+     "line": "F",
+     "a": [
+      9100,
+      6900
+     ],
+     "b": [
+      13800,
+      6900
+     ],
+     "space": "l3-terrace",
+     "treatment": "glass-rail"
+    }
+   ],
+   "openings": [
+    {
+     "id": "l3-d-bed",
+     "kind": "door",
+     "wall": "L3:3:F-H",
+     "orient": "NS",
+     "a": [
+      3700,
+      7100
+     ],
+     "b": [
+      3700,
+      8000
+     ],
+     "center": [
+      3700,
+      7550
+     ],
+     "width": 900,
+     "height": 2100,
+     "sill": 0,
+     "spanLevels": 1,
+     "sides": [
+      "l3-bed",
+      "l3-hall"
+     ],
+     "facing": "E",
+     "swing": {
+      "into": "l3-bed",
+      "hinge": "start",
+      "inferred": true
+     }
+    },
+    {
+     "id": "l3-w-bed",
+     "kind": "window",
+     "wall": "L3:F:1-2",
+     "orient": "EW",
+     "a": [
+      0,
+      6900
+     ],
+     "b": [
+      1800,
+      6900
+     ],
+     "center": [
+      900,
+      6900
+     ],
+     "width": 1800,
+     "height": 1600,
+     "sill": 600,
+     "spanLevels": 1,
+     "sides": [
+      null,
+      "l3-bed"
+     ],
+     "facing": "S"
+    },
+    {
+     "id": "l3-w-bed-w",
+     "kind": "window",
+     "wall": "L3:1:F-K",
+     "orient": "NS",
+     "a": [
+      0,
+      6900
+     ],
+     "b": [
+      0,
+      8200
+     ],
+     "center": [
+      0,
+      7550
+     ],
+     "width": 1300,
+     "height": 1600,
+     "sill": 600,
+     "spanLevels": 1,
+     "sides": [
+      null,
+      "l3-bed"
+     ],
+     "panel": "end",
+     "facing": "W"
+    },
+    {
+     "id": "l3-d-bath",
+     "kind": "door",
+     "wall": "L3:H:3-5",
+     "orient": "EW",
+     "a": [
+      3900,
+      8700
+     ],
+     "b": [
+      4700,
+      8700
+     ],
+     "center": [
+      4300,
+      8700
+     ],
+     "width": 800,
+     "height": 2100,
+     "sill": 0,
+     "spanLevels": 1,
+     "sides": [
+      "l3-hall",
+      "l3-bath"
+     ],
+     "facing": "S",
+     "swing": {
+      "into": "l3-bath",
+      "hinge": "end",
+      "inferred": true
+     }
+    },
+    {
+     "id": "l3-w-bath",
+     "kind": "window",
+     "wall": "L3:K:3-6",
+     "orient": "EW",
+     "a": [
+      3900,
+      10500
+     ],
+     "b": [
+      4500,
+      10500
+     ],
+     "center": [
+      4200,
+      10500
+     ],
+     "width": 600,
+     "height": 600,
+     "sill": 1000,
+     "spanLevels": 1,
+     "sides": [
+      "l3-bath",
+      null
+     ],
+     "facing": "N"
+    },
+    {
+     "id": "l3-d-study",
+     "kind": "door",
+     "wall": "L3:F:6-7",
+     "orient": "EW",
+     "a": [
+      5700,
+      6900
+     ],
+     "b": [
+      6550,
+      6900
+     ],
+     "center": [
+      6125,
+      6900
+     ],
+     "width": 850,
+     "height": 2100,
+     "sill": 0,
+     "spanLevels": 1,
+     "sides": [
+      "l3-hall",
+      "l3-study"
+     ],
+     "facing": "S",
+     "swing": {
+      "into": "l3-study",
+      "hinge": "start",
+      "inferred": true
+     }
+    },
+    {
+     "id": "l3-w-study",
+     "kind": "window",
+     "wall": "L3:K:6-7",
+     "orient": "EW",
+     "a": [
+      6400,
+      10500
+     ],
+     "b": [
+      8200,
+      10500
+     ],
+     "center": [
+      7300,
+      10500
+     ],
+     "width": 1800,
+     "height": 1300,
+     "sill": 300,
+     "spanLevels": 1,
+     "sides": [
+      "l3-study",
+      null
+     ],
+     "facing": "N"
+    },
+    {
+     "id": "l3-d-terrace",
+     "kind": "door",
+     "wall": "L3:7:E-F",
+     "orient": "NS",
+     "a": [
+      9100,
+      5800
+     ],
+     "b": [
+      9100,
+      6650
+     ],
+     "center": [
+      9100,
+      6225
+     ],
+     "width": 850,
+     "height": 2100,
+     "sill": 0,
+     "spanLevels": 1,
+     "sides": [
+      "l3-hall",
+      "l3-terrace"
+     ],
+     "facing": "E",
+     "swing": {
+      "into": "l3-hall",
+      "hinge": "end",
+      "inferred": true
+     }
+    },
+    {
+     "id": "l3-w-stair",
+     "kind": "window",
+     "wall": "L3:C:2-6",
+     "orient": "EW",
+     "a": [
+      4100,
+      1800
+     ],
+     "b": [
+      5300,
+      1800
+     ],
+     "center": [
+      4700,
+      1800
+     ],
+     "width": 1200,
+     "height": 900,
+     "sill": 350,
+     "spanLevels": 1,
+     "sides": [
+      null,
+      "l3-stair"
+     ],
+     "facing": "S"
+    },
+    {
+     "id": "l3-w-family",
+     "kind": "window",
+     "wall": "L3:C:6-7",
+     "orient": "EW",
+     "a": [
+      5700,
+      1800
+     ],
+     "b": [
+      8900,
+      1800
+     ],
+     "center": [
+      7300,
+      1800
+     ],
+     "width": 3200,
+     "height": 900,
+     "sill": 350,
+     "spanLevels": 1,
+     "sides": [
+      null,
+      "l3-family"
+     ],
+     "insert": "wood-panel",
+     "facing": "S"
+    }
+   ],
+   "stairs": [],
+   "slab": [
+    [
+     [
+      3100,
+      1800
+     ],
+     [
+      13800,
+      1800
+     ],
+     [
+      13800,
+      6900
+     ],
+     [
+      9100,
+      6900
+     ],
+     [
+      9100,
+      10500
+     ],
+     [
+      0,
+      10500
+     ],
+     [
+      0,
+      6900
+     ],
+     [
+      3100,
+      6900
+     ]
+    ]
+   ],
+   "slabOpenings": [
+    {
+     "stair": "stair-2",
+     "rings": [
+      [
+       [
+        3100,
+        1800
+       ],
+       [
+        5500,
+        1800
+       ],
+       [
+        5500,
+        5300
+       ],
+       [
+        3100,
+        5300
+       ]
+      ]
+     ]
+    }
+   ],
+   "interiorArea": 63360000
+  }
+ ],
+ "roofs": [
+  {
+   "id": "roof-n",
+   "kind": "mono",
+   "onLevel": "L3",
+   "rings": [
+    [
+     [
+      0,
+      6900
+     ],
+     [
+      9100,
+      6900
+     ],
+     [
+      9100,
+      10500
+     ],
+     [
+      0,
+      10500
+     ]
+    ]
+   ],
+   "bbox": {
+    "x0": 0,
+    "x1": 9100,
+    "y0": 6900,
+    "y1": 10500
+   },
+   "eaveOffset": 300,
+   "overhang": 600,
+   "skylights": [],
+   "pitchDeg": 25,
+   "fall": "N",
+   "vergeOverhang": 100
+  },
+  {
+   "id": "roof-s",
+   "kind": "mono",
+   "onLevel": "L3",
+   "rings": [
+    [
+     [
+      3100,
+      1800
+     ],
+     [
+      9100,
+      1800
+     ],
+     [
+      9100,
+      6900
+     ],
+     [
+      3100,
+      6900
+     ]
+    ]
+   ],
+   "bbox": {
+    "x0": 3100,
+    "x1": 9100,
+    "y0": 1800,
+    "y1": 6900
+   },
+   "eaveOffset": 0,
+   "overhang": 600,
+   "skylights": [
+    {
+     "at": [
+      7300,
+      4300
+     ],
+     "width": 1800,
+     "length": 900
+    }
+   ],
+   "pitchDeg": 15,
+   "fall": "S"
+  },
+  {
+   "id": "canopy-entry",
+   "kind": "canopy",
+   "onLevel": "L1",
+   "rings": [
+    [
+     [
+      11200,
+      6900
+     ],
+     [
+      13800,
+      6900
+     ],
+     [
+      13800,
+      8500
+     ],
+     [
+      11200,
+      8500
+     ]
+    ]
+   ],
+   "bbox": {
+    "x0": 11200,
+    "x1": 13800,
+    "y0": 6900,
+    "y1": 8500
+   },
+   "eaveOffset": 0,
+   "overhang": 150,
+   "skylights": [],
+   "height": 3000
+  },
+  {
+   "id": "canopy-balcony",
+   "kind": "canopy",
+   "onLevel": "L2",
+   "rings": [
+    [
+     [
+      9100,
+      300
+     ],
+     [
+      13800,
+      300
+     ],
+     [
+      13800,
+      1800
+     ],
+     [
+      9100,
+      1800
+     ]
+    ]
+   ],
+   "bbox": {
+    "x0": 9100,
+    "x1": 13800,
+    "y0": 300,
+    "y1": 1800
+   },
+   "eaveOffset": 0,
+   "overhang": 200,
+   "skylights": [],
+   "height": 2500
+  }
+ ],
+ "entourage": [],
+ "interiorArea": 243420000,
+ "style": "modern-pitched"
+}

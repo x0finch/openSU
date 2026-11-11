@@ -21,8 +21,11 @@ export type GridLine = z.infer<typeof GridLine>;
  *  (west or south end) or the end (east or north end) of the host. */
 export const At = z.union([
   z.literal('center'),
-  z.strictObject({ from: z.enum(['start', 'end']), offset: NonNegative }),
-]);
+  z.strictObject({
+    from: z.enum(['start', 'end']).describe('"start" = measured from the west or south end, "end" = from the east or north end.'),
+    offset: NonNegative.describe('Distance in mm from that end to the near edge of the element.'),
+  }),
+]).describe('Position along the edge: "center", or {from, offset}.');
 export type At = z.infer<typeof At>;
 
 /** Gate in the plot fence (adopted in task 003). `at` is measured along the
@@ -65,8 +68,11 @@ export function isOutdoorType(t: SpaceType): boolean {
 
 /** Rectangle between two X grid lines and two Y grid lines (ids). */
 export const CellRect = z.strictObject({
-  x0: Id, x1: Id, y0: Id, y1: Id,
-});
+  x0: Id.describe('X grid line id of the west edge.'),
+  x1: Id.describe('X grid line id of the east edge.'),
+  y0: Id.describe('Y grid line id of the south edge.'),
+  y1: Id.describe('Y grid line id of the north edge.'),
+}).describe('Rectangle between two X grid lines (west x0, east x1) and two Y grid lines (south y0, north y1), by id.');
 export type CellRect = z.infer<typeof CellRect>;
 
 export const Space = z.strictObject({
@@ -85,9 +91,33 @@ export const Space = z.strictObject({
 });
 export type Space = z.infer<typeof Space>;
 
+/** A stretch of a boundary between two grid lines that cross it (X lines
+ *  for a boundary running east-west, Y lines for one running north-south).
+ *  Order does not matter: the start is always the west or south end. */
+export const Span = z.strictObject({
+  from: Id.describe('Grid line id at one end of the stretch.'),
+  to: Id.describe('Grid line id at the other end.'),
+}).describe('The stretch of the wall between two grid lines that cross it: X line ids for an N or S wall, Y line ids for an E or W wall. Offsets in `at` are measured from its west or south end. Required when the space has more than one edge on that side (or the two spaces share more than one boundary).');
+export type Span = z.infer<typeof Span>;
+
+/**
+ * Where an opening sits. `{ space, side, span? }`: on the `side`-facing
+ * boundary of `space`; `span` names the stretch between two grid lines and
+ * may be omitted only when the space has exactly one edge on that side.
+ * `{ between: [a, b], span? }`: on the boundary shared by two spaces, same
+ * rule. Offsets in `at` are measured from the start (west or south end) of
+ * the span, so editing a space's cells does not move its openings.
+ */
 export const OpeningHost = z.union([
-  z.strictObject({ space: Id, side: Side }),
-  z.strictObject({ between: z.tuple([Id, Id]) }),
+  z.strictObject({
+    space: Id.describe('Space id whose wall holds the opening.'),
+    side: Side.describe('Which side of that space: N, S, E or W (the direction the wall faces, seen from inside the space).'),
+    span: Span.optional(),
+  }),
+  z.strictObject({
+    between: z.tuple([Id, Id]).describe('The two space ids on either side of the wall (an interior wall, or an open boundary for a void).'),
+    span: Span.optional(),
+  }),
 ]);
 export type OpeningHost = z.infer<typeof OpeningHost>;
 

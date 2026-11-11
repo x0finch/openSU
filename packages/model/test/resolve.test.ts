@@ -78,7 +78,7 @@ describe('resolve', () => {
     expect(wBed.b).toEqual([6500, 0]);
   });
 
-  it('measures side offsets from the space extent and picks the matching edge of an L-shape', () => {
+  it('measures offsets from the start of the named span (L-shaped spaces name their edge)', () => {
     const r2 = resolve(golden);
     const hallWindow = r2.levels[1]!.openings.find((o) => o.id === 'l2-w-hall-n')!;
     expect(hallWindow.a).toEqual([9800, 6900]);

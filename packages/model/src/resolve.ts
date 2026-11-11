@@ -8,7 +8,7 @@ import {
 import type { Issue } from './issues';
 import {
   isOutdoorType, type DoorSwing, type Entourage, type House, type Level,
-  type Opening, type Roof, type Side, type Space, type SpaceType, type Stair,
+  type Opening, type OpeningHost, type Roof, type Side, type Space, type SpaceType, type Stair,
 } from './schema';
 
 export type Orient = 'NS' | 'EW';
@@ -180,6 +180,8 @@ export interface PlacedOpening {
   lo: number;
   hi: number;
   piece: Piece;
+  /** The edge and span the host resolved to. */
+  span: HostSpan;
   resolved: ResolvedOpening;
 }
 
@@ -272,7 +274,18 @@ function pieceRange(grid: Grid, p: Piece): [number, number] {
   return [pos[p.from]!, pos[p.to]!];
 }
 
-interface Run { orient: Orient; line: number; lo: number; hi: number }
+/** A maximal run of boundary along one grid line. */
+export interface Run {
+  orient: Orient;
+  /** Line index (into xs for NS, ys for EW). */
+  line: number;
+  /** Index range along the line (into ys for NS, xs for EW). */
+  from: number;
+  to: number;
+  /** Position range along the line, mm. */
+  lo: number;
+  hi: number;
+}
 
 /** Maximal runs of the boundary of `cells` facing `side`. */
 function sideRuns(grid: Grid, cells: ReadonlySet<number>, side: Side): Run[] {
@@ -295,7 +308,7 @@ function sideRuns(grid: Grid, cells: ReadonlySet<number>, side: Side): Run[] {
       }
       if (on && start < 0) start = t;
       if (!on && start >= 0) {
-        runs.push({ orient: horizontal ? 'EW' : 'NS', line, lo: pos[start]!, hi: pos[t]! });
+        runs.push({ orient: horizontal ? 'EW' : 'NS', line, from: start, to: t, lo: pos[start]!, hi: pos[t]! });
         start = -1;
       }
     }
@@ -321,7 +334,7 @@ function sharedRuns(grid: Grid, a: ReadonlySet<number>, b: ReadonlySet<number>):
       for (let t = 0; t <= along; t++) {
         const on = t < along && shared(orient, line, t);
         if (on && start < 0) start = t;
-        if (!on && start >= 0) { runs.push({ orient, line, lo: pos[start]!, hi: pos[t]! }); start = -1; }
+        if (!on && start >= 0) { runs.push({ orient, line, from: start, to: t, lo: pos[start]!, hi: pos[t]! }); start = -1; }
       }
     }
   }
@@ -334,8 +347,104 @@ export function areAdjacent(grid: Grid, a: ReadonlySet<number>, b: ReadonlySet<n
 
 const EPS = 0.5;
 const fmt = (n: number) => `${Math.round(n)}`;
-const describeRuns = (grid: Grid, runs: Run[]) =>
-  runs.map((r) => `${r.orient === 'NS' ? `x=${fmt(grid.xs[r.line]!)}` : `y=${fmt(grid.ys[r.line]!)}`} from ${fmt(r.lo)} to ${fmt(r.hi)}`).join('; ');
+
+/** Grid ids of a run's line and of the lines at its ends. */
+export function runIds(grid: Grid, r: { orient: Orient; line: number; from: number; to: number }): { line: string; from: string; to: string } {
+  const along = r.orient === 'NS' ? grid.yIds : grid.xIds;
+  return { line: r.orient === 'NS' ? grid.xIds[r.line]! : grid.yIds[r.line]!, from: along[r.from]!, to: along[r.to]! };
+}
+
+/** "1-3 on line K (3700 mm)" for each run. */
+export function describeSpans(grid: Grid, runs: readonly Run[]): string {
+  return runs.map((r) => {
+    const ids = runIds(grid, r);
+    return `${ids.from}-${ids.to} on line ${ids.line} (${fmt(r.hi - r.lo)} mm)`;
+  }).join('; ');
+}
+
+/** Human description of an opening host, e.g. 'the N side of "gf-senior"'. */
+export function hostText(host: OpeningHost): string {
+  return 'space' in host ? `the ${host.side} side of "${host.space}"` : `the wall between "${host.between[0]}" and "${host.between[1]}"`;
+}
+
+/** Boundary runs a host refers to (all edges on that side, or all shared
+ *  boundaries), or null when a space is unknown on this level. */
+export function hostRuns(grid: Grid, ctx: LevelCtx, host: OpeningHost): Run[] | null {
+  if ('space' in host) {
+    const si = ctx.spaceIndex.get(host.space);
+    if (si === undefined) return null;
+    return sideRuns(grid, ctx.spaceCells[si]!, host.side);
+  }
+  const ia = ctx.spaceIndex.get(host.between[0]);
+  const ib = ctx.spaceIndex.get(host.between[1]);
+  if (ia === undefined || ib === undefined) return null;
+  return sharedRuns(grid, ctx.spaceCells[ia]!, ctx.spaceCells[ib]!);
+}
+
+export interface HostSpan {
+  run: Run;
+  /** Span index range along the run's line and its position range (mm). */
+  from: number;
+  to: number;
+  s0: number;
+  s1: number;
+}
+
+/**
+ * Resolve the edge an opening host names: the given span (which must lie on
+ * one edge of that side / shared boundary), or the only edge when the span
+ * is omitted. Returns null when a referenced space or grid line is unknown
+ * (reference checks report those), or a problem (code + message tail).
+ */
+export function resolveHostSpan(grid: Grid, ctx: LevelCtx, host: OpeningHost): HostSpan | { code: string; message: string } | null {
+  const runs = hostRuns(grid, ctx, host);
+  if (!runs) return null;
+  const where = hostText(host);
+  if (runs.length === 0) {
+    return 'space' in host
+      ? { code: 'opening-off-edge', message: `is on ${where}, but that space has no ${host.side}-facing boundary.` }
+      : { code: 'opening-not-adjacent', message: `is on ${where}, but these spaces share no boundary on level "${ctx.level.id}". Host it on a space side instead, or pick two spaces that touch.` };
+  }
+  const listing = `Edges of ${where}: ${describeSpans(grid, runs)}.`;
+  if (!host.span) {
+    if (runs.length > 1) {
+      const ex = runIds(grid, runs[0]!);
+      return {
+        code: 'ambiguous-host',
+        message: `is on ${where}, which has ${runs.length} separate edges, so the host is ambiguous. Add span to name one. ${listing} Example: "span": {"from": "${ex.from}", "to": "${ex.to}"}.`,
+      };
+    }
+    const run = runs[0]!;
+    return { run, from: run.from, to: run.to, s0: run.lo, s1: run.hi };
+  }
+  const { from, to } = host.span;
+  const lookup = (orient: Orient) => {
+    const index = orient === 'NS' ? grid.yIndex : grid.xIndex;
+    const a = index.get(from);
+    const b = index.get(to);
+    return a === undefined || b === undefined ? null : [Math.min(a, b), Math.max(a, b)] as const;
+  };
+  const orients: Orient[] = 'space' in host ? [host.side === 'N' || host.side === 'S' ? 'EW' : 'NS'] : ['NS', 'EW'];
+  if (orients.every((o) => lookup(o) === null)) return null;
+  if (orients.every((o) => { const r = lookup(o); return r === null || r[0] === r[1]; })) {
+    return { code: 'opening-span', message: `has span ${from}-${to}, whose two lines are at the same position. A span needs two different grid lines. ${listing}` };
+  }
+  let matches = runs.filter((r) => {
+    const s = lookup(r.orient);
+    return s !== null && r.from <= s[0] && s[1] <= r.to;
+  });
+  if (matches.length === 0) {
+    return {
+      code: 'opening-span',
+      message: `has span ${from}-${to}, which is not (entirely) on ${where}. ${listing} Use one of these spans, or a part of one between two grid lines.`,
+    };
+  }
+  if (matches.length > 1 && 'space' in host) matches = outermost(matches, host.side, grid);
+  const run = matches[0]!;
+  const s = lookup(run.orient)!;
+  const pos = run.orient === 'NS' ? grid.ys : grid.xs;
+  return { run, from: s[0], to: s[1], s0: pos[s[0]]!, s1: pos[s[1]]! };
+}
 
 function outermost(runs: Run[], side: Side, grid: Grid): Run[] {
   if (runs.length === 0) return runs;
@@ -347,63 +456,30 @@ function outermost(runs: Run[], side: Side, grid: Grid): Run[] {
 
 function placeOpening(grid: Grid, ctx: LevelCtx, o: Opening, problems: Issue[]): PlacedOpening | null {
   const where = { level: ctx.level.id, opening: o.id };
-  let runs: Run[];
+  const hs = resolveHostSpan(grid, ctx, o.host);
+  if (hs === null) return null; // reported by reference checks
+  if ('code' in hs) {
+    problems.push({ code: hs.code, severity: 'error', message: `Opening "${o.id}" ${hs.message}`, where });
+    return null;
+  }
+  const { run, s0, s1 } = hs;
+  const facing: Side | undefined = 'space' in o.host ? o.host.side : undefined;
   let lo: number;
   let hi: number;
-  let run: Run | undefined;
-  let facing: Side | undefined;
-  if ('space' in o.host) {
-    const si = ctx.spaceIndex.get(o.host.space);
-    if (si === undefined) return null; // reported by reference checks
-    const cells = ctx.spaceCells[si]!;
-    const side = o.host.side;
-    facing = side;
-    runs = sideRuns(grid, cells, side);
-    const bb = bboxOf(grid, cells);
-    if (!bb || runs.length === 0) {
-      problems.push({ code: 'opening-off-edge', severity: 'error', message: `Opening "${o.id}" is on the ${side} side of "${o.host.space}", but that space has no ${side}-facing boundary.`, where });
-      return null;
-    }
-    const [bmin, bmax] = side === 'N' || side === 'S' ? [bb.x0, bb.x1] : [bb.y0, bb.y1];
-    if (o.at === 'center') {
-      const outer = outermost(runs, side, grid).sort((a, b) => (b.hi - b.lo) - (a.hi - a.lo));
-      run = outer[0]!;
-      const c = (run.lo + run.hi) / 2;
-      lo = c - o.width / 2; hi = c + o.width / 2;
-    } else {
-      if (o.at.from === 'start') { lo = bmin + o.at.offset; hi = lo + o.width; }
-      else { hi = bmax - o.at.offset; lo = hi - o.width; }
-      const fits = runs.filter((r) => r.lo <= lo + EPS && hi <= r.hi + EPS);
-      run = outermost(fits, side, grid)[0];
-      if (!run) {
-        problems.push({
-          code: 'opening-off-edge', severity: 'error',
-          message: `Opening "${o.id}" (${fmt(lo)}..${fmt(hi)} along the ${side} side of "${o.host.space}", offset measured from the space's ${o.at.from === 'start' ? (side === 'N' || side === 'S' ? 'west' : 'south') : (side === 'N' || side === 'S' ? 'east' : 'north')} extent) does not fit on any ${side}-facing edge. Available ${side} edges: ${describeRuns(grid, runs)}. Change offset or width.`,
-          where,
-        });
-        return null;
-      }
-    }
-  } else {
-    const [a, b] = o.host.between;
-    const ia = ctx.spaceIndex.get(a);
-    const ib = ctx.spaceIndex.get(b);
-    if (ia === undefined || ib === undefined) return null;
-    runs = sharedRuns(grid, ctx.spaceCells[ia]!, ctx.spaceCells[ib]!).sort((p, q) => (q.hi - q.lo) - (p.hi - p.lo));
-    run = runs[0];
-    if (!run) {
-      problems.push({ code: 'opening-not-adjacent', severity: 'error', message: `Opening "${o.id}" is between "${a}" and "${b}", but these spaces share no boundary on level "${ctx.level.id}". Host it on a space side instead, or pick adjacent spaces.`, where });
-      return null;
-    }
-    if (o.at === 'center') { const c = (run.lo + run.hi) / 2; lo = c - o.width / 2; hi = c + o.width / 2; }
-    else if (o.at.from === 'start') { lo = run.lo + o.at.offset; hi = lo + o.width; }
-    else { hi = run.hi - o.at.offset; lo = hi - o.width; }
-    if (lo < run.lo - EPS || hi > run.hi + EPS) {
-      problems.push({ code: 'opening-off-edge', severity: 'error', message: `Opening "${o.id}" (${fmt(lo)}..${fmt(hi)}) runs past the shared boundary of "${a}" and "${b}" (${describeRuns(grid, [run])}). Reduce width or offset.`, where });
-      return null;
-    }
+  if (o.at === 'center') { const c = (s0 + s1) / 2; lo = c - o.width / 2; hi = c + o.width / 2; }
+  else if (o.at.from === 'start') { lo = s0 + o.at.offset; hi = lo + o.width; }
+  else { hi = s1 - o.at.offset; lo = hi - o.width; }
+  if (lo < s0 - EPS || hi > s1 + EPS) {
+    const len = s1 - s0;
+    const ids = runIds(grid, { ...run, from: hs.from, to: hs.to });
+    problems.push({
+      code: 'opening-off-edge', severity: 'error',
+      message: `Opening "${o.id}" (${fmt(lo)}..${fmt(hi)}) runs past its span ${ids.from}-${ids.to} on ${hostText(o.host)} (${fmt(s0)}..${fmt(s1)}, ${fmt(len)} mm long). ${o.width > len ? `The span is shorter than the opening; make it at most ${fmt(len)} mm wide or use a longer span.` : `For width ${fmt(o.width)} the offset must be between 0 and ${fmt(len - o.width)}.`}`,
+      where,
+    });
+    return null;
   }
-  const linePieces = ctx.pieces.filter((p) => p.orient === run!.orient && p.line === run!.line);
+  const linePieces = ctx.pieces.filter((p) => p.orient === run.orient && p.line === run.line);
   const piece = linePieces.find((p) => {
     const [plo, phi] = pieceRange(grid, p);
     return plo <= lo + EPS && hi <= phi + EPS;
@@ -413,10 +489,15 @@ function placeOpening(grid: Grid, ctx: LevelCtx, o: Opening, problems: Issue[]):
       const [plo, phi] = pieceRange(grid, p);
       return plo < hi - EPS && lo + EPS < phi;
     });
-    const longest = Math.max(0, ...touched.map((p) => { const [a, b] = pieceRange(grid, p); return b - a; }));
+    const sid = (n: number) => (n >= 0 ? ctx.level.spaces[n]!.id : 'outside');
+    const segs = touched.map((p) => {
+      const ids = runIds(grid, p);
+      const [a, b] = pieceRange(grid, p);
+      return `${ids.from}-${ids.to} ${fmt(a)}..${fmt(b)} (${sid(p.sides[0])} | ${sid(p.sides[1])})`;
+    });
     problems.push({
       code: 'opening-too-wide', severity: 'error',
-      message: `Opening "${o.id}" (width ${fmt(o.width)}, ${fmt(lo)}..${fmt(hi)}) spans ${touched.length} wall segments; an opening must sit on one segment between the same two spaces. The longest segment there is ${fmt(longest)} mm. Make it narrower or move it.`,
+      message: `Opening "${o.id}" (width ${fmt(o.width)}, ${fmt(lo)}..${fmt(hi)} on line ${runIds(grid, run).line}) crosses ${touched.length} wall segments: ${segs.join(', ')}. A wall is split wherever the space on either side changes, and an opening must fit inside one segment. Narrow or move it so it lies within one of those ranges.`,
       where,
     });
     return null;
@@ -451,7 +532,7 @@ function placeOpening(grid: Grid, ctx: LevelCtx, o: Opening, problems: Issue[]):
     const swing = o.swing ? { ...o.swing, inferred: false } : inferSwing(grid, ctx, piece, lo, hi);
     if (swing) resolved.swing = swing;
   }
-  return { opening: o, levelIndex: ctx.index, orient: run.orient, line: run.line, lo, hi, piece, resolved };
+  return { opening: o, levelIndex: ctx.index, orient: run.orient, line: run.line, lo, hi, piece, span: hs, resolved };
 }
 
 const CIRCULATION: ReadonlySet<SpaceType> = new Set(['hall', 'stair']);
