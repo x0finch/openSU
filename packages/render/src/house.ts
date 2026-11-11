@@ -143,11 +143,6 @@ function createEntourage(e: EntouragePlacement, pal: Palette): Object3D {
     case 'grass': return createGrassTuft(trees, { height: e.scale, seed: e.seed });
     case 'person-walk': return createPerson(pal.person, 'walk', e.scale, true);
     case 'person-run': return createPerson(pal.person, 'run', e.scale);
-    case 'car': {
-      // The car model's length runs along scene Z; turn it onto the model X axis.
-      const car = createCar({ body: pal.carBody, glass: pal.carGlass, tyre: pal.tyre });
-      car.rotation.y = Math.PI / 2;
-      return car;
-    }
+    case 'car': return createCar({ body: pal.carBody, glass: pal.carGlass, tyre: pal.tyre });
   }
 }

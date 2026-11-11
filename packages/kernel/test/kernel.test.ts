@@ -45,9 +45,9 @@ describe('kernel: golden sample', () => {
     // The level-2 north balcony slab edge projects 180 mm past the plot edge.
     expect(max[1]).toBeCloseTo(12.18, 2);
     expect(min[2]).toBeCloseTo(0, 3);
-    // North roof ridge: L3 top 9.3 m + 0.6 m eave offset + 3.6 m * tan 25 + roof depth.
-    expect(max[2]).toBeGreaterThan(11.5);
-    expect(max[2]).toBeLessThan(12.3);
+    // North roof high edge: attic eaves at 8.1 m + 0.3 m eave offset, + 3.6 m * tan 25,
+    // + 0.6 m overhang * tan 25, + 0.2 m roof depth.
+    expect(max[2]).toBeCloseTo(8.4 + 4.2 * Math.tan((25 * Math.PI) / 180) + 0.2, 2);
   });
 
   it('cuts every opening into its wall', () => {

@@ -5,6 +5,7 @@ import type { ResolvedSpace } from '@opensu/model';
 import { DECK, OUTDOOR_SLAB_OUT, PAVING } from './constants';
 import type { Ctx, Rect } from './context';
 import { flat } from './massing';
+import { gateRange } from './site';
 import type { EntourageKind, EntouragePlacement } from './types';
 
 const MM = 0.001;
@@ -68,33 +69,46 @@ export function placeEntourage(ctx: Ctx, covered: (x: number, y: number) => bool
   const big = candidates.find((c) => !covered((c.r[0] + c.r[2]) / 2, (c.r[1] + c.r[3]) / 2));
   if (big) put('ginkgo', (big.r[0] + big.r[2]) / 2, (big.r[1] + big.r[3]) / 2, surface(big.s), 7.6);
 
-  // 2. Garden strips along the fence: bamboo, except on the main (sunny) side,
-  //    where low grass keeps the facade free; front planters get a small maple.
+  // 2. Strips along the fence (gardens and courtyards up to 2 m deep):
+  //    bamboo clumps along the fence, clear of gates, the pier and doors,
+  //    except on the main (sunny) side, where low grass keeps the facade
+  //    free. Garden strips in front of large glazing get a small maple.
   const touches = (r: Rect, side: string) =>
     side === 'S' ? r[1] <= 0 : side === 'N' ? r[3] >= site.depth : side === 'W' ? r[0] <= 0 : r[2] >= site.width;
-  for (const s of outdoor.filter((o) => o.type === 'garden')) {
+  const gates = site.fence?.gates ?? [];
+  const mainGate = [...gates].sort((p, q) => q.width - p.width)[0];
+  const blockedOn = (side: string): [number, number][] => [
+    ...gates.filter((g) => g.side === side).map((g) => { const [lo, hi] = gateRange(ctx, g); return [lo - 700, hi + 700] as [number, number]; }),
+    ...(mainGate && mainGate.side === side ? [[gateRange(ctx, mainGate)[0] - 600 - 700, gateRange(ctx, mainGate)[0]] as [number, number]] : []),
+  ];
+  for (const s of outdoor.filter((o) => o.type === 'garden' || o.type === 'courtyard')) {
     const rects = ctx.rects(ctx.cellsOf(0, (o) => o.id === s.id));
-    const front = gf.level.openings.some((o) => (o.kind === 'sliding-door' || o.width >= 2400) && o.sides.includes(s.id));
+    const front = s.type === 'garden' && gf.level.openings.some((o) => (o.kind === 'sliding-door' || o.width >= 2400) && o.sides.includes(s.id));
+    const doorsHere = gf.level.openings.filter((o) => o.kind !== 'window' && o.sides.includes(s.id));
     for (const r of rects) {
       const w = r[2] - r[0], h = r[3] - r[1];
       if (Math.min(w, h) > 2000) continue;
       const alongX = w >= h;
       const lenR = alongX ? w : h;
       const z = surface(s);
-      if (front) {
-        put('maple-red', alongX ? r[0] + lenR * 0.7 : (r[0] + r[2]) / 2, alongX ? (r[1] + r[3]) / 2 : r[1] + lenR * 0.7, z, 2.9);
-      }
-      const side = (['S', 'N', 'W', 'E'] as const).find((sd) => touches(r, sd));
+      if (front) put('maple-red', alongX ? r[0] + lenR * 0.7 : (r[0] + r[2]) / 2, alongX ? (r[1] + r[3]) / 2 : r[1] + lenR * 0.7, z, 2.9);
+      const side = (alongX ? (['S', 'N'] as const) : (['W', 'E'] as const)).find((sd) => touches(r, sd));
       if (side && side !== mainSide && !front) {
-        const n = Math.min(4, Math.max(1, Math.floor(lenR / 1600)));
-        for (let k = 0; k < n; k++) {
-          const t = (k + 0.5) / n;
-          const inset = 650;
-          const x = alongX ? r[0] + w * t : side === 'W' ? r[0] + inset : r[2] - inset;
-          const y = alongX ? (side === 'S' ? r[1] + inset : r[3] - inset) : r[1] + h * t;
-          put('bamboo', x, y, z, 3.2 + rnd() * 0.5);
+        const lo = alongX ? r[0] : r[1];
+        let free: [number, number][] = [[lo + 300, lo + lenR - 300]];
+        const blocks = [...blockedOn(side), ...doorsHere.map((d) => { const c = alongX ? d.center[0] : d.center[1]; return [c - 1200, c + 1200] as [number, number]; })];
+        for (const [b0, b1] of blocks) free = free.flatMap(([u, v]) => (b1 <= u || b0 >= v ? [[u, v] as [number, number]] : [[u, b0] as [number, number], [b1, v] as [number, number]].filter(([p, q]) => q - p >= 900)));
+        for (const [u, v] of free) {
+          const n = Math.max(1, Math.round((v - u) / 1500));
+          for (let k = 0; k < n; k++) {
+            const t = u + ((v - u) * (k + 0.5)) / n;
+            const inset = 650;
+            const x = alongX ? t : side === 'W' ? r[0] + inset : r[2] - inset;
+            const y = alongX ? (side === 'S' ? r[1] + inset : r[3] - inset) : t;
+            put('bamboo', x, y, z, 3.2 + rnd() * 0.5);
+          }
         }
-      } else {
+      } else if (s.type === 'garden') {
         const n = Math.max(2, Math.floor(lenR / 900));
         for (let k = 0; k < n; k++) {
           const t = (k + 0.3 + rnd() * 0.4) / n;
@@ -158,7 +172,7 @@ export function placeEntourage(ctx: Ctx, covered: (x: number, y: number) => bool
     let rot = alongX ? 0 : Math.PI / 2;
     if (gate) {
       const toward = gate.side === 'E' || gate.side === 'N' ? 1 : -1;
-      if (alongX) cx += toward * 500; else cy += toward * 500;
+      if (alongX) cx += toward * 300; else cy += toward * 300;
       if (toward < 0) rot += Math.PI;
     }
     put('car', cx, cy, gf.elev + PAVING, 1, rot);

@@ -91,14 +91,17 @@ function buildFence(ctx: Ctx, height: number, gates: Gate[]): void {
       ctx.massing.cut({ x0: v[0], y0: v[1], x1: v[2], y1: v[3], z0: -1, z1: height + COPING + 1, tags: ['fence'] });
       buildGate(ctx, g, side, r[0], r[1], height);
     }
-    // A group of three small square openings on the longest open stretch.
+    // A group of three small square openings on the longest open stretch;
+    // none on the side opposite the main gate (the neighbour's side).
+    const main = [...gates].sort((p, q) => q.width - p.width)[0];
+    const opposite = main ? ({ N: 'S', S: 'N', E: 'W', W: 'E' } as const)[main.side] : null;
     const free = runs.flatMap(([p, q]) => {
       let parts: [number, number][] = [[p, q]];
       for (const { r } of gs) parts = parts.flatMap(([u, v]) => (r[1] <= u || r[0] >= v ? [[u, v] as [number, number]] : [[u, r[0]] as [number, number], [r[1], v] as [number, number]].filter(([s, t]) => t - s > 1)));
       return parts;
     });
     const longest = free.reduce<[number, number] | null>((m, r) => (!m || r[1] - r[0] > m[1] - m[0] ? r : m), null);
-    if (longest && longest[1] - longest[0] >= 3000) {
+    if (longest && longest[1] - longest[0] >= 3000 && side !== opposite) {
       const c = Math.min(longest[1] - 1200, Math.max(longest[0] + 1200, longest[0] + 0.75 * (longest[1] - longest[0])));
       for (const k of [-1, 0, 1]) {
         const m = c + k * (FENCE_HOLE + 380);
