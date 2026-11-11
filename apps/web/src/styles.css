@@ -15,9 +15,15 @@
   --color-hairline: #e6e6e6;
   --color-wash: #f4f4f3;
   --color-page: #ffffff;
-  --color-surface: rgb(255 255 255 / 0.92);
-  /* Large panels over the drawing (the assistant): nearly opaque, so bright foliage never smears through. */
-  --color-surface-solid: rgb(255 255 255 / 0.975);
+  /*
+   * Surfaces over the drawing (buttons, trays, panels) are opaque white: no
+   * backdrop-filter anywhere over the canvas. A blur under a caret or a
+   * running indicator re-filters the WebGL canvas every frame, which is very
+   * expensive with software GL (task 014). A soft shadow and a hairline
+   * separate them from the drawing instead.
+   */
+  --color-surface: #ffffff;
+  --color-surface-solid: #ffffff;
   --color-accent: #f2d40f;
   --color-accent-ink: #8a7400;
   --color-transparent: transparent;
@@ -27,8 +33,6 @@
   --radius-sm: 7px;
   --shadow-float: 0 6px 24px rgba(0, 0, 0, 0.08);
   --shadow-hair: 0 0 0 1px rgba(0, 0, 0, 0.04);
-  --blur-ui: 14px;
-  --blur-ui-soft: 4px;
 
   --font-sans: "Inter Variable", Inter, "PingFang SC", "Hiragino Sans GB", "Noto Sans SC", "Noto Sans CJK SC",
     "Source Han Sans SC", "Microsoft YaHei", "WenQuanYi Zen Hei", system-ui, sans-serif;
@@ -76,17 +80,15 @@
   }
 }
 
+/* Floating chrome over the drawing (the names predate task 014: no blur, see --color-surface). */
 @utility glass {
   background: var(--color-surface);
-  -webkit-backdrop-filter: blur(var(--blur-ui)) saturate(1.2);
-  backdrop-filter: blur(var(--blur-ui)) saturate(1.2);
   box-shadow: var(--shadow-float), var(--shadow-hair);
 }
 
+/* Larger floating panels (trays, menus, the assistant). */
 @utility glass-solid {
   background: var(--color-surface-solid);
-  -webkit-backdrop-filter: blur(var(--blur-ui-soft));
-  backdrop-filter: blur(var(--blur-ui-soft));
   box-shadow: var(--shadow-float), var(--shadow-hair);
 }
 
