@@ -33,3 +33,14 @@ Accepted findings that are not scheduled yet. Lead maintains this file.
 ## Process
 - Parallel implementers must not share a working tree (a shared git index
   caused cross-commits once). Use isolated worktrees and let the lead merge.
+
+## Web app (from task 005 review)
+- Phone layout: the bottom sheet takes half the screen and the drawing is
+  small; default the sheet to a collapsed height.
+- The Worker bundle contains the lazy three.js chunk; keep viewer code out
+  of the server bundle.
+- View-rail icons need tooltips; landing hero should be a real render of
+  our own (non-reference) house.
+- `packages/render` demo: OrbitControls re-aims the camera before
+  `focusPoint()` is read (two-line reorder in `demo/main.ts`).
+- Kernel runs on the main thread (~200 ms); move to a worker if it grows.
