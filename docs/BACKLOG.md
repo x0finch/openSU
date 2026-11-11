@@ -21,3 +21,15 @@ Accepted findings that are not scheduled yet. Lead maintains this file.
 - Entrance pier / wall between planter and porch (x 11200-11580).
 - Canopy over the ground-floor courtyard door on the west side.
 - Stair spaces are used differently on the ground floor and above.
+
+## Schema proposals from the kernel task (decide before the AI milestone)
+- Corner windows wrapping two faces.
+- Canopy voids and off-grid canopies.
+- Surface material for outdoor spaces (deck / paving / gravel / lawn).
+- Explicit eave / knee-wall height for attic levels (level height currently
+  means two things).
+- Explicit placement of fence openings and entrance pier.
+
+## Process
+- Parallel implementers must not share a working tree (a shared git index
+  caused cross-commits once). Use isolated worktrees and let the lead merge.
