@@ -5,6 +5,8 @@ import { create } from 'zustand';
 import type { Lang } from './i18n';
 import { DEFAULT_VIEW, presetById, type ViewId } from './views';
 
+const isAxo = (id: ViewId) => presetById(id).kind === 'axo';
+
 export type Mode = '3d' | 'plan' | 'sheet';
 
 /** Date presets of the sun study. */
@@ -39,6 +41,8 @@ export interface StudioState {
   view: ViewId;
   /** Bumped to re-apply the current view (reset after orbiting). */
   viewNonce: number;
+  /** The user has orbited / zoomed / panned away from the preset. */
+  viewMoved: boolean;
   /** Plan level. */
   level: string | null;
   /** Level cutaway of the 3D view (null = whole house). */
@@ -56,6 +60,7 @@ export interface StudioState {
   setMode: (mode: Mode) => void;
   setView: (view: ViewId) => void;
   resetView: () => void;
+  setViewMoved: (moved: boolean) => void;
   setLevel: (level: string) => void;
   setCut: (level: string | null) => void;
   setSun: (patch: Partial<SunState>) => void;
@@ -84,14 +89,12 @@ function storedLang(): Lang | null {
   }
 }
 
-/** Cutaways are seen from an axonometric; other views show the whole house. */
-const isAxo = (id: ViewId) => presetById(id).kind === 'axo';
-
 export const useStudio = create<StudioState>((set) => ({
   lang: 'zh',
   mode: '3d',
   view: DEFAULT_VIEW,
   viewNonce: 0,
+  viewMoved: false,
   level: null,
   cut: null,
   sun: { on: false, dateId: 'winter', minutes: 10 * 60, playing: false },
@@ -112,14 +115,19 @@ export const useStudio = create<StudioState>((set) => ({
     set({ lang });
   },
   setMode: (mode) => set(mode === '3d' ? { mode } : { mode, walk: false }),
-  setView: (view) => set((s) => ({ view, viewNonce: s.viewNonce + 1, cut: isAxo(view) ? s.cut : null, walk: false })),
-  resetView: () => set((s) => ({ viewNonce: s.viewNonce + 1, walk: false })),
+  // The cutaway choice survives a change of view (eye level and elevations
+  // show the whole house and the dock marks the cut as paused; see `shownCut`).
+  setView: (view) => set((s) => ({ view, viewNonce: s.viewNonce + 1, viewMoved: false, walk: false })),
+  resetView: () => set((s) => ({ viewNonce: s.viewNonce + 1, viewMoved: false, walk: false })),
+  setViewMoved: (viewMoved) => set({ viewMoved }),
   setLevel: (level) => set({ level }),
-  setCut: (cut) => set((s) => (cut && !isAxo(s.view) ? { cut, view: DEFAULT_VIEW, viewNonce: s.viewNonce + 1, walk: false } : { cut, walk: false })),
+  // Choosing a cut from an eye-level view or an elevation goes to the axonometric, where cuts show.
+  setCut: (cut) => set((s) => (cut && !isAxo(s.view) ? { cut, view: DEFAULT_VIEW, viewNonce: s.viewNonce + 1, viewMoved: false, walk: false } : { cut, walk: false })),
   setSun: (patch) => set((s) => ({ sun: { ...s.sun, ...patch } })),
   setSunInfo: (sunInfo) => set({ sunInfo }),
   // Walking and the assistant panel take turns: entering walk mode tucks the chat away.
-  setWalk: (walk) => set(walk ? { walk, mode: '3d', chatOpen: false } : { walk }),
+  // Entering walk also folds the phone sheet away, so the room fills the screen.
+  setWalk: (walk) => set(walk ? { walk, mode: '3d', chatOpen: false, sheetOpen: false } : { walk }),
   setChatOpen: (chatOpen) => set(chatOpen ? { chatOpen, walk: false } : { chatOpen }),
   setSheetOpen: (sheetOpen) => set({ sheetOpen }),
   setHouse: (house, grow) =>

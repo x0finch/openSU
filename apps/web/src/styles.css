@@ -10,12 +10,14 @@
 @theme {
   --color-*: initial;
   --color-ink: #2a2a2a;
-  --color-ink-2: #7a7a7a;
-  --color-ink-3: #a8a8a8;
+  --color-ink-2: #606060;
+  --color-ink-3: #707070;
   --color-hairline: #e6e6e6;
   --color-wash: #f4f4f3;
   --color-page: #ffffff;
   --color-surface: rgb(255 255 255 / 0.92);
+  /* Large panels over the drawing (the assistant): nearly opaque, so bright foliage never smears through. */
+  --color-surface-solid: rgb(255 255 255 / 0.975);
   --color-accent: #f2d40f;
   --color-accent-ink: #8a7400;
   --color-transparent: transparent;
@@ -26,6 +28,7 @@
   --shadow-float: 0 6px 24px rgba(0, 0, 0, 0.08);
   --shadow-hair: 0 0 0 1px rgba(0, 0, 0, 0.04);
   --blur-ui: 14px;
+  --blur-ui-soft: 4px;
 
   --font-sans: "Inter Variable", Inter, "PingFang SC", "Hiragino Sans GB", "Noto Sans SC", "Noto Sans CJK SC",
     "Source Han Sans SC", "Microsoft YaHei", "WenQuanYi Zen Hei", system-ui, sans-serif;
@@ -41,6 +44,9 @@
 
   --ease-out-soft: cubic-bezier(0.22, 0.8, 0.24, 1);
 }
+
+/* A phone held sideways: little height, so header and sheet go to one row each. */
+@custom-variant land (@media (orientation: landscape) and (max-height: 519px));
 
 @layer base {
   html,
@@ -74,6 +80,13 @@
   background: var(--color-surface);
   -webkit-backdrop-filter: blur(var(--blur-ui)) saturate(1.2);
   backdrop-filter: blur(var(--blur-ui)) saturate(1.2);
+  box-shadow: var(--shadow-float), var(--shadow-hair);
+}
+
+@utility glass-solid {
+  background: var(--color-surface-solid);
+  -webkit-backdrop-filter: blur(var(--blur-ui-soft));
+  backdrop-filter: blur(var(--blur-ui-soft));
   box-shadow: var(--shadow-float), var(--shadow-hair);
 }
 

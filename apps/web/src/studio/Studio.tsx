@@ -1,30 +1,66 @@
-import { lazy, Suspense, useCallback, useEffect, useState } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from 'react';
 import { LangToggle } from '../components/ui';
 import { useT } from '../lib/i18n';
-import { restoreLang, SUN_DATES, type SunDateId, useStudio } from '../lib/store';
-import { isViewId } from '../lib/views';
+import { useChat } from '../chat/chat-store';
+import { useAutosave } from '../lib/autosave';
+import { restoreLang, useStudio } from '../lib/store';
+import { applyParams, useUrlState } from '../lib/url-state';
 import { ChatRail, LevelRail, MobileChat, MobileHeader, MobileSheet, ModeSwitch, SceneDock, TitleBlock, useSunPlayer, ViewRail, ZoomCluster } from './chrome';
 import { Loading } from './Loading';
 import { PlanView } from './PlanView';
 import { useDerived } from './useDerived';
 import { Viewer3D } from './Viewer3D';
-import { MobileWalkHUD, WalkHUD } from './WalkHUD';
+import { LandscapeWalkHUD, MobileWalkHUD, useEscapeExitsWalk, WalkHUD } from './WalkHUD';
 
 // The gallery pulls in @opensu/sheet (and with it three.js): its own lazy chunk.
 const SheetGallery = lazy(() => (import.meta.env.SSR ? new Promise<never>(() => {}) : import('./SheetGallery')));
 
 /** Height of the phone header (logo row + title + facts), CSS px. */
 const PHONE_HEADER = 'calc(max(4px, env(safe-area-inset-top)) + 84px)';
+/** Sideways the header is one row (title inline). */
+const PHONE_HEADER_LANDSCAPE = 'calc(max(4px, env(safe-area-inset-top)) + 44px)';
 
-function useIsDesktop(): boolean {
-  const [desk, setDesk] = useState(() => typeof matchMedia === 'function' && matchMedia('(min-width: 768px)').matches);
+/** Desktop chrome needs room in both directions; a phone held sideways keeps the phone layout. */
+const DESKTOP_QUERY = '(min-width: 768px) and (min-height: 520px)';
+// Same condition as the `land` CSS variant (styles.css).
+const LANDSCAPE_QUERY = '(orientation: landscape) and (max-height: 519px)';
+
+function useMedia(query: string): boolean {
+  const [on, setOn] = useState(() => typeof matchMedia === 'function' && matchMedia(query).matches);
   useEffect(() => {
-    const mq = matchMedia('(min-width: 768px)');
-    const on = () => setDesk(mq.matches);
-    mq.addEventListener('change', on);
-    return () => mq.removeEventListener('change', on);
-  }, []);
-  return desk;
+    const mq = matchMedia(query);
+    const fn = () => setOn(mq.matches);
+    fn();
+    mq.addEventListener('change', fn);
+    return () => mq.removeEventListener('change', fn);
+  }, [query]);
+  return on;
+}
+
+/**
+ * Space the floating desktop chrome takes over the drawing (CSS px): mode
+ * switch on top, view rail on the right, scene dock at the bottom, the
+ * assistant rail or its open panel on the left.
+ */
+const DESKTOP_INSETS = { top: 76, right: 92, bottom: 100, left: 92 };
+const CHAT_PANEL_RIGHT = 400;
+const NO_INSETS = { top: 0, right: 0, bottom: 0, left: 0 };
+
+/**
+ * The 3D framing on desktop. The title block sits in the top-left corner:
+ * the house keeps clear of it either from below or from its side, whichever
+ * shows the house larger. With the assistant panel open the panel (which
+ * starts below the title block) takes the whole left side.
+ */
+function desktopInsets(chatOpen: boolean, info: { right: number; bottom: number } | null, dockTop: number | null) {
+  // The dock may wrap to two rows on narrow windows: keep clear of its real top.
+  const base = { ...DESKTOP_INSETS, bottom: dockTop === null ? DESKTOP_INSETS.bottom : Math.max(DESKTOP_INSETS.bottom, window.innerHeight - dockTop + 12) };
+  if (chatOpen) return [{ ...base, left: CHAT_PANEL_RIGHT }];
+  if (!info) return [base];
+  return [
+    { ...base, top: Math.max(base.top, info.bottom + 12) },
+    { ...base, left: Math.max(base.left, info.right + 16) },
+  ];
 }
 
 /**
@@ -33,37 +69,43 @@ function useIsDesktop(): boolean {
  */
 function useInitialParams(): void {
   useEffect(() => {
+    // Test hooks (screenshot scripts): the stores.
+    window.__studio = { ...window.__studio, store: useStudio, chat: useChat };
     restoreLang();
     const q = new URLSearchParams(location.search);
-    const s = useStudio.getState();
-    const mode = q.get('mode');
-    if (mode === 'plan' || mode === '3d' || mode === 'sheet') s.setMode(mode);
-    const view = q.get('view');
-    if (isViewId(view)) useStudio.setState({ view });
-    const level = q.get('level');
-    if (level) s.setLevel(level);
-    const sun = q.get('sun');
-    const time = /^(\d{1,2}):(\d{2})$/.exec(q.get('time') ?? '');
-    if (sun && SUN_DATES.includes(sun as SunDateId)) s.setSun({ on: true, dateId: sun as SunDateId });
-    if (time) s.setSun({ on: true, minutes: Number(time[1]) * 60 + Number(time[2]) });
-    const cut = q.get('cut');
-    if (cut) s.setCut(cut);
-    if (q.get('panel') === 'open') s.setSheetOpen(true);
-    if (q.get('walk') === '1') s.setWalk(true);
+    applyParams(q, true);
+    if (q.get('panel') === 'open') useStudio.getState().setSheetOpen(true);
     const lang = q.get('lang');
-    if (lang === 'en' || lang === 'zh') s.setLang(lang);
+    if (lang === 'en' || lang === 'zh') useStudio.getState().setLang(lang);
   }, []);
 }
 
 export function Studio() {
   useInitialParams();
+  useUrlState();
+  useAutosave();
   useSunPlayer();
+  useEscapeExitsWalk();
   const t = useT();
   const derived = useDerived();
   const mode = useStudio((s) => s.mode);
   const level = useStudio((s) => s.level);
   const walk = useStudio((s) => s.walk) && mode === '3d';
-  const desktop = useIsDesktop();
+  const desktop = useMedia(DESKTOP_QUERY);
+  const landscape = useMedia(LANDSCAPE_QUERY) && !desktop;
+  const chatOpen = useStudio((s) => s.chatOpen);
+  // `?frame=full` frames on the whole canvas (comparison with the renderer's shots).
+  const [fullFrame] = useState(() => typeof location !== 'undefined' && new URLSearchParams(location.search).get('frame') === 'full');
+  const [info, setInfo] = useState<{ right: number; bottom: number } | null>(null);
+  const onInfoRect = useCallback((r: { right: number; bottom: number }) => setInfo((c) => (c && c.right === r.right && c.bottom === r.bottom ? c : r)), []);
+  const [dockTop, setDockTop] = useState<number | null>(null);
+  const onDockRect = useCallback((r: { top: number }) => setDockTop(r.top), []);
+  const insets = useMemo(
+    () => (desktop && !fullFrame ? desktopInsets(chatOpen, info, mode === '3d' ? dockTop : null) : [NO_INSETS]),
+    [desktop, chatOpen, fullFrame, info, dockTop, mode],
+  );
+  // A phone held sideways while walking: the room fills the screen, with its own HUD.
+  const walkLandscape = walk && landscape;
   const [sheetH, setSheetH] = useState(0);
   const onSheetHeight = useCallback((h: number) => setSheetH(h), []);
   // The 3D viewer is created the first time 3D is shown and kept afterwards.
@@ -79,13 +121,13 @@ export function Studio() {
       <main
         className="absolute inset-x-0 transition-[bottom] duration-300 ease-out-soft"
         // Phones: the drawing sits between the header and the bottom sheet.
-        style={{ top: !desktop && mode === '3d' ? PHONE_HEADER : 0, bottom: desktop ? 0 : sheetH }}
+        style={{ top: !desktop && mode === '3d' && !walkLandscape ? (landscape ? PHONE_HEADER_LANDSCAPE : PHONE_HEADER) : 0, bottom: desktop || walkLandscape ? 0 : sheetH }}
         aria-label={mode === '3d' ? t('mode.3d') : t('mode.plan')}
       >
         {!derived && <Loading label={t('loading')} />}
         {derived && want3d && (
           <div className={mode === '3d' ? 'contents' : 'invisible'}>
-            <Viewer3D resolved={derived.resolved} active={mode === '3d'} />
+            <Viewer3D resolved={derived.resolved} active={mode === '3d'} insets={insets} compact={!desktop} />
           </div>
         )}
         {derived && levelId && mode === 'plan' && <PlanView resolved={derived.resolved} levelId={levelId} active />}
@@ -98,7 +140,7 @@ export function Studio() {
 
       {desktop ? (
         <div className="pointer-events-none absolute inset-0">
-          <TitleBlock derived={derived} />
+          <TitleBlock derived={derived} onRect={onInfoRect} />
           <div className="absolute top-5 left-1/2 -translate-x-1/2">
             <ModeSwitch className="glass pointer-events-auto" />
           </div>
@@ -109,7 +151,7 @@ export function Studio() {
           <ChatRail />
           {mode === '3d' && (
             <div className="absolute inset-x-0 bottom-6 flex justify-center">
-              <SceneDock levels={derived?.levels ?? null} />
+              <SceneDock levels={derived?.levels ?? null} onRect={onDockRect} />
             </div>
           )}
           {mode !== 'sheet' && !walk && (
@@ -119,6 +161,8 @@ export function Studio() {
           )}
           {walk && <WalkHUD derived={derived} />}
         </div>
+      ) : walkLandscape ? (
+        <LandscapeWalkHUD derived={derived} />
       ) : (
         <>
           <MobileHeader derived={derived} />
