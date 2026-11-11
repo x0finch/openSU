@@ -44,3 +44,16 @@ Accepted findings that are not scheduled yet. Lead maintains this file.
 - `packages/render` demo: OrbitControls re-aims the camera before
   `focusPoint()` is read (two-line reorder in `demo/main.ts`).
 - Kernel runs on the main thread (~200 ms); move to a worker if it grows.
+
+## Model, after task 009 (resolved: opening anchoring, ambiguous hosts,
+## cascading errors, cross-level messages)
+Still error-prone for an LLM author:
+- Exterior walls split where the outdoor space beyond changes; an opening
+  must fit one segment of what is physically one wall.
+- Copying a level collides with multi-level windows (manual fix needed).
+- Stair flights are implicit; gates, skylights, entourage use absolute mm.
+- Attic level height doubles as eave height.
+- Ids cannot be renamed; `openTo` is one-sided; new rooms get no roof
+  automatically (only warnings).
+- `describeHouse(golden)` is ~8.9k characters; measure real token counts
+  when the AI is connected and trim if needed.
