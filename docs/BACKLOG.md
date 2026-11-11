@@ -94,3 +94,18 @@ Later, per region profile: design rules and room types (garage,
 basement, mudroom, pantry ...), construction defaults, site conventions
 (no perimeter wall, driveway, porch), original templates, style presets,
 entourage, sheet formats (4:5, 2:3), privacy policy when accounts arrive.
+
+## After task 013 (calm UI, location)
+- The four secondary buttons (视角 / 楼层 / 日照 / 走进去) are small and
+  low-contrast on desktop; the prompt bar could carry more weight.
+- The 走进去 hint chip duplicates the button directly below it.
+- Sheet place/orientation line is Chinese only; change summaries keep the
+  language they were written in.
+- On 844x390 the location panel covers the prompt bar while open.
+- Not tested: real phones, iOS keyboard hand-off to the conversation,
+  the geolocation flow ("use my location" has no automated test).
+- Still hard-wired to China (for the region work): default site and
+  `DEFAULT_UTC_OFFSET = 8`, sheet/template/level names, mm/m only, the
+  system prompt's framing and design rules, landing copy, hint copy
+  mentioning Xiaohongshu / WeChat Moments, date chip formats, plan north
+  arrow label, 坐北朝南 only valid north of the tropics.
