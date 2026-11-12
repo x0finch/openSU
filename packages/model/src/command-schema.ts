@@ -285,7 +285,10 @@ export const EDIT_HOUSE_DESCRIPTION = [
 
 /** JSON Schema of the `edit_house` tool input (`{ commands: Command[] }`). */
 export function commandsJsonSchema(): Record<string, unknown> {
-  return z.toJSONSchema(EditHouseInput, { target: 'draft-7', io: 'input' }) as Record<string, unknown>;
+  // Draft 2020-12: Anthropic models reject draft-7 tuples (`items: [...]`,
+  // `additionalItems`). The `$schema` key is dropped; tool APIs do not want it.
+  const { $schema: _drop, ...schema } = z.toJSONSchema(EditHouseInput, { target: 'draft-2020-12', io: 'input' }) as Record<string, unknown>;
+  return schema;
 }
 
 /** Tool definition for an LLM: name, description and input JSON Schema. */

@@ -326,6 +326,8 @@ describe('JSON Schema for the edit_house tool', () => {
     expect(COMMAND_OPS).toHaveLength(20);
     for (const v of variants) expect(v.description?.length).toBeGreaterThan(10);
     expect(JSON.stringify(schema)).not.toMatch(/\$ref/);
+    // Draft 2020-12 only: Anthropic models reject draft-7 tuples and a $schema key.
+    expect(JSON.stringify(schema)).not.toMatch(/"items":\[|additionalItems|\$schema|"definitions"/);
     const tool = editHouseTool();
     expect(tool.name).toBe('edit_house');
     expect(tool.description).toMatch(/atomic/);
