@@ -34,6 +34,10 @@ Update it when a milestone moves.
 - `OPENROUTER_API_KEY` (low spend cap): real-model evaluation.
 
 ## Next, in order
+0. Owner to choose the visual direction from the round 4 mockups (A1
+   ruled or A2 spaced for the studio; the bento landing grid). Then spec
+   and implement it. After that, finish what task 016 left (see
+   `docs/BACKLOG.md`, "After task 016").
 1. Deploy to Cloudflare; confirm `/api/chat` CPU time under streaming.
 2. Real-model evaluation: a fixed set of ~20 briefs and edits, scored by
    the validator and by reviewing plan + 3D screenshots; tune the system

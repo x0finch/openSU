@@ -151,3 +151,33 @@ Re-check each against the task 013 layout before fixing; some may be gone.
   assistant about what the panel shows; the recent strip covers 36-42% of
   the house on phone.
 - Not tested on real phones, WeChat, or with the iOS keyboard.
+
+## After task 016 (second QA pass fixes, stopped at a checkpoint)
+Task 016 was stopped early. Merged: planting independent of latitude,
+polar day/night and after-midnight times, pinned and phone framing with
+the ground shadow, English sun panel, walk toolbar, change note in the
+input bar, phased working phrases, re-frame after orientation or location
+change, neutral page for unknown share ids, polish.
+- Item 9 is switched off behind two flags because the result was worse
+  than before: `EYE_STAND_ENABLED` (`apps/web/src/studio/engine.ts`; on T1
+  the standing point is too close, the roof is cut and the car and a
+  person fill the foreground) and `WALK_BEST_START_ENABLED`
+  (`packages/render/src/viewer.ts`; on T1 the start faces blank walls).
+- Verified on T1 only at 1440, 1024, 820 and 390. Not verified: T2, T3,
+  golden; 360, 320 and landscape phone; items 5-8, 11, 12 were not looked
+  at in screenshots.
+- Not re-run: full `layout-check`, full `ui-shots`, full chat e2e, golden
+  render regression. `apps/web/scripts/fit-check.mjs` is not wired into
+  `pnpm test`; its Reykjavik sunset check was fixed but not re-run.
+- Landing hero and OG image not regenerated after the framing change.
+- Check the Sydney sun-study frame: the tree's ground shadow shows but the
+  house's own shadow is not visible.
+- READMEs not updated for task 016.
+
+## Visual restyle (round 4 mockups, awaiting the owner's choice)
+- Mockups only, no product code: studio internals in two directions
+  (A1 ruled hairlines, A2 spacing only) and a bento landing grid, made
+  with the stageshow skill's rules. Lead recommends A1.
+- Walk HUD and first-visit hints were not redrawn.
+- Process rule from the owner: one agent at a time; ask before starting
+  a task; smallest set of mockups first.

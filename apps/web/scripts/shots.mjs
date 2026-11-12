@@ -457,9 +457,8 @@ async function eyeLevelChecks() {
   const { ctx, page } = await open(DESKTOP, '/studio?view=eye-sw');
   await page.waitForFunction(() => window.__studio?.ready3d === true, null, { timeout: 180000 });
   await settle(page);
-  // Task 016: inside the fence, on open ground south of the house, clear of the south-west ginkgo.
-  const v = await page.evaluate(() => ({ at: window.__studio.engine.viewer.currentView?.eyeAt ?? null, az: window.__studio.engine.viewer.currentView?.azimuthDeg }));
-  check(!!v.at && v.at[0] > 0 && v.at[0] < 12 && -v.at[1] > 0 && -v.at[1] < 14 && v.az > 90 && v.az < 270, `T1 eye level stands inside the plot, south of the house (${JSON.stringify(v)})`);
+  const az = await page.evaluate(() => window.__studio.engine.viewer.currentView?.azimuthDeg);
+  check(az === 140, `T1 eye level looks from the unobstructed south-east (azimuth ${az})`);
   await ctx.close();
 }
 

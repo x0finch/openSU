@@ -30,6 +30,8 @@ import { WalkController, type WalkState } from './walk/controller.js';
 import { WalkWorld } from './walk/world.js';
 
 /** Where to start walking (defaults: the main entrance, or a level's arrival point). */
+const WALK_BEST_START_ENABLED: boolean = false;
+
 export interface WalkOptions {
   /** Storey to start on (its stair arrival point unless `position` is given). */
   level?: string;
@@ -412,7 +414,9 @@ export class IllustrationViewer {
     let at = { x: pos[0], y: pos[1], z: lv?.elevation ?? 0, headingDeg: opts.headingDeg ?? base.headingDeg };
     let settled = world.settle(at.x, at.y, at.z);
     let chosen = false;
-    if (settled && !opts.position && !arrival && opts.headingDeg === undefined) {
+    // Off for now: on T1 the chosen start faces blank walls. See
+    // docs/BACKLOG.md, task 016 item 9.
+    if (WALK_BEST_START_ENABLED && settled && !opts.position && !arrival && opts.headingDeg === undefined) {
       // The entrance: step to a spot with room ahead, looking down the
       // longest open sightline into the house (never wedged in the door).
       const start = world.bestStart(settled, at.headingDeg);

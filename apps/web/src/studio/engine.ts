@@ -194,6 +194,8 @@ const EYE_MAX_FOV = 64;
  * across at least 3.2 m of open ground. Null without a fence or without
  * such a spot (narrow front strips): the eye level then stays outside.
  */
+const EYE_STAND_ENABLED: boolean = false;
+
 function eyeStand(r: ResolvedHouse, building: readonly Vector3[], obstacles: readonly Vector3[], azimuthDeg: number): { eyeAt: [number, number]; azimuthDeg: number } | null {
   const site = r.site;
   if (!site.fence || !building.length) return null;
@@ -323,7 +325,9 @@ export function createEngine(container: HTMLElement, resolved: ResolvedHouse, op
     const p = hidden ? { ...preset, azimuthDeg: EYE_ALTERNATE.azimuthDeg } : preset;
     // Behind a fence the eye at 1.6 m sees the wall and the gate: stand
     // inside the plot instead, in the garden or court on that side.
-    const at = wideFrame ? eyeStand(current, buildingPoints, eyeObstacles, p.azimuthDeg) : null;
+    // Off for now: on T1 the standing point is too close (roof cut, car and
+    // person in the foreground). See docs/BACKLOG.md, task 016 item 9.
+    const at = EYE_STAND_ENABLED && wideFrame ? eyeStand(current, buildingPoints, eyeObstacles, p.azimuthDeg) : null;
     return at ? { ...p, ...at, maxFovDeg: EYE_MAX_FOV, frame: buildingPoints } : p;
   }
 
