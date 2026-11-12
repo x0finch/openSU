@@ -33,6 +33,17 @@ Update it when a milestone moves.
   mainland China; verify).
 - `OPENROUTER_API_KEY` (low spend cap): real-model evaluation.
 
+## Deployed
+- https://opensu-web.ocean4334.workers.dev via `.github/workflows/deploy.yml`
+  (push to the working branch or run it by hand; secrets live in the
+  GitHub repository settings). Owner's OpenRouter key is a Worker secret;
+  default model `anthropic/claude-sonnet-5.5`.
+- First real-model edit on the live site works ("把北侧房间加深 600":
+  159.5 -> 172.8 m2, ~20 s). It first failed: the tool schema used
+  draft-7 tuples, which Anthropic models reject; fixed (draft 2020-12).
+- Not yet done: Worker CPU time measured on Cloudflare, per-user credit
+  limit (anyone can spend the owner's key), the ~20-brief evaluation.
+
 ## Next, in order
 0. Owner to choose the visual direction from the round 4 mockups (A1
    ruled or A2 spaced for the studio; the bento landing grid). Then spec
