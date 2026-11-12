@@ -1,0 +1,83 @@
+# Deploys apps/web to Cloudflare Workers.
+#
+# Repository secrets (Settings -> Secrets and variables -> Actions):
+#   CLOUDFLARE_API_TOKEN   required, "Edit Cloudflare Workers" template
+#   CLOUDFLARE_ACCOUNT_ID  required
+#   OPENROUTER_API_KEY     optional; without it the public site's assistant
+#                          only works with a visitor's own key
+# Repository variable (optional):
+#   OPENSU_MODEL           model id for the owner's key
+name: Deploy
+
+on:
+  push:
+    branches: [claude/dazzling-cray-xdg922]
+  workflow_dispatch:
+
+concurrency:
+  group: deploy
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+    steps:
+      - name: Check credentials
+        id: creds
+        run: |
+          if [ -z "$CLOUDFLARE_API_TOKEN" ] || [ -z "$CLOUDFLARE_ACCOUNT_ID" ]; then
+            echo "::notice::Cloudflare secrets are not set; skipping deploy."
+            echo "ok=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "ok=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: actions/checkout@v4
+        if: steps.creds.outputs.ok == 'true'
+
+      - uses: pnpm/action-setup@v4
+        if: steps.creds.outputs.ok == 'true'
+
+      - uses: actions/setup-node@v4
+        if: steps.creds.outputs.ok == 'true'
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install
+        if: steps.creds.outputs.ok == 'true'
+        run: pnpm install --frozen-lockfile
+        env:
+          PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: '1'
+
+      - name: Build
+        if: steps.creds.outputs.ok == 'true'
+        run: pnpm build
+
+      - name: Deploy
+        if: steps.creds.outputs.ok == 'true'
+        working-directory: apps/web
+        run: pnpm exec wrangler deploy
+
+      - name: Worker secrets
+        if: steps.creds.outputs.ok == 'true'
+        working-directory: apps/web
+        env:
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+          OPENSU_MODEL: ${{ vars.OPENSU_MODEL }}
+        run: |
+          if [ -n "$OPENROUTER_API_KEY" ]; then
+            printf '%s' "$OPENROUTER_API_KEY" | pnpm exec wrangler secret put OPENROUTER_API_KEY
+          else
+            echo "::notice::OPENROUTER_API_KEY not set; the assistant needs a visitor's own key."
+          fi
+          if [ -n "$OPENSU_MODEL" ]; then
+            printf '%s' "$OPENSU_MODEL" | pnpm exec wrangler secret put OPENSU_MODEL
+          fi
