@@ -184,6 +184,16 @@ describe('space commands', () => {
     expect(resolve(h).levels[0]!.openings.find((o) => o.id === 'w-bed')!.a).toEqual([5000, 0]);
   });
 
+  it('update_space: a new name without nameEn drops the old English name', () => {
+    const h = ok(run([
+      { op: 'update_space', space: 'bed', name: 'Master', nameEn: 'Master bedroom' },
+      { op: 'update_space', space: 'bed', name: 'Study' },
+    ]));
+    expect(space(h, 'bed')!.nameEn).toBeUndefined();
+    const kept = ok(run([{ op: 'update_space', space: 'bed', name: 'Study', nameEn: 'Study' }]));
+    expect(space(kept, 'bed')!.nameEn).toBe('Study');
+  });
+
   it('update_space: an untouched opening that would jump to another wall blocks the batch', () => {
     // Shrinking the hall north wall... the entry door is on hall:N (line 3); make the hall half as deep.
     const h0 = smallHouse();

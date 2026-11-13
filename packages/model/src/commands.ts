@@ -446,6 +446,12 @@ const updateSpace: Handler<z.infer<typeof UpdateSpace>> = (work, cmd, index) => 
   const parts: string[] = [];
   if (cmd.name !== undefined) { s.name = cmd.name; parts.push(`name "${cmd.name}"`); }
   if (patch(s, 'nameEn', cmd.nameEn)) parts.push(`nameEn ${cmd.nameEn === null ? 'removed' : `"${cmd.nameEn}"`}`);
+  // A new name without a new English name: the old one would now be wrong
+  // (the plan showed 卧室四 over "FAMILY ROOM"), so drop it.
+  else if (cmd.name !== undefined && cmd.nameEn === undefined && s.nameEn !== undefined) {
+    delete s.nameEn;
+    parts.push('nameEn removed (renamed; give nameEn to keep one)');
+  }
   if (cmd.type !== undefined) { parts.push(`type ${s.type} -> ${cmd.type}`); s.type = cmd.type; }
   if (cmd.cells !== undefined) { s.cells = cmd.cells; parts.push(`cells ${cellsText(cmd.cells)} (${sizeText(buildGrid(work.house), cmd.cells)})`); }
   if (cmd.openTo !== undefined) {
