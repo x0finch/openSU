@@ -258,3 +258,19 @@ describe('kernel: furniture and walk data', () => {
     expect(geo.walk.blockers.filter((b) => b.kind === 'furniture').length).toBeGreaterThan(20);
   });
 });
+
+describe('kernel: empty plot', () => {
+  it('builds an empty plot (new_house "blank") without throwing', () => {
+    const blank: House = {
+      version: 1,
+      name: 'blank',
+      site: { width: 14000, depth: 11000, northDeg: 0, latitude: 30.3, longitude: 120.2 },
+      grid: { x: [{ id: '0', pos: 0 }, { id: '9', pos: 14000 }], y: [{ id: 'A', pos: 0 }, { id: 'Z', pos: 11000 }] },
+      levels: [{ id: 'L1', name: '一层', height: 3300, spaces: [], openings: [], stairs: [] }],
+      roofs: [],
+      style: 'modern-pitched',
+    } as House;
+    const g = buildHouse(resolve(blank));
+    expect(g.parts.every((p) => p.indices.length > 0)).toBe(true);
+  });
+});

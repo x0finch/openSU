@@ -101,6 +101,12 @@ export class Massing {
     const ys = uniqueSorted(this.solids.flatMap((s) => [s.y0, s.y1]).concat(this.voids.flatMap((v) => [v.y0, v.y1])));
     const nx = xs.length - 1;
     const ny = ys.length - 1;
+    // Nothing to build (an empty plot): with no columns, nx * ny would be
+    // (-1) * (-1) = 1 and the loops below would read a column that does not exist.
+    if (nx < 1 || ny < 1) {
+      this.grid = { xs, ys, segs: [] };
+      return;
+    }
     const solidLists: number[][] = Array.from({ length: nx * ny }, () => []);
     const voidLists: number[][] = Array.from({ length: nx * ny }, () => []);
     const fill = (lists: number[][], x0: number, x1: number, y0: number, y1: number, k: number) => {
