@@ -1,0 +1,18 @@
+{
+  "name": "villa-14x11",
+  "about": "A three-storey rural villa on a 14 x 11 m plot, three bays, shrine table, built from an empty plot. Based on a typical Xiaohongshu post (described in words only; the image is not stored).",
+  "criteria": [
+    "Footprint about 14 x 11 m, 3 levels; three bays of about 4.7 m (or an explained adjustment).",
+    "Ground floor: stair back-left, living front-left; dining back-middle with a solid back wall for the shrine table facing the front door; entry hall projecting about 1.6 m at the front centre with a double door; right bay two bedrooms with a bathroom between.",
+    "8 bedrooms and 4 bathrooms in total; upper bedrooms facing south where possible; a master bedroom with its own bathroom; a front balcony on level 2; a glass-railed roof terrace on level 3.",
+    "Replies short, in Chinese, with numbers; honest about what cannot be drawn (furniture).",
+    "Moving the stair must not remove or move a ground-floor bedroom without asking first.",
+    "No crash, no room without a door, English room names match the Chinese ones."
+  ],
+  "turns": [
+    { "tag": "t1", "text": "我家宅基地 14 米宽、11 米深，想盖三层，现代简约风，平屋顶带露台。一楼分三开间，每间 4.7 米左右。左边一间：后面放楼梯，前面是客厅。中间一间：后面是餐厅，靠后墙放神桌，正对大门；前面凸出一个门厅，大概 1.6 米，开双开大门。右边一间：两个卧室，中间夹一个公共卫生间。" },
+    { "tag": "t2", "text": "楼上我想要多点房间，全家一共要 8 个房间、4 个卫生间。二楼三楼的卧室最好都朝南，主卧要带卫生间。二楼前面要一个大阳台，三楼前面的露台要玻璃栏杆。神桌你画出来了吗？我在图上没看到。" },
+    { "tag": "t3", "text": "好，堂屋和餐厅之间加墙开门，神桌靠墙。还有，厨房在哪？我怎么没看到厨房。" },
+    { "tag": "t4", "text": "楼梯能不能换到右边去？左边客厅想整个做大一点。" }
+  ]
+}

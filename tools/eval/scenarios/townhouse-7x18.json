@@ -1,0 +1,13 @@
+{
+  "name": "townhouse-7x18",
+  "about": "A narrow four-storey city house with parking, a planted court, a double-height space and a split-level stair; the last two are beyond what the model can represent. Based on a Xiaohongshu post (described in words only).",
+  "criteria": [
+    "Plot 7.5 x 18 m, 4 levels, no windows on the east and west walls.",
+    "Parking for two cars at the front, living room and an elder's bedroom with a bathroom on the ground floor, a planted court open to the sky.",
+    "Says plainly that a double-height void and a split level cannot be drawn, and offers the nearest alternative without pretending.",
+    "Reply short (about five lines); no crash."
+  ],
+  "turns": [
+    { "tag": "t1", "text": "我有块地在城里，很窄，7.5 米宽 18 米深，两边贴着邻居不能开窗。想盖四层：一楼前面停两台车，后面是客厅和老人房；中间要一个种树的小天井，二楼餐厅厨房那块做挑空，上下两层能看到；楼梯错层的那种；顶楼一半做露台。" }
+  ]
+}

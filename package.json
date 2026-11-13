@@ -11,7 +11,8 @@
     "dev:render": "pnpm --filter @opensu/render dev",
     "shots": "pnpm --filter @opensu/render shots",
     "shots:web": "pnpm --filter @opensu/web shots",
-    "preview": "pnpm --filter @opensu/web preview"
+    "preview": "pnpm --filter @opensu/web preview",
+    "eval": "node tools/eval/run.mjs"
   },
   "devDependencies": {
     "typescript": "5.9.3"
