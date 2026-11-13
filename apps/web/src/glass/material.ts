@@ -89,7 +89,10 @@ export const GLASS = {
   lensGrowY: 16,
   lensMagnify: 1.18,
   lensBend: 1.8,
-  lensLift: 2.2,
+  lensLift: 1.4,
+  /** A sliding lens stretches by its speed (px per px/s), up to a cap. */
+  lensStretch: 0.035,
+  lensStretchMax: 26,
   /** A lifted lens is clear: its tint falls to this share. */
   lensClear: 0.12,
   /** Radii, CSS px. */

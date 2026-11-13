@@ -757,6 +757,31 @@ export class IllustrationViewer {
     return { withShadows: median(a), withoutShadows: median(b) };
   }
 
+  /**
+   * Software-independent cost of a frame (GPU-synchronised by a pixel
+   * read, median of `frames`): a scene frame (scene into the target plus
+   * the composite) and a glass-only frame (the composite alone).
+   */
+  measureGlass(frames = 8): { scene: number; composite: number } | null {
+    if (!this.glass) return null;
+    const gl = this.renderer.getContext();
+    const px = new Uint8Array(4);
+    const time = (f: () => void) => {
+      const t0 = performance.now();
+      f();
+      gl.readPixels(0, 0, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, px);
+      return performance.now() - t0;
+    };
+    const a: number[] = [], b: number[] = [];
+    time(() => this.renderNow());
+    for (let i = 0; i < frames; i++) {
+      a.push(time(() => this.renderNow()));
+      b.push(time(() => this.glass!.composite(this.renderer)));
+    }
+    const median = (v: number[]) => v.sort((x, y) => x - y)[Math.floor(v.length / 2)]!;
+    return { scene: median(a), composite: median(b) };
+  }
+
   get currentView(): ViewPreset | null {
     return this.preset;
   }

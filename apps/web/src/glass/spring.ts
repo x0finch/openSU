@@ -72,7 +72,10 @@ let frame = 0;
 let last = 0;
 const frameListeners = new Set<() => void>();
 
-function tick(now: number): void {
+function tick(): void {
+  // performance.now() rather than the frame's timestamp: the same clock as
+  // `last` (they can differ, e.g. under a test's fake clock).
+  const now = performance.now();
   frame = 0;
   const dt = Math.min(0.064, Math.max(0, (now - last) / 1000));
   last = now;

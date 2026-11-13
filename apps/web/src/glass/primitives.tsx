@@ -84,7 +84,7 @@ export interface GlassSegment<T extends string> {
  * that slides with a spring; pressed or dragged it lifts into a clear
  * magnifying lens over the labels and settles back on release (2b.2).
  */
-export function GlassSegmented<T extends string>({ value, onChange, segments, label, className, height = 48, testId }: { value: T; onChange: (v: T) => void; segments: GlassSegment<T>[]; label: string; className?: string; height?: number; testId?: string }) {
+export function GlassSegmented<T extends string>({ value, onChange, segments, label, className, height = 48, compact, testId }: { value: T; onChange: (v: T) => void; segments: GlassSegment<T>[]; label: string; className?: string; height?: number; compact?: boolean; testId?: string }) {
   const box = useRef<HTMLElement | null>(null);
   const row = useRef<HTMLDivElement>(null);
   const lens = useRef<HTMLDivElement>(null);
@@ -99,7 +99,9 @@ export function GlassSegmented<T extends string>({ value, onChange, segments, la
     const L = lens.current, C = copy.current, R = row.current;
     if (!L || !C || !R) return;
     const s = springs.current!;
-    const x = s.x.value, w = s.w.value, h = geo.current.h, lift = clamp(s.lift.value, 0, 1.2);
+    // A moving lens stretches along its path a little (jelly), centred where it is.
+    const stretch = Math.min(GLASS.lensStretchMax, Math.abs(s.x.velocity) * GLASS.lensStretch);
+    const x = s.x.value - stretch / 2, w = s.w.value + stretch, h = geo.current.h, lift = clamp(s.lift.value, 0, 1.2);
     const sx = 1 + (GLASS.lensGrowX / Math.max(1, w)) * lift, sy = 1 + (GLASS.lensGrowY / Math.max(1, h)) * lift;
     const mag = 1 + (GLASS.lensMagnify - 1) * clamp(lift, 0, 1);
     L.style.left = `${x}px`;
@@ -230,9 +232,9 @@ export function GlassSegmented<T extends string>({ value, onChange, segments, la
     const r = el.getBoundingClientRect();
     const s = springs.current!;
     const lift = clamp(s.lift.value, 0, 1.2);
-    const w = s.w.value, h = geo.current.h;
+    const w = s.w.value + Math.min(GLASS.lensStretchMax, Math.abs(s.x.velocity) * GLASS.lensStretch), h = geo.current.h;
     const W = w + GLASS.lensGrowX * lift, H = h + GLASS.lensGrowY * lift;
-    const cxv = r.left + s.x.value + w / 2, cyv = r.top + pad + h / 2;
+    const cxv = r.left + s.x.value + s.w.value / 2, cyv = r.top + pad + h / 2;
     const l01 = clamp(lift, 0, 1);
     return {
       rect: { x: cxv - W / 2, y: cyv - H / 2, width: W, height: H },
@@ -278,8 +280,8 @@ export function GlassSegmented<T extends string>({ value, onChange, segments, la
             data-seg={s.value}
             data-value={s.value}
             onClick={() => s.value !== valueRef.current && onChange(s.value)}
-            className="lg-focus inline-flex h-full items-center justify-center rounded-full px-[18px] text-[14px] font-medium whitespace-nowrap text-ink-2"
-            style={{ minWidth: 60 }}
+            className={cx('lg-focus inline-flex h-full items-center justify-center rounded-full text-[14px] font-medium whitespace-nowrap text-ink-2', compact ? 'px-3 max-[339px]:px-2' : 'px-[18px]')}
+            style={{ minWidth: compact ? 44 : 60 }}
           >
             {s.label}
           </button>
@@ -554,8 +556,10 @@ export function GlassRow({ children, className, ...rest }: ButtonHTMLAttributes<
   );
 }
 
-const THUMB_W = 38;
-const THUMB_H = 24;
+const THUMB_W = 40;
+const THUMB_H = 26;
+/** A lifted thumb grows by this share (Apple's grows about half again). */
+const THUMB_GROW = 0.5;
 
 /**
  * A slider whose thumb is a glass lens: a solid white pill at rest; while
@@ -578,7 +582,7 @@ export function GlassSlider({ min, max, value, onChange, ariaLabel, ariaValueTex
     const lift = clamp(lifted.current!.value, 0, 1.2);
     const w = W.clientWidth, h = W.clientHeight;
     const cxp = THUMB_W / 2 + progRef.current * (w - THUMB_W);
-    const sx = 1 + 0.4 * lift, sy = 1 + 0.4 * lift;
+    const sx = 1 + THUMB_GROW * lift, sy = 1 + THUMB_GROW * lift;
     L.style.left = `${cxp - THUMB_W / 2}px`;
     L.style.top = `${(h - THUMB_H) / 2}px`;
     L.style.width = `${THUMB_W}px`;
@@ -617,7 +621,7 @@ export function GlassSlider({ min, max, value, onChange, ariaLabel, ariaValueTex
     const r = W.getBoundingClientRect();
     const l = clamp(lifted.current!.value, 0, 1.2), l01 = clamp(l, 0, 1);
     const cxp = r.left + THUMB_W / 2 + progRef.current * (r.width - THUMB_W);
-    const tw = THUMB_W * (1 + 0.4 * l), th = THUMB_H * (1 + 0.4 * l);
+    const tw = THUMB_W * (1 + THUMB_GROW * l), th = THUMB_H * (1 + THUMB_GROW * l);
     return {
       rect: { x: cxp - tw / 2, y: r.top + r.height / 2 - th / 2, width: tw, height: th },
       // At rest a solid white pill (the tint of a light thumb), lifted clear.
@@ -625,7 +629,7 @@ export function GlassSlider({ min, max, value, onChange, ariaLabel, ariaValueTex
       frost: lerp(1, 0.4, l01),
       magnify: 1 + 0.5 * l01,
       bend: 1 + 1.2 * l01,
-      lift: 1 + 1.4 * l01,
+      lift: 1 + 0.4 * l01,
     };
   };
   const fill = `${progress * 100}%`;

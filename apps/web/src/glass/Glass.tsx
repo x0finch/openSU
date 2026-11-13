@@ -198,7 +198,25 @@ export function GlassLens({ shape, className, style, children, ref }: { shape: (
   useLayoutEffect(() => {
     const node = el.current;
     if (!node) return;
-    return glassRegistry.register({ el: node, role: 'control', radius: 'capsule', layer: 1, shape: () => shapeRef.current() });
+    return glassRegistry.register({
+      el: node,
+      role: 'control',
+      radius: 'capsule',
+      layer: 1,
+      shape: () => {
+        // A lens inside a panel fades with the panel's content (it must not
+        // float on its own while the panel morphs in or out).
+        let a = 1;
+        for (let e: HTMLElement | null = node.parentElement; e; e = e.parentElement) {
+          const o = e.style.opacity;
+          if (o !== '') a *= Number(o);
+          if (e.style.visibility === 'hidden') a = 0;
+        }
+        if (a <= 0.01) return null;
+        const o = shapeRef.current();
+        return o && { ...o, alpha: (o.alpha ?? 1) * a };
+      },
+    });
   }, []);
   return (
     <div ref={merged} className={cx('lg-lens', className)} data-backend={backend} style={style} aria-hidden="true">
