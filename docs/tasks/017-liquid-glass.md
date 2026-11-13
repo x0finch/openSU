@@ -162,3 +162,42 @@ Phase B (after the lead says go):
   glass. Put them under `artifacts/` (not committed) and list the paths.
 - Report what is missing, what looks different from the prototype, and
   frame times you measured (software GL numbers are only relative).
+
+## 2b. Apple interactions
+
+Added by the owner: interactions follow Apple too (iOS 26 / macOS 26
+Liquid Glass), and the result is compared against Apple's own footage by
+the implementer, not by eye from memory. Phase A covers what Phase A
+builds; the rest comes in Phase B.
+
+1. Press: a glass control on pointer-down lifts (scales up a little,
+   brightens, a soft light follows the pointer inside it) and springs back
+   on release. Hover on desktop is a subtle highlight only.
+2. Segmented control and phone tool bar: the selected lens slides with a
+   spring; while dragged it lifts into a clear magnifying lens (grows,
+   refracts the labels under it) and settles back to a solid selection
+   when released. glisse implements this (TabBar / SegmentedControl, the
+   "lifted" / "lensing" states); live demo https://glisse.kelvinzhang.com/.
+3. Popovers and menus morph out of the control that opened them and morph
+   back into it on close (shape, radius, tint follow one spring; slight
+   jelly, no hard fade). Menus on touch: press and drag to scrub items,
+   release selects.
+4. Sliders (sun time): the thumb turns into a glass lens while dragged,
+   magnifying the track; settles back on release.
+5. Phone sheets: drag with velocity, detents (fit-content and large),
+   rubber band past the ends, a flick down dismisses.
+6. Springs: Apple style, response about 0.35-0.5 s with a small bounce for
+   morphs and lens moves, no bounce for sheets. One shared spring utility;
+   `prefers-reduced-motion` falls back to fades.
+
+Self-comparison is required:
+- Apple's footage (WWDC25 "Liquid Glass details": press on playback
+  buttons, switch, slider lens, segmented Week/Month/Year lens; and
+  "Apple Music dynamic tab bars": tab bar and mini player morphing).
+  Extract frame sequences (e.g. ffmpeg fps=30 around each interaction)
+  and study timing, scale, overshoot and shape.
+- Record the same interactions in the studio with Playwright (frame
+  captures at a fixed step, or recordVideo) and build side-by-side contact
+  sheets, Apple vs ours, under `artifacts/task017/compare/` (not
+  committed). Iterate until they match; the report includes the sheets
+  with a short note per interaction on what still differs.
