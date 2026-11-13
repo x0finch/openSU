@@ -33,6 +33,10 @@ Accepted findings that are not scheduled yet. Lead maintains this file.
 ## Process
 - Parallel implementers must not share a working tree (a shared git index
   caused cross-commits once). Use isolated worktrees and let the lead merge.
+- Owner's rule (2026-11-13): for every UI idea the owner proposes, the
+  lead weighs it against Apple's conventions and interactions and says
+  which is better and why, with a recommendation, instead of agreeing by
+  default. The owner decides after that feedback.
 
 ## Web app (from task 005 review)
 - Phone layout: the bottom sheet takes half the screen and the drawing is
