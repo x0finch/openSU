@@ -201,3 +201,20 @@ Self-comparison is required:
   sheets, Apple vs ours, under `artifacts/task017/compare/` (not
   committed). Iterate until they match; the report includes the sheets
   with a short note per interaction on what still differs.
+
+## 6. Owner's decisions after Phase A (2026-11-13)
+
+1. 走进去 is renamed 漫游 and moves into the tool group (视角, 楼层, 日照,
+   漫游); no separate capsule. While walking it shows "漫游 ×" in the
+   selected state and exits on click or Escape.
+2. Tool buttons are icons only. Hover shows the name as a tooltip below
+   the button after a short delay; nothing changes width, nothing moves.
+   The active tool shows its name or value. On a first visit the names
+   are shown and collapse to icons after the first tool use (persist in
+   the browser).
+3. A tool panel flows out of the whole tool group, right edges aligned,
+   joined to the group by the glass smooth union so they read as one
+   piece. The tool group does not change width.
+4. Dark capsule tint 45% (was 30%): capsule labels, the input
+   placeholder and segmented labels must reach 4.5:1 over white; add an
+   automated contrast check for capsule and text surfaces.

@@ -98,7 +98,7 @@ Material:
 | | Light glass | Dark glass |
 |---|---|---|
 | tint colour | white | rgb(30 30 34) |
-| tint, capsule | 14% (glasswork range 6-22%) | 30% |
+| tint, capsule | 14% (glasswork range 6-22%) | 45% (30% failed 4.5:1 for labels over white) |
 | tint, text surface | 42% | 55% |
 | blur | 2 px (panel morph up to 6 px) | same |
 | saturation | 1.8 | 1.6 |
@@ -166,8 +166,8 @@ is the yellow glow on the input capsule's edge; nothing else moves.
 |---|---|---|
 | House name and area | ink on the drawing, top left | opens the house menu (a glass panel) |
 | View switch (3D / plan / sheets) | capsule, top centre | selected segment as a slightly denser glass lens |
-| Toolbar | one capsule, top right (phone: bottom) | the tool's segment shows its value, e.g. "10:00" |
-| Panels (view, level, sun) | hidden | flows out of its tool's capsule (phone: sheet above the toolbar) |
+| Toolbar | one capsule, top right (phone: bottom): 视角, 楼层, 日照, 漫游; icons only, a name tooltip below on hover (no width change); names shown on first visit until the first use | the active tool shows its name or value, e.g. "10:00"; walking shows "漫游 ×" highlighted |
+| Panels (view, level, sun) | hidden | flows out of the whole toolbar group, right edges aligned and joined to it by the glass merge; the toolbar keeps its width (phone: sheet above the toolbar) |
 | Input | capsule, bottom centre | yellow edge glow while the assistant works; hidden on phone while a panel is open |
 | Chat | hidden | latest exchange above the input as a text surface; a change reads as one line with its area delta and Undo |
 | Menus, location picker | hidden | glass panel; rows separated by inset hairlines |
