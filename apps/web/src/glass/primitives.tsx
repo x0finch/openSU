@@ -29,24 +29,26 @@ export function GlassButtonGroup({ label, group, className, children, testId, re
 }
 
 /**
- * An icon button inside a group: icon only with a tooltip; an active tool
- * shows its value beside the icon (e.g. the sun time). `on`: its panel is
- * open (a plate marks it).
+ * A tool inside a group: an icon in a fixed slot, its name as a tooltip
+ * below on hover (nothing changes width, nothing moves). A tool in use
+ * shows its value in the icon's place (e.g. the sun time). `named`: the
+ * name beside the icon (first visit, until the first use). `text`: the
+ * button reads as text only (walking: "漫游 ×"). `on`: selected (a plate).
  */
-export function GlassGroupButton({ icon, label, value, on, className, ...rest }: ButtonHTMLAttributes<HTMLButtonElement> & { icon: ReactNode; label: string; value?: ReactNode; on?: boolean }) {
+export function GlassGroupButton({ icon, label, reading: value, named, text, on, className, ...rest }: ButtonHTMLAttributes<HTMLButtonElement> & { icon: ReactNode; label: string; reading?: string | null; named?: boolean; text?: string; on?: boolean }) {
   return (
     <span className="lg-tipped relative inline-flex">
       <button
         type="button"
-        aria-label={label}
+        aria-label={value ? `${label}: ${value}` : label}
         data-on={on ? '' : undefined}
-        className={cx('lg-plate tnum inline-flex h-9 min-w-9 items-center justify-center gap-1.5 text-[14px] font-medium whitespace-nowrap', value ? 'pr-3 pl-2.5' : 'px-0', className)}
+        className={cx('lg-plate tnum inline-flex h-9 items-center justify-center gap-1.5 text-[13px] font-semibold whitespace-nowrap', named || text ? 'min-w-11 px-3' : 'w-11', className)}
         {...rest}
       >
-        {icon}
-        {value && <span>{value}</span>}
+        {text ? <span>{text}</span> : value ? <span className="max-w-[42px] truncate tracking-[-0.01em]">{value}</span> : icon}
+        {named && !text && <span className="font-medium">{label}</span>}
       </button>
-      {!value && <span className="lg-tip" aria-hidden="true">{label}</span>}
+      {!named && !text && <span className="lg-tip" aria-hidden="true">{value ? `${label} ${value}` : label}</span>}
     </span>
   );
 }
@@ -378,9 +380,21 @@ export function GlassPopover({ open, anchor, radius = GLASS.radiusPanel, kind = 
         applied.current = { dx, dy, sx, sy };
         e.style.transform = `translate(${dx}px, ${dy}px) scale(${sx}, ${sy})`;
       }
-    } else if (e.style.transform) {
-      e.style.transform = '';
-      applied.current = { dx: 0, dy: 0, sx: 1, sy: 1 };
+    } else {
+      if (e.style.transform) {
+        e.style.transform = '';
+        applied.current = { dx: 0, dy: 0, sx: 1, sy: 1 };
+      }
+      // WebGL draws the morphing shape; the content stays clipped inside it.
+      const m = !s.reduced ? morphRect() : null;
+      const n = m && natural();
+      const ins = m && n ? [Math.max(0, m.rect.y - n.y), Math.max(0, n.x + n.width - (m.rect.x + m.rect.width)), Math.max(0, n.y + n.height - (m.rect.y + m.rect.height)), Math.max(0, m.rect.x - n.x)] : null;
+      if (m && n && ins && ins.some((v) => v > 0.5)) {
+        const top = Math.max(0, m.rect.y - n.y), left = Math.max(0, m.rect.x - n.x);
+        const right = Math.max(0, n.x + n.width - (m.rect.x + m.rect.width)), bottom = Math.max(0, n.y + n.height - (m.rect.y + m.rect.height));
+        const rad = lerp(m.a ? Math.min(m.a.width, m.a.height) / 2 : radius, radius, clamp(m.t, 0, 1));
+        e.style.clipPath = `inset(${top}px ${right}px ${bottom}px ${left}px round ${rad}px)`;
+      } else if (e.style.clipPath) e.style.clipPath = '';
     }
     const done = s.reduced ? fade <= 0.001 : p <= 0.001 && s.py.value <= 0.001;
     if (!openRef.current && done && !s.px.moving && !s.py.moving && !s.fade.moving) {

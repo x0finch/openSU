@@ -105,8 +105,9 @@ void main() { gl_Position = vec4(position.xy, 0., 1.); }
 const COPY = /* glsl */ `
 precision highp float;
 uniform sampler2D uScene;
+uniform vec4 uFade; // rgb: the page colour, a: how far the scene has faded into it
 out vec4 o;
-void main() { o = vec4(texelFetch(uScene, ivec2(gl_FragCoord.xy), 0).rgb, 1.); }
+void main() { o = vec4(mix(texelFetch(uScene, ivec2(gl_FragCoord.xy), 0).rgb, uFade.rgb, uFade.a), 1.); }
 `;
 
 const FRAG = /* glsl */ `
@@ -114,6 +115,7 @@ precision highp float;
 precision highp int;
 #define MAXN ${MAX_GLASS_SHAPES}
 uniform sampler2D uScene;
+uniform vec4 uFade;
 uniform vec2 uRes;
 uniform float uDpr;
 uniform float uK;
@@ -129,7 +131,7 @@ out vec4 o;
 
 vec3 bgL(vec2 p, float lod) {
   vec2 uv = vec2(p.x / uRes.x, 1. - p.y / uRes.y);
-  return textureLod(uScene, uv, lod).rgb;
+  return mix(textureLod(uScene, uv, lod).rgb, uFade.rgb, uFade.a);
 }
 float sdRR(vec2 p, vec2 b, float r) { vec2 q = abs(p) - b + r; return length(max(q, 0.)) + min(max(q.x, q.y), 0.) - r; }
 float smin(float a, float b, float k) { float h = max(k - abs(a - b), 0.) / k; return min(a, b) - h * h * k * .25; }
@@ -244,6 +246,8 @@ export class GlassCompositor {
   private readonly quads = new Float32Array(MAX_GLASS_SHAPES * 6 * 3);
   private width = 1;
   private height = 1;
+  /** The scene dissolving into the page colour (the glass stays): rgb + amount. */
+  private readonly fade = new Vector4(1, 1, 1, 0);
   private shapes: GlassShape[] = [];
   private mat: GlassMaterial | null = null;
   private pixelRatio = 1;
@@ -278,6 +282,7 @@ export class GlassCompositor {
       depthWrite: false,
       uniforms: {
         uScene: { value: this.target.texture },
+        uFade: { value: this.fade },
         uRes: { value: new Vector2(width, height) },
         uDpr: { value: 1 },
         uK: { value: 14 },
@@ -309,7 +314,7 @@ export class GlassCompositor {
     this.mesh.renderOrder = 1;
     // Overlapping quads are harmless: each pixel's colour depends on the
     // scene and the shapes only, so a pixel drawn twice comes out the same.
-    this.copy = new Mesh(full, new RawShaderMaterial({ glslVersion: GLSL3, vertexShader: VERT, fragmentShader: COPY, depthTest: false, depthWrite: false, uniforms: { uScene: { value: this.target.texture } } }));
+    this.copy = new Mesh(full, new RawShaderMaterial({ glslVersion: GLSL3, vertexShader: VERT, fragmentShader: COPY, depthTest: false, depthWrite: false, uniforms: { uScene: { value: this.target.texture }, uFade: { value: this.fade } } }));
     this.copy.frustumCulled = false;
     this.copy.renderOrder = 0;
     this.scene.add(this.copy, this.mesh);
@@ -377,6 +382,11 @@ export class GlassCompositor {
     u.uDisp!.value = m.dispersion;
     u.uPress!.value = m.pressLight;
     u.uOpaque!.value = m.opaque ? 1 : 0;
+  }
+
+  /** Fades the scene (not the glass) into `color` (sRGB 0..1) by `amount` 0..1. */
+  setSceneFade(amount: number, color: [number, number, number]): void {
+    this.fade.set(color[0], color[1], color[2], amount);
   }
 
   /** Draws the scene texture and the glass to the canvas. */

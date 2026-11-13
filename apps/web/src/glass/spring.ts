@@ -64,7 +64,7 @@ export function step(x: number, v: number, k: number, c: number, dt: number): [n
   // Critically damped.
   const e = Math.exp(-half * dt);
   const b = v + half * x;
-  return [e * (x + b * dt), e * (v - half * (x + b * dt) + b)];
+  return [e * (x + b * dt), e * (b - half * (x + b * dt))];
 }
 
 const moving = new Set<Spring>();
@@ -104,7 +104,10 @@ export class Spring {
   /** Set when the last `set` jumped because of reduced motion. */
   reduced = false;
 
-  constructor(value: number, preset: SpringPreset, private readonly onChange?: (v: number) => void) {
+  private readonly onChange?: (v: number) => void;
+
+  constructor(value: number, preset: SpringPreset, onChange?: (v: number) => void) {
+    this.onChange = onChange;
     this.value = this.target = value;
     ({ k: this.k, c: this.c } = stiffnessOf(preset));
   }

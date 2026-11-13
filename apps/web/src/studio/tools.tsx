@@ -9,7 +9,7 @@ import {
   SunIcon, ViewIcon,
 } from '../components/icons';
 import { cx } from '../components/ui';
-import { GlassButton, GlassButtonGroup, GlassChoice, GlassGroupButton, GlassPopover, GlassRow, GlassSep, GlassSlider } from '../glass';
+import { GlassButtonGroup, GlassChoice, GlassGroupButton, GlassPopover, GlassRow, GlassSep, GlassSlider } from '../glass';
 import { levelName, type MessageKey, useT } from '../lib/i18n';
 import { bearingText, bearingWords, frontBearing, placeText, utcText } from '../lib/site';
 import { SUN_DATES, type SunDateId, type Tray, useStudio } from '../lib/store';
@@ -232,55 +232,100 @@ export function Toolbar({ derived, phone, className }: { derived: Derived | null
 /** Merge group of the desktop tool group and the popovers that flow out of it. */
 export const TOOLS_GROUP = 7;
 
+const NAMES_KEY = 'opensu.toolnames.v1';
+
 /**
- * Desktop, top trailing (task 017): one glass button group for 视角 / 楼层 /
- * 日照 (icons, a tooltip on hover; a tool in use shows its value beside its
- * icon) and 走进去 as its own capsule beside it. Plan view: levels and zoom.
+ * First visit: the tools show their names beside their icons until the
+ * first tool is used (remembered in the browser), then icons only.
+ */
+export function useToolNames(): [boolean, () => void] {
+  const [named, setNamed] = useState(false);
+  useLayoutEffect(() => {
+    try {
+      setNamed(localStorage.getItem(NAMES_KEY) !== 'done' && !new URLSearchParams(location.search).has('nohints'));
+    } catch {
+      setNamed(false);
+    }
+  }, []);
+  const used = () => {
+    if (!named) return;
+    setNamed(false);
+    try {
+      localStorage.setItem(NAMES_KEY, 'done');
+    } catch {
+      /* private mode: icons from now on, for this page */
+    }
+  };
+  return [named, used];
+}
+
+/** Values the tools show in use (sun time, cut level, chosen view) and the plan view's level. */
+function useToolValues(derived: Derived | null) {
+  const t = useT();
+  const lang = useStudio((s) => s.lang);
+  const cut = useStudio((s) => s.cut);
+  const level = useStudio((s) => s.level);
+  const view = useStudio((s) => s.view);
+  const sun = useStudio((s) => s.sun);
+  const polarNight = useStudio((s) => s.sunInfo?.polar === 'night');
+  const lv = (id: string | null) => {
+    const l = derived?.levels.find((x) => x.id === id);
+    return l ? levelName(lang, l.name, l.index, l.isAttic) : null;
+  };
+  return {
+    views: view !== DEFAULT_VIEW ? t(`viewShort.${view}` as MessageKey) || t(`view.${view}`) : null,
+    levels: cut ? lv(cut) : null,
+    planLevel: lv(level),
+    sun: sun.on ? (polarNight ? t('sun.polarNight') : clock(sun.minutes, lang)) : null,
+  };
+}
+
+/**
+ * Desktop, top trailing (task 017, owner's decisions): one glass group of
+ * four tools, 视角 / 楼层 / 日照 / 漫游, icons with a name tooltip below;
+ * a tool in use shows its value in its icon's place; walking, 漫游 reads
+ * "漫游 ×" (selected) and leaves on click or Escape. A tool's panel flows
+ * out of the whole group (PanelCard). Plan view: levels and zoom.
  */
 export function DesktopTools({ derived, className }: { derived: Derived | null; className?: string }) {
   const t = useT();
-  const lang = useStudio((s) => s.lang);
   const mode = useStudio((s) => s.mode);
   const tray = useStudio((s) => s.tray);
   const sitePanel = useStudio((s) => s.sitePanel);
   const setTray = useStudio((s) => s.setTray);
   const walk = useStudio((s) => s.walk);
   const setWalk = useStudio((s) => s.setWalk);
-  const cut = useStudio((s) => s.cut);
-  const level = useStudio((s) => s.level);
-  const view = useStudio((s) => s.view);
   const sun = useStudio((s) => s.sun);
-  const polarNight = useStudio((s) => s.sunInfo?.polar === 'night');
   const setSun = useStudio((s) => s.setSun);
-  const sunLabel = polarNight ? t('sun.polarNight') : clock(sun.minutes, lang);
-  const levels = derived?.levels ?? null;
-  const lv = (id: string | null) => {
-    const l = levels?.find((x) => x.id === id);
-    return l ? levelName(lang, l.name, l.index, l.isAttic) : null;
-  };
+  const values = useToolValues(derived);
+  const [named, used] = useToolNames();
   const open = (k: Tray) => tray === k && (!sitePanel || (k === 'sun' && !!sitePanel.fromSun));
-  const toggle = (k: Tray) => setTray(open(k) ? null : k);
   const icon = { width: 19, height: 19, className: 'shrink-0' };
-  const viewLabel = view !== DEFAULT_VIEW ? t(`viewShort.${view}` as MessageKey) || t(`view.${view}`) : null;
-  const tool = (k: Tray, ico: ReactNode, label: string, value: string | null, testId: string, onClick?: () => void) => (
+  const tool = (k: Tray, ico: ReactNode, label: string, value: string | null, testId: string, onClick?: () => void, disabled?: boolean) => (
     <GlassGroupButton
       icon={ico}
-      label={value ? `${label}: ${value}` : label}
-      title={undefined}
-      value={value ?? undefined}
+      label={label}
+      reading={open(k) ? null : value}
+      named={named}
       on={open(k)}
+      disabled={disabled}
       aria-expanded={open(k)}
       aria-controls={TRAY_ID[k]}
       data-testid={testId}
       data-tool-trigger=""
-      onClick={onClick ?? (() => toggle(k))}
+      className="disabled:opacity-35"
+      onClick={() => {
+        used();
+        if (onClick) onClick();
+        else setTray(open(k) ? null : k);
+      }}
     />
   );
   if (mode === 'plan') {
     return (
-      <div className={cx('pointer-events-none flex items-center gap-2.5', className)}>
+      <div className={cx('pointer-events-none flex items-center', className)}>
         <GlassButtonGroup label={t('tools.label')} group={TOOLS_GROUP} testId="toolbar">
-          {tool('levels', <LayersIcon {...icon} />, t('bar.levels'), lv(level), 'bar-levels')}
+          {tool('levels', <LayersIcon {...icon} />, t('bar.levels'), values.planLevel, 'bar-levels')}
           <GlassGroupButton icon={<MinusIcon width={18} height={18} />} label={t('plan.zoomOut')} onClick={() => planCommands.zoom(1 / 1.4)} />
           <GlassGroupButton icon={<FitIcon width={18} height={18} />} label={t('plan.fit')} onClick={() => planCommands.fit()} />
           <GlassGroupButton icon={<PlusIcon width={18} height={18} />} label={t('plan.zoomIn')} onClick={() => planCommands.zoom(1.4)} />
@@ -289,27 +334,32 @@ export function DesktopTools({ derived, className }: { derived: Derived | null; 
     );
   }
   return (
-    <div className={cx('pointer-events-none flex items-center gap-2.5', className)}>
+    <div className={cx('pointer-events-none flex items-center', className)}>
       <GlassButtonGroup label={t('tools.label')} group={TOOLS_GROUP} testId="toolbar">
-        {!walk && tool('views', <CubeIcon {...icon} />, t('bar.views'), viewLabel, 'bar-views')}
-        {!walk && tool('levels', <LayersIcon {...icon} />, t('bar.levels'), cut ? lv(cut) : null, 'bar-levels')}
-        {tool('sun', <SunIcon {...icon} />, t('bar.sun'), sun.on ? sunLabel : null, 'bar-sun', () => {
+        {/* Walking, view and level do not apply: they stay in place, dimmed (the group keeps its width). */}
+        {tool('views', <CubeIcon {...icon} />, t('bar.views'), values.views, 'bar-views', undefined, walk)}
+        {tool('levels', <LayersIcon {...icon} />, t('bar.levels'), values.levels, 'bar-levels', undefined, walk)}
+        {tool('sun', <SunIcon {...icon} />, t('bar.sun'), values.sun, 'bar-sun', () => {
           if (open('sun')) setTray(null);
           else {
             setTray('sun');
             if (!sun.on) setSun({ on: true });
           }
         })}
+        <GlassGroupButton
+          icon={<WalkIcon {...icon} />}
+          label={walk ? t('walk.exit') : t('bar.walk')}
+          named={named}
+          text={walk ? `${t('bar.walk')} ×` : undefined}
+          on={walk}
+          aria-pressed={walk}
+          data-testid="bar-walk"
+          onClick={() => {
+            used();
+            setWalk(!walk);
+          }}
+        />
       </GlassButtonGroup>
-      <GlassButton
-        icon={<WalkIcon width={19} height={19} className="shrink-0" />}
-        label={walk ? t('walk.exit') : t('bar.walk')}
-        aria-pressed={walk}
-        onClick={() => setWalk(!walk)}
-        data-testid="bar-walk"
-      >
-        {walk ? `${t('bar.walk')} ×` : t('bar.walk')}
-      </GlassButton>
     </div>
   );
 }
@@ -761,12 +811,11 @@ export function useFocusOnOpen(ref: React.RefObject<HTMLElement | null>, key: st
   }, [key]); // eslint-disable-line react-hooks/exhaustive-deps
 }
 
-/** The control a panel grows out of. */
+/** What a panel grows out of: the whole tool group (owner's decision), or the house name for a site panel opened from its menu. */
 function panelAnchor(panel: Tray | 'site'): HTMLElement | null {
-  if (panel !== 'site') return document.querySelector<HTMLElement>(`[aria-controls="${TRAY_ID[panel]}"]`);
-  const sp = useStudio.getState().sitePanel;
-  if (!sp || sp.fromSun) return document.querySelector<HTMLElement>(`[aria-controls="${TRAY_ID.sun}"]`);
-  return document.querySelector<HTMLElement>('[data-testid=project-menu]');
+  const sp = panel === 'site' ? useStudio.getState().sitePanel : null;
+  if (sp && !sp.fromSun) return document.querySelector<HTMLElement>('[data-testid=project-menu]');
+  return document.querySelector<HTMLElement>('[data-testid=toolbar]');
 }
 
 /**
@@ -775,6 +824,12 @@ function panelAnchor(panel: Tray | 'site'): HTMLElement | null {
  * replaced flows back into its own button). Reports its box so the house
  * frames beside or below it.
  */
+/** Panels hang from the tool group and join it (not a site panel opened from the house menu). */
+function fromGroup(panel: Tray | 'site'): boolean {
+  const sp = panel === 'site' ? useStudio.getState().sitePanel : null;
+  return !sp || !!sp.fromSun;
+}
+
 export function PanelCard({ derived, onRect }: { derived: Derived | null; onRect: (r: { left: number; bottom: number } | null) => void }) {
   const open = useOpenPanel();
   const siteKind = useStudio((s) => s.sitePanel?.kind ?? null);
@@ -803,7 +858,8 @@ export function PanelCard({ derived, onRect }: { derived: Derived | null; onRect
             aria-label={p.panel === 'site' ? undefined : p.panel}
             data-testid={on ? (p.panel === 'site' ? 'panel-site' : TRAY_ID[p.panel]) : undefined}
             data-panel={on ? '' : undefined}
-            className="absolute top-[78px] right-[18px] flex max-h-[calc(100%-78px-112px)] w-[330px] flex-col overflow-y-auto overscroll-contain"
+            group={fromGroup(p.panel) ? TOOLS_GROUP : undefined}
+            className="absolute top-[72px] right-[18px] flex max-h-[calc(100%-72px-112px)] w-[330px] flex-col overflow-y-auto overscroll-contain"
             bodyClassName="flex min-h-0 flex-col gap-4 p-[22px]"
           >
             {/* A panel flowing back is an empty shape: its controls are gone at once (no duplicates for keyboard, screen readers and tests). */}

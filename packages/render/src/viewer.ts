@@ -830,6 +830,7 @@ export class IllustrationViewer {
       if (!this.glass) return;
       this.glass.dispose();
       this.glass = null;
+      this.setSceneFade(this.sceneFade);
       this.requestRender();
       return;
     }
@@ -838,12 +839,31 @@ export class IllustrationViewer {
       this.glass = new GlassCompositor(buf.x, buf.y);
       this.glass.setSize(buf.x, buf.y, this.renderer.getPixelRatio());
       this.glass.setGlass(shapes, material);
+      this.setSceneFade(this.sceneFade);
       // The target is empty: the scene must be drawn into it once.
       this.requestRender();
       return;
     }
     this.glass.setGlass(shapes, material);
     this.requestGlassRender();
+  }
+
+  private sceneFade = 0;
+
+  /**
+   * A dissolve of the scene into the page background (0 = scene, 1 = page).
+   * With glass on, the composite pass fades the scene only, so the chrome
+   * drawn in the canvas stays; otherwise the canvas itself fades.
+   */
+  setSceneFade(amount: number): void {
+    this.sceneFade = Math.min(1, Math.max(0, amount));
+    const bg = { r: 1, g: 1, b: 1 };
+    new Color(stage.background).getRGB(bg, SRGBColorSpace);
+    if (this.glass) {
+      this.renderer.domElement.style.opacity = '';
+      this.glass.setSceneFade(this.sceneFade, [bg.r, bg.g, bg.b]);
+      this.requestGlassRender();
+    } else this.renderer.domElement.style.opacity = this.sceneFade ? String(1 - this.sceneFade) : '';
   }
 
   /** Whether the glass composite pass is on. */

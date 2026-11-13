@@ -300,7 +300,6 @@ export function createEngine(container: HTMLElement, resolved: ResolvedHouse, op
     };
   }
   const canvas = viewer.renderer.domElement;
-  canvas.style.transition = `opacity ${FADE}ms ease`;
   canvas.style.touchAction = 'none';
   canvas.style.outline = 'none';
 
@@ -508,10 +507,35 @@ export function createEngine(container: HTMLElement, resolved: ResolvedHouse, op
 
   function stop(): void {
     cancelAnimationFrame(anim);
-    clearTimeout(fadeTimer);
+    cancelAnimationFrame(fadeTimer);
     anim = 0;
     fadeTimer = 0;
-    canvas.style.opacity = '1';
+    fadeLevel = 0;
+    viewer.setSceneFade(0);
+  }
+
+  /**
+   * Dissolves the scene into the page and back (FADE ms each way). The
+   * viewer fades only the scene, so the glass chrome drawn in the same
+   * canvas stays put (task 017).
+   */
+  let fadeLevel = 0;
+  function fadeScene(to: number, done?: () => void): void {
+    cancelAnimationFrame(fadeTimer);
+    const from = fadeLevel;
+    const t0 = performance.now();
+    const step = (now: number) => {
+      if (disposed) return;
+      const t = Math.min(1, Math.max(0, (now - t0) / FADE));
+      fadeLevel = from + (to - from) * t;
+      viewer.setSceneFade(fadeLevel);
+      if (t < 1) fadeTimer = requestAnimationFrame(step);
+      else {
+        fadeTimer = 0;
+        done?.();
+      }
+    };
+    fadeTimer = requestAnimationFrame(step);
   }
 
   /** The preset the camera is on or moving to (a house swapped in mid-move lands there). */
@@ -548,12 +572,10 @@ export function createEngine(container: HTMLElement, resolved: ResolvedHouse, op
       // Perspective <-> parallel: a short dissolve instead of a morph.
       dropControls();
       controls = null;
-      canvas.style.opacity = '0';
-      fadeTimer = window.setTimeout(() => {
-        fadeTimer = 0;
+      fadeScene(1, () => {
         snap(preset);
-        requestAnimationFrame(() => (canvas.style.opacity = '1'));
-      }, FADE);
+        fadeScene(0);
+      });
       return;
     }
     dropControls();
@@ -606,12 +628,10 @@ export function createEngine(container: HTMLElement, resolved: ResolvedHouse, op
       fn();
       return;
     }
-    canvas.style.opacity = '0';
-    fadeTimer = window.setTimeout(() => {
-      fadeTimer = 0;
+    fadeScene(1, () => {
       fn();
-      requestAnimationFrame(() => (canvas.style.opacity = '1'));
-    }, FADE);
+      fadeScene(0);
+    });
   }
 
   function enterWalk(opts: { level?: string } = {}): void {
