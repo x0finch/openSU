@@ -1,0 +1,276 @@
+/*
+ * The glass module's styles (task 017). The only stylesheet that gives a
+ * chrome surface its background, border, shadow or blur. The numbers come
+ * from material.ts as custom properties on the glass layer (GlassLayer).
+ *
+ * Two backends behind the same elements:
+ * - [data-backend="webgl"]: the 3D viewer draws the glass into its canvas;
+ *   the element is transparent and only carries text and icons.
+ * - [data-backend="css"]: glasswork's CSS material (MIT, THIRD_PARTY_NOTICES.md):
+ *   a thin tint, `blur() saturate() brightness()`, rim light, bevel and a
+ *   soft shadow. backdrop-filter is used here and nowhere else, and never
+ *   over the WebGL canvas (that surface is on the webgl backend there).
+ */
+
+@layer components {
+.lg {
+  position: relative;
+  isolation: isolate;
+  color: var(--lg-ink);
+  border-radius: var(--lg-radius, 9999px);
+  /* Content inside glass reads the glass ink through the app's tokens. */
+  --color-ink: var(--lg-ink);
+  --color-ink-2: var(--lg-ink-2);
+  --color-ink-3: var(--lg-ink-2);
+  --color-hairline: var(--lg-separator);
+  --color-wash: var(--lg-row-hover);
+  -webkit-tap-highlight-color: transparent;
+}
+.lg[data-kind="control"] {
+  --lg-t: var(--lg-tint-control);
+}
+.lg[data-kind="text"] {
+  --lg-t: var(--lg-tint-text);
+}
+
+.lg[data-backend="webgl"] {
+  background: transparent;
+}
+
+.lg[data-backend="css"] {
+  background: color-mix(in srgb, var(--lg-tint) calc(var(--lg-t) * 100%), transparent);
+  -webkit-backdrop-filter: blur(var(--lg-blur)) saturate(var(--lg-sat)) brightness(var(--lg-bri));
+  backdrop-filter: blur(var(--lg-blur)) saturate(var(--lg-sat)) brightness(var(--lg-bri));
+  box-shadow:
+    inset 1.5px 1.5px 1px -1px rgb(255 255 255 / calc(1 * var(--lg-catch))),
+    inset -1.5px -1.5px 1px -1px rgb(255 255 255 / calc(0.6 * var(--lg-catch))),
+    inset 0 0 0 0.5px rgb(255 255 255 / calc(0.3 * var(--lg-catch))),
+    0 0 0 0.5px rgb(0 0 0 / var(--lg-hair)),
+    0 4px var(--lg-shadow-blur) rgb(0 0 0 / var(--lg-shadow)),
+    inset 0 6px 8px -6px rgb(255 255 255 / calc(0.5 * var(--lg-bevel))),
+    inset 4px 0 8px -6px rgb(255 255 255 / calc(0.22 * var(--lg-bevel))),
+    inset -4px 0 8px -6px rgb(255 255 255 / calc(0.12 * var(--lg-bevel))),
+    inset 0 -6px 8px -6px rgb(0 0 0 / calc(0.06 * var(--lg-bevel)));
+}
+/* A panel morphing out of its button: transformed from its own box. */
+.lg[data-backend="css"][data-morph] {
+  transform-origin: 0 0;
+}
+
+/* Reduced transparency: an opaque surface in the tint colour (both backends draw it). */
+.lg[data-backend="css"][data-opaque] {
+  background: var(--lg-tint);
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+
+/* Press: a soft light under the pointer (the WebGL backend draws its own). */
+.lg[data-backend="css"]::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  background: radial-gradient(circle 120px at var(--lg-x, 50%) var(--lg-y, 50%), rgb(255 255 255 / 0.35), transparent);
+  opacity: var(--lg-press, 0);
+}
+
+/* ------------------------------------------------------------------ */
+/* A lens on the chrome (selected segment, slider thumb)               */
+/* ------------------------------------------------------------------ */
+
+.lg-lens {
+  position: absolute;
+  pointer-events: none;
+  overflow: hidden;
+  border-radius: 9999px;
+  isolation: isolate;
+}
+.lg-lens[data-backend="css"] {
+  /* Rest: a denser lens; lifted: clear glass with a deeper shadow. */
+  background: color-mix(in srgb, var(--lg-tint) calc((1 - var(--lg-lift, 0) * 0.85) * var(--lg-tint-lens) * 100%), transparent);
+  box-shadow:
+    inset 0 0 0 0.5px rgb(255 255 255 / calc(0.6 * var(--lg-catch))),
+    inset 1px 1.5px 1px -1px rgb(255 255 255 / var(--lg-catch)),
+    0 0 0 0.5px rgb(0 0 0 / calc(var(--lg-hair) * 0.6)),
+    0 calc(2px + 5px * var(--lg-lift, 0)) calc(6px + 12px * var(--lg-lift, 0)) rgb(0 0 0 / calc(0.06 + 0.1 * var(--lg-lift, 0)));
+}
+.lg-lens[data-backend="webgl"] {
+  background: transparent;
+}
+/* The magnified copy of what lies under a lens (labels, the slider track). */
+.lg-lens-copy {
+  position: absolute;
+  top: 0;
+  left: 0;
+  transform-origin: 0 0;
+  pointer-events: none;
+}
+
+/* ------------------------------------------------------------------ */
+/* Inside the glass: rows, plates, separators (never a box)            */
+/* ------------------------------------------------------------------ */
+
+.lg-plate {
+  border-radius: 9999px;
+  transition: background-color 160ms ease;
+}
+@media (hover: hover) and (pointer: fine) {
+  .lg-plate:hover:not(:disabled) {
+    background: var(--lg-row-hover);
+  }
+}
+.lg-plate[data-on],
+.lg-plate:active:not(:disabled) {
+  background: var(--lg-row-active);
+}
+.lg-plate:focus-visible,
+.lg-focus:focus-visible {
+  outline: 2px solid var(--lg-ink);
+  outline-offset: -2px;
+}
+
+.lg-sep {
+  height: 0.5px;
+  background: var(--lg-separator);
+}
+
+/* ------------------------------------------------------------------ */
+/* Slider (sun time): a rail, a fill, a glass thumb                    */
+/* ------------------------------------------------------------------ */
+
+.lg-slider {
+  position: relative;
+  height: 36px;
+  touch-action: pan-y;
+}
+.lg-slider-rail {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 50%;
+  height: 6px;
+  margin-top: -3px;
+  border-radius: 3px;
+  background: color-mix(in srgb, var(--lg-ink) 14%, transparent);
+  overflow: hidden;
+}
+.lg-slider-fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  border-radius: 3px;
+  background: var(--lg-fill, var(--color-accent));
+}
+.lg-slider input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  opacity: 0;
+  cursor: pointer;
+  z-index: 2;
+}
+.lg-slider:has(input:focus-visible) .lg-lens {
+  outline: 2px solid var(--lg-ink);
+  outline-offset: 2px;
+}
+.lg-slider .lg-lens[data-backend="css"] {
+  background: color-mix(in srgb, #fff calc((1 - var(--lg-lift, 0) * 0.9) * 100%), transparent);
+}
+
+/* ------------------------------------------------------------------ */
+/* The input capsule's working glow (yellow light round its edge)      */
+/* ------------------------------------------------------------------ */
+
+.lg-glow {
+  position: absolute;
+  inset: -1.5px;
+  border-radius: inherit;
+  padding: 2px;
+  overflow: hidden;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 400ms;
+  -webkit-mask: linear-gradient(#000 0 0) content-box exclude, linear-gradient(#000 0 0);
+  mask: linear-gradient(#000 0 0) content-box exclude, linear-gradient(#000 0 0);
+}
+.lg-glow > i {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: var(--d, 640px);
+  height: var(--d, 640px);
+  margin: calc(var(--d, 640px) / -2) 0 0 calc(var(--d, 640px) / -2);
+  background: conic-gradient(from 0deg, rgba(255, 250, 232, 0) 0deg, rgba(255, 246, 214, 0.9) 40deg, var(--color-accent) 95deg, var(--color-glow-warm) 140deg, var(--color-glow-red) 165deg, rgba(255, 250, 232, 0) 200deg, rgba(255, 250, 232, 0) 360deg);
+}
+.lg-halo {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 400ms;
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--color-accent) 45%, transparent), 0 8px 30px color-mix(in srgb, var(--color-accent) 40%, transparent), 0 0 18px rgba(232, 100, 60, 0.12);
+}
+[data-working] > .lg-glow {
+  opacity: 1;
+}
+[data-working] > .lg-glow > i {
+  animation: lg-spin 2.8s linear infinite;
+}
+[data-working] > .lg-halo {
+  opacity: 1;
+  animation: lg-breathe 2.4s ease-in-out infinite;
+}
+@keyframes lg-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@keyframes lg-breathe {
+  0%,
+  100% {
+    opacity: 0.45;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+/* Tooltips of icon-only glass buttons (Apple shows them on hover). */
+.lg-tip {
+  position: absolute;
+  top: calc(100% + 10px);
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 4px 8px;
+  border-radius: 7px;
+  background: var(--lg-ink);
+  color: var(--lg-tip-ink, #fff);
+  font-size: 12px;
+  line-height: 16px;
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 150ms;
+}
+.lg-tipped:hover > .lg-tip {
+  opacity: 1;
+  transition-delay: 350ms;
+}
+.lg-tipped:has(:focus-visible) > .lg-tip {
+  opacity: 1;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [data-working] > .lg-glow > i,
+  [data-working] > .lg-halo {
+    animation: none;
+  }
+  [data-working] > .lg-glow > i {
+    transform: rotate(60deg);
+  }
+}
+
+}
