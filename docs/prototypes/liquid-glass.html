@@ -1,0 +1,308 @@
+<title>openSU 液态玻璃原型</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<style>
+/* Layout: a full-screen bench. WebGL draws the drawing AND the glass (shape, refraction, dispersion, rim light, liquid merge); DOM only carries the labels on top. A plain test panel sits in a corner. Single light theme: it mirrors the product's white drawing. */
+:root {
+  --paper: #ffffff;
+  --ink: #111214;
+  --muted: #5f656a;
+  --line: #dfe2e4;
+  --sun: #ffd60a;
+  --on-dark: #ffffff;
+  --on-dark-2: rgba(255,255,255,.72);
+  --on-light: #111214;
+  --on-light-2: rgba(17,18,20,.62);
+  --sans: -apple-system, "SF Pro Text", "PingFang SC", "Noto Sans SC", "Inter", system-ui, sans-serif;
+  color-scheme: light;
+}
+html, body { height: 100%; }
+body { margin: 0; background: var(--paper); color: var(--ink); font-family: var(--sans); overflow: hidden; -webkit-user-select: none; user-select: none; }
+#cv { position: fixed; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; }
+
+/* Glass elements: in WebGL mode they are transparent; the canvas draws them. */
+.gl { position: fixed; z-index: 2; font-weight: 600; color: var(--fg); --fg: var(--on-dark); --fg2: var(--on-dark-2); }
+.light .gl { --fg: var(--on-light); --fg2: var(--on-light-2); }
+.m-css .gl { background: rgba(30,30,32,.70); -webkit-backdrop-filter: blur(20px) saturate(1.8); backdrop-filter: blur(20px) saturate(1.8); box-shadow: inset 0 1px 0 rgba(255,255,255,.30), inset 0 0 0 1px rgba(255,255,255,.12), 0 8px 28px rgba(0,0,0,.18); }
+.m-css.light .gl { background: rgba(255,255,255,.60); -webkit-backdrop-filter: blur(3px) saturate(1.5); backdrop-filter: blur(3px) saturate(1.5); box-shadow: inset 0 0 0 .5px rgba(0,0,0,.08), 0 1px 3px rgba(0,0,0,.06); }
+.m-solid .gl { background: #3a3a3d; box-shadow: 0 8px 28px rgba(0,0,0,.18); }
+.m-solid.light .gl { background: #f2f2f4; }
+.m-none .gl { display: none; }
+
+.tb { top: max(18px, env(safe-area-inset-top, 0px)); right: max(18px, env(safe-area-inset-right, 0px)); height: 48px; border-radius: 24px; padding: 0 6px; display: flex; align-items: center; gap: 2px; }
+.tb button { all: unset; cursor: pointer; height: 36px; padding: 0 13px; border-radius: 18px; display: flex; align-items: center; gap: 7px; font-size: 14px; }
+.tb button:focus-visible { outline: 2px solid var(--sun); outline-offset: 1px; }
+.tb .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--fg2); }
+.tb .open .dot { background: var(--sun); box-shadow: 0 0 10px var(--sun); }
+.panel { top: calc(max(18px, env(safe-area-inset-top, 0px)) + 62px); right: max(18px, env(safe-area-inset-right, 0px)); width: 330px; border-radius: 30px; }
+.panel .in { padding: 22px; display: grid; gap: 15px; transition: opacity .18s; }
+.panel b { font-size: 40px; font-weight: 700; font-variant-numeric: tabular-nums; line-height: 1; letter-spacing: -.02em; }
+.panel small { display: block; color: var(--fg2); font-size: 13px; margin-top: 6px; }
+.track { height: 5px; border-radius: 3px; background: color-mix(in srgb, var(--fg) 22%, transparent); position: relative; }
+.track i { position: absolute; left: 0; top: 0; bottom: 0; background: var(--sun); border-radius: 3px; }
+.row { display: flex; height: 42px; align-items: center; font-size: 14.5px; }
+.row + .row { border-top: 1px solid color-mix(in srgb, var(--fg) 14%, transparent); }
+.row span:last-child { margin-left: auto; color: var(--fg2); font-variant-numeric: tabular-nums; }
+.ask { left: 50%; transform: translateX(-50%); bottom: max(22px, env(safe-area-inset-bottom, 0px)); width: min(540px, calc(100% - 36px)); height: 56px; border-radius: 28px; display: flex; align-items: center; padding: 0 8px 0 22px; font-size: 15.5px; color: var(--fg2); font-weight: 500; }
+.ask i { margin-left: auto; width: 40px; height: 40px; border-radius: 50%; background: var(--sun); }
+.chat { left: 50%; transform: translateX(-50%); bottom: calc(max(22px, env(safe-area-inset-bottom, 0px)) + 74px); width: min(540px, calc(100% - 36px)); border-radius: 26px; padding: 15px 20px; font-size: 14.5px; line-height: 1.6; }
+.chat p { margin: 0; }
+.chat .you { color: var(--fg2); font-weight: 500; }
+
+.bench { position: fixed; z-index: 3; top: max(16px, env(safe-area-inset-top, 0px)); left: max(16px, env(safe-area-inset-left, 0px)); width: 300px; background: var(--paper); border: 1px solid var(--line); border-radius: 14px; padding: 12px 14px; display: grid; gap: 10px; font-size: 13px; box-shadow: 0 6px 20px rgba(0,0,0,.08); -webkit-user-select: text; user-select: text; }
+.bench header { display: flex; align-items: center; }
+.bench h1 { font-size: 15px; margin: 0; }
+.bench .fold { all: unset; cursor: pointer; margin-left: auto; color: var(--muted); font-size: 12.5px; padding: 2px 4px; }
+.bench.folded > :not(header) { display: none; }
+.seg { display: flex; border: 1px solid var(--line); border-radius: 9px; overflow: hidden; }
+.seg button { all: unset; flex: 1; text-align: center; padding: 7px 0; cursor: pointer; font-size: 12.5px; }
+.seg button[aria-pressed="true"] { background: var(--ink); color: var(--paper); }
+.seg button:focus-visible, .act:focus-visible, .bench .fold:focus-visible { outline: 2px solid var(--sun); outline-offset: 2px; }
+.stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; text-align: center; }
+.stats b { display: block; font-size: 22px; font-variant-numeric: tabular-nums; }
+.stats span { color: var(--muted); font-size: 11.5px; }
+.act { all: unset; cursor: pointer; text-align: center; padding: 9px 0; border-radius: 9px; background: var(--ink); color: var(--paper); font-weight: 600; }
+.act.sec { background: transparent; color: var(--ink); border: 1px solid var(--line); }
+.acts { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+#out { font-size: 12px; line-height: 1.6; white-space: pre-wrap; word-break: break-word; background: #f4f5f6; border-radius: 8px; padding: 8px 10px; margin: 0; }
+#out:empty { display: none; }
+.hint { color: var(--muted); font-size: 12px; line-height: 1.5; margin: 0; }
+#nogl { position: fixed; inset: auto 16px 16px; z-index: 4; background: #fff3c4; padding: 10px 12px; border-radius: 10px; font-size: 13px; }
+
+@media (max-width: 640px) {
+  .bench { left: 10px; right: 10px; width: auto; }
+  .tb { top: auto; bottom: max(14px, env(safe-area-inset-bottom, 0px)); left: 10px; right: 10px; justify-content: space-around; }
+  .panel { top: auto; right: 8px; left: 8px; width: auto; bottom: calc(max(14px, env(safe-area-inset-bottom, 0px)) + 60px); }
+  .ask { bottom: calc(max(14px, env(safe-area-inset-bottom, 0px)) + 62px); width: calc(100% - 20px); }
+  .chat { display: none; }
+  .is-open .ask { display: none; }
+}
+</style>
+
+<canvas id="cv" aria-label="房子图纸，日照阴影在上面扫过，上面是液态玻璃控件"></canvas>
+<div id="ui" class="m-liquid">
+  <div class="gl tb" id="tb"><button type="button" id="b-view">视角</button><button type="button" id="b-level">楼层</button><button type="button" id="b-sun" class="open" aria-expanded="true"><span class="dot"></span><span id="tbTime">10:00</span></button><button type="button" id="b-walk">走进去</button></div>
+  <div class="gl panel" id="panel"><div class="in" id="panelIn">
+    <div><b id="time">10:00</b><small>冬至 · 日照演示，时间自动走</small></div>
+    <div class="track"><i id="fill"></i></div>
+    <div><div class="row"><span>杭州附近</span><span>30.3°N</span></div><div class="row"><span>大门朝正南</span><span>180°</span></div></div>
+  </div></div>
+  <div class="gl chat" id="chat"><p class="you">把北侧房间加深 600</p><p>北墙外移 600 mm，厨房、楼梯和洗衣房一起变深。</p></div>
+  <div class="gl ask" id="ask">说一句话，改房子<i></i></div>
+</div>
+
+<section class="bench" id="bench" aria-label="测试面板">
+  <header><h1>液态玻璃原型</h1><button type="button" class="fold" id="fold">收起</button></header>
+  <div class="seg" role="group" aria-label="玻璃颜色">
+    <button type="button" id="t-light" data-t="light" aria-pressed="true">浅色玻璃</button>
+    <button type="button" id="t-dark" data-t="dark" aria-pressed="false">深色玻璃</button>
+  </div>
+  <div class="seg" role="group" aria-label="实现方式">
+    <button type="button" id="m-liquid" data-m="liquid" aria-pressed="true">液态玻璃</button>
+    <button type="button" id="m-css" data-m="css" aria-pressed="false">磨砂</button>
+    <button type="button" id="m-solid" data-m="solid" aria-pressed="false">不透明</button>
+    <button type="button" id="m-none" data-m="none" aria-pressed="false">无界面</button>
+  </div>
+  <div class="stats">
+    <div><b id="fps">–</b><span>当前帧率</span></div>
+    <div><b id="avg">–</b><span>3 秒平均</span></div>
+    <div><b id="worst">–</b><span>最慢一帧 ms</span></div>
+  </div>
+  <div class="acts">
+    <button type="button" class="act" id="auto">自动测四种</button>
+    <button type="button" class="act sec" id="copy" hidden>复制结果</button>
+  </div>
+  <pre id="out"></pre>
+  <p class="hint" id="hint">点工具栏的时间按钮，看面板从按钮里流出来、收回去。测帧率点“自动测四种”，约 30 秒，期间别动手机。</p>
+</section>
+<div id="nogl" hidden>这个浏览器不支持 WebGL2，液态玻璃画不出来。其余三种仍可测。</div>
+
+<script>
+const VS = `#version 300 es
+in vec2 a; void main(){ gl_Position = vec4(a, 0., 1.); }`;
+const FS = `#version 300 es
+precision highp float;
+uniform sampler2D uTex; uniform vec2 uRes, uImg; uniform float uSun, uDpr, uK;
+uniform vec4 uRect[6]; uniform float uRad[6], uFrost[6], uTintA[6]; uniform int uN; uniform vec3 uTint; uniform float uSat, uBri, uCatch, uBevel, uShadow, uHair;
+out vec4 o;
+vec3 bgL(vec2 p, float lod) {
+  vec3 c = vec3(1.);
+  float s = min(uRes.x / uImg.x, uRes.y / uImg.y) * .92; vec2 sz = uImg * s, o0 = (uRes - sz) * .5, uv = (p - o0) / sz;
+  if (uv.x >= 0. && uv.y >= 0. && uv.x <= 1. && uv.y <= 1.) c = textureLod(uTex, uv, lod).rgb;
+  float x = uRes.x * (.1 + .8 * uSun);
+  float band = exp(-pow((p.x - x) / (170. * uDpr), 2.));
+  c = mix(c, c * vec3(1., .96, .78), band * .45);
+  float d = dot(p - vec2(x, uRes.y * .5), normalize(vec2(1., -.35)));
+  float w = smoothstep(-6. * uDpr, 6. * uDpr, d) * (1. - smoothstep(200. * uDpr, 212. * uDpr, d)) * smoothstep(.12, .2, p.y / uRes.y) * (1. - smoothstep(.82, .9, p.y / uRes.y));
+  return c * (1. - .26 * w);
+}
+vec3 bg(vec2 p) { return bgL(p, 0.); }
+float sdRR(vec2 p, vec2 b, float r) { vec2 q = abs(p) - b + r; return length(max(q, 0.)) + min(max(q.x, q.y), 0.) - r; }
+float smin(float a, float b, float k) { float h = max(k - abs(a - b), 0.) / k; return min(a, b) - h * h * k * .25; }
+float scene(vec2 p, out int idx) {
+  float d = 1e5, best = 1e5; idx = 0;
+  for (int i = 0; i < 6; i++) { if (i >= uN) break; vec4 R = uRect[i]; float di = sdRR(p - (R.xy + R.zw * .5), R.zw * .5, uRad[i]); if (di < best) { best = di; idx = i; } d = smin(d, di, uK); }
+  return d;
+}
+float sc(vec2 p) { int j; return scene(p, j); }
+vec3 frost(vec2 q, float r) {
+  if (r < .5) return bg(q);
+  // Smooth blur from the mip chain: 5 taps at a level matching the radius.
+  float s = min(uRes.x / uImg.x, uRes.y / uImg.y) * .92; float lod = log2(max(r / s, 1.)) - .5; vec3 a = bgL(q, lod) * 2.;
+  for (int i = 0; i < 4; i++) { float t = float(i) * 1.5708 + .785; a += bgL(q + vec2(cos(t), sin(t)) * r * .7, lod); }
+  return a / 6.;
+}
+void main() {
+  vec2 p = vec2(gl_FragCoord.x, uRes.y - gl_FragCoord.y);
+  int idx; float d = scene(p, idx);
+  vec3 col = bg(p);
+  // After glasswork (Lumno): outer 0.5 px hairline and a 0 4px 16px shadow.
+  if (d > 0.) {
+    float ds = sc(p - vec2(0., 4. * uDpr)); col *= 1. - uShadow * (1. - smoothstep(-8. * uDpr, 16. * uDpr, ds));
+    col *= 1. - uHair * (1. - smoothstep(0., .5 * uDpr, d));
+  }
+  if (d < 1.5 * uDpr) {
+    vec2 e = vec2(uDpr, 0.);
+    vec2 n = normalize(vec2(sc(p + e.xy) - sc(p - e.xy), sc(p + e.yx) - sc(p - e.yx)) + 1e-5);
+    vec4 R = uRect[idx];
+    float depth = max(-d, 0.);
+    // Rim: at most 40 px, a 3.5th of the short side on small surfaces. The edge
+    // looks 1.1 rim widths inward, falling off as (1 - d/rim)^2.6.
+    float rim = min(40. * uDpr, min(R.z, R.w) / 3.5);
+    float amount = 1.1 * rim * pow(1. - clamp(depth / rim, 0., 1.), 2.6);
+    vec2 q = p - n * amount;
+    float fr = uFrost[idx] * uDpr;
+    vec3 g;
+    if (amount > .3) { g.r = frost(q - n * amount * .15, fr).r; g.g = frost(q, fr).g; g.b = frost(q + n * amount * .15, fr).b; }
+    else g = frost(q, fr);
+    // Tone: saturate, then brightness (lift on light glass, dim on dark).
+    float l = dot(g, vec3(.2126, .7152, .0722)); g = mix(vec3(l), g, uSat); g *= uBri;
+    g = mix(g, uTint, uTintA[idx]);
+    // Rim light: a 1.5 px catch on the top left (full) and bottom right (60%),
+    // a faint even inner line, and soft bevel bands a few px inside the edge.
+    float c15 = 1. - smoothstep(0., 1.5 * uDpr, depth);
+    float tl = max(dot(n, vec2(-.7071, -.7071)), 0.), br = max(dot(n, vec2(.7071, .7071)), 0.);
+    g = mix(g, vec3(1.), c15 * uCatch * clamp(tl * 1.4, 0., 1.) + c15 * uCatch * .6 * clamp(br * 1.4, 0., 1.));
+    g = mix(g, vec3(1.), (1. - smoothstep(0., .5 * uDpr, depth)) * .3 * uCatch);
+    float bev = 1. - smoothstep(0., 6. * uDpr, depth);
+    g = mix(g, vec3(1.), bev * uBevel * (.5 * max(-n.y, 0.) + .22 * max(-n.x, 0.) + .12 * max(n.x, 0.)));
+    g *= 1. - bev * uBevel * .06 * max(n.y, 0.) * 2.;
+    col = mix(col, g, clamp(.5 - d / uDpr, 0., 1.));
+  }
+  o = vec4(col, 1.);
+}`;
+
+const cv = document.getElementById('cv');
+const gl = cv.getContext('webgl2', { antialias: false, alpha: false, powerPreference: 'high-performance' });
+const ui = document.getElementById('ui');
+let prog = null, U = {}, tex = null, imgW = 1, imgH = 1;
+if (!gl) { document.getElementById('nogl').hidden = false; }
+else {
+  const sh = (t, s) => { const x = gl.createShader(t); gl.shaderSource(x, s); gl.compileShader(x); if (!gl.getShaderParameter(x, gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(x)); return x; };
+  prog = gl.createProgram(); gl.attachShader(prog, sh(gl.VERTEX_SHADER, VS)); gl.attachShader(prog, sh(gl.FRAGMENT_SHADER, FS)); gl.linkProgram(prog); gl.useProgram(prog);
+  const buf = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, buf); gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 3, -1, -1, 3]), gl.STATIC_DRAW);
+  const loc = gl.getAttribLocation(prog, 'a'); gl.enableVertexAttribArray(loc); gl.vertexAttribPointer(loc, 2, gl.FLOAT, false, 0, 0);
+  for (const n of ['uTex', 'uRes', 'uImg', 'uSun', 'uDpr', 'uK', 'uRect', 'uRad', 'uFrost', 'uTintA', 'uN', 'uTint', 'uSat', 'uBri', 'uCatch', 'uBevel', 'uShadow', 'uHair']) U[n] = gl.getUniformLocation(prog, n);
+  tex = gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D, tex);
+  gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 1, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, new Uint8Array([255, 255, 255, 255]));
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+  const img = new Image(); img.onload = () => { gl.bindTexture(gl.TEXTURE_2D, tex); gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, img); gl.generateMipmap(gl.TEXTURE_2D); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR); imgW = img.naturalWidth; imgH = img.naturalHeight; }; img.src = '__IMG__';
+}
+let dpr = 1;
+function size() { dpr = Math.min(window.devicePixelRatio || 1, 2); cv.width = Math.round(innerWidth * dpr); cv.height = Math.round(innerHeight * dpr); if (gl) gl.viewport(0, 0, cv.width, cv.height); }
+size(); addEventListener('resize', size);
+
+// The panel grows out of the sun button and flows back into it.
+const tb = document.getElementById('tb'), panel = document.getElementById('panel'), panelIn = document.getElementById('panelIn'), sunBtn = document.getElementById('b-sun');
+const ask = document.getElementById('ask'), chat = document.getElementById('chat');
+let open = 1, prog01 = 1, vel = 0;
+sunBtn.onclick = () => { open = open ? 0 : 1; sunBtn.classList.toggle('open', !!open); sunBtn.setAttribute('aria-expanded', String(!!open)); ui.classList.toggle('is-open', !!open); };
+ui.classList.add('is-open');
+const rect = el => { const r = el.getBoundingClientRect(); return [r.left, r.top, r.width, r.height]; };
+const lerp = (a, b, t) => a + (b - a) * t;
+
+// Tint and mode.
+let tint = 'light', mode = 'liquid';
+// After glasswork (Lumno): light = white 6-22% tint, blur 2, saturate 1.8, brightness 1.06;
+// dark = rgb(30 30 34) 16-38%, saturate 1.6, brightness 0.8. Text surfaces get a
+// higher tint floor so body text stays readable over the line drawing.
+const TINT = { light: { rgb: [1, 1, 1], cap: 0.14, pan: 0.42, sat: 1.8, bri: 1.06, catch: 1, bevel: 1, shadow: 0.10, hair: 0.12 },
+               dark: { rgb: [0.118, 0.118, 0.133], cap: 0.30, pan: 0.55, sat: 1.6, bri: 0.80, catch: 0.46, bevel: 0.36, shadow: 0.22, hair: 0.28 } };
+function setTint(t) { tint = t; ui.classList.toggle('light', t === 'light'); document.querySelectorAll('[data-t]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.t === t))); }
+function setMode(m) { mode = m; ui.classList.remove('m-liquid', 'm-css', 'm-solid', 'm-none'); ui.classList.add('m-' + m); document.querySelectorAll('[data-m]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.m === m))); }
+document.querySelectorAll('[data-t]').forEach(b => b.onclick = () => setTint(b.dataset.t));
+setTint(tint);
+document.querySelectorAll('[data-m]').forEach(b => b.onclick = () => setMode(b.dataset.m));
+const bench = document.getElementById('bench'), fold = document.getElementById('fold');
+fold.onclick = () => { const f = bench.classList.toggle('folded'); fold.textContent = f ? '展开' : '收起'; };
+
+const timeEl = document.getElementById('time'), tbTime = document.getElementById('tbTime'), fill = document.getElementById('fill');
+const t0 = performance.now(); let last = 0, frames = [];
+const R = new Float32Array(24), RAD = new Float32Array(6), FR = new Float32Array(6), TA = new Float32Array(6);
+function frame(now) {
+  if (last) { const dt = Math.min((now - last) / 1000, .05); frames.push(now - last);
+    // critically damped spring towards open/closed
+    const k = 170, c = 2 * Math.sqrt(k); vel += (k * (open - prog01) - c * vel) * dt; prog01 += vel * dt; }
+  last = now;
+  const t = (now - t0) / 1000, sun = (Math.sin(t * .6) + 1) / 2;
+  const mins = Math.round(412 + sun * 610), hh = String(Math.floor(mins / 60)).padStart(2, '0'), mm = String(mins % 60).padStart(2, '0');
+  timeEl.textContent = tbTime.textContent = `${hh}:${mm}`; fill.style.width = (sun * 100).toFixed(1) + '%';
+  const e = Math.max(0, Math.min(1, prog01));
+  panelIn.style.opacity = Math.max(0, (e - .55) / .45).toFixed(3);
+  panel.style.visibility = e < .02 ? 'hidden' : 'visible';
+  if (mode !== 'liquid') panel.style.opacity = open ? 1 : 0; else panel.style.opacity = 1;
+  if (gl) {
+    let n = 0;
+    const T = TINT[tint];
+    const push = (r, rad, frost, ta) => { R.set([r[0] * dpr, r[1] * dpr, r[2] * dpr, r[3] * dpr], n * 4); RAD[n] = Math.min(rad, r[2] / 2, r[3] / 2) * dpr; FR[n] = frost; TA[n] = ta; n++; };
+    if (mode === 'liquid') {
+      const tr = rect(tb); push(tr, 24, 2, T.cap);
+      const sb = rect(sunBtn), pr = rect(panel);
+      if (e > .01) push([lerp(sb[0], pr[0], e), lerp(sb[1], pr[1], e), lerp(sb[2], pr[2], e), lerp(sb[3], pr[3], e)], lerp(18, 30, e), lerp(2, 6, e), lerp(T.cap, T.pan, e));
+      if (getComputedStyle(ask).display !== 'none') push(rect(ask), 28, 2, T.cap);
+      if (getComputedStyle(chat).display !== 'none') push(rect(chat), 26, 6, T.pan);
+    }
+    gl.uniform1i(U.uTex, 0); gl.uniform2f(U.uRes, cv.width, cv.height); gl.uniform2f(U.uImg, imgW, imgH);
+    gl.uniform1f(U.uSun, sun); gl.uniform1f(U.uDpr, dpr); gl.uniform1f(U.uK, 14 * dpr);
+    gl.uniform4fv(U.uRect, R); gl.uniform1fv(U.uRad, RAD); gl.uniform1fv(U.uFrost, FR); gl.uniform1fv(U.uTintA, TA);
+    gl.uniform1i(U.uN, n); gl.uniform3fv(U.uTint, T.rgb); gl.uniform1f(U.uSat, T.sat); gl.uniform1f(U.uBri, T.bri); gl.uniform1f(U.uCatch, T.catch); gl.uniform1f(U.uBevel, T.bevel); gl.uniform1f(U.uShadow, T.shadow); gl.uniform1f(U.uHair, T.hair);
+    gl.drawArrays(gl.TRIANGLES, 0, 3);
+  }
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+
+const fpsEl = document.getElementById('fps'), avgEl = document.getElementById('avg'), worstEl = document.getElementById('worst');
+setInterval(() => {
+  const r = frames.slice(-15); const f = r.length ? 1000 / (r.reduce((a, b) => a + b, 0) / r.length) : 0;
+  let sum = 0, n = 0, worst = 0; for (let i = frames.length - 1; i >= 0 && sum < 3000; i--) { sum += frames[i]; n++; worst = Math.max(worst, frames[i]); }
+  fpsEl.textContent = f.toFixed(0); avgEl.textContent = n ? (n / (sum / 1000)).toFixed(0) : '–'; worstEl.textContent = worst.toFixed(0);
+  if (frames.length > 3000) frames = frames.slice(-800);
+}, 500);
+
+const out = document.getElementById('out'), copyBtn = document.getElementById('copy'), autoBtn = document.getElementById('auto'), hint = document.getElementById('hint');
+const names = { liquid: '液态玻璃', css: '磨砂', solid: '不透明', none: '无界面' };
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+autoBtn.onclick = async () => {
+  autoBtn.disabled = true; copyBtn.hidden = true; out.textContent = '';
+  if (!open) sunBtn.click();
+  const res = {}, prev = mode;
+  for (const m of ['liquid', 'css', 'solid', 'none']) {
+    if (m === 'liquid' && !gl) continue;
+    setMode(m); hint.textContent = `正在测：${names[m]}…`; await sleep(2000);
+    const from = frames.length; await sleep(5000);
+    const seg = frames.slice(from), sum = seg.reduce((a, b) => a + b, 0), s = [...seg].sort((a, b) => a - b);
+    res[m] = { fps: seg.length / (sum / 1000), p95: s[Math.floor(s.length * .95)] || 0, jank: seg.filter(x => x > 25).length };
+  }
+  setMode(prev);
+  const blur = (window.CSS && (CSS.supports('backdrop-filter', 'blur(2px)') || CSS.supports('-webkit-backdrop-filter', 'blur(2px)'))) ? '支持' : '不支持';
+  out.textContent = Object.keys(res).map(m => `${names[m]}：${res[m].fps.toFixed(1)} fps，95% 帧 ≤ ${res[m].p95.toFixed(1)} ms，卡顿帧 ${res[m].jank}`).join('\n')
+    + `\n玻璃颜色 ${tint === 'dark' ? '深色' : '浅色'} · 屏幕 ${innerWidth}×${innerHeight} @${(window.devicePixelRatio || 1).toFixed(2)}x · WebGL2 ${gl ? '有' : '无'} · 背景模糊 ${blur}\n${navigator.userAgent}`;
+  hint.textContent = '测完了。点“复制结果”，粘贴给我。复制不了就长按选中上面的文字。';
+  copyBtn.hidden = false; autoBtn.disabled = false;
+};
+copyBtn.onclick = () => {
+  const t = out.textContent;
+  try { navigator.clipboard.writeText(t).then(() => { copyBtn.textContent = '已复制'; }, selectOut); } catch (e) { selectOut(); }
+};
+function selectOut() { const r = document.createRange(); r.selectNodeContents(out); const s = getSelection(); s.removeAllRanges(); s.addRange(r); copyBtn.textContent = '已选中，请手动复制'; }
+</script>
