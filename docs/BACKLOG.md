@@ -185,3 +185,38 @@ change, neutral page for unknown share ids, polish.
 - Walk HUD and first-visit hints were not redrawn.
 - Process rule from the owner: one agent at a time; ask before starting
   a task; smallest set of mockups first.
+
+## Real-model evaluation, round 1 (2026-11-13)
+
+Setup: local `vite preview`, the Worker's OpenAI-compatible upstream
+pointed at a bridge that answers with Claude Opus through the local
+`claude -p` CLI (scratch tool, not committed). The lead played a self-build
+client from two Xiaohongshu references (a 14 x 11 m three-storey rural
+villa with a shrine table; a 7.5 x 18 m city townhouse with a court and a
+double-height space). 5 user turns, 9 model calls, about 2.7 USD, 1 to 3.5
+minutes per turn.
+
+Fixed during the run: an empty plot (`new_house` "blank") crashed the
+studio (kernel massing with no solids); commit d161b83.
+
+Open findings:
+- Renaming a space keeps its old English name: the plan shows 卧室四 over
+  FAMILY ROOM and 起居室 over BEDROOM 4. `update_space` with a new
+  `name`/`type` should update or clear `nameEn`.
+- No shrine table (神桌) furniture. The model cannot draw the one object a
+  rural 堂屋 is organised around; add it (against the hall's back wall,
+  facing the front door) and let the model ask for it.
+- The model cannot see furniture: it claimed an 8-seat table fits where
+  the planner placed a 4-seat one. Give the furniture result back in the
+  tool result, or stop the model claiming table sizes.
+- A two-car garage shows one car.
+- Double-height spaces and split levels are not supported; the model said
+  so plainly and offered alternatives. Decide whether to add a slab void
+  command.
+- Model behaviour: reads briefs well, states assumptions and trade-offs,
+  honest about limits. Two prompt fixes: ask before removing or moving a
+  room the user asked for (it moved a requested ground-floor bedroom
+  upstairs unasked); keep replies short (the townhouse reply was about 700
+  characters, too long for the one-exchange chat surface).
+- A multi-storey build takes 1 to 3 minutes with only "working" showing;
+  show what is being built (per level) while it runs.
