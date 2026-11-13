@@ -125,7 +125,7 @@ export function TitleMenu({ derived, onRect, compact }: { derived: Derived | nul
         }}
         data-testid="project-menu"
         className={cx(
-          'hit group -ml-1 flex max-w-[calc(100%+4px)] items-center gap-[7px] rounded-[10px] px-1 text-left text-canvas-ink transition-opacity hover:opacity-75',
+          'hit group -ml-1 flex max-w-[calc(100%+4px)] touch-none items-center gap-[7px] rounded-[10px] px-1 text-left text-canvas-ink transition-opacity hover:opacity-75',
           compact ? 'h-8' : 'h-9',
         )}
       >

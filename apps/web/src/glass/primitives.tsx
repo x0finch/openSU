@@ -543,8 +543,11 @@ function useMenuScrub(open: boolean, menu: { current: HTMLElement | null }): voi
       }
       if (e.pointerId !== active) return;
       if (Math.hypot(e.clientX - start.x, e.clientY - start.y) > 8) moved = true;
-      const hit = document.elementFromPoint(e.clientX, e.clientY)?.closest<HTMLElement>('[role=menuitem]') ?? null;
-      light(hit && menu.current?.contains(hit) ? hit : null);
+      const under = document.elementFromPoint(e.clientX, e.clientY);
+      const hit = under?.closest<HTMLElement>('[role=menuitem]') ?? null;
+      // Over a gap between rows (a separator) the last row stays lit; outside the menu nothing is.
+      if (hit && menu.current?.contains(hit)) light(hit);
+      else if (!under || !menu.current?.contains(under)) light(null);
     };
     const up = (e: PointerEvent) => {
       if (e.pointerId !== active) return;
@@ -576,7 +579,7 @@ export function GlassMenu({ label, children, ref, ...rest }: PopoverProps & { la
   const merged = useMergedRef(el, ref);
   useMenuScrub(rest.open, el);
   return (
-    <GlassPopover ref={merged} ariaRole="menu" aria-label={label} kind="text" radius={22} {...rest}>
+    <GlassPopover ref={merged} ariaRole="menu" aria-label={label} kind="text" radius={22} {...rest} className={cx('touch-none', rest.className)}>
       <div className="flex flex-col p-1.5">{children}</div>
     </GlassPopover>
   );
