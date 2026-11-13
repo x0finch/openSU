@@ -8,7 +8,7 @@ they want. It covers the studio chrome only: buttons, panels, input,
 chat, menus. The drawing itself follows `docs/VISUAL_SPEC.md` and does
 not change.
 
-In one line: a few small, clear glass capsules float on the white
+In one line: a few small, smoky glass capsules float on the white
 architectural drawing. Their edges bend the drawing behind them like a
 thick glass slab. They grow into panels when needed and shrink back when
 done. One bright colour, ginkgo yellow, marks the sun and the main action.
@@ -81,8 +81,10 @@ the same tint, blur and rim (no refraction).
    request.
 9. **One bold colour.** Ginkgo yellow for the sun, the play button, the
    send button and the working glow. Everything else is ink.
-10. **Light glass by default.** Dark glass is for walk mode at dusk and
-    the page's dark theme.
+10. **Smoky glass by default.** The owner chose dark, smoky capsules
+    (direction 4), so dark glass with light ink is the default in every
+    view. Light glass stays defined in the material but is not used by
+    default.
 11. **Not everything is glass.** The house name and area are plain text
     on the drawing. Sheets in the gallery stay white paper.
 
