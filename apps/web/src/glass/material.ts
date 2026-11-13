@@ -13,6 +13,15 @@ interface Tone {
   tintText: number;
   /** The selected segment's lens adds this much tint over the capsule. */
   tintLens: number;
+  /**
+   * A light face over a resting lens (selected segment, slider thumb):
+   * dark glass lifts its selection with white, light glass needs none
+   * (its own white tint does it). The slider thumb is solid at rest.
+   */
+  lensFace: string;
+  thumbFace: string;
+  /** Ink of a tooltip (drawn in the glass ink colour). */
+  tipInk: string;
   saturation: number;
   brightness: number;
   catchLight: number;
@@ -34,6 +43,9 @@ export const TONES: Record<GlassTone, Tone> = {
     tintControl: 0.14,
     tintText: 0.42,
     tintLens: 0.55,
+    lensFace: 'rgba(255, 255, 255, 0)',
+    thumbFace: '#ffffff',
+    tipInk: '#ffffff',
     saturation: 1.8,
     brightness: 1.06,
     catchLight: 1,
@@ -51,7 +63,10 @@ export const TONES: Record<GlassTone, Tone> = {
     tint: [30 / 255, 30 / 255, 34 / 255],
     tintControl: 0.3,
     tintText: 0.55,
-    tintLens: 0.35,
+    tintLens: 0.1,
+    lensFace: 'rgba(255, 255, 255, 0.2)',
+    thumbFace: '#ffffff',
+    tipInk: '#1c1c1e',
     saturation: 1.6,
     brightness: 0.8,
     catchLight: 0.46,
@@ -140,6 +155,9 @@ export function cssVars(tone: GlassTone): Record<string, string> {
     '--lg-tint-control': String(t.tintControl),
     '--lg-tint-text': String(t.tintText),
     '--lg-tint-lens': String(t.tintLens),
+    '--lg-lens-face': t.lensFace,
+    '--lg-thumb-face': t.thumbFace,
+    '--lg-tip-ink': t.tipInk,
     '--lg-sat': String(t.saturation),
     '--lg-bri': String(t.brightness),
     '--lg-blur': `${CSS_BLUR_PX}px`,

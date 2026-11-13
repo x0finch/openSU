@@ -98,6 +98,18 @@
 .lg-lens[data-backend="webgl"] {
   background: transparent;
 }
+/* The resting face of a lens (fades out as the lens lifts). */
+.lg-lens-face {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: var(--lg-lens-face);
+  opacity: calc(1 - var(--lg-lift, 0));
+}
+.lg-slider .lg-lens-face {
+  background: var(--lg-thumb-face);
+  box-shadow: 0 1px 4px rgb(0 0 0 / 0.18);
+}
 /* The magnified copy of what lies under a lens (labels, the slider track). */
 .lg-lens-copy {
   position: absolute;
@@ -176,7 +188,7 @@
   outline-offset: 2px;
 }
 .lg-slider .lg-lens[data-backend="css"] {
-  background: color-mix(in srgb, #fff calc((1 - var(--lg-lift, 0) * 0.9) * 100%), transparent);
+  background: transparent;
 }
 
 /* ------------------------------------------------------------------ */
@@ -247,7 +259,7 @@
   padding: 4px 8px;
   border-radius: 7px;
   background: var(--lg-ink);
-  color: var(--lg-tip-ink, #fff);
+  color: var(--lg-tip-ink);
   font-size: 12px;
   line-height: 16px;
   white-space: nowrap;

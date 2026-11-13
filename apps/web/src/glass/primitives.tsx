@@ -288,6 +288,7 @@ export function GlassSegmented<T extends string>({ value, onChange, segments, la
         ))}
       </div>
       <GlassLens ref={lens} shape={lensShape}>
+        <span className="lg-lens-face" />
         <div ref={copy} className="lg-lens-copy" style={{ width: 1, height: 1 }}>
           <div className="absolute left-0" style={{ top: pad, height: height - 2 * pad }}>
             {labels()}
@@ -624,8 +625,8 @@ export function GlassSlider({ min, max, value, onChange, ariaLabel, ariaValueTex
     const tw = THUMB_W * (1 + THUMB_GROW * l), th = THUMB_H * (1 + THUMB_GROW * l);
     return {
       rect: { x: cxp - tw / 2, y: r.top + r.height / 2 - th / 2, width: tw, height: th },
-      // At rest a solid white pill (the tint of a light thumb), lifted clear.
-      tint: lerp(tone === 'light' ? 0.96 : TONES.dark.tintText, 0.06, l01),
+      // At rest the thumb's solid face (DOM) covers it; lifted it is clear glass.
+      tint: lerp(TONES[tone].tintControl, 0.06, l01),
       frost: lerp(1, 0.4, l01),
       magnify: 1 + 0.5 * l01,
       bend: 1 + 1.2 * l01,
@@ -642,6 +643,7 @@ export function GlassSlider({ min, max, value, onChange, ariaLabel, ariaValueTex
         {railInner}
       </div>
       <GlassLens ref={lens} shape={lensShape}>
+        <span className="lg-lens-face" />
         <div ref={copy} className="lg-lens-copy">
           <div className="lg-slider-rail" style={{ maskImage: 'none' }}>
             {railInner}

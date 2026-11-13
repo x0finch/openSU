@@ -29,7 +29,7 @@ function inline(s: string): ReactNode[] {
 function RichText({ text, caret }: { text: string; caret?: boolean }) {
   const blocks = text.replace(/\r/g, '').split(/\n{2,}/).filter((b) => b.trim());
   return (
-    <div className="space-y-2 text-[13.5px] leading-[1.6] break-words text-ink">
+    <div className="space-y-2 text-[14.5px] leading-[23px] font-medium break-words text-ink">
       {blocks.map((b, i) => {
         const lines = b.split('\n');
         const last = i === blocks.length - 1;
@@ -255,13 +255,14 @@ function humanizeValidation(e: string): string {
 /** Long messages fold after a few lines; a toggle shows the rest. */
 const LONG_MESSAGE = 280;
 
-function UserMessage({ item }: { item: ChatItem }) {
+function UserMessage({ item, translucent }: { item: ChatItem; translucent?: boolean }) {
   const t = useT();
   const long = item.text.length > LONG_MESSAGE || item.text.split('\n').length > 6;
   const [open, setOpen] = useState(false);
   return (
-    <div className="flex flex-col items-end">
-      <p className="max-w-[86%] rounded-[12px] rounded-br-[4px] bg-ink px-3 py-[7px] text-[13.5px] leading-[1.5] break-words whitespace-pre-wrap text-white" data-testid="user-message">
+    <div className={cx('flex flex-col', translucent ? 'items-start' : 'items-end')}>
+      {/* On glass the user's words are a quiet line above the answer (no bubble: no box inside glass). */}
+      <p className={cx('break-words whitespace-pre-wrap', translucent ? 'text-[14.5px] leading-[23px] font-medium text-ink-2' : 'max-w-[86%] rounded-[12px] rounded-br-[4px] bg-ink px-3 py-[7px] text-[13.5px] leading-[1.5] text-white')} data-testid="user-message">
         {/* Clamped inside the padding, so no half line peeks out. */}
         <span className={cx(long && !open && 'line-clamp-5')}>{item.text}</span>
       </p>
@@ -381,7 +382,7 @@ function MessageList({ className, from = 0, spacer = true, translucent }: { clas
         <div className="flex flex-col gap-3">
           {items.map((it) => (
             <div key={it.id} data-msg className="scroll-mt-4">
-              {it.role === 'user' ? <UserMessage item={it} /> : it.manual ? <ManualEdit item={it} /> : <AssistantMessage item={it} latest={it.id === lastAssistant} translucent={translucent} />}
+              {it.role === 'user' ? <UserMessage item={it} translucent={translucent} /> : it.manual ? <ManualEdit item={it} /> : <AssistantMessage item={it} latest={it.id === lastAssistant} translucent={translucent} />}
             </div>
           ))}
           {/* Room below the newest message, so it can sit at the top while the reply arrives. */}
@@ -607,7 +608,7 @@ export function ChatInput({ phone, pinned, className }: { phone?: boolean; pinne
             type="submit"
             disabled={!can}
             aria-label={t('chat.send')}
-            className={cx('hit lg-focus grid shrink-0 place-items-center rounded-full text-on-accent transition-[filter,opacity] duration-150', btn, can ? 'bg-accent hover:brightness-95' : 'bg-accent opacity-45')}
+            className={cx('hit lg-focus grid shrink-0 place-items-center rounded-full text-on-accent transition-[filter,opacity] duration-150', btn, 'bg-accent', can ? 'hover:brightness-95' : '[&>svg]:opacity-40')}
             data-testid="chat-send"
           >
             <SendIcon width={16} height={16} />

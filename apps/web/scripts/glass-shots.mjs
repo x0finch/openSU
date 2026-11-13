@@ -92,12 +92,16 @@ if (wanted('phone')) {
   const { ctx, page } = await open('/studio?nohints', { width: 390, height: 844 }, { isMobile: true, hasTouch: true });
   await shot(page, 'phone-390-idle');
   await ctx.close();
+  const p2 = await open('/studio?nohints&panel=open', { width: 390, height: 844 }, { isMobile: true, hasTouch: true });
+  await p2.page.click('[data-testid=chat-history]').catch(() => {});
+  await p2.ctx.close();
 }
-if (wanted('dark')) {
-  const { ctx, page } = await open('/studio?nohints&glass=dark');
+if (wanted('light')) {
+  // Secondary reference: light glass (smoky glass is the default).
+  const { ctx, page } = await open('/studio?nohints&glass=light');
   await page.click('[data-testid=bar-sun]');
   await page.waitForTimeout(1200);
-  await shot(page, 'desktop-dark-sun');
+  await shot(page, 'desktop-light-sun');
   await ctx.close();
 }
 if (wanted('css')) {

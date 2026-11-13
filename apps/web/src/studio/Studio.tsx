@@ -246,8 +246,8 @@ export function Studio() {
   const column = desktop && pinnedState && mode !== 'sheet';
   const canvasLeft = column ? PIN_COLUMN : 0;
   const walkLandscape = walk && landscape;
-  // ?glass=dark: dark glass (walk at dusk and the dark theme come later).
-  const [glassTone] = useState<GlassTone>(() => (typeof location !== 'undefined' && new URLSearchParams(location.search).get('glass') === 'dark' ? 'dark' : 'light'));
+  // Smoky (dark) glass is the studio's material; ?glass=light shows light glass for comparison.
+  const [glassTone] = useState<GlassTone>(() => (typeof location !== 'undefined' && new URLSearchParams(location.search).get('glass') === 'light' ? 'light' : 'dark'));
 
   const main = useRef<HTMLElement>(null);
   useClickAwayFromDrawing(main);

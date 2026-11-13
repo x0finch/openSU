@@ -15,16 +15,17 @@ export function cx(...c: (string | false | null | undefined)[]): string {
 /** The active backend, tone and transparency setting (re-renders when they change). */
 export function useGlass(): { backend: GlassBackend; tone: GlassTone; opaque: boolean } {
   const backend = useSyncExternalStore(glassRegistry.subscribe, () => glassRegistry.backend, () => 'css' as const);
-  const tone = useSyncExternalStore(glassRegistry.subscribe, () => glassRegistry.glassTone, () => 'light' as const);
+  const tone = useSyncExternalStore(glassRegistry.subscribe, () => glassRegistry.glassTone, () => 'dark' as const);
   const opaque = useSyncExternalStore(glassRegistry.subscribe, () => glassRegistry.reducedTransparency, () => false);
   return { backend, tone, opaque };
 }
 
 /**
  * Wraps the studio: sets the material's custom properties (ink, tint,
- * blur...) for everything inside. `tone` picks light or dark glass.
+ * blur...) for everything inside. `tone` picks smoky (dark, the default
+ * the owner chose) or light glass.
  */
-export function GlassLayer({ tone = 'light', children }: { tone?: GlassTone; children: ReactNode }) {
+export function GlassLayer({ tone = 'dark', children }: { tone?: GlassTone; children: ReactNode }) {
   useEffect(() => glassRegistry.setTone(tone), [tone]);
   return (
     <div className="contents" style={cssVars(tone) as CSSProperties} data-glass-tone={tone}>

@@ -69,7 +69,7 @@ class Registry {
   private surfaces = new Map<number, SurfaceSpec & { auto: number }>();
   private nextId = 1;
   private target: GlassTarget | null = null;
-  private tone: GlassTone = 'light';
+  private tone: GlassTone = 'dark';
   private opaque = false;
   private raf = 0;
   private hotUntil = 0;
