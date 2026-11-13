@@ -150,6 +150,8 @@ function measureInPage(gap) {
   const v = window.__studio?.engine?.viewer;
   let house = null, inkUnder = [];
   if (v) {
+    // The drawing alone: the glass drawn in the same canvas is taken out for the reading.
+    window.__studio.glass?.setPaused(true);
     v.renderNow();
     const src = v.renderer.domElement;
     const cr = src.getBoundingClientRect();
@@ -180,6 +182,7 @@ function measureInPage(gap) {
       const neutralLight = Math.max(r, gg, bb) - Math.min(r, gg, bb) < 8 && Math.min(r, gg, bb) > 150;
       return ink(x, y) && !neutralLight;
     };
+    window.__studio.glass?.setPaused(false);
     for (const [l, t, r, b, name] of obs) {
       let n = 0, m = 0;
       for (let y = Math.max(0, Math.floor((t - cr.top) * k)); y < Math.min(c.height, Math.ceil((b - cr.top) * k)); y++) {
@@ -232,7 +235,10 @@ const browser = await playwright.chromium.launch({ args: ['--use-angle=swiftshad
 
 async function open(opts, path, { hints = false, ctxOpts = {} } = {}) {
   const ctx = await browser.newContext({ ...opts, ...ctxOpts });
-  if (!hints) await ctx.addInitScript(() => localStorage.setItem('opensu.hints.v1', 'done'));
+  if (!hints) await ctx.addInitScript(() => {
+    localStorage.setItem('opensu.hints.v1', 'done');
+    localStorage.setItem('opensu.toolnames.v1', 'done');
+  });
   const page = await ctx.newPage();
   page.on('pageerror', (e) => failures.push(`${path}: page error ${e.message}`));
   await page.goto(`${base}${path}`, { waitUntil: 'networkidle' });
@@ -272,21 +278,21 @@ writeFileSync(resolve(outDir, 'measurements.json'), JSON.stringify(table, null, 
 
 if (wanted('checks')) {
   const D = vp(1440, 900), P = vp(390, 844);
-  // Desktop: a label slides out on hover / focus; the group's right edge stays.
+  // Desktop (task 017): icons only; hover shows the name as a tooltip
+  // below after a delay; nothing changes width; a panel flows out of the
+  // whole group, right edges aligned, joined to it.
   {
     const { ctx, page } = await open(D, '/studio');
     const box = () => page.getByTestId('toolbar').boundingBox();
-    const label = (id) => page.getByTestId(id).locator('.tool-label').evaluate((el) => el.getBoundingClientRect().width);
+    const tip = (id) => page.getByTestId(id).locator('xpath=..').locator('.lg-tip').evaluate((el) => +getComputedStyle(el).opacity);
     const a = await box();
-    const l0 = await label('bar-views');
     await page.getByTestId('bar-views').hover();
-    await page.waitForTimeout(400);
+    await page.waitForTimeout(800);
     const b = await box();
-    const l1 = await label('bar-views');
-    check(l0 < 1 && l1 > 20, `hover shows the tool's label (${l0.toFixed(0)} -> ${l1.toFixed(0)} px)`);
-    check(Math.abs(a.x + a.width - (b.x + b.width)) < 0.5 && b.width > a.width, `the toolbar grows to the left, its right edge stays (${(a.x + a.width).toFixed(1)} / ${(b.x + b.width).toFixed(1)})`);
-    const others = await Promise.all(['bar-levels', 'bar-sun', 'bar-walk'].map(label));
-    check(others.every((x) => x < 1), 'only the hovered tool shows its label');
+    check((await tip('bar-views')) > 0.9, 'hover shows the tool name as a tooltip');
+    check(Math.abs(a.width - b.width) < 0.5 && Math.abs(a.x - b.x) < 0.5, `hover changes no width (${a.width.toFixed(1)} / ${b.width.toFixed(1)})`);
+    const others = await Promise.all(['bar-levels', 'bar-sun'].map(tip));
+    check(others.every((x) => x < 0.1), 'only the hovered tool shows its name');
     await page.mouse.move(700, 450);
     await page.waitForTimeout(400);
     // Keyboard focus.
@@ -294,33 +300,56 @@ if (wanted('checks')) {
     await page.keyboard.press('Shift+Tab');
     await page.keyboard.press('Tab');
     await page.waitForTimeout(400);
-    check((await label('bar-sun')) > 20, 'keyboard focus shows the label');
-    // Opening a panel moves neither the input nor the canvas.
+    check((await tip('bar-sun')) > 0.9, 'keyboard focus shows the name');
+    // Opening a panel moves neither the input nor the canvas, nor the group.
     const before = await page.evaluate(() => ({ input: document.querySelector('[data-testid=prompt]').getBoundingClientRect().toJSON(), canvas: [document.querySelector('canvas').clientWidth, document.querySelector('canvas').clientHeight] }));
     await page.getByTestId('bar-views').click();
-    await settle(page, 600);
+    await settle(page, 900);
     const after = await page.evaluate(() => ({ input: document.querySelector('[data-testid=prompt]').getBoundingClientRect().toJSON(), canvas: [document.querySelector('canvas').clientWidth, document.querySelector('canvas').clientHeight] }));
-    check(await page.getByTestId('tray-views').count() === 1, 'the view panel opens under the toolbar');
+    const c = await box();
+    const pan = await page.getByTestId('tray-views').boundingBox();
+    check(await page.getByTestId('tray-views').count() === 1, 'the view panel opens');
+    check(Math.abs(pan.x + pan.width - (c.x + c.width)) < 1 && pan.y - (c.y + c.height) >= 0 && pan.y - (c.y + c.height) < 14, `the panel hangs from the group, right edges aligned, within the merge distance (${(pan.y - c.y - c.height).toFixed(1)} px gap)`);
+    check(Math.abs(c.width - a.width) < 0.5, 'the group keeps its width while a panel is open');
     check(JSON.stringify(before) === JSON.stringify(after), `opening a panel moves neither the input nor the canvas (${JSON.stringify(after.canvas)})`);
-    check((await label('bar-views')) > 20, 'the active tool keeps its label');
+    check(await page.getByTestId('bar-views').getAttribute('data-on') === '', 'the active tool is selected');
     await page.keyboard.press('Escape');
+    await settle(page, 700);
     check(await page.getByTestId('tray-views').count() === 0, 'Escape closes the panel');
     check(await page.evaluate(() => document.activeElement?.dataset.testid) === 'bar-views', 'focus returns to the tool');
     await page.getByTestId('bar-levels').click();
     await page.mouse.click(700, 450);
-    await settle(page, 300);
+    await settle(page, 700);
     check(await page.getByTestId('tray-levels').count() === 0, 'a click on the drawing closes the panel');
     await page.getByTestId('bar-sun').click();
+    await settle(page, 300);
     await page.getByTestId('bar-sun').click();
+    await settle(page, 700);
     check(await page.getByTestId('tray-sun').count() === 0 && (await page.evaluate(() => window.__studio.store.getState().sun.on)), 'clicking the active tool closes its panel; the sun stays on');
-    check(/\d\d:\d\d/.test(await page.getByTestId('bar-sun').textContent()), 'the sun tool shows the time');
-    // Walk: "走进去 ×" exits, Escape too.
+    check(/\d\d:\d\d/.test(await page.getByTestId('bar-sun').textContent()), 'the sun tool shows the time in its icon place');
+    // Walk: "漫游 ×" exits, Escape too.
     await page.getByTestId('bar-walk').click();
     await page.waitForFunction(() => window.__studio.engine.viewer.walking === true, null, { timeout: 60000 });
-    check((await page.getByTestId('bar-walk').textContent()).includes('×'), 'walking: the tool reads "走进去 ×"');
+    check((await page.getByTestId('bar-walk').textContent()).includes('漫游 ×') && (await page.getByTestId('bar-walk').getAttribute('data-on')) === '', 'walking: the tool reads "漫游 ×", selected');
     await page.keyboard.press('Escape');
     await page.waitForFunction(() => window.__studio.engine.viewer.walking === false, null, { timeout: 60000 });
     check(true, 'Escape leaves walk mode');
+    await ctx.close();
+  }
+  // First visit: the tool names show until the first tool use (remembered).
+  {
+    const { ctx, page } = await open(D, '/studio', { hints: true });
+    const named = () => page.getByTestId('toolbar').evaluate((el) => {
+      const t = [...el.querySelectorAll('button')].map((b) => b.textContent).join(' ');
+      return t.includes('视角') && t.includes('漫游');
+    });
+    check(await named(), 'first visit: the tools show their names');
+    await page.getByTestId('bar-views').click();
+    await settle(page, 400);
+    check(!(await named()), 'the first tool use collapses them to icons');
+    await page.reload({ waitUntil: 'networkidle' });
+    await page.waitForFunction(() => window.__studio?.ready3d === true, null, { timeout: 180000 });
+    check(!(await named()), 'icons only after a reload');
     await ctx.close();
   }
   // Pin persists across a reload.
@@ -328,15 +357,16 @@ if (wanted('checks')) {
     const { ctx, page } = await open(D, '/studio');
     await page.getByTestId('chat-history').click();
     check(await page.getByTestId('recent-strip').count() === 1, 'the history button opens the recent strip');
-    const bg = await page.getByTestId('recent-strip').evaluate((el) => getComputedStyle(el).backgroundColor);
-    check(bg === 'rgba(255, 255, 255, 0.8)', `the strip is 80% white (${bg})`);
+    const glass = await page.getByTestId('recent-strip').evaluate((el) => el.classList.contains('lg') && el.dataset.kind);
+    check(glass === 'text', `the latest exchange is a glass text surface (${glass})`);
     await page.keyboard.press('Escape');
     check(await page.getByTestId('recent-strip').count() === 0, 'Escape closes the strip');
     await page.getByTestId('chat-history').click();
     await page.getByTestId('chat-pin').click();
     await settle(page, 500);
     const cw = await page.evaluate(() => document.querySelector('canvas').clientWidth);
-    check(await page.getByTestId('chat-panel').count() === 1 && cw === 1440 - 360, `pinned: a 360 px column, the canvas beside it (${cw} px)`);
+    const side = await page.getByTestId('chat-panel').boundingBox();
+    check(await page.getByTestId('chat-panel').count() === 1 && side.x === 12 && side.width === 360 && cw === 1440, `pinned: a floating, inset glass sidebar; the canvas runs edge to edge (${side.x}, ${side.width} px; canvas ${cw} px)`);
     await page.reload({ waitUntil: 'networkidle' });
     await page.waitForFunction(() => window.__studio?.ready3d === true, null, { timeout: 180000 });
     check(await page.getByTestId('chat-panel').count() === 1, 'the pin survives a reload');
@@ -352,19 +382,20 @@ if (wanted('checks')) {
     const phases = [];
     for (const phase of ['thinking', 'working', 'writing']) {
       await page.evaluate((ph) => window.__studio.chat.setState({ running: true, items: [{ id: 'u', role: 'user', text: '厨房的窗能再大一点吗？' }, { id: 'a', role: 'assistant', text: '', phase: ph }] }), phase);
-      await page.waitForTimeout(150);
+      // Each phrase is held at least 1.1 s (MIN_PHASE_MS), so a quick phase can still be read.
+      await page.waitForTimeout(1300);
       phases.push(await page.getByTestId('chat-status').textContent());
     }
-    const anim = await page.evaluate(() => getComputedStyle(document.querySelector('.ai-spin')).animationName);
-    const lit = await page.evaluate(() => getComputedStyle(document.querySelector('.ai-spin')).opacity);
+    const anim = await page.evaluate(() => getComputedStyle(document.querySelector('.lg-glow > i')).animationName);
+    const lit = await page.evaluate(() => getComputedStyle(document.querySelector('.lg-glow')).opacity);
     if (!reduced) {
       check(phases[0].startsWith('正在思考') && phases[1].startsWith('正在修改房子') && phases[2].startsWith('正在回复'), `the status phrase follows the phases (${phases.join(' / ')})`);
-      check(anim === 'ai-spin', `working: the light travels round the input (${anim})`);
+      check(anim === 'lg-spin', `working: the light travels round the input (${anim})`);
     } else check(anim === 'none' && lit === '1', `reduced motion: a still highlight, no travelling light (${anim}, opacity ${lit})`);
     await page.evaluate(() => window.__studio.chat.setState({ running: false, items: [] }));
     await ctx.close();
   }
-  // Phone: the sheet, the toolbar riding on it, switching, drag to close, the input hidden meanwhile.
+  // Phone (task 017): an inset glass sheet with detents, the tool bar riding on it, switching, drag and flick to close, the input hidden meanwhile.
   {
     const { ctx, page } = await open(P, '/studio');
     const rect = (id) => page.getByTestId(id).evaluate((el) => el.getBoundingClientRect().toJSON());
@@ -372,30 +403,54 @@ if (wanted('checks')) {
     const tb0 = await rect('toolbar');
     check(await inputShown(), 'phone: the input shows by default');
     await page.getByTestId('bar-sun').click();
-    await settle(page, 900);
+    await settle(page, 1200);
     const sheet = await rect('phone-sheet');
     const tb1 = await rect('toolbar');
-    check(await page.locator('[data-testid=phone-sheet][data-open]').count() === 1 && sheet.top > 844 * 0.5 && sheet.bottom >= 843.5, `phone: the sun panel is a bottom sheet (top ${sheet.top.toFixed(0)}, ${(sheet.height / 844 * 100).toFixed(0)}% high)`);
-    check(sheet.height <= 844 * 0.45 + 1, 'phone: the sheet is at most 45% of the screen');
-    check(Math.abs(tb1.bottom + 8 - sheet.top) < 1.5 && tb1.top < tb0.top, `phone: the toolbar rides on the sheet's top edge (${tb1.bottom.toFixed(1)} + 8 = ${sheet.top.toFixed(1)})`);
+    check(await page.locator('[data-testid=phone-sheet][data-open]').count() === 1 && Math.abs(sheet.left - 8) < 0.5 && Math.abs(844 - 8 - sheet.bottom) < 0.5, `phone: the sun panel is an inset sheet (left ${sheet.left}, bottom ${sheet.bottom.toFixed(1)})`);
+    check(Math.abs(tb1.bottom + 8 - sheet.top) < 1.5 && tb1.top < tb0.top, `phone: the tool bar rides on the sheet's top edge (${tb1.bottom.toFixed(1)} + 8 = ${sheet.top.toFixed(1)})`);
     check(!(await inputShown()), 'phone: the input is hidden while the sheet is open');
     await page.getByTestId('bar-views').click();
-    await settle(page, 700);
+    await settle(page, 1000);
     check(await page.locator('[data-testid=phone-sheet]').count() === 1 && (await page.locator('[data-testid=phone-sheet]').getByRole('button', { name: '西南轴测' }).count()) === 1, 'phone: another tool swaps the sheet content');
     const tb2 = await rect('toolbar');
     const sheet2 = await rect('phone-sheet');
-    check(Math.abs(tb2.bottom + 8 - sheet2.top) < 1.5, 'phone: the toolbar follows the new sheet height');
-    // Drag the handle down.
+    check(Math.abs(tb2.bottom + 8 - sheet2.top) < 1.5, 'phone: the tool bar follows the new sheet height');
+    // Drag up to the large detent, past it (rubber band), release.
     const g = await rect('sheet-grab');
-    await page.mouse.move(g.left + g.width / 2, g.top + 8);
+    const gx = g.left + g.width / 2;
+    await page.mouse.move(gx, g.top + 8);
     await page.mouse.down();
-    for (let i = 1; i <= 8; i++) await page.mouse.move(g.left + g.width / 2, g.top + 8 + i * 20);
+    for (let i = 1; i <= 12; i++) await page.mouse.move(gx, g.top + 8 - i * 50);
+    await page.waitForTimeout(100);
+    const stretched = await rect('phone-sheet');
     await page.mouse.up();
-    await settle(page, 900);
-    check(await page.locator('[data-testid=phone-sheet]').count() === 0, 'phone: dragging the sheet down closes it');
+    await settle(page, 1200);
+    const big = await rect('phone-sheet');
+    check(big.height > sheet2.height + 100 && stretched.height > big.height && stretched.height - big.height < 80, `phone: dragging up reaches the large detent, a little rubber band past it (${sheet2.height.toFixed(0)} -> ${big.height.toFixed(0)}, pulled ${stretched.height.toFixed(0)})`);
+    // Drag down slowly: back to fit, then down past half: closes.
+    const g2 = await rect('sheet-grab');
+    await page.mouse.move(gx, g2.top + 8);
+    await page.mouse.down();
+    for (let i = 1; i <= 8; i++) {
+      await page.mouse.move(gx, g2.top + 8 + i * 30);
+      await page.waitForTimeout(40);
+    }
+    await page.waitForTimeout(150);
+    await page.mouse.up();
+    await settle(page, 1200);
+    const back = await rect('phone-sheet');
+    check(Math.abs(back.height - sheet2.height) < 2, `phone: a slow drag down settles on the fit detent (${back.height.toFixed(0)} px)`);
+    // A quick flick down dismisses.
+    const g3 = await rect('sheet-grab');
+    await page.mouse.move(gx, g3.top + 8);
+    await page.mouse.down();
+    for (let i = 1; i <= 4; i++) await page.mouse.move(gx, g3.top + 8 + i * 25);
+    await page.mouse.up();
+    await settle(page, 1200);
+    check(await page.locator('[data-testid=phone-sheet]').count() === 0, 'phone: a flick down dismisses the sheet');
     check(await inputShown(), 'phone: the input is back after the sheet closes');
     const tb3 = await rect('toolbar');
-    check(Math.abs(tb3.top - tb0.top) < 1, 'phone: the toolbar is back at the bottom');
+    check(Math.abs(tb3.top - tb0.top) < 1, 'phone: the tool bar is back at the bottom');
     // The house re-frames above the sheet.
     await page.getByTestId('bar-levels').click();
     await settle(page, 1500);
@@ -408,7 +463,7 @@ if (wanted('checks')) {
     await page.evaluate(() => window.__studio.store.getState().setPinned(true));
     await settle(page, 900);
     const ps = await rect('phone-sheet');
-    check(Math.abs(ps.height - 422) < 2 && (await page.getByTestId('phone-sheet').getByTestId('prompt-bar').count()) === 1, `phone pinned: a half-height sheet with the input inside (${ps.height.toFixed(0)} px)`);
+    check(ps.height > 844 * 0.44 && ps.height < 844 * 0.5 && (await page.getByTestId('phone-sheet').getByTestId('prompt-bar').count()) === 1, `phone pinned: an about half-height sheet with the input inside (${ps.height.toFixed(0)} px)`);
     await page.getByTestId('bar-sun').click();
     await settle(page, 900);
     check(await page.getByTestId('phone-sheet').getAttribute('data-kind') === 'tool', 'phone pinned: a tool swaps the sheet');
@@ -418,7 +473,7 @@ if (wanted('checks')) {
     // Touch targets.
     // The text field's target is the whole input face (a tap anywhere on it focuses the field).
     const small = await page.evaluate(() => [...document.querySelectorAll('button, [role=radio], textarea')].filter((el) => el.checkVisibility() && !el.closest('[inert]')).map((el) => {
-      const r = (el.matches('textarea') ? el.closest('.ai-face') ?? el : el).getBoundingClientRect();
+      const r = (el.matches('textarea') ? el.closest('[data-testid=prompt]') ?? el : el).getBoundingClientRect();
       const after = getComputedStyle(el, '::after');
       const hw = after.content !== 'none' && after.content !== 'normal' ? Math.max(r.width, parseFloat(after.width) || 0) : r.width;
       const hh = after.content !== 'none' && after.content !== 'normal' ? Math.max(r.height, parseFloat(after.height) || 0) : r.height;
@@ -434,11 +489,11 @@ if (wanted('checks')) {
     const hints = await page.getByTestId('hints').boundingBox();
     const input = await page.getByTestId('prompt').boundingBox();
     check(hints && hints.y + hints.height <= input.y && input.y - (hints.y + hints.height) < 16, `${n}: the hints sit just above the input`);
-    // The hint "走进去" must not stand over the tool of that name.
-    const walkChip = await page.getByTestId('hints').getByRole('button', { name: '走进去' }).boundingBox();
+    // The hint "漫游" must not stand over the tool of that name.
+    const walkChip = await page.getByTestId('hints').getByRole('button', { name: '漫游' }).boundingBox();
     const walkTool = await page.getByTestId('bar-walk').boundingBox();
     const overX = Math.min(walkChip.x + walkChip.width, walkTool.x + walkTool.width) - Math.max(walkChip.x, walkTool.x);
-    check(overX <= 0, `${n}: the 走进去 hint is not stacked over the 走进去 tool`);
+    check(overX <= 0, `${n}: the 漫游 hint is not stacked over the 漫游 tool`);
     await page.getByTestId('bar-views').click();
     await settle(page, 300);
     await page.keyboard.press('Escape');

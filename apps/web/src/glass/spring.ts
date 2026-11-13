@@ -77,7 +77,10 @@ function tick(): void {
   // `last` (they can differ, e.g. under a test's fake clock).
   const now = performance.now();
   frame = 0;
-  const dt = Math.min(0.064, Math.max(0, (now - last) / 1000));
+  // The step is exact for any dt, so a slow frame (software GL renders a
+  // scene in ~0.5 s) never slows the motion down; only a long pause (a
+  // background tab) is capped.
+  const dt = Math.min(0.5, Math.max(0, (now - last) / 1000));
   last = now;
   for (const s of [...moving]) s.advance(dt);
   for (const f of frameListeners) f();

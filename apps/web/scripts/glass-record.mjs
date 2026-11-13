@@ -3,7 +3,7 @@
 // so software GL speed does not matter) for the side-by-side comparison
 // with Apple's footage. Frames go to artifacts/task017/compare/ours/<name>/.
 //
-//   node scripts/glass-record.mjs [--only press,segment,popover,slider]
+//   node scripts/glass-record.mjs [--only press,segment,popover,slider,phone-tabs,phone-sheet,menu-scrub]
 import { spawn } from 'node:child_process';
 import { mkdirSync, rmSync } from 'node:fs';
 import { createRequire } from 'node:module';
@@ -44,8 +44,8 @@ for (let i = 0; i < 120; i++) {
 }
 const browser = await playwright.chromium.launch({ args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist', '--enable-webgl'] });
 
-async function open(path) {
-  const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 }, deviceScaleFactor: 2 });
+async function open(path, phone = false) {
+  const ctx = await browser.newContext(phone ? { viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, isMobile: true, hasTouch: true } : { viewport: { width: 1440, height: 900 }, deviceScaleFactor: 2 });
   const page = await ctx.newPage();
   page.on('pageerror', (e) => console.log('pageerror', e.message));
   await page.clock.install();
@@ -53,7 +53,7 @@ async function open(path) {
   await page.waitForFunction(() => window.__studio?.ready3d === true, null, { timeout: 180000 });
   await page.waitForTimeout(1500);
   await page.clock.pauseAt(Date.now() + 1000);
-  await page.clock.runFor(1500);
+  await idle(page, 1500);
   return { ctx, page };
 }
 
@@ -71,6 +71,21 @@ async function record(page, name, clip, frames, at = {}) {
 }
 
 const box = async (page, sel) => page.locator(sel).first().boundingBox();
+
+/** A finger: touch events through the DevTools protocol (they arrive as touch pointer events). */
+const cdps = new WeakMap();
+async function touch(page, type, x, y) {
+  let c = cdps.get(page);
+  if (!c) cdps.set(page, (c = await page.context().newCDPSession(page)));
+  await c.send('Input.dispatchTouchEvent', { type, touchPoints: type === 'touchEnd' ? [] : [{ x, y }] });
+}
+/** Advances the fake clock in small steps, a frame each (see the slider note). */
+async function idle(page, ms) {
+  for (let t = 0; t < ms; t += 50) {
+    await page.clock.runFor(50);
+    await page.screenshot({ clip: { x: 0, y: 0, width: 4, height: 4 } });
+  }
+}
 
 if (wanted('press')) {
   const { ctx, page } = await open('/studio?nohints');
@@ -139,6 +154,57 @@ if (wanted('slider')) {
   for (let i = 0; i < 20; i++) steps[8 + i] = () => page.mouse.move(tx + ((s.x + s.width * 0.8 - tx) * (i + 1)) / 20, y);
   steps[34] = () => page.mouse.up();
   await record(page, 'slider-drag', clip, 50, steps);
+  await ctx.close();
+}
+if (wanted('phone-tabs')) {
+  const { ctx, page } = await open('/studio?nohints', true);
+  const views = await box(page, '[data-testid=bar-views]');
+  const walk = await box(page, '[data-testid=bar-walk]');
+  const sun = await box(page, '[data-testid=bar-sun]');
+  const y = views.y + views.height / 2;
+  const clip = { x: 0, y: views.y - 40, width: 390, height: views.height + 80 };
+  const x0 = views.x + views.width / 2, x1 = walk.x + walk.width / 2, x2 = sun.x + sun.width / 2;
+  const steps = { 2: () => touch(page, 'touchStart', x0, y) };
+  for (let i = 0; i < 16; i++) steps[8 + i] = () => touch(page, 'touchMove', x0 + ((x1 - x0) * (i + 1)) / 16, y);
+  for (let i = 0; i < 8; i++) steps[28 + i] = () => touch(page, 'touchMove', x1 + ((x2 - x1) * (i + 1)) / 8, y);
+  steps[40] = () => touch(page, 'touchEnd', x2, y);
+  await record(page, 'phone-tabs', clip, 70, steps);
+  await ctx.close();
+}
+if (wanted('phone-sheet')) {
+  const { ctx, page } = await open('/studio?nohints', true);
+  const sun = await box(page, '[data-testid=bar-sun]');
+  const clip = { x: 0, y: 200, width: 390, height: 644 };
+  // Open (a tap on 日照), then drag the grabber up to the large detent, release; then a flick down.
+  const steps = {
+    2: () => touch(page, 'touchStart', sun.x + sun.width / 2, sun.y + sun.height / 2),
+    3: () => touch(page, 'touchEnd', sun.x + sun.width / 2, sun.y + sun.height / 2),
+  };
+  let g = null;
+  steps[24] = async () => {
+    g = await box(page, '[data-testid=sheet-grab]');
+    await touch(page, 'touchStart', g.x + g.width / 2, g.y + 8);
+  };
+  for (let i = 0; i < 10; i++) steps[25 + i] = () => touch(page, 'touchMove', g.x + g.width / 2, g.y + 8 - (i + 1) * 28);
+  steps[36] = () => touch(page, 'touchEnd', g.x + g.width / 2, g.y + 8 - 280);
+  steps[60] = async () => {
+    g = await box(page, '[data-testid=sheet-grab]');
+    await touch(page, 'touchStart', g.x + g.width / 2, g.y + 8);
+  };
+  for (let i = 0; i < 3; i++) steps[61 + i] = () => touch(page, 'touchMove', g.x + g.width / 2, g.y + 8 + (i + 1) * 40);
+  steps[64] = () => touch(page, 'touchEnd', g.x + g.width / 2, g.y + 128);
+  await record(page, 'phone-sheet', clip, 86, steps);
+  await ctx.close();
+}
+if (wanted('menu-scrub')) {
+  const { ctx, page } = await open('/studio?nohints', true);
+  const t = await box(page, '[data-testid=project-menu]');
+  const clip = { x: 0, y: 0, width: 390, height: 520 };
+  const x = t.x + 60, y0 = t.y + t.height / 2;
+  const steps = { 2: () => touch(page, 'touchStart', x, y0) };
+  for (let i = 0; i < 14; i++) steps[18 + i] = () => touch(page, 'touchMove', x + i * 4, y0 + (i + 1) * 9);
+  steps[40] = () => touch(page, 'touchEnd', x + 52, y0 + 126);
+  await record(page, 'menu-scrub', clip, 60, steps);
   await ctx.close();
 }
 await browser.close();

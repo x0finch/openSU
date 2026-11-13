@@ -24,6 +24,12 @@ export const SHEET_MS = 420;
 const RIDE_GAP = 8;
 /** Gap of the inset sheet from the screen edges, px. */
 const SHEET_GAP = 8;
+/**
+ * The pinned conversation's sheet: about half the screen (task 015), a
+ * little less so the house above keeps the third of the height the
+ * renderer needs to frame into the free area.
+ */
+const CHAT_SHARE = 0.47;
 /** Width of the sheet when the phone is held sideways, px. */
 export const LAND_SHEET = 360;
 
@@ -112,7 +118,7 @@ export function PhoneDock({ derived, landscape, onExtent }: { derived: Derived |
     <GlassSheet
       open={!!want}
       large={large}
-      fixed={shown === 'chat' ? Math.round(vh * 0.5) : undefined}
+      fixed={shown === 'chat' ? Math.round(vh * CHAT_SHARE) : undefined}
       onClose={close}
       onClosed={() => setShown(null)}
       onHeight={onHeight}
@@ -127,7 +133,7 @@ export function PhoneDock({ derived, landscape, onExtent }: { derived: Derived |
       }
     >
       {shown === 'chat' ? (
-        <div className="flex flex-col" style={{ height: Math.round(vh * 0.5) - 22 }}>
+        <div className="flex flex-col" style={{ height: Math.round(vh * CHAT_SHARE) - 22 }}>
           <PinnedChat />
         </div>
       ) : (

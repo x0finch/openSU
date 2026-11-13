@@ -61,8 +61,11 @@ export const TONES: Record<GlassTone, Tone> = {
   },
   dark: {
     tint: [30 / 255, 30 / 255, 34 / 255],
-    tintControl: 0.55,
-    tintText: 0.55,
+    // Measured by scripts/glass-contrast.mjs over the white drawing: 0.45
+    // (UI_STYLE) gives 3.8:1 for labels; 0.6 lifts primary ink to about 5.2:1
+    // and the 90% secondary ink to about 4.7:1.
+    tintControl: 0.6,
+    tintText: 0.6,
     tintLens: 0.25,
     lensFace: 'rgba(255, 255, 255, 0)',
     thumbFace: '#ffffff',

@@ -172,6 +172,19 @@ class Registry {
     this.kick();
   }
 
+  private paused = false;
+
+  /**
+   * Tests that read the drawing's pixels from the canvas: take the glass out
+   * of the canvas (`true`) and put it back (`false`).
+   */
+  setPaused(on: boolean): void {
+    this.paused = on;
+    this.last = '';
+    if (on) this.target?.setGlass(null);
+    else this.kick();
+  }
+
   /** Something may have moved: measure on the next frames. */
   kick(): void {
     this.hotUntil = performance.now() + HOT_MS;
@@ -187,7 +200,7 @@ class Registry {
   /** Measures every surface and pushes the shapes to the WebGL backend when they changed. */
   collect(): void {
     const target = this.target;
-    if (!target) return;
+    if (!target || this.paused) return;
     const base = target.canvas.getBoundingClientRect();
     const shapes: GlassShape[] = [];
     for (const s of this.surfaces.values()) {

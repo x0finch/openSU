@@ -327,7 +327,7 @@ export function GlassSegmented<T extends string>({ value, onChange, segments, la
             // Pointer activations are handled on release (lens drag); a click with detail 0 is the keyboard.
             onClick={(e) => e.detail === 0 && (s.value !== valueRef.current || reselect) && onChange(s.value)}
             className={cx(
-              'lg-focus inline-flex h-full items-center justify-center rounded-full whitespace-nowrap text-ink-2 disabled:opacity-35',
+              'hit lg-focus inline-flex h-full items-center justify-center rounded-full whitespace-nowrap text-ink-2 disabled:opacity-35',
               tabs ? 'min-w-0 flex-1 flex-col gap-0.5 px-1' : cx('text-[14px] font-medium', compact ? 'px-3 max-[339px]:px-2' : 'px-[18px]'),
             )}
             style={tabs ? undefined : { minWidth: compact ? 44 : 60 }}
