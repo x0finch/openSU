@@ -446,11 +446,13 @@ if (wanted('checks')) {
     check(await page.getByTestId('hints').count() === 0 && (await page.evaluate(() => localStorage.getItem('opensu.hints.v1'))) === 'done', `${n}: the first interaction dismisses the hints for good`);
     await ctx.close();
   }
-  // No backdrop-filter anywhere in the built CSS.
+  // backdrop-filter only in the glass module's CSS backend (task 017), never
+  // in a rule that could apply over the WebGL canvas.
   {
     const dir = resolve(appRoot, 'dist/client/assets');
     const css = readdirSync(dir).filter((f) => f.endsWith('.css')).map((f) => readFileSync(resolve(dir, f), 'utf8')).join('\n');
-    check(css.length > 1000 && !/backdrop-filter/.test(css), 'no backdrop-filter in the built CSS');
+    const rules = [...css.matchAll(/([^{}]*)\{[^{}]*backdrop-filter:(?!\s*none)[^{}]*\}/g)].map((m) => m[1].trim());
+    check(css.length > 1000 && rules.every((sel) => sel.split(',').every((x) => x.includes('[data-backend=css]'))), `backdrop-filter only in the CSS glass backend (${rules.length} rules)`);
   }
 }
 
