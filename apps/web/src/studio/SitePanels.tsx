@@ -121,7 +121,7 @@ export function LocationPanel({ panel, desktop, onClose }: { panel: SitePanel; d
             </div>
           </div>
         )}
-        <label className="flex h-11 items-center gap-2 rounded-[11px] border border-hairline bg-white px-3 transition-colors focus-within:border-ink-3">
+        <label className="lg-field flex h-11 items-center gap-2 px-3">
           <SearchIcon width={17} height={17} className="shrink-0 text-ink-3" />
           <input
             ref={input}
@@ -230,7 +230,7 @@ function ManualCoords({ places, initial }: { places: PlacesModule | null; initia
           const name = t('loc.near', { name: placeName(near, lang) });
           if (await setPlace({ lat: la, lon: lo, tz: near.tz, name }, t('loc.edit', { name: coordText(round2(la), round2(lo)) }))) setPanel(null);
         }}
-        className="mt-2 h-10 w-full rounded-[11px] bg-ink text-[13px] font-medium text-white transition-opacity disabled:opacity-40"
+        className="mt-2 h-10 w-full rounded-[11px] bg-ink text-[13px] font-medium text-on-ink transition-opacity disabled:opacity-40"
         data-testid="loc-apply"
       >
         {t('loc.apply')}
@@ -297,7 +297,7 @@ export function OrientationPanel({ onClose }: { onClose: () => void }) {
                   setNorth(n);
                   commit(n);
                 }}
-                className={cx('h-8 rounded-full px-3 text-xs font-medium transition-colors', on ? 'bg-ink text-white' : 'bg-wash text-ink hover:bg-hairline')}
+                className={cx('h-8 rounded-full px-3 text-xs font-medium transition-colors', on ? 'bg-ink text-on-ink' : 'bg-wash text-ink hover:bg-hairline')}
               >
                 {bearingText(b, lang)}
               </button>

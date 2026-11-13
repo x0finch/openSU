@@ -1,10 +1,12 @@
-// Walk mode HUD: a hint pill, level chips (tap to take the stairs at
-// once), a mini-map (the floor plan with a position and heading marker),
-// and a touch joystick. The toolbar's "走进去 ×" exits (Escape too); the
-// sun panel stays available, so the sun can move while standing in a room.
+// Walk mode HUD, on the glass primitives (task 017): a hint capsule, level
+// chips (tap to take the stairs at once), a mini-map (the floor plan with a
+// position and heading marker) on a glass surface, and a touch joystick.
+// The tool group's "漫游 ×" exits (Escape too); the sun panel stays
+// available, so the sun can move while standing in a room.
 import { type CSSProperties, type PointerEvent as RPointerEvent, useEffect, useRef, useState } from 'react';
 import { CloseIcon } from '../components/icons';
 import { cx } from '../components/ui';
+import { Glass, GlassButton } from '../glass';
 import { levelName, useT } from '../lib/i18n';
 import { useStudio } from '../lib/store';
 import type { Derived } from './house-data';
@@ -55,7 +57,7 @@ function MiniMap({ derived, width }: { derived: Derived; width: number }) {
   }, [plan, ax, ay, k]);
 
   return (
-    <div className="relative overflow-hidden rounded-sm bg-white" style={{ width, height: plan ? height : Math.round(width * 0.8) }} role="img" aria-label={t('walk.map')}>
+    <div className="relative overflow-hidden rounded-[16px] bg-page" style={{ width, height: plan ? height : Math.round(width * 0.8) }} role="img" aria-label={t('walk.map')}>
       {plan && (
         <div
           className="absolute top-0 left-0 origin-top-left [&>svg]:block [&>svg]:h-full [&>svg]:w-full"
@@ -91,11 +93,8 @@ function Levels({ derived, size = 'md' }: { derived: Derived; size?: 'md' | 'lg'
             aria-pressed={on}
             aria-label={on ? name : t('walk.goto', { level: name })}
             onClick={() => !on && walkBridge.toLevel(l.id)}
-            className={cx(
-              'hit min-w-11 rounded-[6px] px-2.5 font-medium whitespace-nowrap transition-colors',
-              size === 'lg' ? 'h-11 text-sm' : 'h-7 text-xs',
-              on ? 'bg-ink text-white' : 'bg-wash text-ink-2 hover:text-ink',
-            )}
+            data-on={on ? '' : undefined}
+            className={cx('hit lg-plate min-w-11 px-3 whitespace-nowrap', size === 'lg' ? 'h-11 text-sm' : 'h-8 text-[13px]', on ? 'font-semibold text-ink' : 'font-medium text-ink-2')}
           >
             {name}
           </button>
@@ -109,14 +108,9 @@ function ExitWalk({ className }: { className?: string }) {
   const t = useT();
   const setWalk = useStudio((s) => s.setWalk);
   return (
-    <button
-      type="button"
-      onClick={() => setWalk(false)}
-      className={cx('glass pointer-events-auto inline-flex h-9 items-center gap-1.5 rounded-full pr-3.5 pl-2.5 text-sm font-medium text-ink', className)}
-    >
-      <CloseIcon width={16} height={16} />
+    <GlassButton size={44} glassClassName={className} icon={<CloseIcon width={16} height={16} />} onClick={() => setWalk(false)}>
       {t('walk.exit')}
-    </button>
+    </GlassButton>
   );
 }
 
@@ -135,36 +129,36 @@ function Joystick({ className, style }: { className?: string; style?: CSSPropert
     const f = d < 6 ? 0 : -y / R, st = d < 6 ? 0 : x / R;
     walkBridge.move(f, st);
   };
-  const down = (e: RPointerEvent<HTMLDivElement>) => {
+  const down = (e: RPointerEvent<HTMLElement>) => {
     const r = e.currentTarget.getBoundingClientRect();
     active.current = { id: e.pointerId, cx: r.left + r.width / 2, cy: r.top + r.height / 2 };
     e.currentTarget.setPointerCapture(e.pointerId);
     set(e.clientX - active.current.cx, e.clientY - active.current.cy);
   };
-  const move = (e: RPointerEvent<HTMLDivElement>) => {
+  const move = (e: RPointerEvent<HTMLElement>) => {
     const a = active.current;
     if (a && e.pointerId === a.id) set(e.clientX - a.cx, e.clientY - a.cy);
   };
-  const up = (e: RPointerEvent<HTMLDivElement>) => {
+  const up = (e: RPointerEvent<HTMLElement>) => {
     if (active.current?.id !== e.pointerId) return;
     active.current = null;
     set(0, 0);
   };
   useEffect(() => () => walkBridge.move(0, 0), []);
   return (
-    <div
-      className={cx('glass pointer-events-auto grid size-[124px] touch-none place-items-center rounded-full', className)}
+    <Glass
+      className={cx('pointer-events-auto grid size-[124px] touch-none place-items-center', className)}
       style={style}
       onPointerDown={down}
       onPointerMove={move}
       onPointerUp={up}
       onPointerCancel={up}
-      role="application"
+      ariaRole="application"
       aria-label={t('walk.joystick')}
       data-testid="walk-joystick"
     >
-      <div ref={knob} className="size-12 rounded-full bg-ink/85 shadow-float" />
-    </div>
+      <div ref={knob} className="lg-knob size-12" />
+    </Glass>
   );
 }
 
@@ -187,9 +181,9 @@ function WalkPill({ derived, touch, className, style }: { derived: Derived; touc
   const l = derived.levels.find((x) => x.id === id);
   const level = l ? levelName(lang, l.name, l.index, l.isAttic) : '';
   return (
-    <p className={cx('glass pointer-events-none truncate rounded-full px-3.5 py-[7px] text-center text-[12.5px] leading-5 text-ink', className)} style={style} role="status" data-testid="walk-pill">
+    <Glass ariaRole="status" className={cx('pointer-events-none truncate px-4 py-2 text-center text-[13px] leading-5 font-medium', className)} style={style} data-testid="walk-pill">
       {touch ? t('walk.pillTouch') : t('walk.pill', { level })}
-    </p>
+    </Glass>
   );
 }
 
@@ -203,13 +197,13 @@ export function WalkHUD({ derived, left = 0 }: { derived: Derived | null; left?:
       <div className="pointer-events-none absolute top-[76px] right-0 flex justify-center px-6" style={{ left }}>
         <WalkPill derived={derived} touch={false} className="max-w-full" />
       </div>
-      <div className="glass pointer-events-auto absolute top-[84px] w-[236px] rounded-ui p-2" style={{ left: left + 24 }} data-testid="walk-hud">
+      <Glass kind="text" radius={26} className="pointer-events-auto absolute top-[84px] w-[244px] p-3" style={{ left: left + 24 }} data-testid="walk-hud">
         <MiniMap derived={derived} width={220} />
-        <div className="mt-2 flex items-center justify-between gap-2 px-0.5">
+        <div className="mt-2 flex items-center justify-between gap-2">
           <Levels derived={derived} />
         </div>
-        <p className="mt-1.5 px-0.5 text-2xs leading-4 text-ink-3">{coarse ? t('walk.hintTouch') : t('walk.hint')}</p>
-      </div>
+        <p className="mt-1.5 px-1 text-[12px] leading-4 font-medium text-ink-2">{coarse ? t('walk.hintTouch') : t('walk.hint')}</p>
+      </Glass>
       {coarse && <Joystick className="absolute right-6 bottom-[100px]" />}
     </>
   );
@@ -223,12 +217,12 @@ export function MobileWalkHUD({ derived, top, bottom }: { derived: Derived | nul
       <div className="pointer-events-none absolute inset-x-3 flex flex-col items-center gap-2" style={{ top: `calc(${top} + 4px)` }}>
         <WalkPill derived={derived} touch className="max-w-full" />
         <div className="flex w-full items-start justify-between">
-          <div className="glass pointer-events-auto rounded-ui p-1">
+          <Glass className="pointer-events-auto p-1">
             <Levels derived={derived} size="lg" />
-          </div>
-          <div className="glass pointer-events-auto rounded-ui p-1" data-testid="walk-hud">
+          </Glass>
+          <Glass kind="text" radius={22} className="pointer-events-auto p-1.5" data-testid="walk-hud">
             <MiniMap derived={derived} width={112} />
-          </div>
+          </Glass>
         </div>
       </div>
       <Joystick className="absolute left-4 size-[112px]! transition-[bottom] duration-300 ease-out-soft" style={{ bottom: bottom + 12 }} />
@@ -249,17 +243,17 @@ export function LandscapeWalkHUD({ derived }: { derived: Derived | null }) {
     <div className="pointer-events-none absolute inset-0" data-testid="walk-landscape">
       <div className="absolute top-3 flex items-center gap-2" style={{ left }}>
         <ExitWalk />
-        <div className="glass pointer-events-auto rounded-ui p-1">
+        <Glass className="pointer-events-auto p-1.5">
           <Levels derived={derived} />
-        </div>
+        </Glass>
       </div>
-      <div className="glass pointer-events-auto absolute top-3 rounded-ui p-1" style={{ right }} data-testid="walk-hud">
+      <Glass kind="text" radius={22} className="pointer-events-auto absolute top-3 p-1.5" style={{ right }} data-testid="walk-hud">
         <MiniMap derived={derived} width={124} />
-      </div>
+      </Glass>
       <Joystick className="absolute bottom-3 size-[112px]!" style={{ left }} />
-      <div className="glass pointer-events-auto absolute bottom-3 flex w-[340px] items-center gap-2 rounded-ui py-1.5 pr-3 pl-1.5" style={{ right }}>
+      <Glass kind="text" radius={26} className="pointer-events-auto absolute bottom-3 flex w-[340px] items-center gap-2 py-1.5 pr-4 pl-1.5" style={{ right }}>
         <SunTime className="min-w-0 flex-1" />
-      </div>
+      </Glass>
     </div>
   );
 }

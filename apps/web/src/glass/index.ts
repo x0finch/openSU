@@ -3,7 +3,7 @@
 export { cx, Glass, GlassLayer, GlassLens, useGlass, usePress, type GlassProps } from './Glass';
 export {
   GlassButton, GlassButtonGroup, GlassChoice, GlassGroupButton, GlassInputBar, GlassMenu, GlassMenuItem, GlassPopover, GlassRow, GlassSegmented, GlassSep,
-  GlassSlider, GlassTextSurface, GlassToast, type GlassSegment, type PopoverProps,
+  GlassSheet, GlassSlider, GlassTextSurface, GlassToast, type GlassSegment, type PopoverProps,
 } from './primitives';
 export { glassRegistry, newGroup, type GlassBackend, type GlassTarget } from './registry';
 export { GLASS, TONES, type GlassRole, type GlassTone } from './material';

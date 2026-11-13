@@ -26,7 +26,7 @@ export function Tip({ label, side = 'left', children, className }: { label: Reac
       <span
         aria-hidden="true"
         className={cx(
-          'pointer-events-none absolute z-50 rounded-sm bg-ink px-2 py-1 text-xs whitespace-nowrap text-white opacity-0 shadow-float transition-opacity duration-150',
+          'pointer-events-none absolute z-50 rounded-sm bg-ink px-2 py-1 text-xs whitespace-nowrap text-white opacity-0 transition-opacity duration-150',
           'group-hover/tip:opacity-100 group-hover/tip:delay-300 group-has-[:focus-visible]/tip:opacity-100',
           tipSide[side],
         )}
@@ -44,7 +44,7 @@ export function IconButton({ label, active, className, children, tip, tipSide: s
       aria-label={label}
       className={cx(
         'grid size-10 place-items-center rounded-sm text-ink transition-colors duration-150',
-        active ? 'bg-ink text-white' : 'hover:bg-wash disabled:text-ink-3 disabled:hover:bg-transparent',
+        active ? 'bg-ink text-on-ink' : 'hover:bg-wash disabled:text-ink-3 disabled:hover:bg-transparent',
         className,
       )}
       {...rest}
@@ -99,7 +99,7 @@ export function Segmented<T extends string>({ value, onChange, segments, label, 
             className={cx(
               'relative flex flex-1 items-center justify-center gap-1.5 font-medium whitespace-nowrap transition-colors duration-150',
               size === 'lg' ? 'h-11 rounded-sm px-4 text-sm' : size === 'sm' ? 'h-8 rounded-[7px] px-2.5 text-xs' : 'h-8 rounded-sm px-3.5 text-sm',
-              on ? (soft ? 'bg-wash text-ink' : 'bg-ink text-white') : s.disabled ? 'text-ink-3' : 'text-ink-2 hover:bg-wash hover:text-ink',
+              on ? (soft ? 'bg-wash text-ink' : 'bg-ink text-on-ink') : s.disabled ? 'text-ink-3' : 'text-ink-2 hover:bg-wash hover:text-ink',
             )}
           >
             {s.label}

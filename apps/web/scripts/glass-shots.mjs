@@ -13,7 +13,7 @@ import { fileURLToPath } from 'node:url';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const appRoot = resolve(here, '..');
-const out = resolve(appRoot, '../../artifacts/task017');
+const out = resolve(appRoot, '../../artifacts/task017/phase-b');
 mkdirSync(out, { recursive: true });
 const onlyArg = process.argv.indexOf('--only');
 const only = onlyArg > 0 ? process.argv[onlyArg + 1].split(',') : null;
@@ -58,56 +58,139 @@ async function open(path, viewport = { width: 1440, height: 900 }, opts = {}) {
 const shot = (page, name) => page.screenshot({ path: resolve(out, `${name}.png`) });
 const counts = (page) => page.evaluate(() => ({ ...window.__studio.engine.viewer.frameCounts, pushes: window.__studio.glass.pushes }));
 
-if (wanted('desktop')) {
-  const { ctx, page } = await open('/studio?nohints');
-  await shot(page, 'desktop-idle');
-  // The sun popover morphing out of its button.
-  const before = await counts(page);
-  await page.click('[data-testid=bar-sun]');
-  await page.waitForTimeout(110);
-  await shot(page, 'desktop-sun-midmorph');
-  await page.waitForTimeout(1200);
-  const after = await counts(page);
-  report.sunOpen = { scene: after.scene - before.scene, glass: after.glass - before.glass, pushes: after.pushes - before.pushes };
-  await shot(page, 'desktop-sun-open');
-  await page.keyboard.press('Escape');
-  await page.waitForTimeout(900);
-  await shot(page, 'desktop-sun-closed');
-  await ctx.close();
-}
-if (wanted('chat')) {
-  const { ctx, page } = await open('/studio?nohints&panel=open');
+const PHONE = { isMobile: true, hasTouch: true };
+const exchange = async (page) => {
   await page.evaluate(() => {
-    const c = window.__studio.chat;
-    c.setState({ items: [
+    window.__studio.chat.setState({ items: [
       { id: 'u1', role: 'user', text: '把北侧房间加深 600' },
       { id: 'a1', role: 'assistant', text: '北墙外移 600 mm，厨房、楼梯和洗衣房一起变深。建筑面积 **+7.2 m²**。', phase: 'done' },
     ] });
   });
   await page.waitForTimeout(800);
-  await shot(page, 'desktop-chat');
+};
+const plain = async (path, viewport = { width: 1440, height: 900 }, opts = {}) => {
+  const ctx = await browser.newContext({ viewport, deviceScaleFactor: 1, ...opts });
+  const page = await ctx.newPage();
+  page.on('pageerror', (e) => console.log('pageerror', e.message));
+  await page.goto(`${base}${path}`);
+  return { ctx, page };
+};
+
+if (wanted('desktop')) {
+  const { ctx, page } = await open('/studio?nohints');
+  await shot(page, 'desktop-idle');
+  await page.hover('[data-testid=bar-levels]');
+  await page.waitForTimeout(700);
+  await shot(page, 'desktop-tooltip');
+  const before = await counts(page);
+  await page.click('[data-testid=bar-sun]');
+  await page.waitForTimeout(90);
+  await shot(page, 'desktop-sun-midmorph');
+  await page.waitForTimeout(1300);
+  const after = await counts(page);
+  report.sunOpen = { scene: after.scene - before.scene, glass: after.glass - before.glass, pushes: after.pushes - before.pushes };
+  await shot(page, 'desktop-sun-open');
+  await page.keyboard.press('Escape');
+  await page.waitForTimeout(900);
+  await page.click('[data-testid=project-menu]');
+  await page.waitForTimeout(900);
+  await shot(page, 'desktop-menu');
   await ctx.close();
 }
-if (wanted('phone')) {
-  const { ctx, page } = await open('/studio?nohints', { width: 390, height: 844 }, { isMobile: true, hasTouch: true });
-  await shot(page, 'phone-390-idle');
+if (wanted('firstvisit')) {
+  const { ctx, page } = await open('/studio');
+  await shot(page, 'desktop-first-visit');
   await ctx.close();
-  const p2 = await open('/studio?nohints&panel=open', { width: 390, height: 844 }, { isMobile: true, hasTouch: true });
-  await p2.page.click('[data-testid=chat-history]').catch(() => {});
-  await p2.ctx.close();
+}
+if (wanted('chat')) {
+  const { ctx, page } = await open('/studio?nohints&panel=open');
+  await exchange(page);
+  await shot(page, 'desktop-chat');
+  await ctx.close();
+  const p = await open('/studio?nohints&panel=pin');
+  await exchange(p.page);
+  await shot(p.page, 'desktop-pinned');
+  await p.ctx.close();
+}
+if (wanted('plan')) {
+  const { ctx, page } = await plain('/studio?nohints&mode=plan');
+  await page.waitForFunction(() => window.__studio?.planReady === true, null, { timeout: 120000 }).catch(() => {});
+  await page.waitForTimeout(1500);
+  await shot(page, 'desktop-plan');
+  await page.click('[data-testid=bar-levels]');
+  await page.waitForTimeout(1200);
+  await shot(page, 'desktop-plan-levels');
+  await ctx.close();
+}
+if (wanted('gallery')) {
+  const { ctx, page } = await plain('/studio?nohints&mode=sheet');
+  await page.waitForFunction(() => window.__sheets?.done === true, null, { timeout: 300000 }).catch(() => {});
+  await page.waitForTimeout(1000);
+  await shot(page, 'desktop-gallery');
+  await ctx.close();
+}
+if (wanted('walk')) {
+  const { ctx, page } = await open('/studio?nohints&walk=1');
+  await page.waitForFunction(() => window.__studio?.engine?.viewer?.walking === true, null, { timeout: 60000 });
+  await page.waitForTimeout(1500);
+  await shot(page, 'desktop-walk');
+  await ctx.close();
+}
+for (const [w, h] of [[390, 844], [360, 780]]) {
+  const n = `phone-${w}`;
+  if (wanted(n)) {
+    const { ctx, page } = await open('/studio?nohints', { width: w, height: h }, PHONE);
+    await shot(page, `${n}-idle`);
+    await page.getByTestId('bar-sun').click();
+    await page.waitForTimeout(1500);
+    await shot(page, `${n}-sun-sheet`);
+    await page.getByTestId('bar-views').click();
+    await page.waitForTimeout(1500);
+    await shot(page, `${n}-views-sheet`);
+    await ctx.close();
+    const c = await open('/studio?nohints&panel=open', { width: w, height: h }, PHONE);
+    await exchange(c.page);
+    await shot(c.page, `${n}-chat`);
+    await c.ctx.close();
+    const wk = await open('/studio?nohints&walk=1', { width: w, height: h }, PHONE);
+    await wk.page.waitForTimeout(2000);
+    await shot(wk.page, `${n}-walk`);
+    await wk.ctx.close();
+  }
+}
+if (wanted('phone-plan')) {
+  const { ctx, page } = await plain('/studio?nohints&mode=plan', { width: 390, height: 844 }, PHONE);
+  await page.waitForTimeout(4000);
+  await shot(page, 'phone-390-plan');
+  await ctx.close();
+}
+if (wanted('phone-gallery')) {
+  const { ctx, page } = await plain('/studio?nohints&mode=sheet', { width: 390, height: 844 }, PHONE);
+  await page.waitForFunction(() => window.__sheets?.done === true, null, { timeout: 300000 }).catch(() => {});
+  await page.waitForTimeout(1000);
+  await shot(page, 'phone-390-gallery');
+  await ctx.close();
+}
+if (wanted('landscape')) {
+  const { ctx, page } = await open('/studio?nohints', { width: 844, height: 390 }, PHONE);
+  await shot(page, 'phone-landscape-idle');
+  await page.getByTestId('bar-sun').click();
+  await page.waitForTimeout(1500);
+  await shot(page, 'phone-landscape-sun');
+  await ctx.close();
 }
 if (wanted('light')) {
   // Secondary reference: light glass (smoky glass is the default).
   const { ctx, page } = await open('/studio?nohints&glass=light');
   await page.click('[data-testid=bar-sun]');
-  await page.waitForTimeout(1200);
+  await page.waitForTimeout(1300);
   await shot(page, 'desktop-light-sun');
   await ctx.close();
 }
 if (wanted('css')) {
   const { ctx, page } = await open('/studio?nohints&glass=css');
   await page.click('[data-testid=bar-sun]');
-  await page.waitForTimeout(1200);
+  await page.waitForTimeout(1300);
   await shot(page, 'desktop-css-sun');
   await ctx.close();
 }

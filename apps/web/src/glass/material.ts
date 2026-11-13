@@ -20,7 +20,7 @@ interface Tone {
    */
   lensFace: string;
   thumbFace: string;
-  /** Ink of a tooltip (drawn in the glass ink colour). */
+  /** Ink of a tooltip (drawn in the glass ink colour), and of anything on an ink fill. */
   tipInk: string;
   saturation: number;
   brightness: number;
@@ -158,6 +158,7 @@ export function cssVars(tone: GlassTone): Record<string, string> {
     '--lg-lens-face': t.lensFace,
     '--lg-thumb-face': t.thumbFace,
     '--lg-tip-ink': t.tipInk,
+    '--lg-on-ink': t.tipInk,
     '--lg-sat': String(t.saturation),
     '--lg-bri': String(t.brightness),
     '--lg-blur': `${CSS_BLUR_PX}px`,

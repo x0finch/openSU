@@ -85,6 +85,7 @@ export function TitleMenu({ derived, onRect, compact }: { derived: Derived | nul
   const [open, setOpen] = useState(false);
   const box = useRef<HTMLDivElement>(null);
   const trigger = useRef<HTMLButtonElement>(null);
+  const pressOpened = useRef(-1e9);
   useEffect(() => {
     const el = box.current;
     if (!el || !onRect) return;
@@ -112,7 +113,16 @@ export function TitleMenu({ derived, onRect, compact }: { derived: Derived | nul
         aria-haspopup="menu"
         aria-expanded={open}
         aria-label={`${t('more.open')}: ${name}`}
-        onClick={() => setOpen(!open)}
+        onPointerDown={(e) => {
+          // Touch: the menu opens on press, so the finger can slide onto a row (scrub) and lift to choose.
+          if (e.pointerType === 'mouse' || open) return;
+          pressOpened.current = performance.now();
+          setOpen(true);
+        }}
+        onClick={() => {
+          if (performance.now() - pressOpened.current < 700) return;
+          setOpen(!open);
+        }}
         data-testid="project-menu"
         className={cx(
           'hit group -ml-1 flex max-w-[calc(100%+4px)] items-center gap-[7px] rounded-[10px] px-1 text-left text-canvas-ink transition-opacity hover:opacity-75',

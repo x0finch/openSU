@@ -5,7 +5,8 @@
 import { levelHeroViews, VIEWS_SHEET_VIEWS } from '@opensu/sheet';
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import { ChevronLeftIcon, ChevronRightIcon, CloseIcon, DownloadIcon, ShareIcon } from '../components/icons';
-import { cx, IconButton } from '../components/ui';
+import { cx } from '../components/ui';
+import { Glass, GlassButton } from '../glass';
 import { levelName, type MessageKey, useT } from '../lib/i18n';
 import { useStudio } from '../lib/store';
 import type { Derived } from './house-data';
@@ -131,8 +132,8 @@ export default function SheetGallery({ derived, desktop }: { derived: Derived; d
 
       {/* Above the conversation input, which stays at the bottom. */}
       <div className={cx('pointer-events-none absolute inset-x-0 flex justify-center', desktop ? 'bottom-[96px]' : 'bottom-[80px]')}>
-        <div className="glass pointer-events-auto flex items-center gap-1 rounded-ui p-1 pl-4" role="group" aria-label={t('sheets.label')}>
-          <p className="tnum mr-3 text-xs whitespace-nowrap text-ink-2" aria-live="polite">
+        <Glass ariaRole="group" aria-label={t('sheets.label')} className="pointer-events-auto flex h-12 items-center gap-1 pr-1.5 pl-5">
+          <p className="tnum mr-2 text-[13px] font-medium whitespace-nowrap text-ink-2" aria-live="polite">
             {snap.error ? t('sheets.error') : snap.done ? t('sheets.ready', { n: ready }) : t('sheets.generating', { n: Math.min(ready + 1, snap.count), total: snap.count })}
           </p>
           {!snap.done && <Spinner />}
@@ -140,7 +141,7 @@ export default function SheetGallery({ derived, desktop }: { derived: Derived; d
             type="button"
             disabled={!snap.done || !!snap.error}
             onClick={() => void downloadAll()}
-            className="inline-flex h-9 items-center gap-1.5 rounded-sm px-3 text-sm font-medium text-ink transition-colors hover:bg-wash disabled:text-ink-3 disabled:hover:bg-transparent"
+            className="lg-plate inline-flex h-9 items-center gap-1.5 px-3.5 text-sm font-semibold text-ink disabled:opacity-40"
           >
             <DownloadIcon width={17} height={17} />
             {t('sheets.downloadAll')}
@@ -150,13 +151,13 @@ export default function SheetGallery({ derived, desktop }: { derived: Derived; d
               type="button"
               disabled={!snap.done || !!snap.error}
               onClick={() => void shareAll()}
-              className="inline-flex h-9 items-center gap-1.5 rounded-sm bg-ink px-3.5 text-sm font-medium text-white transition-opacity hover:opacity-90 disabled:opacity-40"
+              className="lg-focus inline-flex h-9 items-center gap-1.5 rounded-full bg-ink px-4 text-sm font-semibold text-on-ink transition-opacity hover:opacity-90 disabled:opacity-40"
             >
               <ShareIcon width={17} height={17} />
               {t('sheets.share')}
             </button>
           )}
-        </div>
+        </Glass>
       </div>
 
       {preview !== null && (
@@ -207,9 +208,7 @@ function SheetCard({ index, meta, file, desktop, onOpen }: { index: number; meta
         </button>
         {file && desktop && (
           <span className="absolute top-2 right-2 opacity-0 transition-opacity duration-150 group-hover:opacity-100 focus-within:opacity-100">
-            <IconButton label={t('sheets.download')} tipSide="top" className="glass size-8" onClick={() => downloadFile(file, meta.file)}>
-              <DownloadIcon width={16} height={16} />
-            </IconButton>
+            <GlassButton size={36} label={t('sheets.download')} title={t('sheets.download')} icon={<DownloadIcon width={16} height={16} />} onClick={() => downloadFile(file, meta.file)} />
           </span>
         )}
       </div>
@@ -293,9 +292,7 @@ function Preview({
             {file ? ` · ${file.width} × ${file.height}` : ''}
           </p>
         </div>
-        <IconButton label={t('sheets.close')} tip={false} onClick={onClose} className="size-11">
-          <CloseIcon width={20} height={20} />
-        </IconButton>
+        <GlassButton size={44} label={t('sheets.close')} icon={<CloseIcon width={20} height={20} />} onClick={onClose} />
       </header>
       <div className="relative flex min-h-0 flex-1 items-center justify-center px-4">
         {file ? (
@@ -314,14 +311,10 @@ function Preview({
         {desktop && (
           <>
             <div className="absolute top-1/2 left-6 -translate-y-1/2">
-              <IconButton label={t('sheets.prev')} tipSide="right" onClick={() => go(-1)} className="size-11 rounded-full bg-white shadow-float hover:bg-white">
-                <ChevronLeftIcon width={22} height={22} />
-              </IconButton>
+              <GlassButton size={48} label={t('sheets.prev')} title={t('sheets.prev')} icon={<ChevronLeftIcon width={22} height={22} />} onClick={() => go(-1)} />
             </div>
             <div className="absolute top-1/2 right-6 -translate-y-1/2">
-              <IconButton label={t('sheets.next')} tipSide="left" onClick={() => go(1)} className="size-11 rounded-full bg-white shadow-float hover:bg-white">
-                <ChevronRightIcon width={22} height={22} />
-              </IconButton>
+              <GlassButton size={48} label={t('sheets.next')} title={t('sheets.next')} icon={<ChevronRightIcon width={22} height={22} />} onClick={() => go(1)} />
             </div>
           </>
         )}
@@ -334,21 +327,15 @@ function Preview({
             ))}
           </div>
         )}
-        <button
-          type="button"
-          disabled={!file}
-          onClick={() => file && downloadFile(file, meta.file)}
-          className="inline-flex h-10 items-center gap-1.5 rounded-sm border border-hairline bg-white px-4 text-sm font-medium text-ink transition-colors hover:bg-wash disabled:text-ink-3"
-        >
-          <DownloadIcon width={17} height={17} />
+        <GlassButton size={44} disabled={!file} onClick={() => file && downloadFile(file, meta.file)} icon={<DownloadIcon width={17} height={17} />} className="disabled:opacity-40">
           {t('sheets.download')}
-        </button>
+        </GlassButton>
         {shareable && (
           <button
             type="button"
             disabled={!file}
             onClick={() => file && void share([{ f: file, name: meta.file }], title)}
-            className={cx('inline-flex h-10 items-center gap-1.5 rounded-sm bg-ink px-4 text-sm font-medium text-white transition-opacity hover:opacity-90 disabled:opacity-40', !desktop && 'mr-3')}
+            className={cx('lg-focus inline-flex h-11 items-center gap-1.5 rounded-full bg-ink px-5 text-sm font-semibold text-page transition-opacity hover:opacity-90 disabled:opacity-40', !desktop && 'mr-3')}
           >
             <ShareIcon width={17} height={17} />
             {t('sheets.share')}

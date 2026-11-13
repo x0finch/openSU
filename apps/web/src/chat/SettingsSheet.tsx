@@ -17,7 +17,7 @@ function Field({ label, hint, children }: { label: string; hint?: ReactNode; chi
   );
 }
 
-const inputCls = 'h-10 w-full rounded-sm border border-hairline bg-white px-3 text-[13.5px] text-ink outline-none transition-colors placeholder:text-ink-3 focus:border-ink-3 [&:focus-visible]:outline-none';
+const inputCls = 'lg-field h-10 w-full px-3 text-[13.5px] text-ink outline-none transition-colors placeholder:text-ink-3 focus:border-ink-3 [&:focus-visible]:outline-none';
 
 export function SettingsSheet() {
   const t = useT();
@@ -43,7 +43,7 @@ export function SettingsSheet() {
   const serverLine = !server ? t('settings.server.unknown') : server.serverKey ? t('settings.server.on', { provider: providerName(server.provider), model: server.model ?? '' }) : t('settings.server.off');
 
   return (
-    <div className="absolute inset-0 z-10 flex animate-[fade-in_140ms_ease-out] flex-col bg-white" role="dialog" aria-label={t('settings.title')} data-testid="settings-sheet">
+    <div className="flex min-h-0 flex-1 animate-[fade-in_140ms_ease-out] flex-col" role="dialog" aria-label={t('settings.title')} data-testid="settings-sheet">
       <div className="flex h-11 shrink-0 items-center gap-1 border-b border-hairline px-1.5">
         <button type="button" onClick={close} className="inline-flex h-8 items-center gap-0.5 rounded-[6px] pr-2 pl-1 text-sm text-ink-2 transition-colors hover:bg-wash hover:text-ink">
           <ChevronLeftIcon width={17} height={17} />
@@ -61,8 +61,8 @@ export function SettingsSheet() {
           <span className="text-[13.5px] font-medium text-ink">{t('settings.own')}</span>
           <span className="relative inline-flex">
             <input type="checkbox" className="peer sr-only" checked={own} onChange={(e) => up({ useOwn: e.target.checked })} data-testid="settings-own" />
-            <span className="h-6 w-10 rounded-full bg-hairline transition-colors peer-checked:bg-ink peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-ink" />
-            <span className="absolute top-0.5 left-0.5 size-5 rounded-full bg-white shadow-[0_1px_3px_rgba(0,0,0,0.2)] transition-transform duration-150 peer-checked:translate-x-4" />
+            <span className="h-6 w-10 rounded-full bg-hairline transition-colors peer-checked:bg-accent peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-ink" />
+            <span className="lg-knob absolute top-0.5 left-0.5 size-5 transition-transform duration-150 peer-checked:translate-x-4" />
           </span>
         </label>
 
@@ -122,7 +122,7 @@ export function SettingsSheet() {
         ) : (
           <span className="text-2xs text-ink-3">{usesOwnKey(saved) ? t('settings.using.own') : server?.serverKey ? t('settings.using.server') : ''}</span>
         )}
-        <button type="button" onClick={save} className="h-9 min-w-20 rounded-sm bg-ink px-4 text-sm font-medium text-white transition-opacity hover:opacity-90" data-testid="settings-save">
+        <button type="button" onClick={save} className="h-9 min-w-20 rounded-sm bg-ink px-4 text-sm font-medium text-on-ink transition-opacity hover:opacity-90" data-testid="settings-save">
           {flash ? t('settings.saved') : t('settings.save')}
         </button>
       </div>

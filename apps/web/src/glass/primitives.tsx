@@ -79,14 +79,24 @@ export function GlassButton({ icon, children, label, size = 48, accent, classNam
 export interface GlassSegment<T extends string> {
   value: T;
   label: ReactNode;
+  /** Tab bar: the icon above the label. */
+  icon?: ReactNode;
+  ariaLabel?: string;
+  disabled?: boolean;
+  /** Extra attributes of the item's button (test ids, aria-controls...). */
+  props?: Record<string, string | boolean | undefined>;
 }
 
 /**
  * Radio group in a capsule. The selected segment is a slightly denser lens
  * that slides with a spring; pressed or dragged it lifts into a clear
  * magnifying lens over the labels and settles back on release (2b.2).
+ * `variant="tabs"`: the phone tool bar (icon over label, items share the
+ * width, buttons rather than radios); `value` may be null (no lens at
+ * rest) and `reselect` reports a tap on the selected item too.
  */
-export function GlassSegmented<T extends string>({ value, onChange, segments, label, className, height = 48, compact, testId }: { value: T; onChange: (v: T) => void; segments: GlassSegment<T>[]; label: string; className?: string; height?: number; compact?: boolean; testId?: string }) {
+export function GlassSegmented<T extends string>({ value, onChange, segments, label, className, height = 48, compact, testId, variant = 'segments', reselect }: { value: T | null; onChange: (v: T) => void; segments: GlassSegment<T>[]; label: string; className?: string; height?: number; compact?: boolean; testId?: string; variant?: 'segments' | 'tabs'; reselect?: boolean }) {
+  const tabs = variant === 'tabs';
   const box = useRef<HTMLElement | null>(null);
   const row = useRef<HTMLDivElement>(null);
   const lens = useRef<HTMLDivElement>(null);
@@ -112,6 +122,7 @@ export function GlassSegmented<T extends string>({ value, onChange, segments, la
     L.style.height = `${h}px`;
     L.style.transform = `scale(${sx}, ${sy})`;
     L.style.setProperty('--lg-lift', clamp(lift, 0, 1).toFixed(3));
+    L.style.opacity = valueRef.current === null ? clamp(lift, 0, 1).toFixed(3) : '';
     // The copy of the labels inside the lens, magnified about its centre.
     const cxL = w / 2, cyL = h / 2, CX = x + cxL, CY = pad + cyL;
     const kx = mag / sx, ky = mag / sy;
@@ -125,8 +136,8 @@ export function GlassSegmented<T extends string>({ value, onChange, segments, la
   const springs = useRef<{ x: Spring; w: Spring; lift: Spring } | null>(null);
   if (!springs.current) springs.current = { x: new Spring(0, SPRINGS.slide, () => paint()), w: new Spring(0, SPRINGS.slide, () => paint()), lift: new Spring(0, SPRINGS.lift, () => paint()) };
 
-  const goTo = useCallback((v: T, instant = false) => {
-    const sl = slots().find((s) => s.value === v);
+  const goTo = useCallback((v: T | null, instant = false) => {
+    const sl = v === null ? undefined : slots().find((s) => s.value === v);
     if (!sl) return;
     const s = springs.current!;
     s.x.set(sl.left, { instant, preset: SPRINGS.slide });
@@ -164,6 +175,14 @@ export function GlassSegmented<T extends string>({ value, onChange, segments, la
     const r = el.getBoundingClientRect();
     const s = springs.current!;
     clearTimeout(settleTimer.current);
+    const px = e.clientX - r.left;
+    const hit = slots().find((q) => px >= q.left && px < q.left + q.width);
+    if ((e.target as Element).closest('button:disabled')) return;
+    // Nothing selected: the lens appears under the finger.
+    if (valueRef.current === null && hit) {
+      s.x.set(hit.left, { instant: true });
+      s.w.set(hit.width, { instant: true });
+    }
     drag.current = { id: e.pointerId, x0: e.clientX, moved: false, grab: e.clientX - r.left - s.x.value };
     s.lift.set(1, { preset: SPRINGS.lift });
   };
@@ -197,8 +216,8 @@ export function GlassSegmented<T extends string>({ value, onChange, segments, la
     if (!d || d.id !== e.pointerId) return;
     drag.current = null;
     const s = springs.current!;
-    let target = valueRef.current;
-    const sl = slots();
+    let target: T | null = valueRef.current;
+    const sl = slots().filter((q) => !row.current?.querySelector<HTMLButtonElement>(`[data-seg="${q.value}"]`)?.disabled);
     if (d.moved) {
       const c = s.x.value + s.w.value / 2;
       let best = sl[0];
@@ -210,8 +229,12 @@ export function GlassSegmented<T extends string>({ value, onChange, segments, la
       const hit = sl.find((q) => px >= q.left && px < q.left + q.width);
       if (hit) target = hit.value;
     }
-    goTo(target);
-    if (target !== valueRef.current) onChange(target);
+    if (target === null) {
+      s.lift.set(0, { preset: SPRINGS.lift });
+      return;
+    }
+    if (target !== valueRef.current) goTo(target);
+    if (target !== valueRef.current || reselect) onChange(target);
     // Lifted while it travels, then it settles into a solid selection.
     settleTimer.current = window.setTimeout(() => s.lift.set(0, { preset: SPRINGS.lift }), d.moved ? 60 : 160);
   };
@@ -221,6 +244,13 @@ export function GlassSegmented<T extends string>({ value, onChange, segments, la
     const d = e.key === 'ArrowRight' || e.key === 'ArrowDown' ? 1 : e.key === 'ArrowLeft' || e.key === 'ArrowUp' ? -1 : 0;
     if (!d) return;
     e.preventDefault();
+    if (tabs) {
+      // A tool bar: arrows move the focus; Enter or Space opens.
+      const items = [...(row.current?.querySelectorAll<HTMLButtonElement>('[data-seg]:not(:disabled)') ?? [])];
+      const i = items.indexOf(document.activeElement as HTMLButtonElement);
+      items[(i + d + items.length) % items.length]?.focus();
+      return;
+    }
     const i = Math.max(0, segments.findIndex((s) => s.value === value));
     const next = segments[(i + d + segments.length) % segments.length]!;
     onChange(next.value);
@@ -234,6 +264,7 @@ export function GlassSegmented<T extends string>({ value, onChange, segments, la
     const r = el.getBoundingClientRect();
     const s = springs.current!;
     const lift = clamp(s.lift.value, 0, 1.2);
+    if (valueRef.current === null && lift < 0.01) return null;
     const w = s.w.value + Math.min(GLASS.lensStretchMax, Math.abs(s.x.velocity) * GLASS.lensStretch), h = geo.current.h;
     const W = w + GLASS.lensGrowX * lift, H = h + GLASS.lensGrowY * lift;
     const cxv = r.left + s.x.value + s.w.value / 2, cyv = r.top + pad + h / 2;
@@ -245,47 +276,64 @@ export function GlassSegmented<T extends string>({ value, onChange, segments, la
       magnify: 1 + (GLASS.lensMagnify - 1) * l01,
       bend: 1 + (GLASS.lensBend - 1) * l01,
       lift: 1 + (GLASS.lensLift - 1) * l01,
+      alpha: valueRef.current === null ? l01 : 1,
     };
   };
 
+  const face = (s: GlassSegment<T>, sel: boolean) =>
+    tabs ? (
+      <>
+        <span className="grid h-6 place-items-center">{s.icon}</span>
+        <span className={cx('max-w-full truncate text-[10.5px] leading-3', sel ? 'font-semibold' : 'font-medium')}>{s.label}</span>
+      </>
+    ) : (
+      s.label
+    );
   const labels = () =>
     segments.map((s) => {
       const sl = slotState.find((q) => q.value === s.value);
       return (
-        <span key={s.value} className="absolute top-0 inline-flex h-full items-center justify-center text-[14px] font-semibold whitespace-nowrap text-ink" style={{ left: sl?.left ?? 0, width: sl?.width ?? 0 }}>
-          {s.label}
+        <span key={s.value} className={cx('absolute top-0 inline-flex h-full items-center justify-center whitespace-nowrap text-ink', tabs ? 'flex-col gap-0.5' : 'text-[14px] font-semibold')} style={{ left: sl?.left ?? 0, width: sl?.width ?? 0 }}>
+          {face(s, true)}
         </span>
       );
     });
   return (
     <Glass
       ref={box}
-      ariaRole="radiogroup"
+      ariaRole={tabs ? 'toolbar' : 'radiogroup'}
       aria-label={label}
       onKeyDown={onKey}
       onPointerDown={onPointerDown}
       onPointerMove={onPointerMove}
       onPointerUp={onPointerUp}
       onPointerCancel={onPointerUp}
-      className={cx('pointer-events-auto relative inline-flex touch-pan-y items-stretch select-none', className)}
+      className={cx('pointer-events-auto relative touch-pan-y items-stretch select-none', tabs ? 'flex' : 'inline-flex', className)}
       style={{ height, padding: pad }}
       data-testid={testId}
     >
-      <div ref={row} className="relative flex">
+      <div ref={row} className={cx('relative flex', tabs && 'flex-1')}>
         {segments.map((s) => (
           <button
             key={s.value}
             type="button"
-            role="radio"
-            aria-checked={s.value === value}
-            tabIndex={s.value === value ? 0 : -1}
+            role={tabs ? undefined : 'radio'}
+            aria-checked={tabs ? undefined : s.value === value}
+            aria-label={s.ariaLabel}
+            tabIndex={tabs || s.value === value || (value === null && s === segments[0]) ? 0 : -1}
+            disabled={s.disabled}
             data-seg={s.value}
             data-value={s.value}
-            onClick={() => s.value !== valueRef.current && onChange(s.value)}
-            className={cx('lg-focus inline-flex h-full items-center justify-center rounded-full text-[14px] font-medium whitespace-nowrap text-ink-2', compact ? 'px-3 max-[339px]:px-2' : 'px-[18px]')}
-            style={{ minWidth: compact ? 44 : 60 }}
+            // Pointer activations are handled on release (lens drag); a click with detail 0 is the keyboard.
+            onClick={(e) => e.detail === 0 && (s.value !== valueRef.current || reselect) && onChange(s.value)}
+            className={cx(
+              'lg-focus inline-flex h-full items-center justify-center rounded-full whitespace-nowrap text-ink-2 disabled:opacity-35',
+              tabs ? 'min-w-0 flex-1 flex-col gap-0.5 px-1' : cx('text-[14px] font-medium', compact ? 'px-3 max-[339px]:px-2' : 'px-[18px]'),
+            )}
+            style={tabs ? undefined : { minWidth: compact ? 44 : 60 }}
+            {...s.props}
           >
-            {s.label}
+            {face(s, false)}
           </button>
         ))}
       </div>
@@ -440,7 +488,7 @@ export function GlassPopover({ open, anchor, radius = GLASS.radiusPanel, kind = 
   if (!mounted) return null;
   const shape = (): ShapeOverride | null => {
     const s = springs.current!;
-    if (s.reduced) return { alpha: s.fade.value, radius };
+    if (s.reduced) return { radius };
     const m = morphRect();
     if (!m) return null;
     const t = clamp(m.t, 0, 1.2);
@@ -462,10 +510,73 @@ export function GlassPopover({ open, anchor, radius = GLASS.radiusPanel, kind = 
   );
 }
 
-/** A menu: a popover with menu semantics; rows separated by inset hairlines. */
-export function GlassMenu({ label, children, ...rest }: PopoverProps & { label: string }) {
+/**
+ * Touch scrubbing (2b.3): while a finger is down (also the press that
+ * opened the menu), the row under it is highlighted; lifting the finger on
+ * a row after moving selects it.
+ */
+function useMenuScrub(open: boolean, menu: { current: HTMLElement | null }): void {
+  useEffect(() => {
+    if (!open) return;
+    let active: number | null = null;
+    let start = { x: 0, y: 0 };
+    let moved = false;
+    let lit: HTMLElement | null = null;
+    const light = (el: HTMLElement | null) => {
+      if (lit === el) return;
+      lit?.removeAttribute('data-scrub');
+      lit = el;
+      lit?.setAttribute('data-scrub', '');
+    };
+    const down = (e: PointerEvent) => {
+      if (e.pointerType === 'mouse') return;
+      active = e.pointerId;
+      start = { x: e.clientX, y: e.clientY };
+      moved = false;
+    };
+    const move = (e: PointerEvent) => {
+      if (e.pointerType === 'mouse') return;
+      if (active === null) {
+        // The press that opened the menu is still down: adopt it.
+        active = e.pointerId;
+        start = { x: e.clientX, y: e.clientY };
+      }
+      if (e.pointerId !== active) return;
+      if (Math.hypot(e.clientX - start.x, e.clientY - start.y) > 8) moved = true;
+      const hit = document.elementFromPoint(e.clientX, e.clientY)?.closest<HTMLElement>('[role=menuitem]') ?? null;
+      light(hit && menu.current?.contains(hit) ? hit : null);
+    };
+    const up = (e: PointerEvent) => {
+      if (e.pointerId !== active) return;
+      active = null;
+      const hit = lit;
+      light(null);
+      if (moved && hit) {
+        e.preventDefault();
+        hit.click();
+      }
+    };
+    window.addEventListener('pointerdown', down, true);
+    window.addEventListener('pointermove', move, true);
+    window.addEventListener('pointerup', up, true);
+    window.addEventListener('pointercancel', up, true);
+    return () => {
+      light(null);
+      window.removeEventListener('pointerdown', down, true);
+      window.removeEventListener('pointermove', move, true);
+      window.removeEventListener('pointerup', up, true);
+      window.removeEventListener('pointercancel', up, true);
+    };
+  }, [open, menu]);
+}
+
+/** A menu: a popover with menu semantics; rows separated by inset hairlines; touch scrubbing. */
+export function GlassMenu({ label, children, ref, ...rest }: PopoverProps & { label: string }) {
+  const el = useRef<HTMLElement | null>(null);
+  const merged = useMergedRef(el, ref);
+  useMenuScrub(rest.open, el);
   return (
-    <GlassPopover ariaRole="menu" aria-label={label} kind="text" radius={22} {...rest}>
+    <GlassPopover ref={merged} ariaRole="menu" aria-label={label} kind="text" radius={22} {...rest}>
       <div className="flex flex-col p-1.5">{children}</div>
     </GlassPopover>
   );
@@ -680,5 +791,169 @@ export function GlassSlider({ min, max, value, onChange, ariaLabel, ariaValueTex
       />
       {children}
     </div>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/* Phone sheet                                                         */
+/* ------------------------------------------------------------------ */
+
+const SHEET_GRAB = 22;
+
+/**
+ * An inset glass sheet (radius 34, a small gap from the screen edges) that
+ * grows from the bottom (2b.5). Two detents: fit (its content, capped) and
+ * large; drag it with velocity, it rubber-bands past large, and a flick
+ * down or a drag below half the fit height dismisses it (`onClose`). The
+ * sheet spring has no bounce. `onHeight` reports the height every frame
+ * (what rides on top of it follows). `fixed`: a fixed fit height instead
+ * of the content's (the pinned conversation).
+ */
+export function GlassSheet({ open, large, fixed, onClose, onClosed, onHeight, className, style, children, testId, ariaLabel, dataKind }: {
+  open: boolean;
+  large: number;
+  fixed?: number;
+  onClose: () => void;
+  onClosed?: () => void;
+  onHeight?: (h: number, target: number) => void;
+  className?: string;
+  style?: CSSProperties;
+  children: ReactNode;
+  testId?: string;
+  ariaLabel?: string;
+  dataKind?: string;
+}) {
+  const [mounted, setMounted] = useState(open);
+  const el = useRef<HTMLElement | null>(null);
+  const body = useRef<HTMLDivElement>(null);
+  const content = useRef<HTMLDivElement>(null);
+  const detent = useRef<'fit' | 'large'>('fit');
+  const openRef = useRef(open);
+  openRef.current = open;
+  const cb = useRef({ onHeight, onClosed, onClose });
+  cb.current = { onHeight, onClosed, onClose };
+  const fitOf = () => Math.min(large, fixed ?? (content.current ? Math.ceil(content.current.offsetHeight) + SHEET_GRAB : 200));
+  const target = useRef(0);
+  const paint = () => {
+    const e = el.current;
+    const h = Math.max(0, spring.current!.value);
+    if (e) {
+      e.style.height = `${h}px`;
+      e.style.visibility = h < 1 ? 'hidden' : '';
+    }
+    if (body.current) {
+      const scroll = detent.current === 'large' && !drag.current;
+      body.current.style.overflowY = scroll ? 'auto' : 'hidden';
+      body.current.style.touchAction = scroll ? 'pan-y' : 'none';
+    }
+    cb.current.onHeight?.(h, target.current);
+    if (!openRef.current && h <= 0.5 && !spring.current!.moving && !drag.current) {
+      setMounted(false);
+      cb.current.onClosed?.();
+    }
+  };
+  const spring = useRef<Spring | null>(null);
+  if (!spring.current) spring.current = new Spring(0, SPRINGS.sheet, () => paint());
+  const go = (h: number, velocity?: number) => {
+    target.current = h;
+    spring.current!.set(h, { preset: SPRINGS.sheet, velocity, always: true });
+    if (prefersReducedMotion()) spring.current!.set(h, { instant: true });
+  };
+
+  useLayoutEffect(() => {
+    if (open) setMounted(true);
+  }, [open]);
+  useLayoutEffect(() => {
+    if (!mounted) return;
+    if (open) {
+      detent.current = 'fit';
+      go(fitOf());
+    } else go(0);
+    paint();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, mounted, fixed, large]);
+  // New content (another tool): the fit detent follows it.
+  useLayoutEffect(() => {
+    const c = content.current;
+    if (!c || !mounted) return;
+    const ro = new ResizeObserver(() => {
+      if (openRef.current && !drag.current && detent.current === 'fit') go(fitOf());
+    });
+    ro.observe(c);
+    return () => ro.disconnect();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mounted, fixed, large]);
+
+  const drag = useRef<{ id: number; y: number; h0: number; t: number; v: number; lastY: number } | null>(null);
+  const onPointerDown = (e: React.PointerEvent) => {
+    if (e.button > 0) return;
+    const t = e.target as Element;
+    const top = el.current!.getBoundingClientRect().top;
+    // The grabber and the top strip always drag; elsewhere controls keep their gestures and a scrolled list scrolls.
+    if (e.clientY - top > 56 && (t.closest('button, input, textarea, a, select, [role=slider], [role=radio], [contenteditable]') || (body.current?.scrollTop ?? 0) > 0)) return;
+    if (e.clientY - top > 56 && detent.current === 'large') return;
+    drag.current = { id: e.pointerId, y: e.clientY, h0: spring.current!.value, t: performance.now(), v: 0, lastY: e.clientY };
+    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+    el.current?.setAttribute('data-dragging', '');
+  };
+  const onPointerMove = (e: React.PointerEvent) => {
+    const d = drag.current;
+    if (!d || d.id !== e.pointerId) return;
+    const now = performance.now();
+    const dt = Math.max(1, now - d.t) / 1000;
+    // Velocity of the height (up = positive), smoothed.
+    d.v = d.v * 0.6 + (((d.lastY - e.clientY) / dt) * 0.4);
+    d.t = now;
+    d.lastY = e.clientY;
+    let h = d.h0 - (e.clientY - d.y);
+    // Rubber band past the large detent.
+    if (h > large) h = large + (1 - 1 / (1 + (h - large) / 220)) * 70;
+    spring.current!.set(Math.max(0, h), { instant: true });
+  };
+  const onPointerUp = (e: React.PointerEvent) => {
+    const d = drag.current;
+    if (!d || d.id !== e.pointerId) return;
+    drag.current = null;
+    el.current?.removeAttribute('data-dragging');
+    const h = spring.current!.value;
+    const fit = fitOf();
+    const projected = h + d.v * 0.18;
+    if (Math.abs(h - d.h0) < 3) {
+      go(detent.current === 'large' ? large : fit);
+      return;
+    }
+    if (d.v < -900 || projected < fit * 0.5) {
+      cb.current.onClose();
+      return;
+    }
+    detent.current = Math.abs(projected - large) < Math.abs(projected - fit) ? 'large' : 'fit';
+    go(detent.current === 'large' ? large : fit, d.v);
+  };
+
+  if (!mounted) return null;
+  return (
+    <Glass
+      ref={el}
+      as="section"
+      kind="text"
+      radius={34}
+      aria-label={ariaLabel}
+      className={cx('pointer-events-auto absolute flex flex-col overflow-hidden', className)}
+      style={{ height: 0, ...style }}
+      data-testid={testId}
+      data-kind={dataKind}
+      data-open={open ? '' : undefined}
+      onPointerDown={onPointerDown}
+      onPointerMove={onPointerMove}
+      onPointerUp={onPointerUp}
+      onPointerCancel={onPointerUp}
+    >
+      <div className="flex h-[22px] shrink-0 cursor-grab touch-none items-start justify-center pt-2" data-testid="sheet-grab" aria-hidden="true">
+        <span className="h-[5px] w-9 rounded-full bg-[var(--lg-ink-2)] opacity-50" />
+      </div>
+      <div ref={body} className="min-h-0 flex-1 overflow-hidden overscroll-contain">
+        <div ref={content}>{children}</div>
+      </div>
+    </Glass>
   );
 }

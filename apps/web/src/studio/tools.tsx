@@ -1,15 +1,15 @@
-// The studio's tools (task 015): one toolbar (视角 / 楼层 / 日照 / 走进去) and
-// the panel a tool needs. Desktop: compact icons top-right whose label
-// slides out on hover, focus and while the tool is in use; the panel is a
-// card hanging under the toolbar. Phone: the toolbar sits at the bottom
-// with labels; the panel is a bottom sheet the toolbar rides on (PhoneDock).
+// The studio's tools (tasks 015, 017): one tool group (视角 / 楼层 / 日照 / 漫游) and
+// the panel a tool needs, all on the glass primitives. Desktop: a glass
+// group top-right, icons with name tooltips; a panel flows out of the whole
+// group. Phone: a tab-bar capsule at the bottom (icon over label); the panel
+// is an inset glass sheet the tool bar rides on (PhoneDock).
 import { Fragment, type KeyboardEvent as RKeyboardEvent, type ReactNode, useLayoutEffect, useRef, useState } from 'react';
 import {
   ChevronLeftIcon, ChevronRightIcon, CheckIcon, CloseIcon, CubeIcon, FitIcon, LayersIcon, MinusIcon, PauseIcon, PinIcon, PlayIcon, PlusIcon, ResetViewIcon,
   SunIcon, ViewIcon,
 } from '../components/icons';
 import { cx } from '../components/ui';
-import { GlassButtonGroup, GlassChoice, GlassGroupButton, GlassPopover, GlassRow, GlassSep, GlassSlider } from '../glass';
+import { GlassButtonGroup, GlassChoice, GlassSegmented, GlassGroupButton, GlassPopover, GlassRow, GlassSep, GlassSlider } from '../glass';
 import { levelName, type MessageKey, useT } from '../lib/i18n';
 import { bearingText, bearingWords, frontBearing, placeText, utcText } from '../lib/site';
 import { SUN_DATES, type SunDateId, type Tray, useStudio } from '../lib/store';
@@ -37,197 +37,8 @@ export function useOpenPanel(): Tray | 'site' | null {
 }
 
 /* ------------------------------------------------------------------ */
-/* Toolbar                                                             */
+/* Tools                                                               */
 /* ------------------------------------------------------------------ */
-
-function ToolButton({ icon, label, on, set, show, onClick, ariaLabel, controls, expanded, testId, phone }: {
-  icon: ReactNode; label: ReactNode; on?: boolean; set?: boolean; show?: boolean; onClick: () => void; ariaLabel: string; controls?: string; expanded?: boolean; testId?: string; phone?: boolean;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      aria-label={ariaLabel}
-      aria-expanded={expanded}
-      aria-pressed={expanded === undefined ? on : undefined}
-      aria-controls={controls}
-      data-testid={testId}
-      data-tool-trigger=""
-      data-show={show ? '' : undefined}
-      className={cx(
-        'tool tnum inline-flex items-center justify-center text-[13px] whitespace-nowrap transition-colors duration-150',
-        phone ? 'h-11 min-w-0 flex-1 rounded-[11px] px-1.5' : 'h-9 min-w-9 rounded-[9px] px-[9px]',
-        on ? 'bg-ink text-white' : set ? 'bg-wash text-ink' : 'text-ink hover:bg-wash',
-      )}
-    >
-      {icon}
-      <span className="tool-label">
-        <span>{label}</span>
-      </span>
-    </button>
-  );
-}
-
-function IconTool({ label, onClick, children, phone }: { label: string; onClick: () => void; children: ReactNode; phone?: boolean }) {
-  return (
-    <button type="button" aria-label={label} title={label} onClick={onClick} className={cx('grid place-items-center rounded-[9px] text-ink transition-colors hover:bg-wash', phone ? 'h-11 min-w-0 flex-1' : 'size-9')}>
-      {children}
-    </button>
-  );
-}
-
-const Divider = () => <span className="mx-[3px] h-5 w-px shrink-0 bg-hairline" aria-hidden="true" />;
-
-/**
- * Do all labels fit beside their icons (phone row)? Measured: below about
- * 300 px only the tool in use keeps its label.
- */
-function useLabelsFit(ref: React.RefObject<HTMLDivElement | null>, enabled: boolean, deps: unknown[]): boolean {
-  const [fit, setFit] = useState(true);
-  useLayoutEffect(() => {
-    const el = ref.current;
-    if (!el || !enabled) return;
-    const measure = () => {
-      const btns = [...el.querySelectorAll<HTMLElement>('.tool')];
-      const style = getComputedStyle(el);
-      const avail = el.clientWidth - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight) - 2 * Math.max(0, el.children.length - 1);
-      let need = 0;
-      for (const b of btns) need += 12 + 16 + 6 + ((b.querySelector('.tool-label > span') as HTMLElement | null)?.scrollWidth ?? 0);
-      for (const b of el.querySelectorAll<HTMLElement>(':scope > :not(.tool)')) need += b.offsetWidth;
-      setFit(need <= avail);
-    };
-    measure();
-    const ro = new ResizeObserver(measure);
-    ro.observe(el);
-    return () => ro.disconnect();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [enabled, ...deps]);
-  return fit;
-}
-
-/**
- * The four tools (3D), or levels and zoom (plan). `phone`: the bottom row
- * with labels; otherwise the compact desktop group.
- */
-export function Toolbar({ derived, phone, className }: { derived: Derived | null; phone?: boolean; className?: string }) {
-  const t = useT();
-  const lang = useStudio((s) => s.lang);
-  const mode = useStudio((s) => s.mode);
-  const tray = useStudio((s) => s.tray);
-  const sitePanel = useStudio((s) => s.sitePanel);
-  const setTray = useStudio((s) => s.setTray);
-  const walk = useStudio((s) => s.walk);
-  const setWalk = useStudio((s) => s.setWalk);
-  const cut = useStudio((s) => s.cut);
-  const level = useStudio((s) => s.level);
-  const view = useStudio((s) => s.view);
-  const sun = useStudio((s) => s.sun);
-  const polarNight = useStudio((s) => s.sunInfo?.polar === 'night');
-  const setSun = useStudio((s) => s.setSun);
-  const sunLabel = polarNight ? t('sun.polarNight') : clock(sun.minutes, lang);
-  const ref = useRef<HTMLDivElement>(null);
-  const levels = derived?.levels ?? null;
-  const lv = (id: string | null) => {
-    const l = levels?.find((x) => x.id === id);
-    return l ? levelName(lang, l.name, l.index, l.isAttic) : null;
-  };
-  // A site panel opened from the sun panel keeps the sun tool marked.
-  const open = (k: Tray) => tray === k && (!sitePanel || (k === 'sun' && !!sitePanel.fromSun));
-  const toggle = (k: Tray) => setTray(open(k) ? null : k);
-  const fit = useLabelsFit(ref, !!phone, [lang, mode, cut, sun.on, walk, view, level]);
-  const icon = { width: 16, height: 16, className: 'shrink-0' };
-  const viewLabel = view !== DEFAULT_VIEW ? t(`viewShort.${view}` as MessageKey) || t(`view.${view}`) : t('bar.views');
-  const viewText = presetById(view).kind === 'elevation' ? t(`view.${view}`) : viewLabel;
-  return (
-    <div
-      ref={ref}
-      role="toolbar"
-      aria-label={t('tools.label')}
-      data-testid="toolbar"
-      data-labels={phone && fit ? '' : undefined}
-      className={cx(
-        'tools pointer-events-auto flex items-center gap-0.5 bg-surface shadow-float',
-        phone ? 'h-[54px] w-full rounded-[16px] p-[5px]' : 'h-11 rounded-[12px] p-1',
-        'ring-1 ring-black/[0.06]',
-        className,
-      )}
-    >
-      {mode === 'plan' ? (
-        <>
-          <ToolButton phone={phone} icon={<LayersIcon {...icon} />} label={lv(level) ?? t('bar.levels')} on={open('levels')} show expanded={open('levels')} controls={TRAY_ID.levels} onClick={() => toggle('levels')} ariaLabel={t('bar.levels')} testId="bar-levels" />
-          <Divider />
-          <IconTool phone={phone} label={t('plan.zoomOut')} onClick={() => planCommands.zoom(1 / 1.4)}><MinusIcon width={17} height={17} /></IconTool>
-          <IconTool phone={phone} label={t('plan.fit')} onClick={() => planCommands.fit()}><FitIcon width={17} height={17} /></IconTool>
-          <IconTool phone={phone} label={t('plan.zoomIn')} onClick={() => planCommands.zoom(1.4)}><PlusIcon width={17} height={17} /></IconTool>
-        </>
-      ) : (
-        <>
-          {/* Walking: only what applies to walking (the sun, and the way out). */}
-          {!walk && (
-            <>
-            <ToolButton
-              phone={phone}
-              icon={<CubeIcon {...icon} />}
-              label={viewText}
-              on={open('views')}
-              set={view !== DEFAULT_VIEW}
-              show={open('views') || view !== DEFAULT_VIEW}
-              expanded={open('views')}
-              controls={TRAY_ID.views}
-              onClick={() => toggle('views')}
-              ariaLabel={view !== DEFAULT_VIEW ? `${t('bar.views')}: ${t(`view.${view}`)}` : t('bar.views')}
-              testId="bar-views"
-            />
-            <ToolButton
-              phone={phone}
-              icon={<LayersIcon {...icon} />}
-              label={cut ? lv(cut) : t('bar.levels')}
-              on={open('levels')}
-              set={!!cut}
-              show={open('levels') || !!cut}
-              expanded={open('levels')}
-              controls={TRAY_ID.levels}
-              onClick={() => toggle('levels')}
-              ariaLabel={cut ? `${t('bar.levels')}: ${lv(cut)}` : t('bar.levels')}
-              testId="bar-levels"
-            />
-            </>
-          )}
-          <ToolButton
-            phone={phone}
-            icon={<SunIcon {...icon} />}
-            label={sun.on ? sunLabel : t('bar.sun')}
-            on={open('sun')}
-            set={sun.on}
-            show={open('sun') || sun.on}
-            expanded={open('sun')}
-            controls={TRAY_ID.sun}
-            onClick={() => {
-              if (open('sun')) setTray(null);
-              else {
-                setTray('sun');
-                if (!sun.on) setSun({ on: true });
-              }
-            }}
-            ariaLabel={sun.on ? `${t('bar.sun')} ${sunLabel}` : t('bar.sun')}
-            testId="bar-sun"
-          />
-          {!phone && <Divider />}
-          <ToolButton
-            phone={phone}
-            icon={<WalkIcon {...icon} />}
-            label={walk ? `${t('bar.walk')} ×` : t('bar.walk')}
-            on={walk}
-            show={walk}
-            onClick={() => setWalk(!walk)}
-            ariaLabel={walk ? t('walk.exit') : t('bar.walk')}
-            testId="bar-walk"
-          />
-        </>
-      )}
-    </div>
-  );
-}
 
 /** Merge group of the desktop tool group and the popovers that flow out of it. */
 export const TOOLS_GROUP = 7;
@@ -364,6 +175,79 @@ export function DesktopTools({ derived, className }: { derived: Derived | null; 
   );
 }
 
+type PhoneTool = Tray | 'walk' | 'zoomOut' | 'fit' | 'zoomIn';
+
+/**
+ * Phone (task 017): the tools as a tab-bar glass capsule, icon over label;
+ * the open tool is a lens that slides (press and drag scrubs it across,
+ * 2b.2). Tapping the open tool closes its sheet. Plan view: levels and zoom.
+ */
+export function PhoneTools({ derived }: { derived: Derived | null }) {
+  const t = useT();
+  const mode = useStudio((s) => s.mode);
+  const tray = useStudio((s) => s.tray);
+  const sitePanel = useStudio((s) => s.sitePanel);
+  const setTray = useStudio((s) => s.setTray);
+  const walk = useStudio((s) => s.walk);
+  const setWalk = useStudio((s) => s.setWalk);
+  const sun = useStudio((s) => s.sun);
+  const setSun = useStudio((s) => s.setSun);
+  const values = useToolValues(derived);
+  const open = (k: Tray) => tray === k && (!sitePanel || (k === 'sun' && !!sitePanel.fromSun));
+  const icon = { width: 22, height: 22, className: 'shrink-0' };
+  const item = (k: Tray, ico: ReactNode, name: string, value: string | null, testId: string, disabled?: boolean) => ({
+    value: k as PhoneTool,
+    icon: ico,
+    label: value ?? name,
+    ariaLabel: value ? `${name}: ${value}` : name,
+    disabled,
+    props: { 'data-testid': testId, 'aria-expanded': open(k), 'aria-controls': TRAY_ID[k], 'data-tool-trigger': '' },
+  });
+  const plan = mode === 'plan';
+  const segments = plan
+    ? [
+        item('levels', <LayersIcon {...icon} />, t('bar.levels'), values.planLevel, 'bar-levels'),
+        { value: 'zoomOut' as PhoneTool, icon: <MinusIcon {...icon} />, label: t('bar.zoom'), ariaLabel: t('plan.zoomOut') },
+        { value: 'fit' as PhoneTool, icon: <FitIcon {...icon} />, label: t('plan.fit'), ariaLabel: t('plan.fit') },
+        { value: 'zoomIn' as PhoneTool, icon: <PlusIcon {...icon} />, label: t('bar.zoom'), ariaLabel: t('plan.zoomIn') },
+      ]
+    : [
+        item('views', <CubeIcon {...icon} />, t('bar.views'), values.views, 'bar-views', walk),
+        item('levels', <LayersIcon {...icon} />, t('bar.levels'), values.levels, 'bar-levels', walk),
+        item('sun', <SunIcon {...icon} />, t('bar.sun'), values.sun, 'bar-sun'),
+        {
+          value: 'walk' as PhoneTool,
+          icon: <WalkIcon {...icon} />,
+          label: walk ? `${t('bar.walk')} ×` : t('bar.walk'),
+          ariaLabel: walk ? t('walk.exit') : t('bar.walk'),
+          props: { 'data-testid': 'bar-walk', 'aria-pressed': walk },
+        },
+      ];
+  const current: PhoneTool | null = walk && !plan ? 'walk' : tray && open(tray) && (!plan || tray === 'levels') ? tray : null;
+  const pick = (v: PhoneTool) => {
+    if (v === 'zoomOut') return planCommands.zoom(1 / 1.4);
+    if (v === 'zoomIn') return planCommands.zoom(1.4);
+    if (v === 'fit') return planCommands.fit();
+    if (v === 'walk') return setWalk(!walk);
+    if (open(v)) return setTray(null);
+    setTray(v);
+    if (v === 'sun' && !sun.on) setSun({ on: true });
+  };
+  return (
+    <GlassSegmented<PhoneTool>
+      variant="tabs"
+      reselect
+      label={t('tools.label')}
+      value={current}
+      onChange={pick}
+      segments={segments}
+      height={60}
+      testId="toolbar"
+      className="w-full"
+    />
+  );
+}
+
 /* ------------------------------------------------------------------ */
 /* Panel contents                                                      */
 /* ------------------------------------------------------------------ */
@@ -402,9 +286,9 @@ function ViewsPanel({ onClose }: { onClose: () => void }) {
       aria-pressed={view === id}
       title={t(`view.${id}`)}
       onClick={() => setView(id)}
-      className={cx('flex h-[50px] min-w-0 flex-col items-center justify-center gap-[3px] rounded-[8px] text-[11.5px] leading-[14px] transition-colors', view === id ? 'bg-ink text-white' : 'text-ink-2 hover:bg-wash hover:text-ink')}
+      className={cx('flex h-[50px] min-w-0 flex-col items-center justify-center gap-[3px] rounded-[8px] text-[11.5px] leading-[14px] transition-colors', view === id ? 'bg-ink text-on-ink' : 'text-ink-2 hover:bg-wash hover:text-ink')}
     >
-      <ViewIcon id={id} width={20} height={20} className={view === id ? 'text-white' : 'text-ink'} />
+      <ViewIcon id={id} width={20} height={20} className={view === id ? 'text-on-ink' : 'text-ink'} />
       <span className="max-w-full truncate">{label(id)}</span>
     </button>
   );
@@ -428,7 +312,7 @@ function ViewsPanel({ onClose }: { onClose: () => void }) {
           aria-label={t('view.eye-sw')}
           aria-pressed={view === 'eye-sw'}
           onClick={() => setView('eye-sw')}
-          className={cx('inline-flex h-8 flex-1 items-center justify-center gap-1.5 rounded-full text-[12.5px] transition-colors', view === 'eye-sw' ? 'bg-ink text-white' : 'bg-wash text-ink hover:bg-hairline')}
+          className={cx('inline-flex h-8 flex-1 items-center justify-center gap-1.5 rounded-full text-[12.5px] transition-colors', view === 'eye-sw' ? 'bg-ink text-on-ink' : 'bg-wash text-ink hover:bg-hairline')}
         >
           <ViewIcon id="eye-sw" width={15} height={15} />
           {t('views.eye')}

@@ -33,8 +33,9 @@ const DESKTOP_QUERY = '(min-width: 768px) and (min-height: 520px)';
 // Same condition as the `land` CSS variant (styles.css).
 const LANDSCAPE_QUERY = '(orientation: landscape) and (max-height: 519px)';
 
-/** Width of the pinned conversation column (desktop), CSS px. */
+/** The pinned conversation: a floating, inset glass sidebar (desktop): its right edge, CSS px. */
 const PIN_COLUMN = 360;
+const PIN_RIGHT = 12 + PIN_COLUMN;
 /** Space kept between a control and the framed house, CSS px (the renderer adds its own white margin). */
 const GAP_DESKTOP = 12;
 const GAP_PHONE = 6;
@@ -95,9 +96,9 @@ function useBoxState(): [Box | null, (b: Box | null) => void] {
  * top-left corner and the card in the top-right: the house keeps clear of
  * each from below or from the side, whichever shows it larger.
  */
-function desktopInsets(W: number, H: number, left: number, o: { title: Box | null; top: number; dock: Box | null; panel: { left: number; bottom: number } | null }): FrameInsets[] {
+function desktopInsets(W: number, H: number, left: number, o: { title: Box | null; top: number; dock: Box | null; panel: { left: number; bottom: number } | null; sidebar: number }): FrameInsets[] {
   const g = GAP_DESKTOP;
-  const base = { top: o.top + g, right: 24, left: 24, bottom: o.dock ? H - o.dock.top + g : 24 };
+  const base = { top: o.top + g, right: 24, left: Math.max(24, o.sidebar ? o.sidebar + g : 0), bottom: o.dock ? H - o.dock.top + g : 24 };
   const tops = [base];
   // Kept clear of the title from the side, the free area stays symmetric, so
   // the house stands centred over the input (task 016).
@@ -242,9 +243,12 @@ export function Studio() {
   const landscape = useMedia(LANDSCAPE_QUERY) && !desktop;
   // `?frame=full` frames on the whole canvas (comparison with the renderer's shots).
   const [fullFrame] = useState(() => typeof location !== 'undefined' && new URLSearchParams(location.search).get('frame') === 'full');
-  // Desktop: the pinned conversation is a column; the canvas resizes beside it.
+  // Desktop: the pinned conversation is a floating glass sidebar over the
+  // drawing (task 017); the canvas runs edge to edge and the house frames
+  // beside it.
   const column = desktop && pinnedState && mode !== 'sheet';
-  const canvasLeft = column ? PIN_COLUMN : 0;
+  const canvasLeft = 0;
+  const sideRight = column ? PIN_RIGHT : 0;
   const walkLandscape = walk && landscape;
   // Smoky (dark) glass is the studio's material; ?glass=light shows light glass for comparison.
   const [glassTone] = useState<GlassTone>(() => (typeof location !== 'undefined' && new URLSearchParams(location.search).get('glass') === 'light' ? 'light' : 'dark'));
@@ -278,14 +282,14 @@ export function Studio() {
     if (fullFrame) return [{ top: 0, right: 0, bottom: 0, left: 0 }];
     if (desktop) {
       const top = Math.max(modeBox?.bottom ?? 56, 60);
-      return desktopInsets(vp.w - canvasLeft, vp.h, canvasLeft, { title: column ? null : title, top, dock: mode === '3d' && !column ? dockBox : null, panel: panelOpen ? panel : null });
+      return desktopInsets(vp.w - canvasLeft, vp.h, canvasLeft, { title: column ? null : title, top, dock: mode === '3d' && !column ? dockBox : null, panel: panelOpen ? panel : null, sidebar: sideRight });
     }
     const g = GAP_PHONE;
     const top = (header?.bottom ?? 58) + g;
     const bottom = (extent?.bottom ?? 130) + g;
     // A small even margin at the sides: the house, its shadow and trees never touch the screen edge.
     return [{ top, bottom, left: extent?.left ? extent.left + 12 : 10, right: 10 }];
-  }, [fullFrame, desktop, modeBox, vp, canvasLeft, column, title, mode, dockBox, panelOpen, panel, header, extent]);
+  }, [fullFrame, desktop, modeBox, vp, canvasLeft, sideRight, column, title, mode, dockBox, panelOpen, panel, header, extent]);
 
   // The 3D viewer is created the first time 3D is shown and kept afterwards.
   const [want3d, setWant3d] = useState(mode === '3d');
@@ -297,7 +301,7 @@ export function Studio() {
   const titleNode = <TitleMenu derived={derived} />;
   // Plan fitting: the same obstacles, as plain insets of the plan's box.
   const planInsets = desktop
-    ? { top: 84, bottom: dockBox ? vp.h - dockBox.top + GAP_DESKTOP : 120, right: panelOpen && panel ? vp.w - panel.left + GAP_DESKTOP : 40, left: 40 }
+    ? { top: 84, bottom: dockBox ? vp.h - dockBox.top + GAP_DESKTOP : 120, right: panelOpen && panel ? vp.w - panel.left + GAP_DESKTOP : 40, left: sideRight ? sideRight + 24 : 40 }
     : { top: (header?.bottom ?? 58) + 8, bottom: (extent?.bottom ?? 130) + 8, right: 12, left: extent?.left ? extent.left + 24 : 12 };
 
   return (
@@ -338,13 +342,13 @@ export function Studio() {
             ref={modeRef}
             className="absolute top-[18px] -translate-x-1/2"
             // Centred over the drawing; beside a pinned column on a narrow screen it moves left of the toolbar.
-            style={{ left: column && vp.w < 1180 ? canvasLeft + 24 + 83 : canvasLeft + (vp.w - canvasLeft) / 2 }}
+            style={{ left: column && vp.w < 1180 ? sideRight + 24 + 98 : sideRight + (vp.w - sideRight) / 2 }}
           >
             <ModeSwitch />
           </div>
           {mode !== 'sheet' && <DesktopTools derived={derived} className="absolute top-[18px] right-[18px]" />}
           {mode !== 'sheet' && <PanelCard derived={derived} onRect={onPanel} />}
-          {walk && <WalkHUD derived={derived} left={canvasLeft} />}
+          {walk && <WalkHUD derived={derived} left={sideRight} />}
           {/* The input stays in the sheets view too (the column is not shown there). */}
           {!column && <DesktopDock onBox={setDockBox} />}
           <SettingsHost />

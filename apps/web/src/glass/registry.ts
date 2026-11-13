@@ -57,6 +57,23 @@ export function newGroup(): number {
   return nextGroup++;
 }
 
+/**
+ * How visible an element is through its own and its ancestors' opacity
+ * and visibility (a surface faded or hidden by a parent, e.g. the phone
+ * input while a sheet is open, must not stay drawn in the canvas).
+ */
+function visibleAlpha(el: HTMLElement): number {
+  let a = 1;
+  for (let e: HTMLElement | null = el; e && e !== document.body; e = e.parentElement) {
+    const cs = getComputedStyle(e);
+    if (cs.visibility === 'hidden' || cs.display === 'none') return 0;
+    const o = parseFloat(cs.opacity);
+    if (o < 1) a *= o;
+    if (a <= 0.005) return 0;
+  }
+  return a;
+}
+
 const rectOf = (el: Element): Rect => {
   const r = el.getBoundingClientRect();
   return { x: r.left, y: r.top, width: r.width, height: r.height };
@@ -179,6 +196,8 @@ class Registry {
       if (o === null) continue;
       const r = o.rect ?? rectOf(s.el);
       if (r.width < 1 || r.height < 1) continue;
+      const seen = visibleAlpha(s.el);
+      if (seen <= 0) continue;
       const radius = o.radius ?? (s.radius === 'capsule' ? Math.min(r.width, r.height) / 2 : s.radius);
       shapes.push({
         x: r.x - base.left,
@@ -188,7 +207,7 @@ class Registry {
         radius,
         tint: o.tint ?? tintOf(this.tone, s.role),
         frost: o.frost ?? (s.role === 'text' ? GLASS.frostPanel : GLASS.frostControl),
-        alpha: o.alpha ?? 1,
+        alpha: (o.alpha ?? 1) * seen,
         layer: s.layer ?? 0,
         group: s.auto,
         magnify: o.magnify ?? 1,

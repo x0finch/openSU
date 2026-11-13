@@ -85,15 +85,15 @@ function Progress({ label }: { label: string }) {
   );
 }
 
-function ChangesCard({ item, translucent }: { item: ChatItem; translucent?: boolean }) {
+function ChangesCard({ item }: { item: ChatItem }) {
   const t = useT();
   const [open, setOpen] = useState(false);
   const changes = item.changes ?? [];
   if (!changes.length) return null;
   const undone = item.undo === 'undone' || item.undo === 'can-redo';
   return (
-    <div className={cx('mt-2 overflow-hidden', translucent ? 'border-t border-hairline' : 'rounded-[10px] border border-black/10 bg-white', undone && 'opacity-70')} data-testid="changes-card">
-      <div className={cx('flex h-9 items-center justify-between gap-2', translucent ? '' : 'border-b border-black/[0.07] pr-1.5 pl-3')}>
+    <div className={cx('mt-2 overflow-hidden border-t border-hairline', undone && 'opacity-70')} data-testid="changes-card">
+      <div className="flex h-9 items-center justify-between gap-2">
         <p className="flex items-center gap-1.5 text-xs text-ink-2">
           <PlanCheckIcon width={14} height={14} className={undone ? 'text-ink-3' : 'text-ink-2'} />
           {t('chat.changedN', { n: changes.length })}
@@ -101,18 +101,18 @@ function ChangesCard({ item, translucent }: { item: ChatItem; translucent?: bool
         </p>
         <div className="flex items-center">
           {item.undo === 'can-undo' && (
-            <SmallButton onClick={() => undoTurn(item.id)} icon={<UndoIcon width={14} height={14} />} className={translucent ? 'lg-plate h-[28px] px-2.5' : 'h-[26px] bg-white px-[9px] shadow-[inset_0_0_0_1px_#e2e2e2] hover:bg-wash'}>
+            <SmallButton onClick={() => undoTurn(item.id)} icon={<UndoIcon width={14} height={14} />} className="lg-plate h-[28px] px-2.5">
               {t('chat.undo')}
             </SmallButton>
           )}
           {item.undo === 'can-redo' && (
-            <SmallButton onClick={() => redoTurn(item.id)} icon={<RedoIcon width={14} height={14} />} className={translucent ? 'lg-plate h-[28px] px-2.5' : 'h-[26px] bg-white px-[9px] shadow-[inset_0_0_0_1px_#e2e2e2] hover:bg-wash'}>
+            <SmallButton onClick={() => redoTurn(item.id)} icon={<RedoIcon width={14} height={14} />} className="lg-plate h-[28px] px-2.5">
               {t('chat.redo')}
             </SmallButton>
           )}
         </div>
       </div>
-      <ul className={translucent ? 'pb-1' : 'px-3 py-2'}>
+      <ul className="pb-1">
         {changes.map((c, i) => (
           <li key={i} className={cx('relative py-0.5 pl-3.5 text-[13px] leading-5', undone ? 'text-ink-2 line-through decoration-ink-3' : 'text-ink')}>
             <span className="absolute top-[9px] left-0.5 size-1.5 rounded-full bg-accent" aria-hidden="true" />
@@ -176,7 +176,7 @@ function errorText(t: ReturnType<typeof useT>, item: ChatItem): string {
   }
 }
 
-function AssistantMessage({ item, latest, translucent }: { item: ChatItem; latest: boolean; translucent?: boolean }) {
+function AssistantMessage({ item, latest }: { item: ChatItem; latest: boolean }) {
   const t = useT();
   const running = item.phase !== 'done';
   const openSettings = useChat((s) => s.setSettingsOpen);
@@ -186,7 +186,7 @@ function AssistantMessage({ item, latest, translucent }: { item: ChatItem; lates
       {(item.text || running) && <RichText text={item.text} caret={running && !!item.text} />}
       {/* While the reply streams, its caret is the indicator. */}
       {running && item.phase !== 'writing' && (!item.text || item.phase !== 'thinking') && <div className={item.text ? 'mt-2.5' : ''}><Progress label={progress} /></div>}
-      <ChangesCard item={item} translucent={translucent} />
+      <ChangesCard item={item} />
       {item.aborted && <p className="mt-2 text-xs text-ink-3">{t('chat.aborted')}</p>}
       {item.gaveUp && (
         // The same words again would fail the same way: no retry, a next step instead.
@@ -255,14 +255,14 @@ function humanizeValidation(e: string): string {
 /** Long messages fold after a few lines; a toggle shows the rest. */
 const LONG_MESSAGE = 280;
 
-function UserMessage({ item, translucent }: { item: ChatItem; translucent?: boolean }) {
+function UserMessage({ item }: { item: ChatItem }) {
   const t = useT();
   const long = item.text.length > LONG_MESSAGE || item.text.split('\n').length > 6;
   const [open, setOpen] = useState(false);
   return (
-    <div className={cx('flex flex-col', translucent ? 'items-start' : 'items-end')}>
+    <div className="flex flex-col items-start">
       {/* On glass the user's words are a quiet line above the answer (no bubble: no box inside glass). */}
-      <p className={cx('break-words whitespace-pre-wrap', translucent ? 'text-[14.5px] leading-[23px] font-medium text-ink-2' : 'max-w-[86%] rounded-[12px] rounded-br-[4px] bg-ink px-3 py-[7px] text-[13.5px] leading-[1.5] text-white')} data-testid="user-message">
+      <p className="text-[14.5px] leading-[23px] font-medium break-words whitespace-pre-wrap text-ink-2" data-testid="user-message">
         {/* Clamped inside the padding, so no half line peeks out. */}
         <span className={cx(long && !open && 'line-clamp-5')}>{item.text}</span>
       </p>
@@ -283,7 +283,7 @@ function EmptyState({ compact }: { compact?: boolean }) {
   const noKey = server && !server.serverKey && !usesOwnKey(settings);
   return (
     <div className={cx('flex flex-col', compact ? 'gap-3' : 'gap-4 pt-1')}>
-      <p className="text-[13.5px] leading-[1.6] text-ink-2">{t('chat.intro')}</p>
+      <p className="text-[14.5px] leading-[23px] font-medium text-ink-2">{t('chat.intro')}</p>
       {noKey && (
         <div className="-mt-1">
           <Note actions={<SmallButton onClick={() => setSettingsOpen(true)} icon={<SlidersIcon width={14} height={14} />}>{t('chat.err.openSettings')}</SmallButton>}>{t('chat.err.noKey')}</Note>
@@ -297,7 +297,7 @@ function EmptyState({ compact }: { compact?: boolean }) {
               key={k}
               type="button"
               onClick={() => void send(t(k))}
-              className="hit group inline-flex max-w-full items-center gap-2 rounded-full border border-hairline bg-white py-1.5 pr-3 pl-2.5 text-left text-[13px] leading-5 text-ink transition-colors hover:border-ink-3 hover:bg-wash"
+              className="hit group lg-plate inline-flex max-w-full items-center gap-2 py-1.5 pr-3 pl-2.5 text-left text-[13.5px] leading-5 font-medium text-ink"
             >
               <SparkIcon width={14} height={14} className="shrink-0 text-ink-3 transition-colors group-hover:text-ink" />
               <span className="truncate">{t(k)}</span>
@@ -327,7 +327,7 @@ function ManualEdit({ item }: { item: ChatItem }) {
 }
 
 /** The conversation (from item `from`); `spacer` leaves room under the newest message so it can sit at the top. */
-function MessageList({ className, from = 0, spacer = true, translucent }: { className?: string; from?: number; spacer?: boolean; translucent?: boolean }) {
+function MessageList({ className, from = 0, spacer = true }: { className?: string; from?: number; spacer?: boolean }) {
   const all = useChat((s) => s.items);
   const items = from ? all.slice(from) : all;
   const ref = useRef<HTMLDivElement>(null);
@@ -382,7 +382,7 @@ function MessageList({ className, from = 0, spacer = true, translucent }: { clas
         <div className="flex flex-col gap-3">
           {items.map((it) => (
             <div key={it.id} data-msg className="scroll-mt-4">
-              {it.role === 'user' ? <UserMessage item={it} translucent={translucent} /> : it.manual ? <ManualEdit item={it} /> : <AssistantMessage item={it} latest={it.id === lastAssistant} translucent={translucent} />}
+              {it.role === 'user' ? <UserMessage item={it} /> : it.manual ? <ManualEdit item={it} /> : <AssistantMessage item={it} latest={it.id === lastAssistant} />}
             </div>
           ))}
           {/* Room below the newest message, so it can sit at the top while the reply arrives. */}
@@ -600,7 +600,7 @@ export function ChatInput({ phone, pinned, className }: { phone?: boolean; pinne
           )}
         </div>
         {running ? (
-          <button type="button" onClick={stop} aria-label={t('chat.stop')} className={cx('hit lg-focus grid shrink-0 place-items-center rounded-full bg-ink text-white transition-opacity hover:opacity-85', btn)}>
+          <button type="button" onClick={stop} aria-label={t('chat.stop')} className={cx('hit lg-focus grid shrink-0 place-items-center rounded-full bg-ink text-on-ink transition-opacity hover:opacity-85', btn)}>
             <StopIcon width={16} height={16} />
           </button>
         ) : (
@@ -670,7 +670,7 @@ export function RecentStrip({ phone, className }: { phone?: boolean; className?:
           <ChevronDownIcon width={16} height={16} />
         </button>
       </header>
-      <MessageList from={items.length ? lastExchangeStart(items) : 0} spacer={false} className="px-5 pt-0.5 pb-4" translucent />
+      <MessageList from={items.length ? lastExchangeStart(items) : 0} spacer={false} className="px-5 pt-0.5 pb-4" />
       {rounds > 1 && (
         <div className="shrink-0 px-2.5 pb-2.5">
           <LinkButton onClick={() => setPinned(true)} testId="chat-view-all">
@@ -720,15 +720,20 @@ export function PinnedColumn({ title }: { title: ReactNode }) {
     void loadAgent();
   }, []);
   return (
-    <aside aria-label={t('chat.title')} className="pointer-events-auto absolute inset-y-0 left-0 flex w-[360px] animate-[fade-in_200ms_ease-out] flex-col border-r border-hairline bg-white" data-testid="chat-panel">
-      <div className="shrink-0 px-6 pt-4 pb-3">{title}</div>
-      <ConversationHeader />
-      <MessageList className="px-6 pt-4" />
-      <div className="shrink-0 px-4 pt-2 pb-6">
-        <ChatInput pinned />
-      </div>
-      {settingsOpen && <SettingsSheet />}
-    </aside>
+    <GlassTextSurface as="aside" aria-label={t('chat.title')} className="absolute top-3 bottom-3 left-3 flex w-[360px] animate-[fade-in_200ms_ease-out] flex-col overflow-hidden" data-testid="chat-panel">
+      {settingsOpen ? (
+        <SettingsSheet />
+      ) : (
+        <>
+          <div className="shrink-0 px-6 pt-4 pb-3">{title}</div>
+          <ConversationHeader />
+          <MessageList className="px-6 pt-4" />
+          <div className="shrink-0 px-3 pt-2 pb-3">
+            <ChatInput pinned />
+          </div>
+        </>
+      )}
+    </GlassTextSurface>
   );
 }
 
@@ -758,14 +763,15 @@ export function SettingsHost({ phone }: { phone?: boolean }) {
   return (
     <>
       <div className="pointer-events-auto absolute inset-0 z-40 animate-[fade-in_160ms_ease-out] bg-black/10" onClick={close} aria-hidden="true" />
-      <div
+      <GlassTextSurface
+        radius={phone ? 34 : 30}
         className={cx(
-          'pointer-events-auto absolute z-50 overflow-hidden bg-white shadow-[0_8px_30px_rgba(0,0,0,0.14)]',
-          phone ? 'inset-x-0 bottom-0 h-[86%] rounded-t-[18px] land:inset-x-auto land:top-2 land:right-2 land:bottom-2 land:h-auto land:w-[400px] land:rounded-[16px]' : 'top-1/2 left-1/2 h-[min(600px,calc(100%-120px))] w-[420px] -translate-x-1/2 -translate-y-1/2 rounded-[16px]',
+          'absolute z-50 flex flex-col overflow-hidden',
+          phone ? 'inset-x-2 bottom-2 h-[86%] land:inset-x-auto land:top-2 land:right-2 land:bottom-2 land:h-auto land:w-[400px]' : 'top-1/2 left-1/2 h-[min(600px,calc(100%-120px))] w-[420px] -translate-x-1/2 -translate-y-1/2',
         )}
       >
         <SettingsSheet />
-      </div>
+      </GlassTextSurface>
     </>
   );
 }

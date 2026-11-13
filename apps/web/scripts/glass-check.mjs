@@ -26,25 +26,11 @@ const PATTERNS = [
  * rule 11) and the controls that only paint the drawing's own colours.
  */
 const ALLOW = [
-  { file: 'studio/SheetGallery.tsx', why: 'gallery sheets stay white paper (UI_STYLE rule 11)' },
+  { file: 'studio/SheetGallery.tsx', line: /bg-white shadow-hair|rounded-\[4px\] bg-white|file && 'shadow-\[/, why: 'gallery sheets stay white paper (UI_STYLE rule 11)' },
 ];
 
-/**
- * Not converted yet: Phase B of task 017 (phone dock and sheets, walk HUD,
- * plan and gallery chrome, pinned sidebar, settings, menus). This list must
- * be empty when task 017 is done.
- */
-const PENDING_PHASE_B = [
-  { file: 'studio/PhoneDock.tsx' },
-  { file: 'studio/WalkHUD.tsx' },
-  { file: 'studio/SitePanels.tsx' },
-  { file: 'chat/SettingsSheet.tsx' },
-  { file: 'studio/tools.tsx', line: /bg-surface shadow-float/, why: 'phone tool bar' },
-  { file: 'chat/ChatPanel.tsx', line: /rounded-\[10px\] border border-black\/10 bg-white|h-\[26px\] bg-white px-\[9px\]/, why: 'changes card in the pinned column' },
-  { file: 'chat/ChatPanel.tsx', line: /border-hairline bg-white py-1\.5/, why: 'suggestion chips (pinned column)' },
-  { file: 'chat/ChatPanel.tsx', line: /w-\[360px\].*bg-white/, why: 'pinned column (becomes a floating glass sidebar)' },
-  { file: 'chat/ChatPanel.tsx', line: /overflow-hidden bg-white shadow-\[/, why: 'settings host' },
-];
+/** Not converted yet (task 017 Phase B emptied it; keep it empty). */
+const PENDING_PHASE_B = [];
 
 const files = DIRS.flatMap((d) => readdirSync(join(src, d)).filter((f) => /\.(tsx?|css)$/.test(f)).map((f) => join(src, d, f)));
 const failures = [];
