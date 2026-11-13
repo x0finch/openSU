@@ -806,7 +806,8 @@ export function PanelCard({ derived, onRect }: { derived: Derived | null; onRect
             className="absolute top-[78px] right-[18px] flex max-h-[calc(100%-78px-112px)] w-[330px] flex-col overflow-y-auto overscroll-contain"
             bodyClassName="flex min-h-0 flex-col gap-4 p-[22px]"
           >
-            <PanelBody derived={derived} kind={p.panel} />
+            {/* A panel flowing back is an empty shape: its controls are gone at once (no duplicates for keyboard, screen readers and tests). */}
+            {on && <PanelBody derived={derived} kind={p.panel} />}
           </GlassPopover>
         );
       })}
