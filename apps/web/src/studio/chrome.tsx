@@ -5,7 +5,8 @@ import { Link } from '@tanstack/react-router';
 import { type KeyboardEvent as RKeyboardEvent, type ReactNode, type RefObject, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { TEMPLATE_META } from '@opensu/agent/templates-meta';
 import { ChevronDownSmallIcon, CloseIcon, CompassIcon, LayersIcon, Mark, PinIcon, ResetViewIcon } from '../components/icons';
-import { cx, Segmented } from '../components/ui';
+import { cx } from '../components/ui';
+import { GlassButton, GlassMenu, GlassMenuItem, GlassSegmented, GlassSep } from '../glass';
 import { type MessageKey, useT } from '../lib/i18n';
 import { freshView, type Mode, useStudio } from '../lib/store';
 import { resetToTemplate } from '../lib/autosave';
@@ -114,44 +115,31 @@ export function TitleMenu({ derived, onRect, compact }: { derived: Derived | nul
         onClick={() => setOpen(!open)}
         data-testid="project-menu"
         className={cx(
-          'hit group -ml-2 flex max-w-[calc(100%+8px)] items-center gap-[7px] rounded-[9px] px-2 text-left transition-colors hover:bg-wash/80',
+          'hit group -ml-1 flex max-w-[calc(100%+4px)] items-center gap-[7px] rounded-[10px] px-1 text-left text-canvas-ink transition-opacity hover:opacity-75',
           compact ? 'h-8' : 'h-9',
-          open && 'bg-wash',
         )}
       >
         <Mark width={18} height={18} className="shrink-0" />
-        <span className={cx('truncate', compact ? 'text-[16px] max-[339px]:text-[15px]' : 'text-[18px]')}>{name}</span>
-        <ChevronDownSmallIcon width={16} height={16} className={cx('-ml-1 shrink-0 text-ink-3 transition-transform duration-150 group-hover:text-ink-2', open && 'rotate-180')} />
+        <span className={cx('truncate font-semibold tracking-[-0.01em]', compact ? 'text-[17px] max-[339px]:text-[15px]' : 'text-[20px]')}>{name}</span>
+        <ChevronDownSmallIcon width={16} height={16} className={cx('-ml-0.5 shrink-0 text-ink-2 transition-transform duration-200', open && 'rotate-180')} />
       </button>
       <Facts derived={derived} className={cx('pl-0', compact ? 'mt-0' : 'mt-0.5')} />
-      {open && <ProjectMenu ref={menu} onClose={close} compact={compact} />}
+      <ProjectMenu ref={menu} open={open} anchor={() => trigger.current} onClose={close} compact={compact} />
     </div>
   );
 }
 
 function MenuItem({ children, onSelect, value, icon, danger, testId }: { children: ReactNode; onSelect: () => void; value?: ReactNode; icon?: ReactNode; danger?: boolean; testId?: string }) {
   return (
-    <button
-      type="button"
-      role="menuitem"
-      tabIndex={-1}
-      onClick={onSelect}
-      data-testid={testId}
-      className={cx(
-        'flex h-9 w-full items-center gap-2.5 rounded-[7px] px-2.5 text-left text-[13px] transition-colors hover:bg-wash focus-visible:bg-wash focus-visible:outline-none',
-        danger ? 'bg-ink text-white hover:bg-ink focus-visible:bg-ink' : 'text-ink',
-      )}
-    >
-      {icon && <span className={cx('grid size-5 shrink-0 place-items-center', danger ? 'text-white' : 'text-ink-2')}>{icon}</span>}
-      <span className="min-w-0 flex-1 truncate">{children}</span>
-      {value !== undefined && <span className={cx('max-w-[52%] shrink-0 truncate text-xs', danger ? 'text-white/80' : 'text-ink-3')}>{value}</span>}
-    </button>
+    <GlassMenuItem onClick={onSelect} data-testid={testId} icon={icon} detail={value} danger={danger}>
+      {children}
+    </GlassMenuItem>
   );
 }
 
-const Sep = () => <div className="my-1 h-px bg-hairline" role="separator" />;
+const Sep = () => <GlassSep />;
 
-function ProjectMenu({ onClose, compact, ref }: { onClose: (focus: boolean) => void; compact?: boolean; ref: RefObject<HTMLDivElement | null> }) {
+function ProjectMenu({ open, anchor, onClose, compact, ref }: { open: boolean; anchor: () => HTMLElement | null; onClose: (focus: boolean) => void; compact?: boolean; ref: RefObject<HTMLDivElement | null> }) {
   const t = useT();
   const lang = useStudio((s) => s.lang);
   const site = useStudio((s) => s.house?.site);
@@ -162,8 +150,13 @@ function ProjectMenu({ onClose, compact, ref }: { onClose: (focus: boolean) => v
   const [confirm, setConfirm] = useState(false);
   // Arrow keys move between items; focus starts on the first.
   useLayoutEffect(() => {
-    ref.current?.querySelector<HTMLElement>('[role=menuitem]')?.focus();
-  }, [ref]);
+    if (!open) {
+      setTemplates(false);
+      setConfirm(false);
+      return;
+    }
+    ref.current?.querySelector<HTMLElement>('[role=menuitem]')?.focus({ preventScroll: true });
+  }, [ref, open]);
   const onKey = (e: RKeyboardEvent) => {
     const items = [...(ref.current?.querySelectorAll<HTMLElement>('[role=menuitem]') ?? [])];
     const i = items.indexOf(document.activeElement as HTMLElement);
@@ -184,13 +177,14 @@ function ProjectMenu({ onClose, compact, ref }: { onClose: (focus: boolean) => v
     setSitePanel({ kind: 'location', intro: true });
   };
   return (
-    <div
-      ref={ref}
-      role="menu"
-      aria-label={t('more.open')}
+    <GlassMenu
+      ref={ref as RefObject<HTMLElement | null>}
+      open={open}
+      anchor={anchor}
+      label={t('more.open')}
       onKeyDown={onKey}
-      className={cx('glass-solid absolute top-full left-0 z-40 mt-1.5 w-[288px] animate-[fade-in_120ms_ease-out] rounded-ui p-1.5', compact && 'w-[min(288px,calc(100vw-24px))]')}
-      data-testid="project-menu-list"
+      className={cx('absolute top-full left-0 z-40 mt-2 w-[300px]', compact && 'w-[min(300px,calc(100vw-24px))]')}
+      data-testid={open ? 'project-menu-list' : undefined}
     >
       <MenuItem icon={<PinIcon width={17} height={17} />} value={site ? placeText(site, lang) : ''} onSelect={() => { onClose(false); setSitePanel({ kind: 'location' }); }} testId="menu-location">
         {t('more.location')}
@@ -203,13 +197,13 @@ function ProjectMenu({ onClose, compact, ref }: { onClose: (focus: boolean) => v
         {t('more.templates')}
       </MenuItem>
       {templates && (
-        <div className="mb-1 ml-9 border-l border-hairline pl-1.5">
+        <div className="mb-1 ml-9">
           {TEMPLATE_META.map((m) => (
             <MenuItem key={m.id} onSelect={() => void pick(m.id)} value={`${m.plot.width / 1000} × ${m.plot.depth / 1000} m`}>
               {m.name}
             </MenuItem>
           ))}
-          <p className="px-2.5 pt-0.5 pb-1.5 text-2xs text-ink-3">{t('tpl.note')}</p>
+          <p className="px-3 pt-0.5 pb-1.5 text-[12px] leading-4 text-ink-2">{t('tpl.note')}</p>
         </div>
       )}
       <MenuItem
@@ -239,12 +233,12 @@ function ProjectMenu({ onClose, compact, ref }: { onClose: (focus: boolean) => v
       >
         {t('chat.settings')}
       </MenuItem>
-      <Link to="/" role="menuitem" tabIndex={-1} className="flex h-9 w-full items-center gap-2.5 rounded-[7px] px-2.5 text-[13px] text-ink transition-colors hover:bg-wash focus-visible:bg-wash focus-visible:outline-none">
+      <Link to="/" role="menuitem" tabIndex={-1} className="lg-plate flex h-10 w-full items-center gap-2.5 rounded-[16px] px-3 text-[14px] font-medium focus-visible:outline-none">
         <span className="grid size-5 place-items-center"><Mark width={15} height={15} /></span>
         {t('more.about')}
       </Link>
-      <p className="px-2.5 pt-1 pb-1 text-2xs leading-4 text-ink-3">{t('house.autosaved')}</p>
-    </div>
+      <p className="px-3 pt-1 pb-1.5 text-[12px] leading-4 text-ink-2">{t('house.autosaved')}</p>
+    </GlassMenu>
   );
 }
 
@@ -257,12 +251,14 @@ export function ModeSwitch({ size = 'md', className }: { size?: 'md' | 'lg' | 's
   const mode = useStudio((s) => s.mode);
   const setMode = useStudio((s) => s.setMode);
   return (
-    <Segmented<Mode>
+    <GlassSegmented<Mode>
       label={t('mode.label')}
-      size={size === 'sm' ? 'md' : size}
+      height={size === 'sm' ? 44 : 48}
+      compact={size === 'sm'}
       value={mode}
       onChange={setMode}
-      className={cx(className, size === 'sm' && 'p-[3px]! [&>button]:hit [&>button]:h-[30px] [&>button]:px-[11px] [&>button]:text-[13px] max-[339px]:[&>button]:px-2')}
+      className={className}
+      testId="mode-switch"
       segments={[
         { value: '3d', label: t('mode.3d') },
         { value: 'plan', label: t('mode.plan') },
@@ -369,24 +365,22 @@ export function Hints({ className }: { className?: string }) {
     ['hint.sheets', () => s().setMode('sheet')],
   ];
   return (
-    <div className={cx('pointer-events-auto flex animate-[fade-in_300ms_ease-out] items-center gap-1.5', className)} data-testid="hints">
+    <div className={cx('pointer-events-none flex animate-[fade-in_300ms_ease-out] items-center gap-2', className)} data-testid="hints">
       {chips.map(([k, run]) => (
-        <button
+        <GlassButton
           key={k}
-          type="button"
+          size={32}
+          className="hit pr-3.5! pl-2.5! text-[12.5px]"
+          icon={<span className="size-1.5 rounded-full bg-accent" aria-hidden="true" />}
           onClick={() => {
             done();
             run();
           }}
-          className="hit inline-flex h-7 shrink-0 items-center gap-1.5 rounded-full border border-accent/70 bg-white pr-3 pl-2 text-xs font-medium text-ink shadow-hair transition-colors hover:bg-accent"
         >
-          <span className="size-1.5 rounded-full bg-accent" aria-hidden="true" />
           {t(k)}
-        </button>
+        </GlassButton>
       ))}
-      <button type="button" onClick={done} aria-label={t('hint.dismiss')} title={t('hint.dismiss')} className="hit grid size-7 shrink-0 place-items-center rounded-full bg-white text-ink-3 shadow-hair transition-colors hover:text-ink">
-        <CloseIcon width={14} height={14} />
-      </button>
+      <GlassButton size={32} className="hit text-ink-2" onClick={done} label={t('hint.dismiss')} title={t('hint.dismiss')} icon={<CloseIcon width={14} height={14} />} />
     </div>
   );
 }

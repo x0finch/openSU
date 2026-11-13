@@ -11,6 +11,7 @@ import { useStudio } from '../lib/store';
 import { type ChatItem, fetchServerStatus, loadAgent, newChat, redoTurn, retry, send, stop, undoTurn, useChat } from './chat-store';
 import { ChevronDownIcon, ComposeIcon, DockIcon, HistoryIcon, NoteIcon, PlanCheckIcon, RedoIcon, RetryIcon, SlidersIcon, StopIcon, UndockIcon, UndoIcon } from './icons';
 import { usesOwnKey } from './settings';
+import { GlassInputBar, GlassTextSurface } from '../glass';
 import { SettingsSheet } from './SettingsSheet';
 
 const SUGGESTIONS: MessageKey[] = ['chat.s1', 'chat.s2', 'chat.s3', 'chat.s4'];
@@ -91,8 +92,8 @@ function ChangesCard({ item, translucent }: { item: ChatItem; translucent?: bool
   if (!changes.length) return null;
   const undone = item.undo === 'undone' || item.undo === 'can-redo';
   return (
-    <div className={cx('mt-2 overflow-hidden rounded-[10px] border border-black/10', translucent ? 'bg-white/60' : 'bg-white', undone && 'opacity-70')} data-testid="changes-card">
-      <div className="flex h-9 items-center justify-between gap-2 border-b border-black/[0.07] pr-1.5 pl-3">
+    <div className={cx('mt-2 overflow-hidden', translucent ? 'border-t border-hairline' : 'rounded-[10px] border border-black/10 bg-white', undone && 'opacity-70')} data-testid="changes-card">
+      <div className={cx('flex h-9 items-center justify-between gap-2', translucent ? '' : 'border-b border-black/[0.07] pr-1.5 pl-3')}>
         <p className="flex items-center gap-1.5 text-xs text-ink-2">
           <PlanCheckIcon width={14} height={14} className={undone ? 'text-ink-3' : 'text-ink-2'} />
           {t('chat.changedN', { n: changes.length })}
@@ -100,18 +101,18 @@ function ChangesCard({ item, translucent }: { item: ChatItem; translucent?: bool
         </p>
         <div className="flex items-center">
           {item.undo === 'can-undo' && (
-            <SmallButton onClick={() => undoTurn(item.id)} icon={<UndoIcon width={14} height={14} />} className="h-[26px] bg-white px-[9px] shadow-[inset_0_0_0_1px_#e2e2e2] hover:bg-wash">
+            <SmallButton onClick={() => undoTurn(item.id)} icon={<UndoIcon width={14} height={14} />} className={translucent ? 'lg-plate h-[28px] px-2.5' : 'h-[26px] bg-white px-[9px] shadow-[inset_0_0_0_1px_#e2e2e2] hover:bg-wash'}>
               {t('chat.undo')}
             </SmallButton>
           )}
           {item.undo === 'can-redo' && (
-            <SmallButton onClick={() => redoTurn(item.id)} icon={<RedoIcon width={14} height={14} />} className="h-[26px] bg-white px-[9px] shadow-[inset_0_0_0_1px_#e2e2e2] hover:bg-wash">
+            <SmallButton onClick={() => redoTurn(item.id)} icon={<RedoIcon width={14} height={14} />} className={translucent ? 'lg-plate h-[28px] px-2.5' : 'h-[26px] bg-white px-[9px] shadow-[inset_0_0_0_1px_#e2e2e2] hover:bg-wash'}>
               {t('chat.redo')}
             </SmallButton>
           )}
         </div>
       </div>
-      <ul className="px-3 py-2">
+      <ul className={translucent ? 'pb-1' : 'px-3 py-2'}>
         {changes.map((c, i) => (
           <li key={i} className={cx('relative py-0.5 pl-3.5 text-[13px] leading-5', undone ? 'text-ink-2 line-through decoration-ink-3' : 'text-ink')}>
             <span className="absolute top-[9px] left-0.5 size-1.5 rounded-full bg-accent" aria-hidden="true" />
@@ -513,21 +514,11 @@ export function ChatInput({ phone, pinned, className }: { phone?: boolean; pinne
   const setRecent = useStudio((s) => s.setRecent);
   const working = useWorking();
   const note = useChangeNote();
-  const box = useRef<HTMLDivElement>(null);
+  const box = useRef<HTMLElement>(null);
   const ref = useRef<HTMLTextAreaElement>(null);
   useMarkSeen();
   useEffect(() => {
     void fetchServerStatus();
-  }, []);
-  // The rotating light covers the whole input whatever its size.
-  useLayoutEffect(() => {
-    const el = box.current;
-    if (!el) return;
-    const set = () => el.style.setProperty('--d', `${Math.ceil(Math.hypot(el.offsetWidth, el.offsetHeight)) + 4}px`);
-    set();
-    const ro = new ResizeObserver(set);
-    ro.observe(el);
-    return () => ro.disconnect();
   }, []);
   useLayoutEffect(() => {
     const el = ref.current;
@@ -552,13 +543,9 @@ export function ChatInput({ phone, pinned, className }: { phone?: boolean; pinne
     }
   };
   const can = !!text.trim() && !running;
-  const btn = phone ? 'size-[34px]' : 'size-[34px]';
+  const btn = phone ? 'size-[36px]' : 'size-[40px]';
   return (
-    <div ref={box} className={cx('ai-input pointer-events-auto', className)} data-working={working ? '' : undefined} data-testid="prompt">
-      <div className="ai-halo" aria-hidden="true" />
-      <div className="ai-rim" aria-hidden="true">
-        <div className="ai-spin" />
-      </div>
+    <GlassInputBar ref={box} working={!!working} className={className} data-testid="prompt">
       <form
         onSubmit={submit}
         onPointerDown={(e) => {
@@ -567,7 +554,7 @@ export function ChatInput({ phone, pinned, className }: { phone?: boolean; pinne
             ref.current?.focus();
           }
         }}
-        className={cx('ai-face flex cursor-text items-end gap-2 px-[7px]', phone ? 'py-[7px]' : 'py-2')}
+        className={cx('relative flex cursor-text items-end gap-2', phone ? 'min-h-12 px-1.5 py-1.5' : 'min-h-14 px-2 py-2')}
       >
         {pinned ? (
           <span className={cx('grid shrink-0 place-items-center', btn)}>
@@ -580,11 +567,12 @@ export function ChatInput({ phone, pinned, className }: { phone?: boolean; pinne
             aria-label={recent ? t('chat.historyClose') : t('chat.history')}
             aria-expanded={recent}
             aria-controls="recent-strip"
-            className={cx('hit relative grid shrink-0 place-items-center rounded-full transition-colors', btn, recent ? 'bg-ink text-white' : 'text-ink-2 hover:bg-wash hover:text-ink')}
+            data-on={recent ? '' : undefined}
+            className={cx('hit lg-plate relative grid shrink-0 place-items-center text-ink-2 hover:text-ink', btn, recent && 'text-ink')}
             data-testid="chat-history"
           >
             <HistoryIcon width={17} height={17} />
-            {unseen && !recent && !running && <span className="absolute top-[5px] right-[5px] size-[7px] rounded-full bg-accent shadow-[0_0_0_2px_white]" aria-hidden="true" />}
+            {unseen && !recent && !running && <span className="absolute top-[7px] right-[7px] size-[7px] rounded-full bg-accent" aria-hidden="true" />}
           </button>
         )}
         <div className="relative min-w-0 flex-1">
@@ -596,12 +584,12 @@ export function ChatInput({ phone, pinned, className }: { phone?: boolean; pinne
             onKeyDown={onKey}
             placeholder={working || (note.item && !pinned) ? '' : t('prompt.placeholder')}
             aria-label={t('chat.placeholder')}
-            className="block max-h-[120px] min-h-[34px] w-full resize-none bg-transparent py-[7px] text-[14px] leading-5 outline-none placeholder:text-ink-3 [&:focus-visible]:outline-none"
+            className={cx('block max-h-[120px] w-full resize-none bg-transparent text-[15px] leading-5 font-medium outline-none placeholder:text-ink-2 [&:focus-visible]:outline-none', phone ? 'min-h-9 py-2' : 'min-h-10 py-2.5')}
             data-testid="prompt-bar"
           />
           {!working && !text && note.item && !pinned && <ChangeNote item={note.item} hold={note.hold} />}
           {working && !text && (
-            <p className="pointer-events-none absolute inset-0 flex items-center truncate text-[14px] text-ink" role="status" data-testid="chat-status" data-phase={working.phase}>
+            <p className="pointer-events-none absolute inset-0 flex items-center truncate text-[15px] font-medium text-ink" role="status" data-testid="chat-status" data-phase={working.phase}>
               <span className="truncate">
                 {t(statusKey(working.phase))}
                 <span className="text-accent-ink">…</span>
@@ -611,7 +599,7 @@ export function ChatInput({ phone, pinned, className }: { phone?: boolean; pinne
           )}
         </div>
         {running ? (
-          <button type="button" onClick={stop} aria-label={t('chat.stop')} className={cx('hit grid shrink-0 place-items-center rounded-full bg-ink text-white transition-opacity hover:opacity-85', btn)}>
+          <button type="button" onClick={stop} aria-label={t('chat.stop')} className={cx('hit lg-focus grid shrink-0 place-items-center rounded-full bg-ink text-white transition-opacity hover:opacity-85', btn)}>
             <StopIcon width={16} height={16} />
           </button>
         ) : (
@@ -619,14 +607,14 @@ export function ChatInput({ phone, pinned, className }: { phone?: boolean; pinne
             type="submit"
             disabled={!can}
             aria-label={t('chat.send')}
-            className={cx('hit grid shrink-0 place-items-center rounded-full transition-colors duration-150', btn, can ? 'bg-accent text-ink hover:brightness-95' : 'bg-wash text-ink-2')}
+            className={cx('hit lg-focus grid shrink-0 place-items-center rounded-full text-on-accent transition-[filter,opacity] duration-150', btn, can ? 'bg-accent hover:brightness-95' : 'bg-accent opacity-45')}
             data-testid="chat-send"
           >
             <SendIcon width={16} height={16} />
           </button>
         )}
       </form>
-    </div>
+    </GlassInputBar>
   );
 }
 
@@ -642,7 +630,7 @@ function lastExchangeStart(items: ChatItem[]): number {
 
 function LinkButton({ onClick, icon, children, testId, className }: { onClick: () => void; icon?: ReactNode; children: ReactNode; testId?: string; className?: string }) {
   return (
-    <button type="button" onClick={onClick} data-testid={testId} className={cx('hit inline-flex h-[30px] shrink-0 items-center gap-[5px] rounded-[7px] px-2 text-[12.5px] whitespace-nowrap text-ink transition-colors hover:bg-black/5', className)}>
+    <button type="button" onClick={onClick} data-testid={testId} className={cx('hit lg-plate inline-flex h-[32px] shrink-0 items-center gap-[5px] px-3 text-[13px] font-medium whitespace-nowrap text-ink', className)}>
       {icon}
       {children}
     </button>
@@ -664,23 +652,24 @@ export function RecentStrip({ phone, className }: { phone?: boolean; className?:
     void loadAgent();
   }, []);
   return (
-    <section
+    <GlassTextSurface
+      as="section"
       id="recent-strip"
       aria-label={t('chat.recent')}
-      className={cx('pointer-events-auto flex animate-[strip-rise_220ms_cubic-bezier(0.22,0.8,0.24,1)] flex-col overflow-hidden rounded-[16px] bg-veil shadow-[0_8px_30px_rgba(0,0,0,0.08),0_0_0_1px_rgba(0,0,0,0.07)]', phone ? 'max-h-[42vh]' : 'max-h-[35vh]', className)}
+      className={cx('flex animate-[strip-rise_220ms_cubic-bezier(0.22,0.8,0.24,1)] flex-col overflow-hidden', phone ? 'max-h-[42vh]' : 'max-h-[35vh]', className)}
       data-testid="recent-strip"
     >
-      <header className="flex h-[42px] shrink-0 items-center gap-1.5 pr-1.5 pl-4">
-        <h2 className="text-[13px] font-medium">{t('chat.recent')}</h2>
+      <header className="flex h-[46px] shrink-0 items-center gap-1.5 pr-2 pl-5">
+        <h2 className="text-[13px] font-semibold text-ink-2">{t('chat.recent')}</h2>
         <span className="flex-1" />
         <LinkButton onClick={() => setPinned(true)} icon={<DockIcon width={14} height={14} />} testId="chat-pin">
           {phone ? t('chat.pinPhone') : t('chat.pin')}
         </LinkButton>
-        <button type="button" onClick={() => setRecent(false)} aria-label={t('chat.historyClose')} className="hit grid size-[30px] place-items-center rounded-[8px] text-ink-2 transition-colors hover:bg-black/5 hover:text-ink">
+        <button type="button" onClick={() => setRecent(false)} aria-label={t('chat.historyClose')} className="hit lg-plate grid size-[32px] place-items-center text-ink-2 hover:text-ink">
           <ChevronDownIcon width={16} height={16} />
         </button>
       </header>
-      <MessageList from={items.length ? lastExchangeStart(items) : 0} spacer={false} className="px-4 pt-0.5 pb-3" translucent />
+      <MessageList from={items.length ? lastExchangeStart(items) : 0} spacer={false} className="px-5 pt-0.5 pb-4" translucent />
       {rounds > 1 && (
         <div className="shrink-0 px-2.5 pb-2.5">
           <LinkButton onClick={() => setPinned(true)} testId="chat-view-all">
@@ -689,7 +678,7 @@ export function RecentStrip({ phone, className }: { phone?: boolean; className?:
           </LinkButton>
         </div>
       )}
-    </section>
+    </GlassTextSurface>
   );
 }
 

@@ -19,7 +19,8 @@ import type { Derived } from './house-data';
 import { Loading } from './Loading';
 import { type DockExtent, PhoneDock, SHEET_MS } from './PhoneDock';
 import { PlanView } from './PlanView';
-import { PanelCard, TRAY_ID, Toolbar } from './tools';
+import { DesktopTools, PanelCard, TRAY_ID } from './tools';
+import { GlassLayer, type GlassTone } from '../glass';
 import { useDerived } from './useDerived';
 import { Viewer3D } from './Viewer3D';
 import { LandscapeWalkHUD, MobileWalkHUD, useEscapeExitsWalk, WalkHUD } from './WalkHUD';
@@ -191,10 +192,10 @@ function DesktopDock({ onBox }: { onBox: (b: Box | null) => void }) {
   const ref = useRef<HTMLDivElement>(null);
   useBox(ref, onBox);
   return (
-    <div ref={ref} className="pointer-events-none absolute bottom-6 left-1/2 flex w-[min(600px,calc(100%-48px))] -translate-x-1/2 flex-col items-center gap-2.5" data-testid="dock">
+    <div ref={ref} className="pointer-events-none absolute bottom-[22px] left-1/2 flex w-[min(580px,calc(100%-48px))] -translate-x-1/2 flex-col items-center gap-3" data-testid="dock">
       <Hints />
       <div className="relative w-full">
-        {recent && <RecentStrip className="absolute inset-x-0 bottom-full mb-2" />}
+        {recent && <RecentStrip className="absolute inset-x-0 bottom-full mb-3" />}
         <ChatInput />
       </div>
     </div>
@@ -245,6 +246,8 @@ export function Studio() {
   const column = desktop && pinnedState && mode !== 'sheet';
   const canvasLeft = column ? PIN_COLUMN : 0;
   const walkLandscape = walk && landscape;
+  // ?glass=dark: dark glass (walk at dusk and the dark theme come later).
+  const [glassTone] = useState<GlassTone>(() => (typeof location !== 'undefined' && new URLSearchParams(location.search).get('glass') === 'dark' ? 'dark' : 'light'));
 
   const main = useRef<HTMLElement>(null);
   useClickAwayFromDrawing(main);
@@ -298,6 +301,7 @@ export function Studio() {
     : { top: (header?.bottom ?? 58) + 8, bottom: (extent?.bottom ?? 130) + 8, right: 12, left: extent?.left ? extent.left + 24 : 12 };
 
   return (
+    <GlassLayer tone={glassTone}>
     <div className="fixed inset-0 overflow-hidden bg-page text-ink">
       <main
         ref={main}
@@ -326,19 +330,19 @@ export function Studio() {
           {column ? (
             <PinnedColumn title={titleNode} />
           ) : (
-            <div ref={titleRef} className={cx('absolute top-4 left-6 w-max max-w-[min(360px,calc(50vw-180px))]', walk && 'glass -mt-1 -ml-2 rounded-ui py-1 pr-3 pl-2')}>
+            <div ref={titleRef} className="absolute top-[18px] left-6 w-max max-w-[min(360px,calc(50vw-200px))]">
               {titleNode}
             </div>
           )}
           <div
             ref={modeRef}
-            className="absolute top-4 -translate-x-1/2"
+            className="absolute top-[18px] -translate-x-1/2"
             // Centred over the drawing; beside a pinned column on a narrow screen it moves left of the toolbar.
             style={{ left: column && vp.w < 1180 ? canvasLeft + 24 + 83 : canvasLeft + (vp.w - canvasLeft) / 2 }}
           >
-            <ModeSwitch className="glass pointer-events-auto rounded-[12px]" />
+            <ModeSwitch />
           </div>
-          {mode !== 'sheet' && <Toolbar derived={derived} className="absolute top-4 right-4" />}
+          {mode !== 'sheet' && <DesktopTools derived={derived} className="absolute top-[18px] right-[18px]" />}
           {mode !== 'sheet' && <PanelCard derived={derived} onRect={onPanel} />}
           {walk && <WalkHUD derived={derived} left={canvasLeft} />}
           {/* The input stays in the sheets view too (the column is not shown there). */}
@@ -357,7 +361,7 @@ export function Studio() {
             <div className="min-w-0 pt-0.5">
               <TitleMenu derived={derived} compact />
             </div>
-            <ModeSwitch size="sm" className="glass pointer-events-auto shrink-0 rounded-[12px]" />
+            <ModeSwitch size="sm" className="shrink-0" />
           </header>
           {walk && <MobileWalkHUD derived={derived} top={`${header?.bottom ?? 58}px`} bottom={extent?.bottom ?? 130} />}
           {mode !== 'sheet' ? <PhoneDock derived={derived} landscape={landscape} onExtent={onExtent} /> : <SheetInput />}
@@ -365,5 +369,6 @@ export function Studio() {
         </>
       )}
     </div>
+    </GlassLayer>
   );
 }

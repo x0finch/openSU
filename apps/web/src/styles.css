@@ -33,6 +33,9 @@
   --color-surface-solid: #ffffff;
   --color-accent: #f2d40f;
   --color-accent-ink: #8a7400;
+  /* Icons and text on the accent, and text written straight on the drawing (docs/UI_STYLE.md). */
+  --color-on-accent: #1c1c1e;
+  --color-canvas-ink: #1b1c1e;
   --color-transparent: transparent;
   --color-white: #ffffff;
   /* Only as a low alpha (hairlines, scrims). */

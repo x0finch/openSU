@@ -9,11 +9,12 @@ import { cutawayPreset, presetById, shownCut } from '../lib/views';
 import type { Engine } from './engine';
 import { Loading } from './Loading';
 import { walkBridge } from './walk-bridge';
+import { glassRegistry, type GlassTarget } from '../glass';
 
 declare global {
   interface Window {
     /** Test hooks for the smoke test / screenshot script. */
-    __studio?: { ready3d?: boolean; engine?: Engine; planReady?: boolean; growing?: boolean; store?: unknown; chat?: unknown };
+    __studio?: { ready3d?: boolean; engine?: Engine; planReady?: boolean; growing?: boolean; store?: unknown; chat?: unknown; glass?: typeof glassRegistry };
   }
 }
 
@@ -131,7 +132,8 @@ export function Viewer3D({ resolved, active, insets, insetMs, compact = false, w
         shown.current = latest.current;
         walkBridge.attach(e);
         if (st.walk) e.enterWalk();
-        window.__studio = { ...window.__studio, engine: e, ready3d: true };
+        window.__studio = { ...window.__studio, engine: e, ready3d: true, glass: glassRegistry };
+        glassTarget.current = { canvas: e.viewer.renderer.domElement, setGlass: (shapes, m) => e.viewer.setGlass(shapes, m) };
         setStatus('ready');
       } catch (err) {
         console.error(err);
@@ -140,12 +142,22 @@ export function Viewer3D({ resolved, active, insets, insetMs, compact = false, w
     });
     return () => {
       alive = false;
+      glassRegistry.attachWebGL(null);
+      glassTarget.current = null;
       walkBridge.attach(null);
       engine.current?.dispose();
       engine.current = null;
       if (window.__studio) window.__studio.ready3d = false;
     };
   }, []);
+
+  // Liquid glass over the 3D view: the viewer's composite pass draws it
+  // (?glass=css keeps the CSS backend, for comparison).
+  const glassTarget = useRef<GlassTarget | null>(null);
+  useEffect(() => {
+    const forceCss = new URLSearchParams(location.search).get('glass') === 'css';
+    glassRegistry.attachWebGL(status === 'ready' && active && !forceCss ? glassTarget.current : null);
+  }, [status, active]);
 
   // A changed house: swap it in and play the grow transition when asked.
   useEffect(() => {

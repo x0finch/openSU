@@ -9,6 +9,7 @@ import {
   SunIcon, ViewIcon,
 } from '../components/icons';
 import { cx } from '../components/ui';
+import { GlassButton, GlassButtonGroup, GlassChoice, GlassGroupButton, GlassPopover, GlassRow, GlassSep, GlassSlider } from '../glass';
 import { levelName, type MessageKey, useT } from '../lib/i18n';
 import { bearingText, bearingWords, frontBearing, placeText, utcText } from '../lib/site';
 import { SUN_DATES, type SunDateId, type Tray, useStudio } from '../lib/store';
@@ -228,6 +229,91 @@ export function Toolbar({ derived, phone, className }: { derived: Derived | null
   );
 }
 
+/** Merge group of the desktop tool group and the popovers that flow out of it. */
+export const TOOLS_GROUP = 7;
+
+/**
+ * Desktop, top trailing (task 017): one glass button group for 视角 / 楼层 /
+ * 日照 (icons, a tooltip on hover; a tool in use shows its value beside its
+ * icon) and 走进去 as its own capsule beside it. Plan view: levels and zoom.
+ */
+export function DesktopTools({ derived, className }: { derived: Derived | null; className?: string }) {
+  const t = useT();
+  const lang = useStudio((s) => s.lang);
+  const mode = useStudio((s) => s.mode);
+  const tray = useStudio((s) => s.tray);
+  const sitePanel = useStudio((s) => s.sitePanel);
+  const setTray = useStudio((s) => s.setTray);
+  const walk = useStudio((s) => s.walk);
+  const setWalk = useStudio((s) => s.setWalk);
+  const cut = useStudio((s) => s.cut);
+  const level = useStudio((s) => s.level);
+  const view = useStudio((s) => s.view);
+  const sun = useStudio((s) => s.sun);
+  const polarNight = useStudio((s) => s.sunInfo?.polar === 'night');
+  const setSun = useStudio((s) => s.setSun);
+  const sunLabel = polarNight ? t('sun.polarNight') : clock(sun.minutes, lang);
+  const levels = derived?.levels ?? null;
+  const lv = (id: string | null) => {
+    const l = levels?.find((x) => x.id === id);
+    return l ? levelName(lang, l.name, l.index, l.isAttic) : null;
+  };
+  const open = (k: Tray) => tray === k && (!sitePanel || (k === 'sun' && !!sitePanel.fromSun));
+  const toggle = (k: Tray) => setTray(open(k) ? null : k);
+  const icon = { width: 19, height: 19, className: 'shrink-0' };
+  const viewLabel = view !== DEFAULT_VIEW ? t(`viewShort.${view}` as MessageKey) || t(`view.${view}`) : null;
+  const tool = (k: Tray, ico: ReactNode, label: string, value: string | null, testId: string, onClick?: () => void) => (
+    <GlassGroupButton
+      icon={ico}
+      label={value ? `${label}: ${value}` : label}
+      title={undefined}
+      value={value ?? undefined}
+      on={open(k)}
+      aria-expanded={open(k)}
+      aria-controls={TRAY_ID[k]}
+      data-testid={testId}
+      data-tool-trigger=""
+      onClick={onClick ?? (() => toggle(k))}
+    />
+  );
+  if (mode === 'plan') {
+    return (
+      <div className={cx('pointer-events-none flex items-center gap-2.5', className)}>
+        <GlassButtonGroup label={t('tools.label')} group={TOOLS_GROUP} testId="toolbar">
+          {tool('levels', <LayersIcon {...icon} />, t('bar.levels'), lv(level), 'bar-levels')}
+          <GlassGroupButton icon={<MinusIcon width={18} height={18} />} label={t('plan.zoomOut')} onClick={() => planCommands.zoom(1 / 1.4)} />
+          <GlassGroupButton icon={<FitIcon width={18} height={18} />} label={t('plan.fit')} onClick={() => planCommands.fit()} />
+          <GlassGroupButton icon={<PlusIcon width={18} height={18} />} label={t('plan.zoomIn')} onClick={() => planCommands.zoom(1.4)} />
+        </GlassButtonGroup>
+      </div>
+    );
+  }
+  return (
+    <div className={cx('pointer-events-none flex items-center gap-2.5', className)}>
+      <GlassButtonGroup label={t('tools.label')} group={TOOLS_GROUP} testId="toolbar">
+        {!walk && tool('views', <CubeIcon {...icon} />, t('bar.views'), viewLabel, 'bar-views')}
+        {!walk && tool('levels', <LayersIcon {...icon} />, t('bar.levels'), cut ? lv(cut) : null, 'bar-levels')}
+        {tool('sun', <SunIcon {...icon} />, t('bar.sun'), sun.on ? sunLabel : null, 'bar-sun', () => {
+          if (open('sun')) setTray(null);
+          else {
+            setTray('sun');
+            if (!sun.on) setSun({ on: true });
+          }
+        })}
+      </GlassButtonGroup>
+      <GlassButton
+        icon={<WalkIcon width={19} height={19} className="shrink-0" />}
+        label={walk ? t('walk.exit') : t('bar.walk')}
+        aria-pressed={walk}
+        onClick={() => setWalk(!walk)}
+        data-testid="bar-walk"
+      >
+        {walk ? `${t('bar.walk')} ×` : t('bar.walk')}
+      </GlassButton>
+    </div>
+  );
+}
+
 /* ------------------------------------------------------------------ */
 /* Panel contents                                                      */
 /* ------------------------------------------------------------------ */
@@ -375,7 +461,7 @@ function LevelsPanel({ derived, onClose }: { derived: Derived; onClose: () => vo
   );
 }
 
-/** Time of day on a sunrise..sunset track: the range and its hour ticks (never colliding). */
+/** Time of day on a sunrise..sunset track: a glass-thumb slider and its hour ticks (never colliding). */
 export function SunSlider({ className }: { className?: string }) {
   const t = useT();
   const lang = useStudio((s) => s.lang);
@@ -385,7 +471,6 @@ export function SunSlider({ className }: { className?: string }) {
   const lo = info?.sunrise ?? 360;
   const hi = info?.sunset ?? 1080;
   const value = Math.min(hi, Math.max(lo, Math.round(sun.minutes)));
-  const fill = ((value - lo) / Math.max(1, hi - lo)) * 100;
   const ref = useRef<HTMLDivElement>(null);
   const [width, setWidth] = useState(260);
   useLayoutEffect(() => {
@@ -403,26 +488,23 @@ export function SunSlider({ className }: { className?: string }) {
   const endGap = Math.max(loText.length, hiText.length) * 6.2 + 4;
   return (
     <div className={cx('relative min-w-0 pb-3.5', className)}>
-      <input
-        type="range"
-        className={cx('range block w-full', !sun.on && 'range-idle')}
-        style={{ ['--fill' as string]: `${fill}%`, height: 24 }}
+      <GlassSlider
         min={lo}
         max={hi}
-        step={1}
         value={value}
-        onChange={(e) => setSun({ on: true, playing: false, minutes: Number(e.target.value) })}
-        aria-label={t('sun.time')}
-        aria-valuetext={clock(value, lang)}
+        idle={!sun.on}
+        onChange={(v) => setSun({ on: true, playing: false, minutes: v })}
+        ariaLabel={t('sun.time')}
+        ariaValueText={clock(value, lang)}
       />
-      <div ref={ref} className="tnum pointer-events-none absolute inset-x-[9px] bottom-0 h-3 text-2xs leading-none whitespace-nowrap text-ink-3" aria-hidden="true" data-testid="sun-ticks">
-        <span className="absolute top-0 left-[-9px]">{loText}</span>
+      <div ref={ref} className="tnum pointer-events-none absolute inset-x-[19px] bottom-0 h-3 text-[11px] leading-none whitespace-nowrap text-ink-2" aria-hidden="true" data-testid="sun-ticks">
+        <span className="absolute top-0 left-[-19px]">{loText}</span>
         {hourTicks(lo, hi, width, endGap).map((h) => (
           <span key={h} className="absolute top-0 -translate-x-1/2" style={{ left: `${((h * 60 - lo) / (hi - lo)) * 100}%` }}>
             {h % 24}
           </span>
         ))}
-        <span className="absolute top-0 right-[-9px]">{hiText}</span>
+        <span className="absolute top-0 right-[-19px]">{hiText}</span>
       </div>
     </div>
   );
@@ -447,7 +529,7 @@ function PlayButton({ size = 36 }: { size?: number }) {
       aria-label={sun.playing ? t('sun.pause') : t('sun.play')}
       aria-pressed={sun.playing}
       style={{ width: size, height: size }}
-      className={cx('hit grid shrink-0 place-items-center rounded-full text-ink transition-colors duration-150', sun.on ? 'bg-accent hover:brightness-95' : 'bg-wash hover:bg-accent')}
+      className={cx('hit lg-focus grid shrink-0 place-items-center rounded-full text-on-accent transition-[filter] duration-150 hover:brightness-95', sun.on ? 'bg-accent' : 'bg-accent/70')}
     >
       {sun.playing ? <PauseIcon width={16} height={16} /> : <PlayIcon width={16} height={16} className="translate-x-px" />}
     </button>
@@ -472,47 +554,25 @@ export function SunTime({ className }: { className?: string }) {
   );
 }
 
-/** The five dates as a light segmented row. */
+/** The five dates as choice chips inside the panel. */
 function DateRow() {
   const t = useT();
   const lang = useStudio((s) => s.lang);
   const dateId = useStudio((s) => s.sun.dateId);
   const setSun = useStudio((s) => s.setSun);
   const lat = useStudio((s) => s.house?.site.latitude ?? 30);
-  const ref = useRef<HTMLDivElement>(null);
-  const pick = (id: SunDateId) => setSun({ dateId: id, on: true });
-  const onKey = (e: RKeyboardEvent) => {
-    const d = e.key === 'ArrowRight' ? 1 : e.key === 'ArrowLeft' ? -1 : 0;
-    if (!d) return;
-    e.preventDefault();
-    const i = SUN_DATES.indexOf(dateId);
-    const next = SUN_DATES[(i + d + SUN_DATES.length) % SUN_DATES.length]!;
-    pick(next);
-    ref.current?.querySelector<HTMLElement>(`[data-value="${next}"]`)?.focus();
-  };
   return (
-    <div ref={ref} role="radiogroup" aria-label={t('sun.dates')} onKeyDown={onKey} className="flex gap-0.5 rounded-[12px] bg-wash p-[3px]" data-testid="sun-date">
-      {SUN_DATES.map((id) => {
-        const on = id === dateId;
+    <GlassChoice<SunDateId>
+      label={t('sun.dates')}
+      value={dateId}
+      onChange={(id) => setSun({ dateId: id, on: true })}
+      testId="sun-date"
+      className="-mx-1"
+      options={SUN_DATES.map((id) => {
         const day = dayText(sunDate(id, lat), lang);
-        return (
-          <button
-            key={id}
-            type="button"
-            role="radio"
-            aria-checked={on}
-            aria-label={`${t(`sun.date.${id}`)} ${day}`}
-            title={day}
-            tabIndex={on ? 0 : -1}
-            data-value={id}
-            onClick={() => pick(id)}
-            className={cx('h-[30px] flex-auto rounded-[8px] px-1 text-[13px] whitespace-nowrap transition-colors', on ? 'bg-white text-ink shadow-[0_1px_2px_rgba(0,0,0,0.08),0_0_0_1px_rgba(0,0,0,0.04)]' : 'text-ink-2 hover:text-ink')}
-          >
-            {lang === 'zh' ? t(`sun.date.${id}`) : t(`sun.date.${id}`).split(' ')[0]}
-          </button>
-        );
+        return { value: id, title: day, ariaLabel: `${t(`sun.date.${id}`)} ${day}`, label: lang === 'zh' ? t(`sun.date.${id}`) : t(`sun.date.${id}`).split(' ')[0] };
       })}
-    </div>
+    />
   );
 }
 
@@ -531,12 +591,12 @@ function MiniDial({ northDeg }: { northDeg: number }) {
 
 function SiteRow({ icon, text, meta, onClick, label, testId }: { icon: ReactNode; text: ReactNode; meta: string; onClick: () => void; label: string; testId: string }) {
   return (
-    <button type="button" onClick={onClick} aria-label={label} data-testid={testId} className="flex min-h-11 w-full items-center gap-2.5 rounded-[10px] bg-wash px-3 py-1.5 text-left text-[13px] transition-colors hover:bg-hairline">
+    <GlassRow onClick={onClick} aria-label={label} data-testid={testId} className="-mx-3 w-[calc(100%+24px)] py-1.5 text-[14px]">
       {icon}
-      <span className="min-w-0 flex-1 leading-[17px] [overflow-wrap:anywhere]">{text}</span>
-      <span className="tnum shrink-0 text-xs text-ink-3">{meta}</span>
+      <span className="min-w-0 flex-1 leading-[18px] [overflow-wrap:anywhere]">{text}</span>
+      <span className="tnum shrink-0 text-[13px] font-normal text-ink-2">{meta}</span>
       <ChevronRightIcon width={14} height={14} className="shrink-0 text-ink-2" />
-    </button>
+    </GlassRow>
   );
 }
 
@@ -583,25 +643,23 @@ function SunPanel({ onClose, phone }: { onClose: () => void; phone?: boolean }) 
   const [placeMain, placeNote] = placeTxt.includes('（') ? [placeTxt.slice(0, placeTxt.indexOf('（')), placeTxt.slice(placeTxt.indexOf('（'))] : placeTxt.includes(' (') ? [placeTxt.slice(0, placeTxt.indexOf(' (')), placeTxt.slice(placeTxt.indexOf(' ('))] : [placeTxt, ''];
   return (
     <>
-      <div className="flex items-center gap-3">
-        {polar !== 'night' && <PlayButton />}
+      <div className="flex items-start gap-3">
         <div className="min-w-0 flex-1">
-          <p className="tnum text-[26px] leading-[30px] font-medium" data-testid="sun-clock">{polar === 'night' ? t('sun.polarNight') : clock(value, lang)}</p>
-          <p className="tnum text-[11.5px] leading-4 text-ink-2" data-testid="sun-sub">{sub}</p>
+          <p className="tnum text-[40px] leading-10 font-bold tracking-[-0.02em]" data-testid="sun-clock">{polar === 'night' ? t('sun.polarNight') : clock(value, lang)}</p>
+          <p className="tnum mt-1.5 text-[13px] leading-[18px] font-medium text-ink-2" data-testid="sun-sub">{sub}</p>
         </div>
-        <CloseButton onClick={onClose} />
+        {polar !== 'night' && <PlayButton size={44} />}
       </div>
       {polar === 'night' ? (
-        <p className="rounded-[10px] bg-wash px-3 py-2 text-[12px] leading-[18px] text-ink-2" data-testid="sun-polar-note">
+        <p className="text-[13px] leading-[18px] text-ink-2" data-testid="sun-polar-note">
           {t('sun.polarNightNote')}
         </p>
       ) : (
         <SunSlider />
       )}
       <DateRow />
-      <p className="text-[11.5px] tracking-[0.04em] text-ink-3">{t('sun.site')}</p>
       {site && (
-        <div className="-mt-1.5 flex flex-col gap-2">
+        <div className="-my-1 flex flex-col">
           <SiteRow
             icon={<PinIcon width={16} height={16} className="shrink-0" />}
             text={<>{placeMain}<span className="text-ink-3">{placeNote}</span></>}
@@ -610,6 +668,7 @@ function SunPanel({ onClose, phone }: { onClose: () => void; phone?: boolean }) 
             label={`${t('more.location')}: ${placeTxt}`}
             testId="sun-place"
           />
+          <GlassSep className="mx-0 my-0" />
           <SiteRow
             icon={<MiniDial northDeg={site.northDeg} />}
             text={t('sun.front', { dir: bearingWords(frontBearing(site.northDeg), lang) })}
@@ -621,7 +680,7 @@ function SunPanel({ onClose, phone }: { onClose: () => void; phone?: boolean }) 
         </div>
       )}
       <div className="flex items-center justify-between gap-2">
-        <span className="tnum min-w-0 text-[11.5px] leading-4 text-ink-2" data-testid="sun-noon">
+        <span className="tnum min-w-0 text-[12px] leading-4 font-medium text-ink-2" data-testid="sun-noon">
           {span.map((x, i) => (
             <Fragment key={i}>
               {i > 0 && ' · '}
@@ -635,7 +694,7 @@ function SunPanel({ onClose, phone }: { onClose: () => void; phone?: boolean }) 
             setSun({ on: false, playing: false });
             setTray(null);
           }}
-          className="hit inline-flex h-8 shrink-0 items-center gap-1 rounded-[7px] px-2 text-[12.5px] whitespace-nowrap text-ink transition-colors hover:bg-wash"
+          className="hit lg-plate -mr-2 inline-flex h-8 shrink-0 items-center gap-1 px-2.5 text-[13px] font-medium whitespace-nowrap"
         >
           <CloseIcon width={14} height={14} />
           {t('sun.exit')}
@@ -668,8 +727,9 @@ function SitePanelBody({ phone }: { phone?: boolean }) {
 }
 
 /** The content of the open panel (header included); null when none is open. */
-export function PanelBody({ derived, phone }: { derived: Derived | null; phone?: boolean }) {
-  const open = useOpenPanel();
+export function PanelBody({ derived, phone, kind }: { derived: Derived | null; phone?: boolean; kind?: Tray | 'site' }) {
+  const current = useOpenPanel();
+  const open = kind ?? current;
   const setTray = useStudio((s) => s.setTray);
   const close = () => setTray(null);
   if (!open) return null;
@@ -701,43 +761,55 @@ export function useFocusOnOpen(ref: React.RefObject<HTMLElement | null>, key: st
   }, [key]); // eslint-disable-line react-hooks/exhaustive-deps
 }
 
+/** The control a panel grows out of. */
+function panelAnchor(panel: Tray | 'site'): HTMLElement | null {
+  if (panel !== 'site') return document.querySelector<HTMLElement>(`[aria-controls="${TRAY_ID[panel]}"]`);
+  const sp = useStudio.getState().sitePanel;
+  if (!sp || sp.fromSun) return document.querySelector<HTMLElement>(`[aria-controls="${TRAY_ID.sun}"]`);
+  return document.querySelector<HTMLElement>('[data-testid=project-menu]');
+}
+
 /**
- * Desktop: the open panel as a card hanging under the toolbar (~300 px,
- * fitted to its content). Reports its box so the house frames beside or
- * below it.
+ * Desktop: the open panel as a glass popover that flows out of its tool's
+ * button and hangs under the toolbar (one at a time; a panel being
+ * replaced flows back into its own button). Reports its box so the house
+ * frames beside or below it.
  */
 export function PanelCard({ derived, onRect }: { derived: Derived | null; onRect: (r: { left: number; bottom: number } | null) => void }) {
   const open = useOpenPanel();
-  const kind = useStudio((s) => (s.sitePanel ? `site-${s.sitePanel.kind}` : s.tray));
-  const ref = useRef<HTMLDivElement>(null);
-  useFocusOnOpen(ref, open ? kind : null);
+  const siteKind = useStudio((s) => s.sitePanel?.kind ?? null);
+  const current = open ? (open === 'site' ? `site-${siteKind}` : open) : null;
+  const [panels, setPanels] = useState<{ key: string; panel: Tray | 'site' }[]>([]);
   useLayoutEffect(() => {
-    const el = ref.current;
-    if (!el || !open) {
-      onRect(null);
-      return;
-    }
-    // offsetTop / offsetHeight ignore the drop-in transform: the settled box.
-    const report = () => onRect({ left: el.offsetLeft, bottom: el.offsetTop + el.offsetHeight });
-    report();
-    const ro = new ResizeObserver(report);
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, [open, onRect]);
-  if (!open) return null;
+    if (current && open && !panels.some((p) => p.key === current)) setPanels((ps) => [...ps, { key: current, panel: open }]);
+    if (!current) onRect(null);
+  }, [current]); // eslint-disable-line react-hooks/exhaustive-deps
+  const ref = useRef<HTMLElement>(null);
+  useFocusOnOpen(ref, current);
   return (
-    <div
-      ref={ref}
-      id={open === 'site' ? undefined : TRAY_ID[open]}
-      role={open === 'site' ? undefined : 'group'}
-      aria-label={open === 'site' ? undefined : open}
-      data-testid={open === 'site' ? 'panel-site' : TRAY_ID[open]}
-      data-panel=""
-      className="glass-solid pointer-events-auto absolute top-[68px] right-4 flex max-h-[calc(100%-68px-96px)] w-[300px] flex-col overflow-y-auto overscroll-contain rounded-[14px]"
-    >
-      <div key={kind} className="flex min-h-0 flex-col gap-3 px-4 pt-3.5 pb-4 animate-[panel-drop_240ms_cubic-bezier(0.22,0.8,0.24,1)]">
-        <PanelBody derived={derived} />
-      </div>
-    </div>
+    <>
+      {panels.map((p) => {
+        const on = p.key === current;
+        return (
+          <GlassPopover
+            key={p.key}
+            ref={on ? ref : undefined}
+            open={on}
+            anchor={() => panelAnchor(p.panel)}
+            onClosed={() => setPanels((ps) => ps.filter((q) => q.key !== p.key))}
+            onBox={on ? onRect : undefined}
+            id={p.panel === 'site' ? undefined : TRAY_ID[p.panel]}
+            ariaRole={p.panel === 'site' ? undefined : 'group'}
+            aria-label={p.panel === 'site' ? undefined : p.panel}
+            data-testid={on ? (p.panel === 'site' ? 'panel-site' : TRAY_ID[p.panel]) : undefined}
+            data-panel={on ? '' : undefined}
+            className="absolute top-[78px] right-[18px] flex max-h-[calc(100%-78px-112px)] w-[330px] flex-col overflow-y-auto overscroll-contain"
+            bodyClassName="flex min-h-0 flex-col gap-4 p-[22px]"
+          >
+            <PanelBody derived={derived} kind={p.panel} />
+          </GlassPopover>
+        );
+      })}
+    </>
   );
 }
