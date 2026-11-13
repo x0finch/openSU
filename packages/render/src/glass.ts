@@ -14,6 +14,7 @@
 import {
   BufferAttribute,
   BufferGeometry,
+  DoubleSide,
   GLSL3,
   LinearFilter,
   LinearMipmapLinearFilter,
@@ -100,6 +101,14 @@ in vec3 position;
 void main() { gl_Position = vec4(position.xy, 0., 1.); }
 `;
 
+/** Everywhere away from the glass: the scene as it is. */
+const COPY = /* glsl */ `
+precision highp float;
+uniform sampler2D uScene;
+out vec4 o;
+void main() { o = vec4(texelFetch(uScene, ivec2(gl_FragCoord.xy), 0).rgb, 1.); }
+`;
+
 const FRAG = /* glsl */ `
 precision highp float;
 precision highp int;
@@ -113,7 +122,6 @@ uniform vec4 uA[MAXN]; // x, y, w, h (device px, top-left origin)
 uniform vec4 uB[MAXN]; // radius, tint, frost, alpha
 uniform vec4 uC[MAXN]; // magnify, layer, group, bend
 uniform vec4 uD[MAXN]; // lightX, lightY, lightStrength, lift
-uniform vec4 uBounds;  // union of all shapes and their shadows (x0, y0, x1, y1)
 uniform vec3 uTint;
 uniform float uSat, uBri, uCatch, uBevel, uShadow, uShadowY, uShadowBlur, uHair;
 uniform float uRimMax, uRimDiv, uEdge, uFall, uDisp, uPress, uOpaque;
@@ -199,7 +207,6 @@ vec3 outside(vec3 col, vec2 p, float d, float layer, int idx) {
 void main() {
   vec2 p = vec2(gl_FragCoord.x, uRes.y - gl_FragCoord.y);
   vec3 col = bgL(p, 0.);
-  if (uN == 0 || p.x < uBounds.x || p.y < uBounds.y || p.x > uBounds.z || p.y > uBounds.w) { o = vec4(col, 1.); return; }
   int i0; float d0 = field(p, 0., i0);
   col = outside(col, p, d0, 0., i0);
   if (i0 >= 0 && d0 < 1.5 * uDpr) {
@@ -232,6 +239,11 @@ export class GlassCompositor {
   private readonly camera = new OrthographicCamera(-1, 1, 1, -1, 0, 1);
   private readonly material: RawShaderMaterial;
   private readonly mesh: Mesh;
+  private readonly copy: Mesh;
+  /** One quad per shape (its box, its shadow and merge reach): only there runs the glass shader. */
+  private readonly quads = new Float32Array(MAX_GLASS_SHAPES * 6 * 3);
+  private width = 1;
+  private height = 1;
   private shapes: GlassShape[] = [];
   private mat: GlassMaterial | null = null;
   private pixelRatio = 1;
@@ -251,13 +263,17 @@ export class GlassCompositor {
     this.target.texture.colorSpace = SRGBColorSpace;
     this.target.texture.internalFormat = 'RGBA8';
     (this.target as unknown as { isXRRenderTarget: boolean }).isXRRenderTarget = true;
+    const full = new BufferGeometry();
+    full.setAttribute('position', new BufferAttribute(new Float32Array([-1, -1, 0, 3, -1, 0, -1, 3, 0]), 3));
     const geo = new BufferGeometry();
-    geo.setAttribute('position', new BufferAttribute(new Float32Array([-1, -1, 0, 3, -1, 0, -1, 3, 0]), 3));
+    geo.setAttribute('position', new BufferAttribute(this.quads, 3));
+    geo.setDrawRange(0, 0);
     const arr4 = () => Array.from({ length: MAX_GLASS_SHAPES }, () => new Vector4());
     this.material = new RawShaderMaterial({
       glslVersion: GLSL3,
       vertexShader: VERT,
       fragmentShader: FRAG,
+      side: DoubleSide,
       depthTest: false,
       depthWrite: false,
       uniforms: {
@@ -270,7 +286,6 @@ export class GlassCompositor {
         uB: { value: arr4() },
         uC: { value: arr4() },
         uD: { value: arr4() },
-        uBounds: { value: new Vector4() },
         uTint: { value: new Vector3(1, 1, 1) },
         uSat: { value: 1 },
         uBri: { value: 1 },
@@ -291,13 +306,21 @@ export class GlassCompositor {
     });
     this.mesh = new Mesh(geo, this.material);
     this.mesh.frustumCulled = false;
-    this.scene.add(this.mesh);
+    this.mesh.renderOrder = 1;
+    // Overlapping quads are harmless: each pixel's colour depends on the
+    // scene and the shapes only, so a pixel drawn twice comes out the same.
+    this.copy = new Mesh(full, new RawShaderMaterial({ glslVersion: GLSL3, vertexShader: VERT, fragmentShader: COPY, depthTest: false, depthWrite: false, uniforms: { uScene: { value: this.target.texture } } }));
+    this.copy.frustumCulled = false;
+    this.copy.renderOrder = 0;
+    this.scene.add(this.copy, this.mesh);
   }
 
   /** Drawing-buffer size (device px) and the pixel ratio of the canvas. */
   setSize(width: number, height: number, pixelRatio: number): void {
     this.target.setSize(width, height);
     this.pixelRatio = pixelRatio;
+    this.width = width;
+    this.height = height;
     (this.material.uniforms.uRes!.value as Vector2).set(width, height);
     this.upload();
   }
@@ -318,21 +341,23 @@ export class GlassCompositor {
     const m = this.mat;
     const pr = this.pixelRatio;
     const A = u.uA!.value as Vector4[], B = u.uB!.value as Vector4[], C = u.uC!.value as Vector4[], D = u.uD!.value as Vector4[];
-    let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
-    const pad = m ? (m.shadowOffset + m.shadowBlur * 2.5 + m.merge + 4) : 0;
+    const pad = m ? m.shadowOffset + m.shadowBlur * 2.5 + m.merge + 4 : 0;
+    const q = this.quads;
+    const W = this.width, H = this.height;
     this.shapes.forEach((s, i) => {
       A[i]!.set(s.x * pr, s.y * pr, Math.max(0, s.width) * pr, Math.max(0, s.height) * pr);
       B[i]!.set(s.radius * pr, s.tint, s.frost * pr, s.alpha ?? 1);
       C[i]!.set(s.magnify ?? 1, s.layer ?? 0, s.group ?? 0, s.bend ?? 1);
       D[i]!.set((s.light?.x ?? 0) * pr, (s.light?.y ?? 0) * pr, s.light?.strength ?? 0, s.lift ?? 1);
       const lp = pad * Math.max(1, s.lift ?? 1);
-      x0 = Math.min(x0, (s.x - lp) * pr);
-      y0 = Math.min(y0, (s.y - lp) * pr);
-      x1 = Math.max(x1, (s.x + s.width + lp) * pr);
-      y1 = Math.max(y1, (s.y + s.height + lp) * pr);
+      const ax = ((s.x - lp) * pr / W) * 2 - 1, bx = ((s.x + s.width + lp) * pr / W) * 2 - 1;
+      const ay = 1 - ((s.y - lp) * pr / H) * 2, by = 1 - ((s.y + s.height + lp) * pr / H) * 2;
+      q.set([ax, ay, 0, bx, ay, 0, ax, by, 0, ax, by, 0, bx, ay, 0, bx, by, 0], i * 18);
     });
     u.uN!.value = this.shapes.length;
-    (u.uBounds!.value as Vector4).set(x0, y0, x1, y1);
+    const geo = this.mesh.geometry;
+    geo.setDrawRange(0, this.shapes.length * 6);
+    (geo.getAttribute('position') as BufferAttribute).needsUpdate = true;
     u.uDpr!.value = pr;
     if (!m) return;
     u.uK!.value = m.merge * pr;
@@ -366,5 +391,7 @@ export class GlassCompositor {
     this.target.dispose();
     this.material.dispose();
     this.mesh.geometry.dispose();
+    (this.copy.material as RawShaderMaterial).dispose();
+    this.copy.geometry.dispose();
   }
 }
