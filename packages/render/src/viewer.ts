@@ -13,6 +13,7 @@ import {
   Plane,
   Scene,
   SRGBColorSpace,
+  Vector2,
   Vector3,
   WebGLRenderer,
 } from 'three';
@@ -42,6 +43,7 @@ export interface WalkOptions {
   pitchDeg?: number;
 }
 import { GROW_DURATION, growHeight, type GrowOptions } from './grow.js';
+import { GlassCompositor, type GlassMaterial, type GlassShape } from './glass.js';
 
 /**
  * Shadow framing (`setFrameShadows`): a sun lower than `minElevationDeg`
@@ -143,6 +145,11 @@ export class IllustrationViewer {
   private growZ: number | null = null;
   private growFrame = 0;
   private growDone: (() => void) | null = null;
+  /** The glass composite pass (null: the scene renders straight to the canvas). */
+  private glass: GlassCompositor | null = null;
+  private glassPending = false;
+  /** Frames drawn: scene renders and composite-only (glass) frames. Tests and the debug overlay read them. */
+  readonly frameCounts = { scene: 0, glass: 0 };
   /** Called after every frame (stats, UI). */
   onAfterRender: ((stats: SceneStats) => void) | null = null;
   lastStats: SceneStats = { triangles: 0, drawCalls: 0, drawCallsWithShadows: 0, trianglesWithShadows: 0 };
@@ -763,6 +770,10 @@ export class IllustrationViewer {
     const pr = this.fixedPixelRatio ?? Math.min(window.devicePixelRatio || 1, stage.maxPixelRatio);
     this.renderer.setPixelRatio(pr);
     this.renderer.setSize(width, height, true);
+    if (this.glass) {
+      const buf = this.renderer.getDrawingBufferSize(new Vector2());
+      this.glass.setSize(buf.x, buf.y, pr);
+    }
     this.edgeMaterial.resolution.set(width, height);
     this.floorMaterial.resolution.set(width, height);
     for (const m of this.clipLineMaterials) m.resolution.set(width, height);
@@ -780,6 +791,51 @@ export class IllustrationViewer {
       applyOrthoAspect(cam, aspect);
     }
     this.requestRender();
+  }
+
+  /**
+   * Liquid glass chrome (task 017): `shapes` are drawn over the scene by a
+   * composite pass, in CSS px relative to the canvas. The scene itself then
+   * renders into a multisampled target, only when it changes; a change of
+   * the glass alone re-runs the composite pass. `null` switches the pass
+   * off (the scene renders straight to the canvas again).
+   */
+  setGlass(shapes: readonly GlassShape[] | null, material?: GlassMaterial): void {
+    if (!shapes || !material) {
+      if (!this.glass) return;
+      this.glass.dispose();
+      this.glass = null;
+      this.requestRender();
+      return;
+    }
+    if (!this.glass) {
+      const buf = this.renderer.getDrawingBufferSize(new Vector2());
+      this.glass = new GlassCompositor(buf.x, buf.y);
+      this.glass.setSize(buf.x, buf.y, this.renderer.getPixelRatio());
+      this.glass.setGlass(shapes, material);
+      // The target is empty: the scene must be drawn into it once.
+      this.requestRender();
+      return;
+    }
+    this.glass.setGlass(shapes, material);
+    this.requestGlassRender();
+  }
+
+  /** Whether the glass composite pass is on. */
+  get glassOn(): boolean {
+    return !!this.glass;
+  }
+
+  /** Schedule a composite-only frame (the scene is unchanged). */
+  requestGlassRender(): void {
+    if (this.glassPending || this.pending) return;
+    this.glassPending = true;
+    requestAnimationFrame(() => {
+      this.glassPending = false;
+      if (this.pending || !this.glass) return;
+      this.glass.composite(this.renderer);
+      this.frameCounts.glass++;
+    });
   }
 
   /** Schedule one frame. Nothing renders unless something asked for it. */
@@ -815,7 +871,12 @@ export class IllustrationViewer {
       this.renderer.shadowMap.needsUpdate = true;
       this.shadowsDirty = false;
     }
-    this.renderer.render(this.scene, this.camera);
+    if (this.glass) {
+      this.renderer.setRenderTarget(this.glass.target);
+      this.renderer.render(this.scene, this.camera);
+      this.renderer.setRenderTarget(null);
+    } else this.renderer.render(this.scene, this.camera);
+    this.frameCounts.scene++;
     const info = this.renderer.info.render;
     let triangles = 0;
     let drawCalls = 0;
@@ -833,6 +894,7 @@ export class IllustrationViewer {
       }
     });
     this.lastStats = { triangles: Math.round(triangles), drawCalls, drawCallsWithShadows: info.calls, trianglesWithShadows: info.triangles };
+    this.glass?.composite(this.renderer);
     this.onAfterRender?.(this.lastStats);
     return this.lastStats;
   }
@@ -841,6 +903,8 @@ export class IllustrationViewer {
     this.walker?.dispose();
     this.walker = null;
     this.stopGrow();
+    this.glass?.dispose();
+    this.glass = null;
     this.renderer.dispose();
     this.renderer.domElement.remove();
   }

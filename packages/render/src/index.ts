@@ -19,3 +19,4 @@ export { createHouseObject, MATERIAL_SLOTS, BAKE_GROUP, type HouseObject } from 
 export { solarPosition, sunriseSunset, parseSolarDate, type SolarDate, type SolarInput, type SolarPosition, type SunTimes } from './sun/solar.js';
 export { studySun, clampToDaylight, datePresets, siteOffsetHours, zoneOffsetHours, type StudySite, type StudySun } from './sun/study.js';
 export { OffscreenView, type OffscreenRenderOptions, type FrameWindow } from './offscreen.js';
+export { GlassCompositor, MAX_GLASS_SHAPES, type GlassMaterial, type GlassShape } from './glass.js';
