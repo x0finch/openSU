@@ -98,8 +98,8 @@ Material:
 | | Light glass | Dark glass |
 |---|---|---|
 | tint colour | white | rgb(30 30 34) |
-| tint, capsule | 14% (glasswork range 6-22%) | 45% (30% failed 4.5:1 for labels over white) |
-| tint, text surface | 42% | 55% |
+| tint, capsule | 14% (glasswork range 6-22%) | 60% (30% and 45% failed 4.5:1 for labels over white) |
+| tint, text surface | 42% | 60% |
 | blur | 2 px (panel morph up to 6 px) | same |
 | saturation | 1.8 | 1.6 |
 | brightness | 1.06 | 0.80 |
