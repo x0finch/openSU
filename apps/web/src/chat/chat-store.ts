@@ -7,6 +7,9 @@ import { countryName, loadPlaces } from '../lib/site';
 import { create } from 'zustand';
 import { useStudio } from '../lib/store';
 import { type AiSettings, loadSettings, relayHeaders, requestModel, saveSettings } from './settings';
+import { addCall, addChange, addText, type TurnPart } from './turn-parts';
+
+export type { TurnPart } from './turn-parts';
 
 /**
  * Progress of a turn, as it actually is: `thinking` (waiting for the model,
@@ -17,10 +20,25 @@ export type Phase = 'thinking' | 'working' | 'repairing' | 'writing' | 'done';
 /** Undo state of a turn's changes card. */
 export type UndoState = 'can-undo' | 'can-redo' | 'undone' | 'kept';
 
+/** What a running turn is doing now: the edit being sent, or the one just applied. */
+export interface LiveStep {
+  summary: string;
+  applied: boolean;
+}
+
 export interface ChatItem {
   id: string;
   role: 'user' | 'assistant';
+  /** The whole text (assistant: every segment of the turn, joined; also the model's memory). */
   text: string;
+  /**
+   * Assistant (task 018): the turn in order, text segments split at each
+   * tool call and the changes they led to. Absent in saves made before it
+   * (the turn then reads as plain `text`).
+   */
+  parts?: TurnPart[];
+  /** Assistant, while running: the current step (not saved). */
+  live?: LiveStep;
   /** Assistant: progress of the turn. */
   phase?: Phase;
   changes?: AppliedBatch[];
@@ -226,7 +244,7 @@ export async function send(text: string): Promise<void> {
   const id = nextId();
   useChat.setState((s) => ({
     running: true,
-    items: [...s.items, { id: userId, role: 'user', text: prompt }, { id, role: 'assistant', text: '', phase: 'thinking', prompt }],
+    items: [...s.items, { id: userId, role: 'user', text: prompt }, { id, role: 'assistant', text: '', parts: [], phase: 'thinking', prompt }],
   }));
   abort = new AbortController();
   try {
@@ -235,11 +253,15 @@ export async function send(text: string): Promise<void> {
     const settings = useChat.getState().settings;
     const adapter = m.createRelayAdapter({ endpoint: endpoint(), model: requestModel(settings), headers: () => relayHeaders(settings) });
     const onEvent = (e: AgentEvent) => {
-      if (e.type === 'text') patch(id, (it) => ({ text: it.text + e.delta, phase: 'writing' }));
-      else if (e.type === 'tool-call') patch(id, { phase: e.name === 'get_house' ? 'thinking' : 'working' });
+      if (e.type === 'text') patch(id, (it) => ({ text: it.text + e.delta, parts: addText(it.parts ?? [], e.delta), phase: 'writing' }));
+      else if (e.type === 'tool-call') patch(id, (it) => ({ parts: addCall(it.parts ?? []), phase: e.name === 'get_house' ? 'thinking' : 'working' }));
+      else if (e.type === 'step') patch(id, { live: { summary: e.summary, applied: false } });
       else if (e.type === 'rejected') patch(id, { phase: 'repairing', lastErrors: e.errors });
       else if (e.type === 'house') {
-        patch(id, (it) => ({ changes: [...(it.changes ?? []), e.batch], phase: 'working' }));
+        patch(id, (it) => {
+          const changes = [...(it.changes ?? []), e.batch];
+          return { changes, parts: addChange(it.parts ?? [], changes.length - 1), live: { summary: e.batch.summary, applied: true }, phase: 'working' };
+        });
         useStudio.getState().setHouse(e.house, { fromLevel: e.fromLevel });
       }
     };
@@ -258,6 +280,7 @@ export async function send(text: string): Promise<void> {
     patch(id, {
       text: r.text,
       phase: 'done',
+      live: undefined,
       changes: r.changes,
       undo: r.committed ? 'can-undo' : undefined,
       error: r.error,
@@ -265,7 +288,7 @@ export async function send(text: string): Promise<void> {
       aborted: r.status === 'aborted',
     });
   } catch (err) {
-    patch(id, { phase: 'done', error: { kind: 'network', message: String(err) } });
+    patch(id, { phase: 'done', live: undefined, error: { kind: 'network', message: String(err) } });
   } finally {
     abort = null;
     useChat.setState({ running: false });
@@ -363,6 +386,9 @@ export function restoreItems(items: ChatItem[], history?: SavedHistory | null, h
   const next = redoable[redoable.length - 1];
   const restored = items.map((it): ChatItem => ({
     ...it,
+    // Saves made before task 018 have no `parts`: the turn reads as its plain text.
+    parts: Array.isArray(it.parts) ? it.parts : undefined,
+    live: undefined,
     phase: it.role === 'assistant' ? 'done' : it.phase,
     undo: it.id === top ? 'can-undo' : it.id === next ? 'can-redo' : redoable.includes(it.id) || it.undo === 'can-redo' ? 'undone' : it.undo === 'can-undo' ? 'kept' : it.undo,
   }));

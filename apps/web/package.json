@@ -9,7 +9,7 @@
     "build": "vite build && node scripts/size-report.mjs",
     "preview": "vite preview",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "node --experimental-strip-types --no-warnings --test scripts/spring-test.ts && node scripts/glass-check.mjs && node scripts/shots.mjs --smoke && node scripts/glass-contrast.mjs && node scripts/chat-e2e.mjs --smoke && node --experimental-strip-types --no-warnings scripts/relay-check.mjs",
+    "test": "node --experimental-strip-types --no-warnings --test scripts/spring-test.ts scripts/turn-parts-test.ts && node scripts/glass-check.mjs && node scripts/shots.mjs --smoke && node scripts/glass-contrast.mjs && node scripts/chat-e2e.mjs --smoke && node --experimental-strip-types --no-warnings scripts/relay-check.mjs",
     "shots": "node scripts/shots.mjs",
     "deploy": "vite build && wrangler deploy",
     "cf-typegen": "wrangler types",
