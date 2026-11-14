@@ -242,9 +242,10 @@ function SignInBody({ phone }: { phone?: boolean }) {
         </div>
       )}
       {google && (
-        <button type="button" onClick={() => void continueWithGoogle(tk(t))} disabled={busy} className="hit lg-plate lg-field flex h-12 w-full items-center justify-center gap-2.5 rounded-full text-[15px] font-medium text-ink" data-testid="signin-google">
-          <GoogleLogo />
-          {t('account.google')}
+        // Google's dark theme (glass.css .google-btn): standard "G" unmodified, 12 px before it, 10 px after, 12 px after the text.
+        <button type="button" onClick={() => void continueWithGoogle(tk(t))} disabled={busy} className="hit google-btn flex h-12 w-full items-center justify-center rounded-full pr-3 pl-3 text-[15px] font-medium" data-testid="signin-google">
+          <GoogleLogo width={20} height={20} className="mr-2.5 shrink-0" />
+          <span className="truncate">{t('account.google')}</span>
         </button>
       )}
       {!emailOn && errorLine}

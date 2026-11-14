@@ -290,6 +290,29 @@ try {
     preview.stop();
   }
 
+  // --- Google configured (fake ids: the button shows, nothing is called) ------
+  if (wanted('google')) {
+    const preview = await startPreview({ GOOGLE_CLIENT_ID: 'not-a-real-id', GOOGLE_CLIENT_SECRET: 'not-a-real-secret' });
+    console.log(`google: preview on ${preview.base}`);
+    for (const [label, opts] of [['desktop', DESKTOP], ['phone', PHONE]]) {
+      const { ctx, page } = await open(preview.base, opts);
+      await openMenu(page);
+      await page.getByTestId('menu-signin').click();
+      await page.waitForSelector('[data-testid=signin-google]');
+      await page.waitForTimeout(1500);
+      const g = await page.getByTestId('signin-google').evaluate((b) => ({
+        text: b.textContent.trim(),
+        fills: [...b.querySelectorAll('svg path')].map((p) => p.getAttribute('fill')).join(','),
+        bg: getComputedStyle(b).backgroundColor,
+      }));
+      check(g.text === '使用 Google 账号继续' && g.fills === '#EA4335,#4285F4,#FBBC05,#34A853' && g.bg === 'rgb(19, 19, 20)', `${label}: Google button: wording, standard four-colour G, Google's dark fill (${JSON.stringify(g)})`);
+      check((await page.getByTestId('signin-email-input').count()) === 1, `${label}: email and Google in one sheet`);
+      await shot(page, `${label}-signin-google`);
+      await ctx.close();
+    }
+    preview.stop();
+  }
+
   // --- Phone ------------------------------------------------------------------
   if (wanted('phone')) {
     const preview = await startPreview({ QUOTA_ANON_TRIAL: '1', QUOTA_USER_DAILY: '2' });
