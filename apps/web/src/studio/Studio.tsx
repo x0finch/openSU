@@ -10,6 +10,8 @@ import type { FrameInsets } from '@opensu/render';
 import { cx } from '../components/ui';
 import { useT } from '../lib/i18n';
 import { ChatInput, PinnedColumn, RecentStrip, SettingsHost } from '../chat/ChatPanel';
+import { closeSignIn, restoreDraftAfterRedirect, useAccount } from '../chat/account';
+import { SignInHost } from '../chat/SignIn';
 import { useChat } from '../chat/chat-store';
 import { useAutosave } from '../lib/autosave';
 import { restoreLang, useStudio } from '../lib/store';
@@ -145,7 +147,9 @@ function useEscapeCloses(): void {
     const on = (e: KeyboardEvent) => {
       if (e.key !== 'Escape' || e.defaultPrevented) return;
       const s = useStudio.getState();
-      if (useChat.getState().settingsOpen) {
+      if (useAccount.getState().open) {
+        closeSignIn();
+      } else if (useChat.getState().settingsOpen) {
         useChat.getState().setSettingsOpen(false);
       } else if (s.sitePanel) {
         s.setSitePanel(null);
@@ -227,6 +231,7 @@ function QuietLoading({ label }: { label: string }) {
 
 export function Studio() {
   useInitialParams();
+  useEffect(restoreDraftAfterRedirect, []);
   useUrlState();
   useAutosave();
   useSunPlayer();
@@ -352,6 +357,7 @@ export function Studio() {
           {/* The input stays in the sheets view too (the column is not shown there). */}
           {!column && <DesktopDock onBox={setDockBox} />}
           <SettingsHost />
+          <SignInHost />
         </div>
       ) : walkLandscape ? (
         <LandscapeWalkHUD derived={derived} />
@@ -370,6 +376,7 @@ export function Studio() {
           {walk && <MobileWalkHUD derived={derived} top={`${header?.bottom ?? 58}px`} bottom={extent?.bottom ?? 130} />}
           {mode !== 'sheet' ? <PhoneDock derived={derived} landscape={landscape} onExtent={onExtent} /> : <SheetInput />}
           <SettingsHost phone />
+          <SignInHost phone />
         </>
       )}
     </div>

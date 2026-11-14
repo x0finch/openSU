@@ -35,7 +35,9 @@ export default defineConfig({
     chunkSizeWarningLimit: 1500,
   },
   plugins: [
-    cloudflare({ viteEnvironment: { name: 'ssr' } }),
+    // OPENSU_STATE: a separate local state folder (D1 etc.) for test runs
+    // (scripts/account-e2e.mjs), so they never touch the dev database.
+    cloudflare({ viteEnvironment: { name: 'ssr' }, persistState: process.env.OPENSU_STATE ? { path: process.env.OPENSU_STATE } : true }),
     tanstackStart({
       prerender: {
         enabled: true,

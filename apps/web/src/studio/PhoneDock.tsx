@@ -12,6 +12,7 @@
 import { type ReactNode, useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { cx } from '../components/ui';
 import { ChatInput, PinnedChat, RecentStrip } from '../chat/ChatPanel';
+import { useAccount } from '../chat/account';
 import { GlassSheet } from '../glass';
 import { useStudio } from '../lib/store';
 import { Hints } from './chrome';
@@ -42,6 +43,7 @@ export interface DockExtent {
 }
 
 export function PhoneDock({ derived, landscape, onExtent }: { derived: Derived | null; landscape: boolean; onExtent: (e: DockExtent) => void }) {
+  const signing = useAccount((s) => s.open);
   const walk = useStudio((s) => s.walk);
   const pinned = useStudio((s) => s.pinned);
   const recent = useStudio((s) => s.recent);
@@ -147,7 +149,8 @@ export function PhoneDock({ derived, landscape, onExtent }: { derived: Derived |
   const above: ReactNode = recent && !want ? <RecentStrip phone className="absolute inset-x-0 bottom-full mb-2" /> : null;
 
   return (
-    <div ref={root} className="pointer-events-none absolute inset-0 z-20" data-testid="phone-dock">
+    // The sign-in sheet (task 019) takes the bottom: the dock steps aside, as the input does for a tool sheet.
+    <div ref={root} className={cx('pointer-events-none absolute inset-0 z-20 transition-opacity duration-200', signing && 'opacity-0')} inert={signing || undefined} data-testid="phone-dock">
       {sheet}
       <div
         ref={ride}
