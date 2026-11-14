@@ -475,7 +475,8 @@ try {
       // A newer turn: the older one collapses to its final text and the line.
       await sendMessage(page, '你好');
       await waitDone(page, 2);
-      await page.waitForTimeout(800);
+      // The collapse runs on the spring; software GL can make its frames slow.
+      await page.waitForFunction(() => document.querySelectorAll('[data-testid=chat-panel] [data-testid=assistant-message]')[0]?.querySelectorAll('[data-testid=turn-sentence]').length === 0, null, { timeout: 20000 }).catch(() => {});
       const older = panel.getByTestId('assistant-message').first();
       const olderToggle = older.getByTestId('turn-toggle');
       check((await olderToggle.getAttribute('aria-expanded')) === 'false' && (await older.getByTestId('turn-sentence').count()) === 0 && ((await older.textContent()) ?? '').includes('三处都改好了'),
@@ -484,6 +485,7 @@ try {
       await shot(page, `${name}-full-older-collapsed`, dir);
       await olderToggle.click();
       await page.waitForTimeout(800);
+      await page.waitForFunction(() => !document.querySelector('[data-testid=chat-panel] [data-testid=assistant-message] [data-testid=turn] [data-open]')?.style.height, null, { timeout: 20000 }).catch(() => {});
       check((await older.getByTestId('turn-sentence').count()) === 3 && (await olderToggle.getAttribute('aria-expanded')) === 'true', `${name}: full: expanding an older turn shows its timeline`);
       await older.evaluate((el) => el.scrollIntoView({ block: 'start' }));
       await page.waitForTimeout(200);
