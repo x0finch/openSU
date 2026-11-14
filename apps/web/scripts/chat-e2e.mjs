@@ -58,6 +58,8 @@ const check = (cond, msg) => {
 
 /** Starts `vite preview` with the given Worker variables; returns base URL, log and stop(). */
 async function startPreview(vars) {
+  // The quota (task 019) has its own e2e (account-e2e.mjs); here it is off.
+  vars = { QUOTA_ENABLED: 'false', ...(vars ?? {}) };
   if (vars) writeFileSync(devVars, Object.entries(vars).map(([k, v]) => `${k}='${v}'\n`).join(''));
   else rmSync(devVars, { force: true });
   const port = await freePort();

@@ -3,8 +3,21 @@
   "name": "opensu-web",
   "compatibility_date": "2026-11-01",
   "compatibility_flags": ["nodejs_compat"],
-  "main": "@tanstack/react-start/server-entry",
+  "main": "./src/server.ts",
   "observability": {
     "enabled": true
-  }
+  },
+  // Accounts and the daily quota (task 019; migrations in ./migrations).
+  // `database_id` is a placeholder for local runs; the deploy workflow
+  // (scripts/d1-ensure.mjs) finds or creates the database by name and
+  // writes its real id here before building. Self-hosters without D1:
+  // remove this block and set QUOTA_ENABLED=false.
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "opensu",
+      "database_id": "00000000-0000-0000-0000-000000000000",
+      "migrations_dir": "migrations"
+    }
+  ]
 }

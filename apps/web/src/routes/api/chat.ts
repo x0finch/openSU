@@ -2,7 +2,8 @@ import { createFileRoute } from '@tanstack/react-router';
 import type { RelayEnv } from '../../server/chat-relay';
 
 // The AI relay (see src/server/chat-relay.ts). Waiting on the provider is
-// network time, not CPU: the Worker only picks the key and the model.
+// network time, not CPU: the Worker only picks the key and the model and
+// counts credits on the owner's key (one D1 statement).
 // Server-only modules are imported inside the handlers so the client
 // bundle never sees them.
 const load = async () => {
@@ -13,9 +14,9 @@ const load = async () => {
 export const Route = createFileRoute('/api/chat')({
   server: {
     handlers: {
-      GET: async () => {
+      GET: async ({ request }) => {
         const { env, relay } = await load();
-        return relay.relayStatus(env);
+        return relay.relayStatus(request, env);
       },
       POST: async ({ request }) => {
         const { env, relay } = await load();

@@ -4,7 +4,12 @@
 // (10 ms on the free plan) can only be checked on Cloudflare.
 //
 //   node --experimental-strip-types scripts/relay-check.mjs
-import { relayChat, relayStatus } from '../src/server/chat-relay.ts';
+import * as relay from '../src/server/chat-relay.ts';
+
+// The quota (task 019) is checked in auth-check.ts; here it is off unless a
+// test turns it on.
+const relayChat = (r, env) => relay.relayChat(r, { QUOTA_ENABLED: 'false', ...env });
+const relayStatus = (env) => relay.relayStatus(new Request('https://opensu.example/api/chat'), { QUOTA_ENABLED: 'false', ...env });
 
 const failures = [];
 const check = (cond, msg) => {
@@ -28,7 +33,7 @@ const req = (headers = {}, body = { model: 'default', stream: false, max_tokens:
   const r = await relayChat(req(), {});
   const j = await r.json();
   check(r.status === 401 && j.error.code === 'no_key', 'no key configured -> 401 no_key');
-  const s = await relayStatus({}).json();
+  const s = await (await relayStatus({})).json();
   check(s.serverKey === false && s.model === null, 'status without a key');
 }
 
@@ -42,7 +47,7 @@ const req = (headers = {}, body = { model: 'default', stream: false, max_tokens:
   check(last.headers.get('authorization') === 'Bearer sk-or-owner', 'owner key: Authorization added by the relay');
   check(last.body.model === 'anthropic/claude-sonnet-5.5' && last.body.stream === true && last.body.max_tokens === 4096, 'owner key: model, stream and output cap set by the relay');
   check(!r.headers.has('set-cookie') && !r.headers.has('x-upstream'), 'upstream headers are not passed to the browser');
-  const s = await relayStatus(env).text();
+  const s = await (await relayStatus(env)).text();
   check(!s.includes('sk-or-owner'), 'status does not reveal the key');
   const c = await relayChat(req({ 'x-opensu-key': '' }, { model: 'openai/gpt-6-astra-pro', messages: [] }), env);
   await c.text();
@@ -71,6 +76,18 @@ const req = (headers = {}, body = { model: 'default', stream: false, max_tokens:
   check(bad.status === 400, 'BYO: non-https base URLs are refused');
   const bad2 = await relayChat(req({ 'x-opensu-key': 'sk-user', 'x-opensu-base-url': 'https://u:p@evil.example/v1' }), env);
   check(bad2.status === 400, 'BYO: base URLs with credentials are refused');
+}
+
+// Quota on but no database bound: the owner's key is refused (fail closed), own keys work.
+{
+  const env = { OPENROUTER_API_KEY: 'sk-or-owner', QUOTA_ENABLED: 'true' };
+  const r = await relayChat(req(), env);
+  check(r.status === 503 && (await r.json()).error.code === 'quota_unavailable', 'quota without a database: owner key refused (503 quota_unavailable)');
+  const own = await relayChat(req({ 'x-opensu-key': 'sk-user' }), env);
+  await own.text();
+  check(own.status === 200, 'quota without a database: own key still works');
+  const s = await (await relayStatus(env)).json();
+  check(s.serverKey === false, 'quota without a database: status says there is no usable server key');
 }
 
 // Oversized and malformed bodies.

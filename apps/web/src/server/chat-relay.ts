@@ -7,8 +7,14 @@
 // Keys: the owner's key comes from the environment; a user may send their
 // own in `x-opensu-key` (with an optional `x-opensu-base-url`). Keys are
 // never logged, echoed, stored or put in URLs.
+//
+// The owner's key is metered by the daily quota (task 019, quota.ts); a
+// visitor's own key never is.
+import { type AccountEnv, authConfig, quotaConfig } from './config.ts';
+import { consume, type QuotaStatus, type Subject, status as quotaStatus, TURN_ID } from './quota.ts';
+import { clientIp, newVisitor, verifyVisitor } from './visitor.ts';
 
-export interface RelayEnv {
+export interface RelayEnv extends AccountEnv {
   OPENROUTER_API_KEY?: string;
   OPENAI_API_KEY?: string;
   /** OpenAI-compatible base URL used with OPENAI_API_KEY (default https://api.openai.com/v1). */
@@ -25,6 +31,8 @@ export const DEFAULT_MODELS = { openrouter: 'anthropic/claude-sonnet-5.5', opena
 /** Request headers of the bring-your-own-key flow. */
 export const BYO_KEY_HEADER = 'x-opensu-key';
 export const BYO_BASE_HEADER = 'x-opensu-base-url';
+/** The user message a model call belongs to (one credit per turn). */
+export const TURN_HEADER = 'x-opensu-turn';
 
 /** Largest request body accepted (the house description plus a trimmed history fits easily). */
 const MAX_BODY = 256 * 1024;
@@ -78,21 +86,104 @@ function pickUpstream(req: Request, env: RelayEnv): Upstream | Response {
   return { url: `${s.base}/chat/completions`, key: s.key, model: s.model, provider: s.provider, owner: true };
 }
 
-/**
- * Credits / rate limiting (later task, needs Cloudflare storage): decide
- * here whether this request may use the owner's key. Return a Response to
- * refuse (e.g. 429 with `{ error: { code: 'rate_limited' } }`).
- */
-async function checkCredits(_req: Request, _upstream: Upstream): Promise<Response | null> {
-  return null;
+/** Who is asking: the signed-in user, else the anonymous visitor (cookie, or the IP without a secret). */
+interface Caller {
+  subject: Subject;
+  email: string | null;
+  /** Set-Cookie for a new visitor cookie. */
+  setCookie: string | null;
 }
 
-/** GET /api/chat: what the assistant can use (no secrets). */
-export function relayStatus(env: RelayEnv): Response {
+async function identify(req: Request, env: RelayEnv): Promise<Caller> {
+  const auth = authConfig(env);
+  if (auth.enabled) {
+    // Better Auth loads only when sign-in is configured.
+    const { sessionUser } = await import('./auth.ts');
+    const user = await sessionUser(req, env);
+    if (user) return { subject: { kind: 'user', id: user.id }, email: user.email, setCookie: null };
+  }
+  if (auth.secret) {
+    const id = await verifyVisitor(req, auth.secret);
+    if (id) return { subject: { kind: 'anon', id }, email: null, setCookie: null };
+    const v = await newVisitor(req, auth.secret);
+    return { subject: { kind: 'anon', id: v.id }, email: null, setCookie: v.cookie };
+  }
+  // No secret to sign a visitor cookie with: the trial is counted per IP.
+  return { subject: { kind: 'anon', id: `ip:${clientIp(req)}` }, email: null, setCookie: null };
+}
+
+function quotaError(st: QuotaStatus, setCookie: string | null): Response {
+  const headers: Record<string, string> = { 'cache-control': 'no-store' };
+  if (setCookie) headers['set-cookie'] = setCookie;
+  const message =
+    st.reason === 'site'
+      ? "Today's shared credits are used up. Use your own key, or come back after the reset."
+      : st.reason === 'turn'
+        ? 'This message used the most model calls one message may use.'
+        : 'No credits left for today.';
+  return Response.json({ error: { code: 'quota_exhausted', message, quota: st } }, { status: 429, headers });
+}
+
+/**
+ * Credits: decides whether this request may use the owner's key. Returns a
+ * Response to refuse, else the Set-Cookie (if any) to add to the reply.
+ */
+async function checkCredits(req: Request, upstream: Upstream, env: RelayEnv): Promise<Response | { setCookie: string | null }> {
+  if (!upstream.owner) return { setCookie: null };
+  const cfg = quotaConfig(env);
+  if (!cfg.enabled) return { setCookie: null };
+  if (!env.DB) return jsonError(503, 'quota_unavailable', 'The shared key is not available on this server. Use your own key.');
+  try {
+    const caller = await identify(req, env);
+    const raw = req.headers.get(TURN_HEADER) ?? '';
+    // Without a turn id every call is its own turn (older clients).
+    const turn = TURN_ID.test(raw) ? raw : crypto.randomUUID();
+    const r = await consume(env.DB, cfg, caller.subject, clientIp(req), turn);
+    return r.ok ? { setCookie: caller.setCookie } : quotaError(r.status, caller.setCookie);
+  } catch (e) {
+    console.error('quota: database error', e instanceof Error ? e.message : e);
+    return jsonError(503, 'quota_unavailable', 'The shared key is not available right now. Use your own key or try again later.');
+  }
+}
+
+/**
+ * GET /api/chat: what the assistant can use (no secrets): the owner's key
+ * and model, the sign-in methods, who is signed in, and the caller's
+ * credits with their reset time.
+ */
+export async function relayStatus(req: Request, env: RelayEnv): Promise<Response> {
   const s = serverUpstream(env);
+  const auth = authConfig(env);
+  const cfg = quotaConfig(env);
+  const headers: Record<string, string> = { 'cache-control': 'no-store' };
+  let quota: QuotaStatus | null = null;
+  let email: string | null = null;
+  let quotaError: string | null = null;
+  try {
+    if (s && cfg.enabled && env.DB) {
+      const caller = await identify(req, env);
+      email = caller.email;
+      if (caller.setCookie) headers['set-cookie'] = caller.setCookie;
+      quota = await quotaStatus(env.DB, cfg, caller.subject, clientIp(req));
+    } else if (auth.enabled) {
+      const { sessionUser } = await import('./auth.ts');
+      email = (await sessionUser(req, env))?.email ?? null;
+    }
+  } catch (e) {
+    console.error('status: database error', e instanceof Error ? e.message : e);
+    quotaError = 'unavailable';
+  }
   return Response.json(
-    { serverKey: !!s, provider: s?.provider ?? null, model: s?.model ?? null },
-    { headers: { 'cache-control': 'no-store' } },
+    {
+      serverKey: !!s && (!cfg.enabled || !!env.DB),
+      provider: s?.provider ?? null,
+      model: s?.model ?? null,
+      auth: { email: auth.email, google: auth.google },
+      user: email ? { email } : null,
+      quota,
+      quotaError,
+    },
+    { headers },
   );
 }
 
@@ -100,9 +191,6 @@ export function relayStatus(env: RelayEnv): Response {
 export async function relayChat(req: Request, env: RelayEnv): Promise<Response> {
   const up = pickUpstream(req, env);
   if (up instanceof Response) return up;
-  const refused = await checkCredits(req, up);
-  if (refused) return refused;
-
   const text = await req.text();
   if (text.length > MAX_BODY) return jsonError(413, 'too_large', 'The conversation is too long. Start a new chat.');
   // The only look at the request: set the model (and an output cap on the
@@ -113,6 +201,9 @@ export async function relayChat(req: Request, env: RelayEnv): Promise<Response> 
   } catch {
     return jsonError(400, 'bad_request', 'Request body is not JSON.');
   }
+  // Credits are taken only for a request that will reach the provider.
+  const credits = await checkCredits(req, up, env);
+  if (credits instanceof Response) return credits;
   if (up.owner || typeof body.model !== 'string' || body.model === 'default') body.model = up.model;
   body.stream = true;
   if (up.owner && up.provider !== 'custom') {
@@ -138,12 +229,11 @@ export async function relayChat(req: Request, env: RelayEnv): Promise<Response> 
     return jsonError(502, 'upstream_unreachable', 'The AI provider could not be reached.');
   }
   // Pass the body through as is; keep only the content type of the upstream headers.
-  return new Response(res.body, {
-    status: res.status,
-    headers: {
-      'content-type': res.headers.get('content-type') ?? 'text/event-stream',
-      'cache-control': 'no-store',
-      'x-accel-buffering': 'no',
-    },
+  const out = new Headers({
+    'content-type': res.headers.get('content-type') ?? 'text/event-stream',
+    'cache-control': 'no-store',
+    'x-accel-buffering': 'no',
   });
+  if (credits.setCookie) out.set('set-cookie', credits.setCookie);
+  return new Response(res.body, { status: res.status, headers: out });
 }
