@@ -85,7 +85,7 @@ export const chatZh = {
   'account.emailNext': '我们会给这个邮箱发一个 6 位验证码。',
   'account.continue': '继续',
   'account.or': '或',
-  'account.google': '通过 Google 继续',
+  'account.google': '使用 Google 账号继续',
   'account.codeTitle': '输入验证码',
   'account.codeSent': '已发送到 {email}',
   'account.change': '更改',

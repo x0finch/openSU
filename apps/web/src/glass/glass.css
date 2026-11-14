@@ -312,3 +312,24 @@
 .lg-tipped:has([data-on]) > .lg-tip {
   opacity: 0 !important;
 }
+
+/*
+ * "Continue with Google" (task 019): Google's own dark button theme, as its
+ * sign-in branding guidelines require for the full-colour "G" (fill
+ * #131314, 1 px inside stroke #8E918F, text #E3E3E3; light, dark or neutral
+ * only, never a tinted or see-through background). Brand colours, not
+ * studio tokens; the only opaque control inside a glass panel.
+ */
+.google-btn {
+  background: #131314;
+  color: #e3e3e3;
+  box-shadow: inset 0 0 0 1px #8e918f;
+  transition: filter 150ms;
+}
+.google-btn:hover:not(:disabled) {
+  filter: brightness(1.15);
+}
+.google-btn:focus-visible {
+  outline: 2px solid var(--lg-ink);
+  outline-offset: 2px;
+}
