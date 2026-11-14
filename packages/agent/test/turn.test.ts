@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { type House } from '@opensu/model';
-import { type AgentEvent, createRelayAdapter, HouseSession, MAX_REPAIRS, runTurn, starterHouse } from '../src/index';
+import { type AgentEvent, createRelayAdapter, HouseSession, MAX_REPAIRS, runTurn, starterHouse, summaryFromArgs } from '../src/index';
 import { scripted } from './scripted';
 
 const widen = { summary: '客厅向东加宽 600 mm', commands: [{ op: 'move_grid_line', line: '2', by: 600 }] };
@@ -93,8 +93,12 @@ describe('runTurn', () => {
       { tools: [{ name: 'edit_house', args: { summary: '书房改名', commands: [{ op: 'update_space', space: 'l1-laundry', name: '茶室' }] } }] },
       { text: '完成。' },
     ]);
-    const r = await runTurn({ adapter: m.adapter, session, text: '加宽客厅，书房改茶室' });
+    const events: AgentEvent[] = [];
+    const r = await runTurn({ adapter: m.adapter, session, text: '加宽客厅，书房改茶室', onEvent: (e) => events.push(e) });
     expect(r.changes.map((c) => c.summary)).toEqual(['客厅向东加宽 600 mm', '书房改名']);
+    // Each edit's summary is announced from its streaming arguments, before the edit lands.
+    const order = events.filter((e) => e.type === 'step' || e.type === 'house').map((e) => (e.type === 'step' ? `step:${e.summary}` : `house:${e.batch.summary}`));
+    expect(order).toEqual(['step:客厅向东加宽 600 mm', 'house:客厅向东加宽 600 mm', 'step:书房改名', 'house:书房改名']);
     expect(session.history.undoDepth).toBe(1);
     expect(session.undo()).toBe(before);
   });
@@ -162,5 +166,12 @@ describe('runTurn', () => {
     const m = scripted([{ text: 'hi' }], () => ({ 'x-opensu-key': 'sk-test' }));
     await runTurn({ adapter: m.adapter, session, text: 'hi' });
     expect(m.headers[0]!.get('x-opensu-key')).toBe('sk-test');
+  });
+
+  it('reads the summary from partial tool arguments once its string is complete', () => {
+    expect(summaryFromArgs('{"summary":"盖二')).toBeNull();
+    expect(summaryFromArgs('{"summary":"盖二层","comm')).toBe('盖二层');
+    expect(summaryFromArgs('{"commands":[{"op":"x","name":"a \\"summary\\": b"}],"summary": "加 \\"露台\\""}')).toBe('加 "露台"');
+    expect(summaryFromArgs('{"summary":"  "}')).toBeNull();
   });
 });

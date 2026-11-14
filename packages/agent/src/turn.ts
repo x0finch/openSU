@@ -47,6 +47,8 @@ export class HouseSession {
 export type AgentEvent =
   | { type: 'text'; delta: string }
   | { type: 'tool-call'; name: string }
+  /** The one-line summary of the edit being sent, read from its streaming arguments (before it is applied). */
+  | { type: 'step'; summary: string }
   | { type: 'house'; house: House; reason: 'edit' | 'new'; fromLevel: number; batch: AppliedBatch }
   | { type: 'rejected'; errors: string[]; repairsLeft: number };
 
@@ -96,6 +98,22 @@ export function pastMessages(past: readonly PastTurn[]): ModelMessage[] {
     out.push({ role: 'assistant', content: `${t.assistant}${note}`.trim() || '(no reply)' });
   }
   return out;
+}
+
+/**
+ * The `summary` of a tool call whose arguments are still streaming, once
+ * its string is complete (models usually send it first: it is the first
+ * property of the schema). Null until then.
+ */
+export function summaryFromArgs(args: string): string | null {
+  const m = /"summary"\s*:\s*"((?:[^"\\]|\\.)*)"/.exec(args);
+  if (!m) return null;
+  try {
+    const s = (JSON.parse(`"${m[1]}"`) as string).trim();
+    return s || null;
+  } catch {
+    return null;
+  }
 }
 
 /** Maps an error from the provider call to what the UI tells the user. */
@@ -166,6 +184,8 @@ export async function runTurn(opts: TurnOptions): Promise<TurnResult> {
     }
     return res;
   };
+  // Arguments of the edit calls in flight, by call id, until their summary is readable.
+  const pending = new Map<string, string>();
   const abort = new AbortController();
   const onAbort = () => abort.abort();
   opts.signal?.addEventListener('abort', onAbort);
@@ -195,6 +215,17 @@ export async function runTurn(opts: TurnOptions): Promise<TurnResult> {
           onEvent?.({ type: 'text', delta: '\n\n' });
         }
         onEvent?.({ type: 'tool-call', name: ev.toolCallName });
+        if (ev.toolCallName === 'edit_house' || ev.toolCallName === 'new_house') pending.set(ev.toolCallId, '');
+      } else if (ev.type === 'TOOL_CALL_ARGS') {
+        const sofar = pending.get(ev.toolCallId);
+        if (sofar !== undefined) {
+          const args = sofar + ev.delta;
+          const summary = summaryFromArgs(args);
+          if (summary) {
+            pending.delete(ev.toolCallId);
+            onEvent?.({ type: 'step', summary });
+          } else pending.set(ev.toolCallId, args);
+        }
       } else if (ev.type === 'RUN_ERROR') {
         error = classifyError(ev.error ?? { message: ev.message, code: ev.code });
       }
