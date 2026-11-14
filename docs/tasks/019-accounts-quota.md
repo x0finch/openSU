@@ -107,3 +107,39 @@ lines, files to change). If the free tier, the bundle budget or Better
 Auth do not fit, stop and report. Commit locally in small commits; do not
 push (a push deploys to production). Report honestly what was skipped.
 Project rules in `CLAUDE.md` apply.
+
+## Owner's additions (2026-11-14)
+
+- Public site address: `https://opensu.009003.xyz` (the Google redirect
+  URI, the cookie domain and the sender domain derive from the configured
+  site URL; nothing is hard-coded).
+- One flow for sign-in and sign-up. There is no "register" anywhere: the
+  user enters an email and the code; a new address becomes an account
+  silently. Same for Google. Copy says "继续" / "Continue", never
+  "注册" / "Sign up".
+- Looks and interaction follow Apple, like the rest of the studio
+  (`docs/UI_STYLE.md`, task 017 section 2b), and you compare against
+  Apple yourself rather than from memory:
+  - a glass sheet that flows out of the account entry (phone: the inset
+    bottom sheet with detents from task 017), one field per step, one
+    primary action, a short line of what happens next;
+  - the code step is six separate boxes as in iOS verification: the
+    first box is focused on arrival, typing advances, backspace goes
+    back, pasting a 6-digit code fills all boxes, the code submits itself
+    when complete, `autocomplete="one-time-code"` and
+    `inputmode="numeric"` so the phone keyboard offers the code from the
+    mail or message; a wrong code shakes the row and clears it; resend
+    with a visible countdown;
+  - the email step uses `type="email"`, `autocomplete="email"`, Return
+    submits; "Continue with Google" follows Google's and Apple's sign-in
+    button guidance (logo, wording, one neutral style on glass);
+  - errors are calm sentences inside the sheet; nothing navigates away
+    from the drawing; after sign-in the sheet flows back and the user is
+    where they were, with their message draft kept.
+  - Record the interactions (frame captures like `glass-record.mjs`) and
+    put side-by-side sheets against Apple references under
+    `artifacts/task019/compare/`. If you have no Apple footage for a
+    step, say so and describe which Apple screen you matched (e.g. the
+    iOS verification-code entry).
+- Do not push: the owner deploys when the domain and the secrets are
+  ready.
