@@ -144,8 +144,9 @@ async function openMenu(page) {
 /** Signs in through the sheet: email, a wrong code (shake), then the right one pasted. */
 async function signInFlow(page, base, email, { shots, prefix }) {
   await page.waitForSelector('[data-testid=signin-email-input]');
-  await page.waitForTimeout(1200);
-  check(await page.evaluate(() => document.activeElement?.getAttribute('data-testid') === 'signin-email-input'), 'sign-in: the email field is focused on arrival');
+  const focused = await page.waitForFunction(() => document.activeElement?.getAttribute('data-testid') === 'signin-email-input', null, { timeout: 3000 }).then(() => true, () => false);
+  check(focused, 'sign-in: the email field is focused on arrival');
+  await page.waitForTimeout(800);
   const attrs = await page.getByTestId('signin-email-input').evaluate((el) => [el.type, el.autocomplete].join(','));
   check(attrs === 'email,email', `email field: type=email, autocomplete=email (${attrs})`);
   if (shots) await shot(page, `${prefix}-signin-email`);
@@ -171,12 +172,10 @@ async function signInFlow(page, base, email, { shots, prefix }) {
   await page.keyboard.type(wrong);
   await page.waitForSelector('[data-testid=signin-error]');
   const shook = await page.evaluate(() => document.querySelector('[data-testid=otp-boxes]').classList.contains('otp-shake'));
+  await page.waitForTimeout(600);
   const cleared = await page.evaluate(() => [...document.querySelectorAll('[data-testid^=otp-]')].filter((e) => e.tagName === 'INPUT').every((e) => e.value === ''));
   check(shook && cleared, `a wrong code shakes the row and clears it (${shook}, ${cleared})`);
-  if (shots) {
-    await page.waitForTimeout(500);
-    await shot(page, `${prefix}-signin-wrong`);
-  }
+  if (shots) await shot(page, `${prefix}-signin-wrong`);
   // Pasting the code fills every box and submits by itself.
   await page.getByTestId('otp-0').focus();
   await page.evaluate((c) => {
