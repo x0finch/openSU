@@ -54,16 +54,61 @@ const EMAIL = /^[^\s@]{1,64}@[^\s@]{1,255}$/;
 /** True while `warmUp` runs (startup, no I/O allowed): rate limits are skipped. */
 let warming = false;
 
-type Auth = ReturnType<typeof createAuth>;
-let cached: { key: string; auth: Auth } | null = null;
+export type Auth = ReturnType<typeof createAuth>;
 
-/** The Better Auth instance for this isolate, or null when sign-in is off. */
-export function getAuth(env: AccountEnv): Auth | null {
-  const cfg = authConfig(env);
+/** Tests only: make the next builds throw (scripts/auth-check.ts). */
+export const authTesting = { failBuild: false };
+
+/** Builds per isolate: at most this many attempts, then sign-in stays off until the next deploy. */
+const MAX_BUILDS = 2;
+let cached: { key: string; auth: Auth | null; ready: Promise<boolean> } | null = null;
+let builds = 0;
+
+const reason = (e: unknown) => (e instanceof Error ? `${e.name}: ${e.message}` : String(e)).slice(0, 200);
+
+/**
+ * The Better Auth instance for this isolate, ready to use, or null when
+ * sign-in is off or could not be built. Never throws: a failed build is
+ * logged in one line (never a secret) and retried once, on the next call
+ * (the first /api/auth request after a failed startup); after that the
+ * sign-in routes answer `auth_off` and everyone counts as anonymous.
+ */
+export async function loadAuth(env: AccountEnv): Promise<Auth | null> {
+  let cfg: AuthConfig;
+  try {
+    cfg = authConfig(env);
+  } catch (e) {
+    console.error(`auth: configuration unreadable (${reason(e)})`);
+    return null;
+  }
   if (!cfg.enabled) return null;
   const key = `${cfg.siteUrl}|${cfg.email}|${cfg.google}|${cfg.testHook}`;
-  if (cached?.key !== key) cached = { key, auth: createAuth(env, cfg) };
-  return cached.auth;
+  // A new configuration, or a failed build with an attempt left: build.
+  if (cached && cached.key === key && cached.auth === null && builds >= MAX_BUILDS) return null;
+  if (!cached || cached.key !== key || cached.auth === null) {
+    builds = cached?.key === key ? builds + 1 : 1;
+    try {
+      if (authTesting.failBuild) throw new Error('build failure (test)');
+      const auth = createAuth(env, cfg);
+      cached = {
+        key,
+        auth,
+        ready: auth.$context.then(
+          () => true,
+          (e) => {
+            console.error(`auth: sign-in unavailable, Better Auth did not start (${reason(e)})`);
+            if (cached?.auth === auth) cached = { key, auth: null, ready: Promise.resolve(false) };
+            return false;
+          },
+        ),
+      };
+    } catch (e) {
+      console.error(`auth: sign-in unavailable, Better Auth did not build (${reason(e)})`);
+      cached = { key, auth: null, ready: Promise.resolve(false) };
+    }
+  }
+  const c = cached!;
+  return (await c.ready) ? c.auth : null;
 }
 
 function createAuth(env: AccountEnv, cfg: AuthConfig) {
@@ -168,9 +213,20 @@ export async function warmUp(auth: Auth, siteUrl: string): Promise<void> {
 }
 
 /** The signed-in user of a request (id and email), or null. */
+/**
+ * The signed-in user of a request (id and email), or null. Never throws:
+ * when sign-in is broken the caller counts as anonymous (the quota still
+ * applies).
+ */
 export async function sessionUser(req: Request, env: AccountEnv): Promise<{ id: string; email: string } | null> {
-  const auth = getAuth(env);
-  if (!auth || !/opensu\.session_token=/.test(req.headers.get('cookie') ?? '')) return null;
-  const s = await auth.api.getSession({ headers: req.headers });
-  return s?.user ? { id: s.user.id, email: s.user.email } : null;
+  if (!/opensu\.session_token=/.test(req.headers.get('cookie') ?? '')) return null;
+  try {
+    const auth = await loadAuth(env);
+    if (!auth) return null;
+    const s = await auth.api.getSession({ headers: req.headers });
+    return s?.user ? { id: s.user.id, email: s.user.email } : null;
+  } catch (e) {
+    console.error(`auth: session not readable (${reason(e)})`);
+    return null;
+  }
 }

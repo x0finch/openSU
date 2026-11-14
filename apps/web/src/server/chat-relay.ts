@@ -97,9 +97,8 @@ interface Caller {
 async function identify(req: Request, env: RelayEnv): Promise<Caller> {
   const auth = authConfig(env);
   if (auth.enabled) {
-    // Better Auth loads only when sign-in is configured.
-    const { sessionUser } = await import('./auth.ts');
-    const user = await sessionUser(req, env);
+    // Better Auth loads only when sign-in is configured; if it cannot, the caller is anonymous.
+    const user = await import('./auth.ts').then((m) => m.sessionUser(req, env), () => null);
     if (user) return { subject: { kind: 'user', id: user.id }, email: user.email, setCookie: null };
   }
   if (auth.secret) {
@@ -166,8 +165,7 @@ export async function relayStatus(req: Request, env: RelayEnv): Promise<Response
       if (caller.setCookie) headers['set-cookie'] = caller.setCookie;
       quota = await quotaStatus(env.DB, cfg, caller.subject, clientIp(req));
     } else if (auth.enabled) {
-      const { sessionUser } = await import('./auth.ts');
-      email = (await sessionUser(req, env))?.email ?? null;
+      email = (await import('./auth.ts').then((m) => m.sessionUser(req, env), () => null))?.email ?? null;
     }
   } catch (e) {
     console.error('status: database error', e instanceof Error ? e.message : e);
