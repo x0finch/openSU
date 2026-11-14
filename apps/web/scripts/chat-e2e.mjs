@@ -105,9 +105,10 @@ async function open(base, ctxOpts, path) {
   return { ctx, page };
 }
 
-async function shot(page, name) {
+async function shot(page, name, dir = outDir) {
   if (smoke) return;
-  const file = resolve(outDir, `${name}.png`);
+  mkdirSync(dir, { recursive: true });
+  const file = resolve(dir, `${name}.png`);
   // Software GL on a busy machine can take long for one frame.
   await page.screenshot({ path: file, timeout: 180000 });
   console.log(`  -> ${file}`);
@@ -208,7 +209,7 @@ try {
     await sendMessage(page, '把北侧房间加深 600');
     await page.waitForFunction(() => document.querySelector('[data-testid=assistant-message]')?.textContent?.includes('轴线 F'), null, { timeout: 30000 });
     const midText = await page.getByTestId('assistant-message').first().textContent();
-    check(/北侧房间加深/.test(midText ?? '') && (await page.getByTestId('changes-card').count()) === 0, 'stream shows text before the tool call is applied');
+    check(/北侧房间加深/.test(midText ?? '') && (await page.getByTestId('turn-toggle').count()) === 0, 'stream shows text before the tool call is applied');
     await shot(page, 'chat-streaming-desktop');
     stub.config.holdMs = 0;
     stub.config.delay = 8;
@@ -229,8 +230,8 @@ try {
     check(Math.abs(area1 - area0 - 13.3) < 0.15, `edit applied: interior area ${area0} -> ${area1} m² (+13.3 expected)`);
     const d01 = pixelDiff(px0, px1);
     check(d01 > 0.005, `3D view changed after the edit (${(d01 * 100).toFixed(1)}% pixels differ)`);
-    const card = page.getByTestId('changes-card').first();
-    check((await card.textContent())?.includes('北侧房间加深 600 mm'), 'changes card lists the edit in plain language');
+    const card = page.getByTestId('assistant-message').first();
+    check((await card.getByTestId('turn-change').first().textContent())?.includes('北侧房间加深 600 mm'), 'the latest turn\'s timeline lists the edit in plain language');
     await page.waitForTimeout(200);
     await shot(page, 'chat-changes-desktop');
 
@@ -256,7 +257,7 @@ try {
     check(/"ok":false/.test(firstResult) && /l2-family/.test(firstResult), 'repair: the rejected batch went back with errors naming the right id');
     const msg2 = page.getByTestId('assistant-message').nth(1);
     check((await msg2.textContent())?.includes('二楼起居室已改成卧室'), 'repair: final reply shown');
-    check((await msg2.getByTestId('changes-card').count()) === 1, 'repair: one changes card for the repaired edit');
+    check((await msg2.getByTestId('turn-change').count()) === 1 && (await msg2.getByTestId('turn-toggle').textContent()) === '做了 1 步修改', 'repair: one change for the repaired edit');
     await page.waitForTimeout(200);
     await shot(page, 'chat-repair-desktop');
 
@@ -394,7 +395,101 @@ try {
     await page.getByTestId('recent-strip').getByRole('button', { name: '恢复' }).click();
     await page.waitForFunction((a) => !document.querySelector('[data-testid=fact-area]')?.textContent?.startsWith(String(a)), area0, { timeout: 30000 });
     check(Math.abs((await shownArea(page)) - area1) < 0.05, 'redo survives a reload too');
+    // A save made before task 018 (no turn structure) still loads and reads as plain text.
+    await page.evaluate(() => {
+      const s = JSON.parse(localStorage.getItem('opensu.autosave.v1'));
+      s.chat = [
+        { id: 'm1', role: 'user', text: '盖三层' },
+        { id: 'm2', role: 'assistant', text: '先搭一层。\n\n三层已建好。', phase: 'done', changes: [{ summary: '一层', details: [] }, { summary: '二三层', details: [] }], undo: 'kept' },
+      ];
+      s.history = { undo: [], redo: [] };
+      localStorage.setItem('opensu.autosave.v1', JSON.stringify(s));
+    });
+    await page.reload({ waitUntil: 'networkidle' });
+    await page.waitForFunction(() => window.__studio?.ready3d === true, null, { timeout: 180000 });
+    await page.getByTestId('chat-history').click();
+    const legacy = page.getByTestId('recent-strip').getByTestId('assistant-message');
+    const legacyText = (await legacy.textContent()) ?? '';
+    check(legacyText.includes('先搭一层。') && legacyText.includes('三层已建好。') && (await legacy.getByTestId('turn-toggle').textContent()) === '做了 2 步修改', `an older save without the turn structure reads as plain text (${legacyText.slice(0, 60)})`);
     await ctx.close();
+  }
+
+  // --- A turn of several steps (task 018) ------------------------------------
+  if (wanted('chat-steps')) {
+    const dir = resolve(repoRoot, 'artifacts/task018');
+    for (const [name, opts] of [['desktop', DESKTOP], ['phone', { ...PHONE, reducedMotion: 'reduce' }]]) {
+      console.log(`  (${name}${name === 'phone' ? ', reduced motion' : ''})`);
+      const { ctx, page } = await open(preview.base, opts, '/studio');
+      const strip = page.getByTestId('recent-strip');
+      await page.getByTestId('chat-history').click();
+      stub.config.holdMs = 4000;
+      stub.config.delay = 10;
+      await sendMessage(page, '请分三步帮我改一改这栋房子');
+      // Compact while working: one live line naming the step being sent.
+      await page.waitForFunction(() => document.querySelector('[data-testid=recent-strip] [data-testid=turn][data-live]')?.textContent?.includes('第 1 步：北侧房间加深 600 mm'), null, { timeout: 60000 });
+      const liveText = (await strip.getByTestId('assistant-message').textContent()) ?? '';
+      check(!liveText.includes('先把北侧房间加深') && (await strip.locator('[role=status]').count()) === 1, `${name}: compact, working: one live line with the step, not the sentence (${liveText})`);
+      await page.waitForTimeout(300);
+      await shot(page, `${name}-compact-working`, dir);
+      stub.config.holdMs = 0;
+      await waitDone(page, 1);
+      await waitGrown(page);
+      // Compact, done: the final text under one collapsed line; no intermediate sentences.
+      const msg = strip.getByTestId('assistant-message');
+      const toggle = msg.getByTestId('turn-toggle');
+      const doneText = (await msg.textContent()) ?? '';
+      check((await toggle.textContent()) === '做了 3 步修改' && (await toggle.getAttribute('aria-expanded')) === 'false' && (await msg.getByTestId('turn-change').count()) === 0,
+        `${name}: compact, done: one collapsed line "做了 3 步修改"`);
+      check(doneText.includes('三处都改好了') && doneText.includes('我假设卧室暂不加门') && !/先把|接着|最后把/.test(doneText), `${name}: compact, done: only the final text, no intermediate sentences`);
+      check((await msg.getByRole('button', { name: '撤销' }).count()) === 1, `${name}: compact: undo stays on the changes line`);
+      await page.waitForTimeout(300);
+      await shot(page, `${name}-compact-done`, dir);
+      // Expand (keyboard on desktop): the change summaries, still no sentences.
+      if (name === 'desktop') {
+        await toggle.focus();
+        await page.keyboard.press('Enter');
+      } else await toggle.click();
+      await page.waitForTimeout(700);
+      const changes = await msg.getByTestId('turn-change').allTextContents();
+      check((await toggle.getAttribute('aria-expanded')) === 'true' && changes.length === 3 && changes[1] === '二楼起居室改为卧室' && !/先把|接着/.test((await msg.textContent()) ?? ''),
+        `${name}: compact, expanded: the three change summaries (${changes.join(' / ')})`);
+      const clipped = await page.evaluate(() => {
+        const s = document.querySelector('[data-testid=recent-strip]').getBoundingClientRect();
+        const r = document.querySelector('[data-testid=recent-strip] [data-testid=turn] [data-open]')?.getBoundingClientRect();
+        return !!r && r.left >= s.left && r.right <= s.right;
+      });
+      check(clipped, `${name}: the expanded list stays inside the glass surface`);
+      await shot(page, `${name}-compact-expanded`, dir);
+      // Full: the latest turn is the timeline, open.
+      await page.getByTestId('chat-pin').click();
+      const panel = page.getByTestId('chat-panel');
+      await panel.waitFor();
+      await page.waitForTimeout(700);
+      const full = panel.getByTestId('assistant-message').last();
+      const sentences = await full.getByTestId('turn-sentence').allTextContents();
+      check((await full.getByTestId('turn-toggle').getAttribute('aria-expanded')) === 'true' && sentences.length === 3 && (await full.getByTestId('turn-change').count()) === 3 && sentences[0].includes('先把北侧房间加深'),
+        `${name}: full: the latest turn is a timeline (${sentences.join(' / ')})`);
+      const order = await full.evaluate((el) => [...el.querySelectorAll('[data-testid=turn-sentence],[data-testid=turn-change]')].map((e) => e.dataset.testid === 'turn-change' ? 'C' : 'S').join(''));
+      check(order === 'SCSCSC', `${name}: full: each sentence is followed by its change (${order})`);
+      await shot(page, `${name}-full-latest`, dir);
+      // A newer turn: the older one collapses to its final text and the line.
+      await sendMessage(page, '你好');
+      await waitDone(page, 2);
+      await page.waitForTimeout(800);
+      const older = panel.getByTestId('assistant-message').first();
+      const olderToggle = older.getByTestId('turn-toggle');
+      check((await olderToggle.getAttribute('aria-expanded')) === 'false' && (await older.getByTestId('turn-sentence').count()) === 0 && ((await older.textContent()) ?? '').includes('三处都改好了'),
+        `${name}: full: an older turn collapses to its final text and the line`);
+      await older.scrollIntoViewIfNeeded();
+      await shot(page, `${name}-full-older-collapsed`, dir);
+      await olderToggle.click();
+      await page.waitForTimeout(800);
+      check((await older.getByTestId('turn-sentence').count()) === 3 && (await olderToggle.getAttribute('aria-expanded')) === 'true', `${name}: full: expanding an older turn shows its timeline`);
+      await older.evaluate((el) => el.scrollIntoView({ block: 'start' }));
+      await page.waitForTimeout(200);
+      await shot(page, `${name}-full-older-expanded`, dir);
+      await ctx.close();
+    }
   }
 
   // --- Phone ---------------------------------------------------------------
@@ -428,7 +523,7 @@ try {
     await shot(page, 'chat-phone-bar');
     await page.getByTestId('chat-history').click();
     await page.waitForTimeout(400);
-    check((await page.getByTestId('recent-strip').getByTestId('changes-card').count()) === 1, 'phone: the recent strip shows the changes card');
+    check((await page.getByTestId('recent-strip').getByTestId('turn-toggle').count()) === 1, 'phone: the recent strip shows the changes line');
     await shot(page, 'chat-phone-changes');
     await page.getByTestId('prompt-bar').fill('限流测试');
     await page.getByTestId('prompt-bar').press('Enter');

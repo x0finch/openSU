@@ -7,7 +7,8 @@
 //   node scripts/chat-stub.mjs [port]      standalone, prints its base URL
 //
 // Endpoints: POST /v1/chat/completions, GET /__requests (what it received,
-// for assertions), POST /__config {"delay": ms, "holdMs": ms}.
+// for assertions), POST /__config {"delay": ms, "holdMs": ms}. A step's `hold`
+// pauses after its text, `holdInArgs` after the summary in its tool arguments.
 import { createServer } from 'node:http';
 import { fileURLToPath } from 'node:url';
 
@@ -57,6 +58,32 @@ const SCRIPTS = [
         text: zh
           ? '二楼起居室已改成卧室：4.5 × 3.9 m，约 17.6 m²，朝南的推拉门通向阳台。楼梯口仍是开敞的，可以考虑加一道墙和门。'
           : 'The upstairs family room is now a bedroom: 4.5 × 3.9 m, about 17.6 m², with a south sliding door onto the balcony. It is still open to the stair; consider a wall and a door there.',
+      },
+    ],
+  },
+  {
+    // Task 018: a turn of several edits, each after one sentence (the
+    // sentences fold away in the compact view; the final text stands alone).
+    name: 'three-steps',
+    match: /分三步|in three steps/i,
+    steps: (zh) => [
+      {
+        text: zh ? '先把北侧房间加深 600 mm。' : 'First the north rooms get 600 mm deeper.',
+        holdInArgs: true,
+        tools: [{ name: 'edit_house', args: { summary: zh ? '北侧房间加深 600 mm' : 'North rooms 600 mm deeper', commands: [{ op: 'move_grid_line', line: 'F', by: 600 }] } }],
+      },
+      {
+        text: zh ? '接着把二楼起居室改成卧室。' : 'Next the upstairs family room becomes a bedroom.',
+        tools: [{ name: 'edit_house', args: { summary: zh ? '二楼起居室改为卧室' : 'Upstairs family room becomes a bedroom', commands: [{ op: 'update_space', space: 'l2-family', type: 'bedroom', name: '卧室', nameEn: 'Bedroom' }] } }],
+      },
+      {
+        text: zh ? '最后把屋顶坡度改缓。' : 'Last, a flatter roof.',
+        tools: [{ name: 'edit_house', args: { summary: zh ? '屋顶坡度 27° 改为 20°' : 'Roof pitch 27° to 20°', commands: [{ op: 'update_roof', roof: 'roof-main', pitchDeg: 20 }] } }],
+      },
+      {
+        text: zh
+          ? '三处都改好了：北侧房间加深 0.6 m，厨房约 11.9 m²；二楼起居室改成 17.6 m² 的卧室；屋顶坡度 20°，屋脊降低约 0.5 m。\n\n我假设卧室暂不加门：它仍对楼梯开敞，需要的话我再加墙和门。'
+          : 'All three are done: the north rooms are 0.6 m deeper (kitchen about 11.9 m²); the upstairs family room is a 17.6 m² bedroom; the roof is at 20°, its ridge about 0.5 m lower.\n\nI assumed no door for the bedroom yet: it is still open to the stair; I can add a wall and a door.',
       },
     ],
   },
@@ -136,7 +163,13 @@ function* chunks(step, call) {
   for (const [i, t] of (step.tools ?? []).entries()) {
     const args = JSON.stringify(t.args);
     yield { ...base, choices: [{ index: 0, delta: { tool_calls: [{ index: i, id: `call_${call}_${i}`, type: 'function', function: { name: t.name, arguments: '' } }] }, finish_reason: null }] };
-    for (const part of args.match(/[\s\S]{1,40}/g) ?? []) yield { ...base, choices: [{ index: 0, delta: { tool_calls: [{ index: i, function: { arguments: part } }] }, finish_reason: null }] };
+    // holdInArgs: the summary is sent, then the stream holds before the rest (a long build being written).
+    const cut = step.holdInArgs && i === 0 ? args.indexOf(',"commands"') : -1;
+    const head = cut > 0 ? [args.slice(0, cut)] : [];
+    for (const part of [...head, ...(args.slice(Math.max(0, cut)).match(/[\s\S]{1,40}/g) ?? [])]) {
+      yield { ...base, choices: [{ index: 0, delta: { tool_calls: [{ index: i, function: { arguments: part } }] }, finish_reason: null }] };
+      if (part === head[0]) yield 'hold';
+    }
   }
   yield { ...base, choices: [{ index: 0, delta: {}, finish_reason: step.tools?.length ? 'tool_calls' : 'stop' }] };
   yield { ...base, choices: [], usage: { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0 } };
