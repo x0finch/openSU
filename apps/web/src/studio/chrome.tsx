@@ -159,7 +159,6 @@ function ProjectMenu({ open, anchor, onClose, compact, ref }: { open: boolean; a
   const setSettingsOpen = useChat((s) => s.setSettingsOpen);
   const authOn = useChat((s) => !!(s.server?.auth?.email || s.server?.auth?.google));
   const user = useChat((s) => s.server?.user ?? null);
-  const perDay = useChat((s) => s.server?.limits?.user ?? null);
   const [templates, setTemplates] = useState(false);
   const [confirm, setConfirm] = useState(false);
   // Arrow keys move between items; focus starts on the first.
@@ -216,7 +215,6 @@ function ProjectMenu({ open, anchor, onClose, compact, ref }: { open: boolean; a
         <>
           <GlassMenuItem
             icon={<PersonIcon width={17} height={17} />}
-            detail={perDay !== null ? t('account.perDay', { n: perDay }) : undefined}
             onClick={(e) => {
               openSignIn(e.currentTarget, 'menu');
               onClose(false);

@@ -74,8 +74,6 @@ export interface ServerStatus {
   user?: { email: string } | null;
   /** Credits on the site's key; null when not metered. */
   quota?: QuotaInfo | null;
-  /** Daily allowances on the site's key (signed in, anonymous trial). */
-  limits?: { user: number; anon: number } | null;
 }
 
 interface ChatState {
