@@ -31,6 +31,8 @@ pnpm --filter @opensu/web preview       # the built app in the local Workers run
 pnpm --filter @opensu/web shots         # checks + screenshots -> artifacts/web/*.png
 pnpm --filter @opensu/web test          # smoke checks + chat e2e + relay checks (needs a build)
 pnpm --filter @opensu/web chat          # chat e2e against the scripted stub -> artifacts/web/chat-*.png
+pnpm --filter @opensu/web accounts      # task 019: sign-in and the daily quota against the stub, fresh local D1
+                                        # -> artifacts/task019/*.png
 pnpm --filter @opensu/web layout        # task 015 layout: every approved state, measurements, behaviour checks
                                         # -> artifacts/web/layout/ (--mockups <dir>: side by side with the mockup states)
 node scripts/shots.mjs --only studio-sheets,check-sun   # just some shots / checks (name prefixes)
@@ -68,7 +70,9 @@ pixel for pixel.
 | `/studio` | `ssr: false`; the build prerenders only the HTML shell (head + a loading fallback) | static asset (`studio.html`) |
 | `/s/$id` | `ssr: 'data-only'`: the Worker runs a trivial loader so the `<head>` carries title / description / `og:*` metadata; the body renders on the client | Worker |
 | `/api/health` | server route, `{ ok: true }` | Worker |
-| `/api/chat` | server route: `POST` relays one Chat Completions call, `GET` says whether a server key exists | Worker |
+| `/api/chat` | server route: `POST` relays one Chat Completions call (counting credits on the owner's key), `GET` says whether a server key exists, the sign-in methods, who is signed in and the caller's credits | Worker |
+| `/api/auth/*` | Better Auth (email code, Google, session, sign-out), answered by `src/server.ts` before TanStack Start | Worker |
+| `/auth-done` | end of the Google popup (`public/auth-done.html`): tells the studio and closes | static asset |
 
 Static assets are matched before the Worker runs, so the landing page and
 the studio never cost Worker CPU. The share route does no work beyond
@@ -186,7 +190,10 @@ string formatting (well inside the 10 ms free-tier budget).
   pushes house changes into the studio store), `messages.ts` (its zh / en
   strings), `settings.ts` (key storage, request headers).
 - `src/server/chat-relay.ts` the `/api/chat` relay (no app imports; checked
-  by `scripts/relay-check.mjs`).
+  by `scripts/relay-check.mjs`); `src/server/quota.ts`, `config.ts`,
+  `visitor.ts`, `auth.ts` and the Worker entry `src/server.ts`: accounts and
+  the daily quota (see "Accounts and quota"). `src/chat/account.ts` and
+  `SignIn.tsx`: the sign-in sheet.
 - `src/lib/store.ts` the zustand store. The house model is the single source
   of truth: model -> resolve -> kernel -> render / plan.
 - `src/lib/i18n.ts` zh (default) and en dictionaries.
@@ -338,19 +345,211 @@ credentials. "Remove my key" deletes it from the browser.
   token counts and cost, CPU time on Cloudflare, the BYO path through the
   relay to a real https provider, behaviour on real phones / WeChat.
 
-## Deployment (not done yet)
+## Accounts and quota
+
+Task 019. Anyone can use the site; the owner's model key is metered:
+without an account a visitor gets a small daily trial, signed in a larger
+daily allowance; a visitor's own key (bring your own key, above) is never
+limited. Sign-in is one flow for new and returning people: an email and a
+6-digit code, or Google; a new address or Google account becomes an
+account silently. There are no passwords (hashing one does not fit the
+free tier's 10 ms CPU).
+
+### How it works
+
+- **Storage**: one D1 database (binding `DB`), migrations in `migrations/`
+  (`0001_auth.sql`: Better Auth's `user`, `session`, `account`,
+  `verification`, generated from Better Auth 1.7.15 and checked against it
+  by `scripts/auth-check.ts`; `0002_quota.sql`: `quota_counter`,
+  `quota_turn` and a trigger). The deploy workflow creates the database if
+  missing and applies the migrations before deploying.
+- **Auth** (`src/server/auth.ts`, mounted by `src/server.ts` at
+  `/api/auth/*`): Better Auth with its built-in D1 dialect, the email OTP
+  plugin (6 digits, stored hashed, 10 minutes, 5 attempts) and Google.
+  Codes are sent with Resend's HTTP API from `AUTH_EMAIL_FROM`. Limits: 5
+  codes per address per hour, 20 sends per IP per hour, 20 sign-in attempts
+  per IP per 10 minutes, 60 auth requests per IP per minute (atomic D1
+  counters through Better Auth's `customStorage`). Session in an http-only
+  cookie (`opensu.session_token`, 60 days, renewed daily) with Better Auth's
+  signed 5-minute cookie cache, so most session reads need no query. The
+  Better Auth instance is built in the Worker's global scope with a GET-only
+  warm-up, so its one-time CPU (tens of ms) counts against the 1 s startup
+  limit, not a visitor's request.
+- **Quota** (`src/server/quota.ts`, called from the relay's `checkCredits`
+  only for the owner's key): one user message is one credit. The browser
+  sends a turn id (`x-opensu-turn`) with every model call of a message; the
+  first call of a turn takes the credit, later calls of the same turn are
+  free up to `QUOTA_CALLS_PER_TURN`. Counters per subject (the signed-in
+  user, or the anonymous visitor's signed http-only cookie `opensu_v`), per
+  IP (`cf-connecting-ip`, IPv6 per /64) and for the whole site, per day in
+  `QUOTA_TZ`. One SQL statement per model call: `INSERT INTO quota_turn ...
+  SELECT ... WHERE <turn exists> OR (<subject, IP and site counters under
+  their limits>) ON CONFLICT DO UPDATE SET calls = calls + 1 WHERE calls <
+  cap RETURNING calls`; a trigger bumps the three counters in the same
+  statement. SQLite runs it atomically, so concurrent requests cannot pass a
+  limit (tested with 40 interleaved requests). A refusal reads the counters
+  once more to say why (429 `quota_exhausted` / `quota_turn_limit`). When
+  the site limit is reached the owner's key stops for everyone; own keys go
+  on. Rows older than three days are deleted now and then (primary-key range
+  deletes). On a database error the owner's key is refused
+  (`quota_unavailable`, fail closed).
+- `GET /api/chat` reports `auth` (`email`, `google`), `user` (the email),
+  `quota` (`kind`, `limit`, `remaining`, `resetAt`, `reason`) and `limits`.
+- **Studio**: the project menu has the account entry (sign in, or the email
+  and sign out; hidden when no sign-in method is configured). The sign-in
+  sheet (`src/chat/SignIn.tsx`) is a glass popover that grows out of the
+  control that opened it (desktop) or the inset bottom sheet (phone). The
+  input shows the credits left when 3 or fewer remain; out of credits, the
+  exchange shows a calm note with what to do (sign in, the reset time, or
+  your own key) and the relay is not called. Google uses a popup that lands
+  on `/auth-done`; if popups are blocked the page goes to Google and back
+  and the draft is kept in `sessionStorage` for the trip.
+
+### Configuration
+
+Worker variables and secrets (the deploy workflow sets them from GitHub
+secrets and variables; for local runs put them in `apps/web/.dev.vars`).
+Every one is optional; a deploy without them keeps working: sign-in is
+hidden and the anonymous limits apply (counted per IP when there is no
+`BETTER_AUTH_SECRET` to sign the visitor cookie).
+
+| Name | Kind | Default | Meaning |
+|---|---|---|---|
+| `SITE_URL` | variable | none | public URL (`https://opensu.009003.xyz`); Better Auth's base URL and trusted origin, the Google redirect URI and the cookies derive from it. Sign-in needs it |
+| `BETTER_AUTH_SECRET` | secret | none | 32+ random characters (`openssl rand -base64 32`); signs sessions and the visitor cookie. Sign-in needs it |
+| `RESEND_API_KEY` | secret | none | Resend API key ("sending access" is enough); email codes need it and `AUTH_EMAIL_FROM` |
+| `AUTH_EMAIL_FROM` | variable | none | sender on your verified domain, e.g. `openSU <code@mail.opensu.009003.xyz>` |
+| `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | secrets | none | "Continue with Google" appears only with both |
+| `AUTH_ENABLED` | variable | on | `false` hides sign-in even with the secrets set |
+| `QUOTA_ENABLED` | variable | on | `false` turns the quota off (the owner's key is then unlimited) |
+| `QUOTA_USER_DAILY` | variable | 10 | credits per signed-in account per day |
+| `QUOTA_ANON_TRIAL` | variable | 3 | credits per anonymous visitor per day |
+| `QUOTA_IP_DAILY` | variable | 60 | credits per IP per day (all subjects) |
+| `QUOTA_SITE_DAILY` | variable | 500 | credits per day for the whole site |
+| `QUOTA_CALLS_PER_TURN` | variable | 8 | model calls one message may make |
+| `QUOTA_TZ` | variable | `Asia/Shanghai` | IANA zone where the day rolls over at midnight |
+| `AUTH_TEST_HOOK` | local only | off | `1`: codes are logged and readable at `/api/auth-test/code` instead of emailed (honoured only for requests to localhost; never set in production) |
+
+Malformed numbers or an unknown zone fall back to the defaults.
+
+**Turning it off (self-hosting, AGPL)**: set `AUTH_ENABLED=false` and
+`QUOTA_ENABLED=false`, or simply leave the auth secrets unset. Without D1,
+remove the `d1_databases` block from `wrangler.jsonc` and set
+`QUOTA_ENABLED=false` (with the quota on and no database the owner's key is
+refused rather than left unmetered).
+
+### Owner setup
+
+Do these once, then push (the workflow does the rest). Nothing here goes
+into the repository or a chat.
+
+1. **Cloudflare API token**: the existing `CLOUDFLARE_API_TOKEN` was made
+   from the "Edit Cloudflare Workers" template. Edit it (My Profile -> API
+   Tokens) and add **Account / D1 / Edit** for your account. The workflow
+   uses it to find or create the database `opensu`
+   (`scripts/d1-ensure.mjs`) and to apply the migrations; without it the
+   deploy fails at "D1 database and migrations" and the previous version
+   stays live.
+2. **Site address**: GitHub -> Settings -> Secrets and variables -> Actions
+   -> Variables: `SITE_URL` = `https://opensu.009003.xyz`. Add the custom
+   domain to the Worker in the Cloudflare dashboard (Workers -> opensu-web
+   -> Settings -> Domains & Routes) if it is not there yet.
+3. **Better Auth secret**: Secrets: `BETTER_AUTH_SECRET` = the output of
+   `openssl rand -base64 32`. Changing it later signs everyone out.
+4. **Resend** (email codes):
+   - resend.com -> Domains -> Add domain. Use a subdomain, e.g.
+     `mail.opensu.009003.xyz` (Resend recommends a subdomain).
+   - Add the DNS records Resend shows (copy the exact values from its
+     Records tab; in Cloudflare DNS set them to "DNS only", not proxied):
+     a TXT record `resend._domainkey.mail` (DKIM), an MX record `send.mail`
+     -> `feedback-smtp.<region>.amazonses.com` priority 10 and a TXT record
+     `send.mail` -> `v=spf1 include:amazonses.com ~all` (SPF / return path).
+     Recommended: a TXT record `_dmarc` -> `v=DMARC1; p=none;`. Wait until
+     Resend shows the domain as verified.
+   - Resend -> API Keys -> create one with "Sending access" for that
+     domain. Secrets: `RESEND_API_KEY`. Variables: `AUTH_EMAIL_FROM` =
+     `openSU <code@mail.opensu.009003.xyz>`.
+   - Free plan: 100 emails a day, 3,000 a month (each sign-in sends one).
+5. **Google** (optional): Google Cloud console -> APIs & Services ->
+   OAuth consent screen (External; app name openSU; support email; the
+   `email` and `profile` scopes only) -> Credentials -> Create OAuth client
+   ID -> Web application. Authorized JavaScript origin
+   `https://opensu.009003.xyz`; authorized redirect URI
+   **`https://opensu.009003.xyz/api/auth/callback/google`** (that is
+   `SITE_URL` + `/api/auth/callback/google`). Secrets: `GOOGLE_CLIENT_ID`,
+   `GOOGLE_CLIENT_SECRET`. Publish the consent screen ("In production") so
+   accounts outside your test users can sign in.
+6. **Numbers** (optional): Variables `QUOTA_USER_DAILY`, `QUOTA_ANON_TRIAL`,
+   `QUOTA_IP_DAILY`, `QUOTA_SITE_DAILY`, `QUOTA_CALLS_PER_TURN`, `QUOTA_TZ`
+   only if you want other values than the defaults above.
+7. Push. Then check: the studio's menu shows "登录"; a code arrives; in the
+   Cloudflare dashboard (Workers -> opensu-web -> Observability) look at the
+   CPU time of `/api/auth/*` and `/api/chat` requests (see "Free tier" below:
+   the numbers here are Node estimates).
+
+A secret or variable removed from GitHub stays on the Worker until you run
+`pnpm dlx wrangler secret delete NAME` in `apps/web`.
+
+### Free tier (checked 2026-11-14)
+
+- Workers Free: 10 ms CPU per request (network waits do not count), 1 s
+  startup, 100,000 requests a day, 50 subrequests (D1 queries count) per
+  request, 64 MiB uncompressed script size
+  (<https://developers.cloudflare.com/workers/platform/limits/>).
+- D1 Free: 5 million rows read and 100,000 rows written a day, 500 MB per
+  database, 10 databases; over a daily limit D1 queries fail until 00:00
+  UTC (the owner's key is then refused, own keys go on)
+  (<https://developers.cloudflare.com/d1/platform/pricing/>). One counted
+  turn writes about 5 rows (turn row and three counters) and each further
+  model call 1; 500 turns a day with 8 calls each stay under 10,000 writes.
+- Resend Free: 100 emails a day, 3,000 a month, 10 requests per second
+  (<https://resend.com/docs/knowledge-base/account-quotas-and-limits>).
+
+CPU, measured by `scripts/auth-check.ts` (Node's V8 with D1 replaced by
+Node's SQLite and the time inside SQLite subtracted, since D1 runs it
+remotely; process CPU, which also counts V8's background compiler and GC
+threads, so it errs high). Medians / p90 of warm requests; "first" is the
+first such request after the startup warm-up:
+
+| Path | Median | p90 | First |
+|---|---|---|---|
+| send a code | 1.7 ms | 2.2 ms | 13 ms |
+| sign in with the code | 3.2 ms | 9 ms | 21-25 ms |
+| read the session (cookie cache) | 0.8 ms | 1.3 ms | 6-7 ms |
+| `/api/chat` POST, anonymous, new turn (30 KB body) | 0.7 ms | 1.4 ms | |
+| `/api/chat` POST, signed in, new turn | 1.4 ms | 2.3 ms | |
+| `/api/chat` GET status, signed in | 1.0 ms | 2.2 ms | |
+| startup: build Better Auth + warm-up | 18-29 ms + 36 ms | | |
+
+The relay alone stays at about 0.6 ms (`scripts/relay-check.mjs`). The
+first sign-in on a fresh isolate and rare GC spikes (max 14-32 ms seen)
+may exceed 10 ms in this approximation; whether Cloudflare counts them the
+same way can only be seen on Cloudflare. The client retries a failed code
+request once.
+
+## Deployment
 
 Deployment follows the Cloudflare guide for TanStack Start
 (<https://developers.cloudflare.com/workers/framework-guides/web-apps/tanstack-start/>):
 `@cloudflare/vite-plugin` builds the Worker (`dist/server`) and the static
 assets (`dist/client`, including the prerendered pages); `wrangler.jsonc`
-points `main` at `@tanstack/react-start/server-entry`.
+points `main` at `src/server.ts` (our entry around TanStack Start's).
 
-1. `pnpm dlx wrangler login` (or set `CLOUDFLARE_API_TOKEN` in CI).
-2. `pnpm --filter @opensu/web deploy` (= `vite build && wrangler deploy`),
-   which publishes to `opensu-web.<account>.workers.dev`; add a custom
-   domain in the dashboard.
-3. Later tasks add D1 / R2 bindings to `wrangler.jsonc` and run
-   `pnpm --filter @opensu/web cf-typegen`.
+`.github/workflows/deploy.yml` deploys on a push to the working branch:
+install, find or create the D1 database and apply `migrations/`
+(`--remote`), build, `wrangler deploy`, then one `wrangler secret bulk` with
+the secrets and variables that are set. Owner setup: see "Accounts and
+quota".
 
-Self-hosting is the same two steps on your own Cloudflare account.
+By hand: `pnpm dlx wrangler login`, then in `apps/web`:
+`node scripts/d1-ensure.mjs && pnpm exec wrangler d1 migrations apply DB
+--remote && pnpm build && pnpm exec wrangler deploy`. Do not commit the
+database id `d1-ensure.mjs` writes into `wrangler.jsonc`.
+
+Locally: `pnpm exec wrangler d1 migrations apply DB --local` once (in
+`apps/web`), and put `SITE_URL=http://localhost:5173`,
+`BETTER_AUTH_SECRET=<any 32+ characters>` and `AUTH_TEST_HOOK=1` in
+`.dev.vars` to try sign-in without email (the code is printed in the
+terminal).
+
+Self-hosting is the same on your own Cloudflare account.

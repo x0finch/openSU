@@ -1,12 +1,25 @@
 # Deploys apps/web to Cloudflare Workers.
 #
 # Repository secrets (Settings -> Secrets and variables -> Actions):
-#   CLOUDFLARE_API_TOKEN   required, "Edit Cloudflare Workers" template
+#   CLOUDFLARE_API_TOKEN   required, "Edit Cloudflare Workers" template plus
+#                          Account / D1 / Edit (task 019: accounts and quota)
 #   CLOUDFLARE_ACCOUNT_ID  required
 #   OPENROUTER_API_KEY     optional; without it the public site's assistant
 #                          only works with a visitor's own key
-# Repository variable (optional):
+#   BETTER_AUTH_SECRET     optional; 32+ random characters. Without it sign-in
+#                          is hidden and the quota counts anonymous trials per IP
+#   RESEND_API_KEY         optional; email sign-in codes (with AUTH_EMAIL_FROM)
+#   GOOGLE_CLIENT_ID       optional; "Continue with Google" (both needed)
+#   GOOGLE_CLIENT_SECRET
+# Repository variables (optional; see apps/web/README.md "Accounts and quota"):
 #   OPENSU_MODEL           model id for the owner's key
+#   SITE_URL               public site URL, e.g. https://opensu.009003.xyz
+#   AUTH_EMAIL_FROM        sender, e.g. "openSU <code@mail.opensu.009003.xyz>"
+#   AUTH_ENABLED           "false" hides sign-in even with the secrets set
+#   QUOTA_ENABLED          "false" turns the daily quota off
+#   QUOTA_USER_DAILY, QUOTA_ANON_TRIAL, QUOTA_IP_DAILY, QUOTA_SITE_DAILY,
+#   QUOTA_CALLS_PER_TURN, QUOTA_TZ   the numbers (defaults 10, 3, 60, 500, 8,
+#                          Asia/Shanghai)
 name: Deploy
 
 on:
@@ -57,6 +70,16 @@ jobs:
         env:
           PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: '1'
 
+      # Accounts and quota (task 019): the database exists and is migrated
+      # before the code that uses it is deployed. Fails if the API token
+      # lacks D1 permission (the previous deploy then stays live).
+      - name: D1 database and migrations
+        if: steps.creds.outputs.ok == 'true'
+        working-directory: apps/web
+        run: |
+          node scripts/d1-ensure.mjs
+          pnpm exec wrangler d1 migrations apply DB --remote
+
       - name: Build
         if: steps.creds.outputs.ok == 'true'
         run: pnpm build
@@ -66,18 +89,41 @@ jobs:
         working-directory: apps/web
         run: pnpm exec wrangler deploy
 
-      - name: Worker secrets
+      # Secrets and variables go to the Worker in one `secret bulk` call
+      # (only the ones that are set; an unset one keeps its earlier value,
+      # remove it with `wrangler secret delete NAME`). AUTH_TEST_HOOK is
+      # never set here.
+      - name: Worker secrets and variables
         if: steps.creds.outputs.ok == 'true'
         working-directory: apps/web
         env:
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+          BETTER_AUTH_SECRET: ${{ secrets.BETTER_AUTH_SECRET }}
+          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+          GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
+          GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
           OPENSU_MODEL: ${{ vars.OPENSU_MODEL }}
+          SITE_URL: ${{ vars.SITE_URL }}
+          AUTH_EMAIL_FROM: ${{ vars.AUTH_EMAIL_FROM }}
+          AUTH_ENABLED: ${{ vars.AUTH_ENABLED }}
+          QUOTA_ENABLED: ${{ vars.QUOTA_ENABLED }}
+          QUOTA_USER_DAILY: ${{ vars.QUOTA_USER_DAILY }}
+          QUOTA_ANON_TRIAL: ${{ vars.QUOTA_ANON_TRIAL }}
+          QUOTA_IP_DAILY: ${{ vars.QUOTA_IP_DAILY }}
+          QUOTA_SITE_DAILY: ${{ vars.QUOTA_SITE_DAILY }}
+          QUOTA_CALLS_PER_TURN: ${{ vars.QUOTA_CALLS_PER_TURN }}
+          QUOTA_TZ: ${{ vars.QUOTA_TZ }}
         run: |
-          if [ -n "$OPENROUTER_API_KEY" ]; then
-            printf '%s' "$OPENROUTER_API_KEY" | pnpm exec wrangler secret put OPENROUTER_API_KEY
-          else
-            echo "::notice::OPENROUTER_API_KEY not set; the assistant needs a visitor's own key."
-          fi
-          if [ -n "$OPENSU_MODEL" ]; then
-            printf '%s' "$OPENSU_MODEL" | pnpm exec wrangler secret put OPENSU_MODEL
+          [ -n "$OPENROUTER_API_KEY" ] || echo "::notice::OPENROUTER_API_KEY not set; the assistant needs a visitor's own key."
+          [ -n "$BETTER_AUTH_SECRET" ] || echo "::notice::BETTER_AUTH_SECRET not set; sign-in is hidden, anonymous trials are counted per IP."
+          umask 077
+          node -e '
+            const names = ["OPENROUTER_API_KEY", "BETTER_AUTH_SECRET", "RESEND_API_KEY", "GOOGLE_CLIENT_ID", "GOOGLE_CLIENT_SECRET", "OPENSU_MODEL", "SITE_URL", "AUTH_EMAIL_FROM", "AUTH_ENABLED", "QUOTA_ENABLED", "QUOTA_USER_DAILY", "QUOTA_ANON_TRIAL", "QUOTA_IP_DAILY", "QUOTA_SITE_DAILY", "QUOTA_CALLS_PER_TURN", "QUOTA_TZ"];
+            const out = Object.fromEntries(names.filter((n) => process.env[n]).map((n) => [n, process.env[n]]));
+            if (Object.keys(out).length) require("fs").writeFileSync(process.env.RUNNER_TEMP + "/worker-secrets.json", JSON.stringify(out));
+            console.log("setting: " + (Object.keys(out).join(", ") || "nothing"));
+          '
+          if [ -f "$RUNNER_TEMP/worker-secrets.json" ]; then
+            pnpm exec wrangler secret bulk "$RUNNER_TEMP/worker-secrets.json"
+            rm -f "$RUNNER_TEMP/worker-secrets.json"
           fi
