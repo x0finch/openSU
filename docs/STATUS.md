@@ -44,6 +44,23 @@ Update it when a milestone moves.
 - Not yet done: Worker CPU time measured on Cloudflare, per-user credit
   limit (anyone can spend the owner's key), the ~20-brief evaluation.
 
+## Built, not deployed: accounts and the daily quota (task 019, 2026-11-14)
+- Local commits only (not pushed: a push deploys). Reviewed by the lead:
+  typecheck, the full test suite and the full account e2e pass; server
+  code and screenshots read.
+- Before the first push the owner must: add **Account / D1 / Edit** to
+  `CLOUDFLARE_API_TOKEN` (otherwise the deploy fails at the D1 step and
+  the previous version stays live), then follow `apps/web/README.md`
+  "Accounts and quota" (site URL, `BETTER_AUTH_SECRET`, Resend domain and
+  key, optional Google client).
+- Unverified until deployed: CPU time on Cloudflare (local estimate: warm
+  sign-in 3 ms median, the first sign-in on a new instance 18-25 ms, over
+  the 10 ms limit on paper), real D1, real email, Google end to end,
+  phone keyboard and one-time-code autofill on real devices.
+- Owner to confirm (`docs/tasks/019-accounts-quota.md`, "Deviations"):
+  the anonymous trial is 3 per day, not 3 once.
+- `pnpm -r test` now takes about 12 minutes.
+
 ## Next, in order
 0. Done 2026-11-13: liquid glass chrome and Apple-style layout (task 017,
    `docs/UI_STYLE.md`), deployed. Follow-ups: press light barely visible
