@@ -143,3 +143,24 @@ Project rules in `CLAUDE.md` apply.
     iOS verification-code entry).
 - Do not push: the owner deploys when the domain and the secrets are
   ready.
+
+## Deviations for the owner to confirm
+
+Implemented as below; nothing changes until the owner decides.
+
+- **The anonymous trial is 3 per day, not 3 once.** The counter is keyed by
+  the quota day, like the signed-in allowance, so an anonymous visitor gets
+  3 again after midnight (China time). Reasons: the visitor is only a
+  cookie, and clearing cookies or opening a private window already starts a
+  new trial, so the real bounds are the per-IP (60) and whole-site (500)
+  daily limits either way; and when sign-in is off (no secrets) a one-time
+  trial would leave the site's own key unusable for every visitor after 3
+  messages. A one-time trial would take: a counter key without the day
+  (`trial|v:<visitor>`) kept outside the three-day cleanup, the out-of-credits
+  note without a reset time for visitors, and a decision about what happens
+  when sign-in is not configured (keep it daily then, or no trial at all).
+- **Without `BETTER_AUTH_SECRET` the trial is counted per IP.** The visitor
+  cookie is signed with that secret; without it there is nothing to sign
+  with, so the anonymous subject is the IP (`ip:<address>`). Everyone
+  behind one address (an office, a carrier NAT) then shares one trial of 3.
+  Setting the secret (owner setup step 3) restores per-visitor trials.
