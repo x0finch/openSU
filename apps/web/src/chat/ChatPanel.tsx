@@ -158,12 +158,13 @@ function SmallButton({ onClick, icon, children, className }: { onClick: () => vo
 /** Calm inline note for errors and the give-up case, with the next step. */
 function Note({ children, actions }: { children: ReactNode; actions?: ReactNode }) {
   return (
-    <div className="mt-3 rounded-sm bg-wash px-3 py-2.5" role="note">
+    // Plain text in the panel's flow: no plate inside the glass (UI_STYLE rule 3).
+    <div className="mt-3" role="note">
       <p className="flex gap-2 text-[13px] leading-5 text-ink">
         <NoteIcon width={16} height={16} className="mt-0.5 shrink-0 text-ink-2" />
         <span>{children}</span>
       </p>
-      {actions && <div className="mt-1.5 -mb-1 ml-5 flex flex-wrap gap-1">{actions}</div>}
+      {actions && <div className="mt-2 ml-6 flex flex-wrap items-center gap-1">{actions}</div>}
     </div>
   );
 }
@@ -182,15 +183,15 @@ function quotaText(t: ReturnType<typeof useT>, lang: Lang, code: string | undefi
   if (code === 'quota_turn_limit') return t('quota.out.turn');
   const q = server?.quota;
   const time = resetText(t, lang, q?.resetAt);
-  const n = q?.limit ?? 0;
+  // The owner's wording: no counts, promise little (the reset time stays).
   switch (q?.reason) {
     case 'site': return t('quota.out.site', { time });
     case 'ip': return t('quota.out.ip', { time });
-    case 'user': return t('quota.out.user', { n, time });
+    case 'user': return t('quota.out.user', { time });
     default: {
-      if (q?.kind === 'user') return t('quota.out.user', { n, time });
+      if (q?.kind === 'user') return t('quota.out.user', { time });
       const account = !!(server?.auth?.email || server?.auth?.google);
-      return account ? t('quota.out.anon', { n, m: server?.limits?.user ?? 10 }) : t('quota.out.anonNoAccount', { n, time });
+      return account ? t('quota.out.anon') : t('quota.out.anonNoAccount', { time });
     }
   }
 }

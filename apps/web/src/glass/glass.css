@@ -296,16 +296,31 @@
   box-shadow: 0 2px 8px rgb(0 0 0 / 0.22);
 }
 
-/* A text field inside glass: a quiet well, no box shadow. */
+/*
+ * A text field inside glass: a quiet well, no box shadow. Focused, it keeps
+ * its hairline and only brightens a little, as iOS fields do (no outline;
+ * the accent caret shows where typing goes).
+ */
 .lg-field {
   border-radius: 14px;
   background: var(--lg-row-hover);
   box-shadow: inset 0 0 0 0.5px var(--lg-separator);
-  transition: box-shadow 150ms;
+  transition: background-color 150ms, box-shadow 150ms;
+  caret-color: var(--color-accent);
+}
+.lg-field input {
+  caret-color: var(--color-accent);
 }
 .lg-field:focus-within,
 .lg-field:focus {
-  box-shadow: inset 0 0 0 1.5px var(--lg-ink-2);
+  background: var(--lg-row-active);
+}
+/* The sign-in code boxes have no caret: the box being typed in shows a thin ring. */
+.lg-code {
+  caret-color: transparent;
+}
+.lg-code:focus {
+  box-shadow: inset 0 0 0 1px var(--lg-ink-2);
 }
 
 /* No tooltip under a tool whose panel is open (the panel hangs there). */

@@ -108,7 +108,7 @@ export function CodeBoxes({ onComplete, disabled, wrong, label }: { onComplete: 
           autoComplete="one-time-code"
           maxLength={6}
           aria-label={label(i + 1)}
-          className="lg-field tnum h-14 w-0 min-w-0 flex-1 text-center text-[24px] font-semibold text-ink caret-[var(--lg-ink)] outline-none disabled:opacity-50 [&:focus-visible]:outline-none"
+          className="lg-field lg-code tnum h-14 w-0 min-w-0 flex-1 text-center text-[24px] font-semibold text-ink outline-none disabled:opacity-50 [&:focus-visible]:outline-none"
           data-testid={`otp-${i}`}
         />
       ))}
@@ -150,7 +150,6 @@ function SignInBody({ phone }: { phone?: boolean }) {
   const resendAt = useAccount((s) => s.resendAt);
   const google = useChat((s) => !!s.server?.auth?.google);
   const emailOn = useChat((s) => !!s.server?.auth?.email);
-  const perDay = useChat((s) => s.server?.limits?.user ?? null);
   const [value, setValue] = useState(email);
   const field = useRef<HTMLInputElement>(null);
   const left = useCountdown(resendAt);
@@ -210,7 +209,7 @@ function SignInBody({ phone }: { phone?: boolean }) {
   return (
     <div className={cx('flex flex-col gap-4', phone ? 'px-5 pt-1 pb-6' : 'p-[22px]')} data-testid="signin-email">
       {head(t('account.title'))}
-      {perDay !== null && <p className="-mt-2 text-[13.5px] leading-5 text-ink-2">{t('account.why', { n: perDay })}</p>}
+      <p className="-mt-2 text-[13.5px] leading-5 text-ink-2">{t('account.why')}</p>
       {emailOn && (
         <form onSubmit={submitEmail} className="flex flex-col gap-3" noValidate>
           <label className="lg-field flex h-12 items-center px-4">

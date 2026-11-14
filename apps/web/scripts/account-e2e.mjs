@@ -216,7 +216,7 @@ try {
     check(e4?.kind === 'quota' && stub.received.length === calls, 'the 4th message is refused with a calm note, without calling the model');
     await page.waitForSelector('[data-testid=quota-note]');
     const note = await page.getByTestId('quota-note').first().textContent();
-    check(/登录后每天可以用 10 次/.test(note ?? '') && (await page.getByTestId('quota-signin').count()) === 1, `anonymous: the note offers sign-in for 10 a day and the own key (${note})`);
+    check(/登录可享更多免费额度/.test(note ?? '') && !/\d/.test(note ?? '') && (await page.getByTestId('quota-signin').count()) === 1, `anonymous: the note offers sign-in and the own key, no numbers (${note})`);
     await page.waitForTimeout(400);
     await shot(page, 'desktop-out-anon');
     // The server refuses too (a client that ignores the hint).
@@ -248,7 +248,7 @@ try {
     await turn(page, '你好 11');
     await page.waitForSelector('[data-testid=quota-note]');
     const note2 = await page.getByTestId('quota-note').last().textContent();
-    check(/今天的 10 次已经用完了/.test(note2 ?? '') && /恢复/.test(note2 ?? '') && (await page.getByTestId('quota-signin').count()) === 0, `signed in: come back at the reset time or use your own key (${note2})`);
+    check(/今天的免费次数用完了/.test(note2 ?? '') && /恢复/.test(note2 ?? '') && (await page.getByTestId('quota-signin').count()) === 0, `signed in: come back at the reset time or use your own key (${note2})`);
     await page.waitForTimeout(400);
     await shot(page, 'desktop-out-user');
     // Own key: never limited (the relay forwards it; the upstream here is unreachable on purpose).
@@ -281,7 +281,7 @@ try {
     check(qb?.remaining === 0 && qb.reason === 'site', `site limit reached: the owner's key stops for a new visitor too (${JSON.stringify(qb)})`);
     await turn(b.page, '你好');
     const nb = await b.page.getByTestId('quota-note').first().textContent();
-    check(/大家共用的额度/.test(nb ?? ''), `site limit: a calm note (${nb})`);
+    check(/大家共用的免费额度/.test(nb ?? ''), `site limit: a calm note (${nb})`);
     await shot(b.page, 'desktop-out-site');
     const own = await b.page.evaluate(async () => (await fetch('/api/chat', { method: 'POST', headers: { 'content-type': 'application/json', 'x-opensu-key': 'sk-own-test', 'x-opensu-base-url': 'https://127.0.0.1:9/v1' }, body: '{"messages":[]}' })).status);
     check(own !== 429, `site limit: own key continues (${own})`);
