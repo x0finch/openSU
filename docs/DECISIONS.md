@@ -51,6 +51,11 @@ One line each. Change only with the lead's sign-off.
 - Tools execute in the browser; the Worker adds the key and relays the stream.
 - Public site: owner's key with per-user credit limit; users may bring their
   own key.
+- Accounts and credits (task 019): Better Auth on D1 (email one-time code
+  sent with Resend, and Google; no passwords: hashing does not fit 10 ms
+  CPU). One credit per user message, counted atomically in D1 (one
+  statement per model call). Numbers are deployment variables; everything
+  turns off without the secrets or with AUTH_ENABLED / QUOTA_ENABLED=false.
 
 ## Process
 - Milestones: golden sample -> interaction -> AI -> sharing -> styles/rain.
