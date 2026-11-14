@@ -135,6 +135,8 @@ describe('runTurn', () => {
     [401, { error: { code: 'no_key', message: 'No provider key configured.' } }, 'no-key'],
     [401, { error: { message: 'Invalid API key' } }, 'auth'],
     [429, { error: { message: 'Rate limit exceeded' } }, 'rate-limit'],
+    [429, { error: { code: 'quota_exhausted', message: 'No credits left for today.', quota: { remaining: 0 } } }, 'quota'],
+    [503, { error: { code: 'quota_unavailable', message: 'The shared key is not available right now.' } }, 'quota'],
     [502, { error: { message: 'Upstream unavailable' } }, 'upstream'],
   ] as const)('reports HTTP %i as %s and leaves the house alone', async (status, body, kind) => {
     const session = new HouseSession(starterHouse());

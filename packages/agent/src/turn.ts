@@ -55,8 +55,15 @@ export type AgentEvent =
 export type TurnStatus = 'ok' | 'gave-up' | 'aborted' | 'error';
 
 export interface TurnError {
-  /** `no-key`: the server has no provider key and none was given; `auth`: the key was refused. */
-  kind: 'no-key' | 'auth' | 'rate-limit' | 'upstream' | 'network';
+  /**
+   * `no-key`: the server has no provider key and none was given; `auth`: the
+   * key was refused; `quota`: the site's daily credits on its own key are
+   * used up (`code` "quota_exhausted"), one message made too many model calls
+   * ("quota_turn_limit"), or they cannot be counted now ("quota_unavailable").
+   */
+  kind: 'no-key' | 'auth' | 'rate-limit' | 'quota' | 'upstream' | 'network';
+  /** The relay's error code, when it sent one (e.g. "quota_exhausted"). */
+  code?: string;
   message: string;
   status?: number;
 }
@@ -124,6 +131,7 @@ export function classifyError(err: unknown): TurnError {
   const status = typeof e?.status === 'number' ? e.status : Number(code) >= 400 && Number(code) < 600 ? Number(code) : undefined;
   const message = e?.error?.message ?? e?.message ?? String(err);
   if (code === 'no_key' || /no_key/.test(message)) return { kind: 'no-key', message, status };
+  if (typeof code === 'string' && code.startsWith('quota_')) return { kind: 'quota', message, status, code };
   if (status === 401 || status === 403) return { kind: 'auth', message, status };
   if (status === 429) return { kind: 'rate-limit', message, status };
   if (status !== undefined) return { kind: 'upstream', message, status };
