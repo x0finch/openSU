@@ -26,10 +26,10 @@ export function CodeBoxes({ onComplete, disabled, wrong, label }: { onComplete: 
   useLayoutEffect(() => {
     const focus = () => refs.current[0]?.focus({ preventScroll: true });
     focus();
-    const ids = [60, 250].map((ms) => window.setTimeout(() => !row.current?.contains(document.activeElement) && focus(), ms));
+    const ids = [60, 150, 300, 500, 800, 1200].map((ms) => window.setTimeout(() => !row.current?.contains(document.activeElement) && focus(), ms));
     return () => ids.forEach(clearTimeout);
   }, []);
-  // A wrong code: the row shakes and clears, focus back to the first box.
+  // A wrong code: the row shakes, then clears (as the iOS passcode does), focus back to the first box.
   useEffect(() => {
     if (!wrong) return;
     const el = row.current;
@@ -38,8 +38,12 @@ export function CodeBoxes({ onComplete, disabled, wrong, label }: { onComplete: 
       void el.offsetWidth;
       el.classList.add('otp-shake');
     }
-    setDigits(['', '', '', '', '', '']);
-    refs.current[0]?.focus({ preventScroll: true });
+    const reduced = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+    const id = window.setTimeout(() => {
+      setDigits(['', '', '', '', '', '']);
+      refs.current[0]?.focus({ preventScroll: true });
+    }, reduced ? 0 : 450);
+    return () => clearTimeout(id);
   }, [wrong]);
 
   const fill = (from: number, chars: string) => {
@@ -155,7 +159,8 @@ function SignInBody({ phone }: { phone?: boolean }) {
     // The phone sheet is hidden for its first frame; focus once it shows.
     const focus = () => field.current?.focus({ preventScroll: true });
     focus();
-    const ids = [60, 250].map((ms) => window.setTimeout(() => document.activeElement !== field.current && focus(), ms));
+    // Retried until it takes (a slow first frame can keep the sheet hidden longer).
+    const ids = [60, 150, 300, 500, 800, 1200].map((ms) => window.setTimeout(() => document.activeElement !== field.current && focus(), ms));
     return () => ids.forEach(clearTimeout);
   }, [step]);
 
