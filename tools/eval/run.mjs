@@ -101,11 +101,11 @@ for (const turn of scenario.turns) {
   await page.getByTestId('prompt-bar').press('Enter');
   await page.waitForFunction((k) => { const s = window.__studio.chat.getState(); return s.items.length > k + 1 && !s.running; }, before, { timeout: 1800000, polling: 1000 });
   const crashed = await page.evaluate(() => /Something went wrong/.test(document.body.innerText));
-  const reply = await page.evaluate((k) => window.__studio.chat.getState().items.slice(k + 1).map((m) => ({ text: m.text, changes: (m.changes ?? []).map((c) => c.summary), error: m.error, gaveUp: m.gaveUp, lastErrors: m.lastErrors })), before);
+  const reply = await page.evaluate((k) => window.__studio.chat.getState().items.slice(k + 1).map((m) => ({ text: m.text, final: m.parts?.length && m.parts.at(-1).type === 'text' ? m.parts.at(-1).text.trim() : null, changes: (m.changes ?? []).map((c) => c.summary), error: m.error, gaveUp: m.gaveUp, lastErrors: m.lastErrors })), before);
   const area = await page.getByTestId('fact-area').first().textContent().catch(() => null);
   const files = crashed ? [] : await shots(turn.tag, turn.levels);
   transcript.push({ ...turn, crashed, area, reply, files });
-  for (const r of reply) console.log(`< ${r.text.replace(/\n+/g, ' / ').slice(0, 300)}${r.error ? ` [error ${JSON.stringify(r.error)}]` : ''}`);
+  for (const r of reply) console.log(`< ${r.text.replace(/\n+/g, ' / ').slice(0, 300)}${r.error ? ` [error ${JSON.stringify(r.error)}]` : ''}${r.final != null ? `\n  final message: ${r.final.length} chars` : ''}`);
   if (crashed) { console.log('! the studio crashed; stopping'); failed = true; break; }
 }
 const calls = JSON.parse(JSON.stringify(readdirSafe(join(OUT, 'log'))));

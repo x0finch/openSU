@@ -25,7 +25,7 @@ How it works:
   replay only matches while the prompt and tools are unchanged).
 
 Output goes to `artifacts/eval/<scenario>-<time>/` (git-ignored):
-`transcript.json` (turns, replies, crashes, cost per call), `log/` (every
+`transcript.json` (turns, replies with the final message after the last tool call, crashes, cost per call), `log/` (every
 model call with its full request) and the screenshots. Review them against
 the scenario's `criteria`.
 
