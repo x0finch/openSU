@@ -11,7 +11,8 @@ import { useStudio } from '../lib/store';
 import { type ChatItem, fetchServerStatus, loadAgent, newChat, redoTurn, retry, send, stop, undoTurn, useChat } from './chat-store';
 import { ChevronDownIcon, ComposeIcon, DockIcon, HistoryIcon, NoteIcon, PlanCheckIcon, RedoIcon, RetryIcon, SlidersIcon, StopIcon, UndockIcon, UndoIcon } from './icons';
 import { usesOwnKey } from './settings';
-import { GlassInputBar, GlassTextSurface } from '../glass';
+import { GlassInputBar, GlassTextSurface, GlassTurn, type GlassTurnEntry } from '../glass';
+import { turnView } from './turn-parts';
 import { SettingsSheet } from './SettingsSheet';
 
 const SUGGESTIONS: MessageKey[] = ['chat.s1', 'chat.s2', 'chat.s3', 'chat.s4'];
@@ -85,58 +86,58 @@ function Progress({ label }: { label: string }) {
   );
 }
 
-function ChangesCard({ item }: { item: ChatItem }) {
+/** The live step of a running turn, in words: the edit being sent or just applied, else the phase. */
+function liveStep(t: ReturnType<typeof useT>, item: ChatItem): { label: string; pending: boolean } {
+  const n = item.changes?.length ?? 0;
+  if (item.phase !== 'repairing' && item.live) {
+    return item.live.applied
+      ? { label: t('chat.step.done', { n, s: item.live.summary }), pending: false }
+      : { label: t('chat.step.doing', { n: n + 1, s: item.live.summary }), pending: true };
+  }
+  return { label: phaseLabel(t, item.phase), pending: true };
+}
+
+/** What each command did (English validator wording), behind its own small toggle. */
+function TechDetails({ item }: { item: ChatItem }) {
   const t = useT();
   const [open, setOpen] = useState(false);
-  const changes = item.changes ?? [];
-  if (!changes.length) return null;
-  const undone = item.undo === 'undone' || item.undo === 'can-redo';
+  const lines = (item.changes ?? []).flatMap((c) => c.details);
+  if (!lines.length) return null;
   return (
-    <div className={cx('mt-2 overflow-hidden border-t border-hairline', undone && 'opacity-70')} data-testid="changes-card">
-      <div className="flex h-9 items-center justify-between gap-2">
-        <p className="flex items-center gap-1.5 text-xs text-ink-2">
-          <PlanCheckIcon width={14} height={14} className={undone ? 'text-ink-3' : 'text-ink-2'} />
-          {t('chat.changedN', { n: changes.length })}
-          {undone && <span className="rounded-[5px] bg-wash px-1.5 py-px text-2xs font-normal text-ink-2">{t('chat.undone')}</span>}
-        </p>
-        <div className="flex items-center">
-          {item.undo === 'can-undo' && (
-            <SmallButton onClick={() => undoTurn(item.id)} icon={<UndoIcon width={14} height={14} />} className="lg-plate h-[28px] px-2.5">
-              {t('chat.undo')}
-            </SmallButton>
-          )}
-          {item.undo === 'can-redo' && (
-            <SmallButton onClick={() => redoTurn(item.id)} icon={<RedoIcon width={14} height={14} />} className="lg-plate h-[28px] px-2.5">
-              {t('chat.redo')}
-            </SmallButton>
-          )}
-        </div>
-      </div>
-      <ul className="pb-1">
-        {changes.map((c, i) => (
-          <li key={i} className={cx('relative py-0.5 pl-3.5 text-[13px] leading-5', undone ? 'text-ink-2 line-through decoration-ink-3' : 'text-ink')}>
-            <span className="absolute top-[9px] left-0.5 size-1.5 rounded-full bg-accent" aria-hidden="true" />
-            {c.summary}
-          </li>
-        ))}
-      </ul>
-      {changes.some((c) => c.details.length) && (
-        <div className="border-t border-hairline">
-          <button type="button" onClick={() => setOpen(!open)} aria-expanded={open} className="flex h-7 w-full items-center gap-1 px-3 text-2xs text-ink-3 transition-colors hover:text-ink-2">
-            <ChevronRightIcon width={13} height={13} className={cx('transition-transform duration-150', open && 'rotate-90')} />
-            {t('chat.details')}
-          </button>
-          {open && (
-            <ul className="max-h-40 space-y-1 overflow-auto px-3 pb-2.5 font-mono text-[11px] leading-4 text-ink-2" lang="en">
-              {changes.flatMap((c) => c.details).map((d, i) => (
-                <li key={i}>{d}</li>
-              ))}
-            </ul>
-          )}
-        </div>
+    <div className="-mt-1 pb-2">
+      <button type="button" onClick={() => setOpen(!open)} aria-expanded={open} className="flex h-7 items-center gap-1 text-2xs text-ink-3 transition-colors hover:text-ink-2">
+        <ChevronRightIcon width={13} height={13} className={cx('transition-transform duration-150', open && 'rotate-90')} />
+        {t('chat.details')}
+      </button>
+      {open && (
+        <ul className="max-h-40 space-y-1 overflow-auto pb-0.5 pl-1 font-mono text-[11px] leading-4 text-ink-2" lang="en">
+          {lines.map((d, i) => (
+            <li key={i}>{d}</li>
+          ))}
+        </ul>
       )}
     </div>
   );
+}
+
+/** Undo / redo of a turn's changes, at the end of its changes line. */
+function UndoButtons({ item }: { item: ChatItem }) {
+  const t = useT();
+  if (item.undo === 'can-undo') {
+    return (
+      <SmallButton onClick={() => undoTurn(item.id)} icon={<UndoIcon width={14} height={14} />} className="lg-plate h-[28px] px-2.5">
+        {t('chat.undo')}
+      </SmallButton>
+    );
+  }
+  if (item.undo === 'can-redo') {
+    return (
+      <SmallButton onClick={() => redoTurn(item.id)} icon={<RedoIcon width={14} height={14} />} className="lg-plate h-[28px] px-2.5">
+        {t('chat.redo')}
+      </SmallButton>
+    );
+  }
+  return null;
 }
 
 function SmallButton({ onClick, icon, children, className }: { onClick: () => void; icon?: ReactNode; children: ReactNode; className?: string }) {
@@ -176,17 +177,58 @@ function errorText(t: ReturnType<typeof useT>, item: ChatItem): string {
   }
 }
 
-function AssistantMessage({ item, latest }: { item: ChatItem; latest: boolean }) {
+/**
+ * An assistant turn (task 018) in the compact density (the recent strip:
+ * a live line while it runs, then the final text under its changes line)
+ * or the full one (the pinned conversation: the timeline).
+ */
+function AssistantMessage({ item, latest, density }: { item: ChatItem; latest: boolean; density: 'compact' | 'full' }) {
   const t = useT();
   const running = item.phase !== 'done';
   const openSettings = useChat((s) => s.setSettingsOpen);
-  const progress = phaseLabel(t, item.phase);
+  const compact = density === 'compact';
+  const view = turnView(item);
+  const changes = item.changes ?? [];
+  const undone = item.undo === 'undone' || item.undo === 'can-redo';
+  const step = liveStep(t, item);
+
+  let live: ReactNode = null;
+  let final: ReactNode = null;
+  if (running) {
+    if (compact && !view.calledTools && item.text) {
+      // No tool called (yet): the reply streams as before.
+      final = <RichText text={item.text} caret />;
+    } else if (compact) {
+      live = <Progress label={step.label} />;
+    } else {
+      // The timeline fills in: the text streaming now, or the step under way.
+      if (view.final) final = <RichText text={view.final} caret={item.phase === 'writing'} />;
+      if (item.phase !== 'writing' || !view.final) live = <div className={view.final || view.timeline.length ? 'mt-2.5' : ''}><Progress label={step.label} /></div>;
+    }
+  } else if (view.final) {
+    final = <RichText text={view.final} />;
+  }
+
+  const entries: GlassTurnEntry[] = view.structured
+    ? view.timeline.map((e) => (e.type === 'text' ? { type: 'text', content: <RichText text={e.text} /> } : { type: 'change', summary: changes[e.change]?.summary ?? '' }))
+    : changes.map((c) => ({ type: 'change', summary: c.summary }));
+  const label = changes.length ? (changes.length === 1 ? t('chat.steps1') : t('chat.stepsN', { n: changes.length })) : undefined;
+
   return (
     <div className="animate-[fade-in_200ms_ease-out]" data-testid="assistant-message" data-phase={item.phase}>
-      {(item.text || running) && <RichText text={item.text} caret={running && !!item.text} />}
-      {/* While the reply streams, its caret is the indicator. */}
-      {running && item.phase !== 'writing' && (!item.text || item.phase !== 'thinking') && <div className={item.text ? 'mt-2.5' : ''}><Progress label={progress} /></div>}
-      <ChangesCard item={item} />
+      <GlassTurn
+        density={density}
+        live={live}
+        entries={entries}
+        changes={changes.map((c) => c.summary)}
+        final={final}
+        label={label}
+        badge={undone ? <span className="rounded-[5px] bg-wash px-1.5 py-px text-2xs font-normal text-ink-2">{t('chat.undone')}</span> : undefined}
+        trailing={<UndoButtons item={item} />}
+        defaultOpen={!compact && latest}
+        undone={undone}
+        extra={<TechDetails item={item} />}
+      />
       {item.aborted && <p className="mt-2 text-xs text-ink-3">{t('chat.aborted')}</p>}
       {item.gaveUp && (
         // The same words again would fail the same way: no retry, a next step instead.
@@ -327,7 +369,7 @@ function ManualEdit({ item }: { item: ChatItem }) {
 }
 
 /** The conversation (from item `from`); `spacer` leaves room under the newest message so it can sit at the top. */
-function MessageList({ className, from = 0, spacer = true }: { className?: string; from?: number; spacer?: boolean }) {
+function MessageList({ className, from = 0, spacer = true, density }: { className?: string; from?: number; spacer?: boolean; density: 'compact' | 'full' }) {
   const all = useChat((s) => s.items);
   const items = from ? all.slice(from) : all;
   const ref = useRef<HTMLDivElement>(null);
@@ -382,7 +424,7 @@ function MessageList({ className, from = 0, spacer = true }: { className?: strin
         <div className="flex flex-col gap-3">
           {items.map((it) => (
             <div key={it.id} data-msg className="scroll-mt-4">
-              {it.role === 'user' ? <UserMessage item={it} /> : it.manual ? <ManualEdit item={it} /> : <AssistantMessage item={it} latest={it.id === lastAssistant} />}
+              {it.role === 'user' ? <UserMessage item={it} /> : it.manual ? <ManualEdit item={it} /> : <AssistantMessage item={it} latest={it.id === lastAssistant} density={density} />}
             </div>
           ))}
           {/* Room below the newest message, so it can sit at the top while the reply arrives. */}
@@ -514,6 +556,14 @@ export function ChatInput({ phone, pinned, className }: { phone?: boolean; pinne
   const recent = useStudio((s) => s.recent);
   const setRecent = useStudio((s) => s.setRecent);
   const working = useWorking();
+  // The step under way (task 018), when the turn has one; else the phase phrase.
+  const step = useChat((s) => {
+    if (!s.running) return null;
+    const it = [...s.items].reverse().find((i) => i.role === 'assistant' && !i.manual);
+    if (!it?.live || it.phase === 'repairing') return null;
+    const r = liveStep(t, it);
+    return `${r.pending ? 1 : 0}${r.label}`;
+  });
   const note = useChangeNote();
   const box = useRef<HTMLElement>(null);
   const ref = useRef<HTMLTextAreaElement>(null);
@@ -591,9 +641,9 @@ export function ChatInput({ phone, pinned, className }: { phone?: boolean; pinne
           {!working && !text && note.item && !pinned && <ChangeNote item={note.item} hold={note.hold} />}
           {working && !text && (
             <p className="pointer-events-none absolute inset-0 flex items-center truncate text-[15px] font-medium text-ink" role="status" data-testid="chat-status" data-phase={working.phase}>
-              <span className="truncate">
-                {t(statusKey(working.phase))}
-                <span className="text-accent-ink">…</span>
+              <span className="truncate" data-testid="chat-status-text">
+                {step ? step.slice(1) : t(statusKey(working.phase))}
+                {(!step || step[0] === '1') && <span className="text-accent-ink">…</span>}
                 {!phone && working.prompt && <span className="ml-1 text-ink-3">{`“${working.prompt.replace(/\s+/g, ' ')}”`}</span>}
               </span>
             </p>
@@ -670,7 +720,7 @@ export function RecentStrip({ phone, className }: { phone?: boolean; className?:
           <ChevronDownIcon width={16} height={16} />
         </button>
       </header>
-      <MessageList from={items.length ? lastExchangeStart(items) : 0} spacer={false} className="px-5 pt-0.5 pb-4" />
+      <MessageList density="compact" from={items.length ? lastExchangeStart(items) : 0} spacer={false} className="px-5 pt-0.5 pb-4" />
       {rounds > 1 && (
         <div className="shrink-0 px-2.5 pb-2.5">
           <LinkButton onClick={() => setPinned(true)} testId="chat-view-all">
@@ -727,7 +777,7 @@ export function PinnedColumn({ title }: { title: ReactNode }) {
         <>
           <div className="shrink-0 px-6 pt-4 pb-3">{title}</div>
           <ConversationHeader />
-          <MessageList className="px-6 pt-4" />
+          <MessageList density="full" className="px-6 pt-4" />
           <div className="shrink-0 px-3 pt-2 pb-3">
             <ChatInput pinned />
           </div>
@@ -746,7 +796,7 @@ export function PinnedChat() {
   return (
     <section aria-label={t('chat.title')} className="flex min-h-0 flex-1 flex-col" data-testid="chat-panel">
       <ConversationHeader phone />
-      <MessageList className="px-4 pt-1" spacer={false} />
+      <MessageList density="full" className="px-4 pt-1" spacer={false} />
       <div className="shrink-0 px-3 pt-1.5 pb-[max(12px,env(safe-area-inset-bottom))]">
         <ChatInput phone pinned />
       </div>
