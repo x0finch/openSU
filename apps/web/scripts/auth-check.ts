@@ -5,7 +5,8 @@
 //
 //   node --experimental-strip-types --no-warnings scripts/auth-check.ts
 import { getMigrations } from 'better-auth/db/migration';
-import { getAuth, lastTestCode, sessionUser, warmUp } from '../src/server/auth.ts';
+import { accountRoute, startAuth } from '../src/server/accounts.ts';
+import { authTesting, lastTestCode, loadAuth, sessionUser, warmUp } from '../src/server/auth.ts';
 import { relayChat, relayStatus } from '../src/server/chat-relay.ts';
 import { migratedD1 } from './d1-shim.ts';
 
@@ -54,8 +55,8 @@ const cookiesOf = (res: Response) => res.headers.getSetCookie().map((c) => c.spl
 globalThis.fetch = (async () => new Response('data: [DONE]\n\n', { status: 200, headers: { 'content-type': 'text/event-stream' } })) as typeof fetch;
 
 console.log('sign-in (email code, test hook)');
-const first = await cpu(async () => getAuth(env)!);
-const ctx = await cpu(async () => first.value.$context);
+const first = await cpu(async () => (await loadAuth(env))!);
+const ctx = { ms: 0 };
 const statementsBefore = db.statements;
 const warm = await cpu(async () => warmUp(first.value, SITE));
 console.log(`  Worker startup (src/server.ts, not a request): Better Auth instance ${(first.ms + ctx.ms).toFixed(2)} ms + warm-up ${warm.ms.toFixed(2)} ms`);
@@ -157,6 +158,37 @@ const chatReq = (turn: string, cookieHeader = '', ip = '203.0.113.50') =>
   for (const [k, v] of Object.entries(ms)) console.log(`  /api/chat ${names[k]}: median ${median(v.slice(5)).toFixed(2)} ms, p90 ${pct(v.slice(5), 0.9).toFixed(2)} ms, max ${Math.max(...v.slice(5)).toFixed(2)} ms (30 KB body, upstream mocked)`);
   const worst = Math.max(...Object.values(ms).map((v) => median(v.slice(5))), median(sendMs), median(signMs));
   check(worst < 5, `every path well under 10 ms in this approximation (worst median ${worst.toFixed(2)} ms)`);
+}
+
+// A sign-in that cannot start must not take anything else down (task 019 review).
+console.log('sign-in that fails to build');
+{
+  const broken = { ...env, SITE_URL: 'http://localhost:8788', QUOTA_ANON_TRIAL: '3' };
+  authTesting.failBuild = true;
+  const errors: string[] = [];
+  const err = console.error;
+  console.error = (...a: unknown[]) => void errors.push(String(a[0]));
+  let threw = false;
+  try {
+    await startAuth(broken);
+  } catch {
+    threw = true;
+  }
+  check(!threw && errors.some((e) => /auth: sign-in unavailable/.test(e)), 'startup survives a throwing build and logs one line');
+  check(!errors.join(' ').includes(env.BETTER_AUTH_SECRET), 'the log line carries no secret');
+  const r = await accountRoute(new Request('http://localhost:8788/api/auth/email-otp/send-verification-otp', { method: 'POST', headers: { 'content-type': 'application/json', origin: 'http://localhost:8788' }, body: '{"email":"x@example.com","type":"sign-in"}' }), broken);
+  check(r?.status === 503 && ((await r.json()) as { error: { code: string } }).error.code === 'auth_off', 'the lazy retry fails too: sign-in routes answer auth_off (503)');
+  const other = await accountRoute(new Request('http://localhost:8788/studio'), broken);
+  check(other === null, 'other paths are left to the app (the page is served as before)');
+  const st = await relayStatus(new Request('http://localhost:8788/api/chat', { headers: { cookie } }), broken);
+  const sj = (await st.json()) as { user: unknown; quota: { kind: string } | null };
+  check(st.status === 200 && sj.user === null && sj.quota?.kind === 'anon', `GET /api/chat works; a session cookie counts as anonymous (${st.status}, ${JSON.stringify(sj.quota)})`);
+  const post = await relayChat(chatReq('broken-auth-turn-1', cookie, '198.18.0.9'), broken);
+  check(post.status === 200, `POST /api/chat works on the owner's key, metered as anonymous (${post.status})`);
+  console.error = err;
+  authTesting.failBuild = false;
+  const again = await loadAuth({ ...broken, SITE_URL: 'http://localhost:8789' });
+  check(!!again, 'a later build (new configuration) is not blocked by the failure');
 }
 
 if (failures.length) {
