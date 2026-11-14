@@ -275,7 +275,8 @@ function AssistantMessage({ item, latest, density }: { item: ChatItem; latest: b
           actions={
             <>
               {item.error.kind === 'quota' && !server?.user && server?.quota?.kind === 'anon' && server.quota.reason !== 'site' && !!(server.auth?.email || server.auth?.google) && (
-                <button type="button" onClick={(e) => openSignIn(e.currentTarget, 'input')} className="hit inline-flex h-7 items-center gap-1 rounded-[6px] px-2 text-xs font-semibold text-ink transition-colors hover:bg-wash" data-testid="quota-signin">
+                // The one primary action for an anonymous visitor: the accent, small (like send).
+                <button type="button" onClick={(e) => openSignIn(e.currentTarget, 'input')} className="hit lg-focus mr-1 inline-flex h-7 items-center rounded-full bg-accent px-3.5 text-xs font-semibold text-on-accent transition-[filter] duration-150 hover:brightness-95" data-testid="quota-signin">
                   {t('account.signIn')}
                 </button>
               )}
