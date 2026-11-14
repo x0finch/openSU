@@ -8,7 +8,9 @@ import { ChevronRightIcon, SendIcon, SparkIcon } from '../components/icons';
 import { cx, IconButton } from '../components/ui';
 import { type MessageKey, useT } from '../lib/i18n';
 import { useStudio } from '../lib/store';
-import { type ChatItem, fetchServerStatus, loadAgent, newChat, redoTurn, retry, send, stop, undoTurn, useChat } from './chat-store';
+import { type ChatItem, fetchServerStatus, loadAgent, newChat, redoTurn, retry, send, type ServerStatus, stop, undoTurn, useChat } from './chat-store';
+import { openSignIn } from './account';
+import type { Lang } from '../lib/i18n';
 import { ChevronDownIcon, ComposeIcon, DockIcon, HistoryIcon, NoteIcon, PlanCheckIcon, RedoIcon, RetryIcon, SlidersIcon, StopIcon, UndockIcon, UndoIcon } from './icons';
 import { usesOwnKey } from './settings';
 import { GlassInputBar, GlassTextSurface, GlassTurn, type GlassTurnEntry } from '../glass';
@@ -166,9 +168,37 @@ function Note({ children, actions }: { children: ReactNode; actions?: ReactNode 
   );
 }
 
-function errorText(t: ReturnType<typeof useT>, item: ChatItem): string {
+/** When the credits come back, in this browser's clock: "明天 0:00 " / "tomorrow at 0:00". */
+function resetText(t: ReturnType<typeof useT>, lang: Lang, iso: string | undefined): string {
+  if (!iso) return '';
+  const d = new Date(iso);
+  const time = d.toLocaleTimeString(lang === 'zh' ? 'zh-CN' : 'en-GB', { hour: 'numeric', minute: '2-digit' });
+  return new Date().toDateString() === d.toDateString() ? t('quota.today', { t: time }) : t('quota.tomorrow', { t: time });
+}
+
+/** The calm sentence for a turn refused by the daily credits (task 019): what happened and what to do. */
+function quotaText(t: ReturnType<typeof useT>, lang: Lang, code: string | undefined, server: ServerStatus | null): string {
+  if (code === 'quota_unavailable') return t('quota.out.unavailable');
+  if (code === 'quota_turn_limit') return t('quota.out.turn');
+  const q = server?.quota;
+  const time = resetText(t, lang, q?.resetAt);
+  const n = q?.limit ?? 0;
+  switch (q?.reason) {
+    case 'site': return t('quota.out.site', { time });
+    case 'ip': return t('quota.out.ip', { time });
+    case 'user': return t('quota.out.user', { n, time });
+    default: {
+      if (q?.kind === 'user') return t('quota.out.user', { n, time });
+      const account = !!(server?.auth?.email || server?.auth?.google);
+      return account ? t('quota.out.anon', { n, m: server?.limits?.user ?? 10 }) : t('quota.out.anonNoAccount', { n, time });
+    }
+  }
+}
+
+function errorText(t: ReturnType<typeof useT>, item: ChatItem, server: ServerStatus | null = null, lang: Lang = 'zh'): string {
   const e = item.error!;
   switch (e.kind) {
+    case 'quota': return quotaText(t, lang, e.code, server);
     case 'no-key': return t('chat.err.noKey');
     case 'auth': return t('chat.err.auth');
     case 'rate-limit': return t('chat.err.rateLimit');
@@ -186,6 +216,9 @@ function AssistantMessage({ item, latest, density }: { item: ChatItem; latest: b
   const t = useT();
   const running = item.phase !== 'done';
   const openSettings = useChat((s) => s.setSettingsOpen);
+  const server = useChat((s) => s.server);
+  const ownKey = useChat((s) => usesOwnKey(s.settings));
+  const lang = useStudio((s) => s.lang);
   const compact = density === 'compact';
   const view = turnView(item);
   const changes = item.changes ?? [];
@@ -241,17 +274,25 @@ function AssistantMessage({ item, latest, density }: { item: ChatItem; latest: b
         <Note
           actions={
             <>
+              {item.error.kind === 'quota' && !server?.user && server?.quota?.kind === 'anon' && server.quota.reason !== 'site' && !!(server.auth?.email || server.auth?.google) && (
+                <button type="button" onClick={(e) => openSignIn(e.currentTarget, 'input')} className="hit inline-flex h-7 items-center gap-1 rounded-[6px] px-2 text-xs font-semibold text-ink transition-colors hover:bg-wash" data-testid="quota-signin">
+                  {t('account.signIn')}
+                </button>
+              )}
+              {item.error.kind === 'quota' && !ownKey && (
+                <SmallButton onClick={() => openSettings(true)} icon={<SlidersIcon width={14} height={14} />}>{t('quota.useOwnKey')}</SmallButton>
+              )}
               {(item.error.kind === 'no-key' || item.error.kind === 'auth') && (
                 <SmallButton onClick={() => openSettings(true)} icon={<SlidersIcon width={14} height={14} />}>{t('chat.err.openSettings')}</SmallButton>
               )}
-              {/* Retrying cannot help until a key is set. */}
-              {latest && item.error.kind !== 'no-key' && item.error.kind !== 'auth' && (
+              {/* Retrying cannot help until a key is set, or while no credit is left. */}
+              {latest && item.error.kind !== 'no-key' && item.error.kind !== 'auth' && (item.error.kind !== 'quota' || (item.error.code !== 'quota_turn_limit' && (ownKey || (server?.quota?.remaining ?? 0) > 0))) && (
                 <SmallButton onClick={() => retry(item.id)} icon={<RetryIcon width={14} height={14} />}>{t('chat.retry')}</SmallButton>
               )}
             </>
           }
         >
-          {errorText(t, item)}
+          <span data-testid={item.error.kind === 'quota' ? 'quota-note' : undefined}>{errorText(t, item, server, lang)}</span>
         </Note>
       )}
     </div>
@@ -595,6 +636,8 @@ export function ChatInput({ phone, pinned, className }: { phone?: boolean; pinne
   };
   const can = !!text.trim() && !running;
   const btn = phone ? 'size-[36px]' : 'size-[40px]';
+  // Credits on the site's key, shown only when 3 or fewer are left (task 019).
+  const left = useChat((s) => (!usesOwnKey(s.settings) && s.server?.serverKey && s.server.quota && s.server.quota.remaining <= 3 ? s.server.quota.remaining : null));
   return (
     <GlassInputBar ref={box} working={!!working} className={className} data-testid="prompt">
       <form
@@ -649,6 +692,11 @@ export function ChatInput({ phone, pinned, className }: { phone?: boolean; pinne
             </p>
           )}
         </div>
+        {left !== null && !running && (
+          <span className={cx('tnum shrink-0 self-center text-ink-2', phone ? 'text-[12px]' : 'text-[12.5px]')} data-testid="quota-left" aria-live="polite">
+            {phone ? t('quota.leftShort', { n: left }) : t('quota.left', { n: left })}
+          </span>
+        )}
         {running ? (
           <button type="button" onClick={stop} aria-label={t('chat.stop')} className={cx('hit lg-focus grid shrink-0 place-items-center rounded-full bg-ink text-on-ink transition-opacity hover:opacity-85', btn)}>
             <StopIcon width={16} height={16} />
@@ -878,6 +926,8 @@ function useChangeNote(): { item: ChatItem | null; hold: (on: boolean) => void }
  */
 function ChangeNote({ item, hold }: { item: ChatItem; hold: (on: boolean) => void }) {
   const t = useT();
+  const server = useChat((s) => s.server);
+  const lang = useStudio((s) => s.lang);
   const n = item.changes?.length ?? 0;
   const undone = item.undo === 'undone' || item.undo === 'can-redo';
   const problem = !n && (item.error || item.gaveUp);
@@ -895,7 +945,7 @@ function ChangeNote({ item, hold }: { item: ChatItem; hold: (on: boolean) => voi
       {problem ? (
         <>
           <NoteIcon width={15} height={15} className="shrink-0 text-ink-2" />
-          <span className="min-w-0 truncate text-ink-2">{item.gaveUp ? t('chat.gaveUp') : errorText(t, item)}</span>
+          <span className="min-w-0 truncate text-ink-2">{item.gaveUp ? t('chat.gaveUp') : errorText(t, item, server, lang)}</span>
           <SmallButton onClick={() => useStudio.getState().setRecent(true)} className={btn}>{t('chat.show')}</SmallButton>
         </>
       ) : (

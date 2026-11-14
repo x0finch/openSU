@@ -4,7 +4,7 @@
 import { Link } from '@tanstack/react-router';
 import { type KeyboardEvent as RKeyboardEvent, type ReactNode, type RefObject, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { TEMPLATE_META } from '@opensu/agent/templates-meta';
-import { ChevronDownSmallIcon, CloseIcon, CompassIcon, LayersIcon, Mark, PinIcon, ResetViewIcon } from '../components/icons';
+import { ChevronDownSmallIcon, CloseIcon, CompassIcon, LayersIcon, Mark, PersonIcon, PinIcon, ResetViewIcon } from '../components/icons';
 import { cx } from '../components/ui';
 import { GlassButton, GlassMenu, GlassMenuItem, GlassSegmented, GlassSep } from '../glass';
 import { type MessageKey, useT } from '../lib/i18n';
@@ -12,6 +12,7 @@ import { freshView, type Mode, useStudio } from '../lib/store';
 import { resetToTemplate } from '../lib/autosave';
 import { bearingText, frontBearing, placeText } from '../lib/site';
 import { replaceHouse, useChat } from '../chat/chat-store';
+import { openSignIn, signOut } from '../chat/account';
 import type { Derived } from './house-data';
 import { loadHouseData } from './useDerived';
 
@@ -156,6 +157,9 @@ function ProjectMenu({ open, anchor, onClose, compact, ref }: { open: boolean; a
   const setLang = useStudio((s) => s.setLang);
   const setSitePanel = useStudio((s) => s.setSitePanel);
   const setSettingsOpen = useChat((s) => s.setSettingsOpen);
+  const authOn = useChat((s) => !!(s.server?.auth?.email || s.server?.auth?.google));
+  const user = useChat((s) => s.server?.user ?? null);
+  const perDay = useChat((s) => s.server?.limits?.user ?? null);
   const [templates, setTemplates] = useState(false);
   const [confirm, setConfirm] = useState(false);
   // Arrow keys move between items; focus starts on the first.
@@ -196,6 +200,34 @@ function ProjectMenu({ open, anchor, onClose, compact, ref }: { open: boolean; a
       className={cx('absolute top-full left-0 z-40 mt-2 w-[300px]', compact && 'w-[min(300px,calc(100vw-24px))]')}
       data-testid={open ? 'project-menu-list' : undefined}
     >
+      {/* The account (task 019): hidden when this server offers no sign-in. */}
+      {user ? (
+        <>
+          <div className="flex h-10 items-center gap-2.5 px-3 text-[14px] font-medium" data-testid="menu-account">
+            <span className="grid size-5 shrink-0 place-items-center text-ink-2"><PersonIcon width={17} height={17} /></span>
+            <span className="min-w-0 flex-1 truncate">{user.email}</span>
+          </div>
+          <MenuItem icon={<span className="size-5" />} onSelect={() => { onClose(false); void signOut(); }} testId="menu-signout">
+            {t('account.signOut')}
+          </MenuItem>
+          <Sep />
+        </>
+      ) : authOn ? (
+        <>
+          <GlassMenuItem
+            icon={<PersonIcon width={17} height={17} />}
+            detail={perDay !== null ? t('account.perDay', { n: perDay }) : undefined}
+            onClick={(e) => {
+              openSignIn(e.currentTarget, 'menu');
+              onClose(false);
+            }}
+            data-testid="menu-signin"
+          >
+            {t('account.signIn')}
+          </GlassMenuItem>
+          <Sep />
+        </>
+      ) : null}
       <MenuItem icon={<PinIcon width={17} height={17} />} value={site ? placeText(site, lang) : ''} onSelect={() => { onClose(false); setSitePanel({ kind: 'location' }); }} testId="menu-location">
         {t('more.location')}
       </MenuItem>

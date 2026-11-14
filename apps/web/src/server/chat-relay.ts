@@ -121,7 +121,7 @@ function quotaError(st: QuotaStatus, setCookie: string | null): Response {
       : st.reason === 'turn'
         ? 'This message used the most model calls one message may use.'
         : 'No credits left for today.';
-  return Response.json({ error: { code: 'quota_exhausted', message, quota: st } }, { status: 429, headers });
+  return Response.json({ error: { code: st.reason === 'turn' ? 'quota_turn_limit' : 'quota_exhausted', message, quota: st } }, { status: 429, headers });
 }
 
 /**
@@ -181,6 +181,7 @@ export async function relayStatus(req: Request, env: RelayEnv): Promise<Response
       auth: { email: auth.email, google: auth.google },
       user: email ? { email } : null,
       quota,
+      limits: s && cfg.enabled ? { user: cfg.userDaily, anon: cfg.anonTrial } : null,
       quotaError,
     },
     { headers },

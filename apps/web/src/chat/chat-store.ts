@@ -6,7 +6,7 @@ import type { House } from '@opensu/model';
 import { countryName, loadPlaces } from '../lib/site';
 import { create } from 'zustand';
 import { useStudio } from '../lib/store';
-import { type AiSettings, loadSettings, relayHeaders, requestModel, saveSettings } from './settings';
+import { type AiSettings, loadSettings, relayHeaders, requestModel, saveSettings, usesOwnKey } from './settings';
 import { addCall, addChange, addText, type TurnPart } from './turn-parts';
 
 export type { TurnPart } from './turn-parts';
@@ -54,10 +54,28 @@ export interface ChatItem {
   manual?: boolean;
 }
 
+/** The caller's credits on the site's key (task 019; GET /api/chat). */
+export interface QuotaInfo {
+  kind: 'user' | 'anon';
+  limit: number;
+  remaining: number;
+  /** ISO 8601. */
+  resetAt: string;
+  reason: 'user' | 'anon' | 'ip' | 'site' | 'turn' | null;
+}
+
 export interface ServerStatus {
   serverKey: boolean;
   provider: string | null;
   model: string | null;
+  /** Sign-in methods this server offers (none: sign-in is hidden). */
+  auth?: { email: boolean; google: boolean };
+  /** The signed-in account. */
+  user?: { email: string } | null;
+  /** Credits on the site's key; null when not metered. */
+  quota?: QuotaInfo | null;
+  /** Daily allowances on the site's key (signed in, anonymous trial). */
+  limits?: { user: number; anon: number } | null;
 }
 
 interface ChatState {
@@ -237,21 +255,40 @@ export async function fetchServerStatus(): Promise<void> {
   }
 }
 
+/** True when the next turn would use the site's key and no credit is left. */
+export function outOfCredits(): boolean {
+  const s = useChat.getState();
+  return !usesOwnKey(s.settings) && !!s.server?.serverKey && s.server.quota?.remaining === 0;
+}
+
+/** A turn id: one user message = one credit on the site's key, however many model calls it makes. */
+const turnId = () => (globalThis.crypto?.randomUUID?.() ?? `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 12)}`);
+
 export async function send(text: string): Promise<void> {
   const prompt = text.trim();
   if (!prompt || useChat.getState().running) return;
   const userId = nextId();
   const id = nextId();
+  // Known to be out of credits: say so at once instead of asking the server.
+  if (outOfCredits()) {
+    useChat.setState((s) => ({
+      items: [...s.items, { id: userId, role: 'user', text: prompt }, { id, role: 'assistant', text: '', parts: [], phase: 'done', prompt, error: { kind: 'quota', code: 'quota_exhausted', message: 'No credits left for today.' } }],
+    }));
+    // No turn ran, so no after-turn note: show the exchange with what to do.
+    if (!useStudio.getState().pinned) useStudio.getState().setRecent(true);
+    return;
+  }
   useChat.setState((s) => ({
     running: true,
     items: [...s.items, { id: userId, role: 'user', text: prompt }, { id, role: 'assistant', text: '', parts: [], phase: 'thinking', prompt }],
   }));
   abort = new AbortController();
+  const settings = useChat.getState().settings;
   try {
     const m = await loadAgent();
     const sess = syncSession(m);
-    const settings = useChat.getState().settings;
-    const adapter = m.createRelayAdapter({ endpoint: endpoint(), model: requestModel(settings), headers: () => relayHeaders(settings) });
+    const turn = turnId();
+    const adapter = m.createRelayAdapter({ endpoint: endpoint(), model: requestModel(settings), headers: () => ({ ...relayHeaders(settings), 'x-opensu-turn': turn }) });
     const onEvent = (e: AgentEvent) => {
       if (e.type === 'text') patch(id, (it) => ({ text: it.text + e.delta, parts: addText(it.parts ?? [], e.delta), phase: 'writing' }));
       else if (e.type === 'tool-call') patch(id, (it) => ({ parts: addCall(it.parts ?? []), phase: e.name === 'get_house' ? 'thinking' : 'working' }));
@@ -292,6 +329,8 @@ export async function send(text: string): Promise<void> {
   } finally {
     abort = null;
     useChat.setState({ running: false });
+    // The site's key: the credits changed (or ran out); show what is left.
+    if (!usesOwnKey(settings)) void fetchServerStatus();
   }
 }
 
