@@ -8,3 +8,4 @@ export {
 export { glassRegistry, newGroup, type GlassBackend, type GlassTarget } from './registry';
 export { GLASS, TONES, type GlassRole, type GlassTone } from './material';
 export { Spring, SPRINGS, prefersReducedMotion } from './spring';
+export { GlassDisclosureRegion, GlassTurn, type GlassTurnEntry, type GlassTurnProps } from './turn';
