@@ -24,7 +24,7 @@ name: Deploy
 
 on:
   push:
-    branches: [claude/dazzling-cray-xdg922]
+    branches: [main]
   workflow_dispatch:
 
 concurrency:

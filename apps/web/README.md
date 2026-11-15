@@ -636,7 +636,7 @@ Deployment follows the Cloudflare guide for TanStack Start
 assets (`dist/client`, including the prerendered pages); `wrangler.jsonc`
 points `main` at `src/server.ts` (our entry around TanStack Start's).
 
-`.github/workflows/deploy.yml` deploys on a push to the working branch:
+`.github/workflows/deploy.yml` deploys on a push to `main`:
 install, find or create the D1 database and apply `migrations/`
 (`--remote`), build, `wrangler deploy`, then one `wrangler secret bulk` with
 the secrets and variables that are set. Owner setup: see "Accounts and

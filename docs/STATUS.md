@@ -35,7 +35,7 @@ Update it when a milestone moves.
 
 ## Deployed
 - https://opensu-web.ocean4334.workers.dev via `.github/workflows/deploy.yml`
-  (push to the working branch or run it by hand; secrets live in the
+  (push to `main` or run it by hand; secrets live in the
   GitHub repository settings). Owner's OpenRouter key is a Worker secret;
   default model `anthropic/claude-sonnet-5.5`.
 - First real-model edit on the live site works ("把北侧房间加深 600":
@@ -44,22 +44,26 @@ Update it when a milestone moves.
 - Not yet done: Worker CPU time measured on Cloudflare, per-user credit
   limit (anyone can spend the owner's key), the ~20-brief evaluation.
 
-## Built, not deployed: accounts and the daily quota (task 019, 2026-11-14)
-- Local commits only (not pushed: a push deploys). Reviewed by the lead:
-  typecheck, the full test suite and the full account e2e pass; server
-  code and screenshots read.
-- Before the first push the owner must: add **Account / D1 / Edit** to
-  `CLOUDFLARE_API_TOKEN` (otherwise the deploy fails at the D1 step and
-  the previous version stays live), then follow `apps/web/README.md`
-  "Accounts and quota" (site URL, `BETTER_AUTH_SECRET`, Resend domain and
-  key, optional Google client).
-- Unverified until deployed: CPU time on Cloudflare (local estimate: warm
-  sign-in 3 ms median, the first sign-in on a new instance 18-25 ms, over
-  the 10 ms limit on paper), real D1, real email, Google end to end,
-  phone keyboard and one-time-code autofill on real devices.
+## Accounts, quota, turn records, still house (tasks 019-021, 2026-11-15)
+- Deployed. `main` is the primary branch; a push to `main` deploys.
+- 019: accounts (Better Auth on D1, email code, Google) and the daily
+  quota. Sign-in stays hidden until the owner sets `SITE_URL`,
+  `BETTER_AUTH_SECRET`, `RESEND_API_KEY`, `AUTH_EMAIL_FROM` (see
+  `apps/web/README.md` "Accounts and quota"); until then the anonymous
+  trial is counted per IP.
+- 020: every finished turn is stored in D1 (`turn_record`, 30 days);
+  users export a conversation from the project menu; the owner exports
+  with `apps/web/scripts/turns-export.mjs`.
+- 021: floating panels never move the house; the pinned conversation
+  hangs under the house name.
+- Unverified on Cloudflare: CPU time (local: warm sign-in 3 ms, first
+  sign-in on a new instance 18-25 ms), real email, Google end to end, a
+  real turn written to `turn_record`, phone keyboard and one-time-code
+  autofill on real devices.
 - Owner to confirm (`docs/tasks/019-accounts-quota.md`, "Deviations"):
   the anonymous trial is 3 per day, not 3 once.
-- `pnpm -r test` now takes about 12 minutes.
+- `pnpm -r test` takes 12-15 minutes.
+- Next: task 022, per-account API keys (OpenRouter, OpenAI, Anthropic).
 
 ## Next, in order
 0. Done 2026-11-13: liquid glass chrome and Apple-style layout (task 017,
