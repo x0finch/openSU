@@ -441,7 +441,14 @@ async function siteChecks() {
   await page.getByRole('menuitem', { name: /三合院/ }).click();
   await page.waitForSelector('[data-testid=loc-skip]', { timeout: 60000 });
   await page.waitForFunction(() => !window.__studio?.growing, null, { timeout: 60000 });
-  await page.waitForTimeout(600);
+  // Wait for the state, not a fixed time (software GL can be slow to finish the view change).
+  await page
+    .waitForFunction(() => {
+      const s = window.__studio.store.getState();
+      const v = window.__studio.engine.viewer;
+      return s.view === 'axo-se' && !s.cut && !s.sun.on && !v.cutaway && v.lightingMode.mode === 'presentation' && v.currentView?.id === 'axo-se';
+    }, null, { timeout: 15000 })
+    .catch(() => {});
   const fresh = await page.evaluate(() => {
     const s = window.__studio.store.getState();
     const v = window.__studio.engine.viewer;
