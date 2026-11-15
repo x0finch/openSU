@@ -46,7 +46,13 @@ export class HouseSession {
 
 export type AgentEvent =
   | { type: 'text'; delta: string }
-  | { type: 'tool-call'; name: string }
+  | { type: 'tool-call'; id: string; name: string }
+  /**
+   * A tool call finished: its parsed arguments and what the tool returned
+   * (an `{ ok: false, errors }` result is a rejected edit). For records of
+   * the turn (task 020); the UI does not need it.
+   */
+  | { type: 'tool-result'; id: string; name: string; args: unknown; result: unknown }
   /** The one-line summary of the edit being sent, read from its streaming arguments (before it is applied). */
   | { type: 'step'; summary: string }
   | { type: 'house'; house: House; reason: 'edit' | 'new'; fromLevel: number; batch: AppliedBatch }
@@ -123,6 +129,16 @@ export function summaryFromArgs(args: string): string | null {
   }
 }
 
+/** Parsed JSON, or the text itself when it is not JSON (a model's malformed tool arguments). */
+function parseJson(text: unknown): unknown {
+  if (typeof text !== 'string') return text;
+  try {
+    return JSON.parse(text);
+  } catch {
+    return text;
+  }
+}
+
 /** Maps an error from the provider call to what the UI tells the user. */
 export function classifyError(err: unknown): TurnError {
   const e = err as { status?: number; code?: string; message?: string; error?: { code?: string; message?: string } } | undefined;
@@ -192,6 +208,8 @@ export async function runTurn(opts: TurnOptions): Promise<TurnResult> {
     }
     return res;
   };
+  // Name and raw arguments of every call in flight, until its result arrives.
+  const calls = new Map<string, { name: string; args: string }>();
   // Arguments of the edit calls in flight, by call id, until their summary is readable.
   const pending = new Map<string, string>();
   const abort = new AbortController();
@@ -222,9 +240,12 @@ export async function runTurn(opts: TurnOptions): Promise<TurnResult> {
           text += '\n\n';
           onEvent?.({ type: 'text', delta: '\n\n' });
         }
-        onEvent?.({ type: 'tool-call', name: ev.toolCallName });
+        onEvent?.({ type: 'tool-call', id: ev.toolCallId, name: ev.toolCallName });
+        calls.set(ev.toolCallId, { name: ev.toolCallName, args: '' });
         if (ev.toolCallName === 'edit_house' || ev.toolCallName === 'new_house') pending.set(ev.toolCallId, '');
       } else if (ev.type === 'TOOL_CALL_ARGS') {
+        const call = calls.get(ev.toolCallId);
+        if (call) call.args += ev.delta;
         const sofar = pending.get(ev.toolCallId);
         if (sofar !== undefined) {
           const args = sofar + ev.delta;
@@ -233,6 +254,12 @@ export async function runTurn(opts: TurnOptions): Promise<TurnResult> {
             pending.delete(ev.toolCallId);
             onEvent?.({ type: 'step', summary });
           } else pending.set(ev.toolCallId, args);
+        }
+      } else if (ev.type === 'TOOL_CALL_RESULT') {
+        const call = calls.get(ev.toolCallId);
+        if (call) {
+          calls.delete(ev.toolCallId);
+          onEvent?.({ type: 'tool-result', id: ev.toolCallId, name: call.name, args: parseJson(call.args), result: parseJson(ev.content) });
         }
       } else if (ev.type === 'RUN_ERROR') {
         error = classifyError(ev.error ?? { message: ev.message, code: ev.code });

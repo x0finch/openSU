@@ -28,6 +28,12 @@ describe('runTurn', () => {
     expect(r.text).toContain('客厅现在宽 5.4 m');
     expect(events.filter((e) => e.type === 'text').length).toBeGreaterThan(4);
     expect(events.some((e) => e.type === 'house' && e.reason === 'edit')).toBe(true);
+    // Each finished call reports its arguments and result (task 020 records), with the call's id.
+    const call = events.find((e) => e.type === 'tool-call');
+    const done = events.filter((e) => e.type === 'tool-result');
+    expect(done).toHaveLength(1);
+    expect(done[0]).toMatchObject({ name: 'edit_house', args: widen, result: { ok: true } });
+    expect(call?.type === 'tool-call' && done[0]!.type === 'tool-result' && call.id === done[0]!.id).toBe(true);
 
     // Two model calls through the relay; the house description is in the system prompt once.
     expect(m.urls).toEqual(['/api/chat', '/api/chat']);
@@ -64,6 +70,9 @@ describe('runTurn', () => {
     expect(JSON.stringify(bad!.errors)).toContain('l1-living');
     expect(String(bad!.note)).toContain('2 repair attempts left');
     expect(events.find((e) => e.type === 'rejected')).toMatchObject({ repairsLeft: 2 });
+    const results = events.flatMap((e) => (e.type === 'tool-result' ? [e.result as { ok: boolean; errors?: string[] }] : []));
+    expect(results.map((x) => x.ok)).toEqual([false, true]);
+    expect(JSON.stringify(results[0]!.errors)).toContain('l1-living');
   });
 
   it('gives up after the repair limit; the house stays at the last valid state', async () => {
