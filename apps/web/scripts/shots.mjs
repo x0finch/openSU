@@ -451,6 +451,228 @@ async function siteChecks() {
   await ctx.close();
 }
 
+// --- Task 021: the house stays still ---------------------------------------
+
+/**
+ * Records, every animation frame, the 3D camera (world and projection
+ * matrices) or the plan's transform; `take()` returns the distinct values
+ * seen since the last take, in order.
+ */
+const recorder = {
+  install: (page) =>
+    page.evaluate(() => {
+      const read = () => {
+        const plan = document.querySelector('[data-testid=plan] > div');
+        // Computed: the plan's animated re-fit is a CSS transition.
+        if (plan) return `plan ${getComputedStyle(plan).transform}`;
+        const c = window.__studio?.engine?.viewer?.camera;
+        if (!c) return 'none';
+        c.updateMatrixWorld();
+        return [...c.matrixWorld.elements, ...c.projectionMatrix.elements].map((v) => v.toFixed(6)).join(',');
+      };
+      const rec = { seen: [read()], ticks: 0 };
+      const tick = () => {
+        rec.ticks++;
+        const v = read();
+        if (v !== rec.seen[rec.seen.length - 1]) rec.seen.push(v);
+        requestAnimationFrame(tick);
+      };
+      requestAnimationFrame(tick);
+      window.__rec = rec;
+    }),
+  take: (page) => recorder.takeTicks(page).then((r) => r.seen),
+  /** The values and how many frames were drawn since the last take. */
+  takeTicks: (page) =>
+    page.evaluate(() => {
+      const r = window.__rec;
+      const out = { seen: r.seen, ticks: r.ticks };
+      r.seen = [out.seen[out.seen.length - 1]];
+      r.ticks = 0;
+      return out;
+    }),
+};
+
+/**
+ * Waits until nothing has moved for 400 ms and at least 8 frames (software
+ * GL can starve frames for a while; at most 15 s); returns every value
+ * seen meanwhile.
+ */
+async function restAfter(page) {
+  let all = await recorder.take(page);
+  let quiet = 0;
+  for (let i = 0; i < 40 && quiet < 8; i++) {
+    await page.waitForTimeout(400);
+    const v = await recorder.takeTicks(page);
+    if (v.seen.length === 1) quiet += v.ticks;
+    else quiet = 0;
+    all = [...all, ...v.seen.slice(1)];
+  }
+  return all;
+}
+
+/** The name block: its box, the menu trigger's box, and the name's ink. */
+const nameBlock = (page) =>
+  page.evaluate(() => {
+    const b = (el) => {
+      const r = el.getBoundingClientRect();
+      return [r.x, r.y, r.width, r.height].map((v) => Math.round(v * 100) / 100);
+    };
+    const block = document.querySelector('[data-testid=title-block]');
+    const trigger = document.querySelector('[data-testid=project-menu]');
+    const name = trigger.querySelector('span');
+    const cs = getComputedStyle(name);
+    return JSON.stringify({ block: b(block), trigger: b(trigger), name: b(name), color: cs.color, size: cs.fontSize, weight: cs.fontWeight, opacity: getComputedStyle(block).opacity });
+  });
+
+/**
+ * Opening, closing or switching a floating panel (tool panels, a site
+ * panel, the project menu, sign-in, the recent strip, the phone sheet at
+ * either detent) never moves the house, in 3D or in plan; pinning and
+ * unpinning the conversation moves it once, smoothly, and back; the house
+ * name stays exactly where it is, pinned or not (task 021).
+ */
+async function stillHouseChecks() {
+  if (!wanted('check-still')) return;
+  const ms = 750;
+  const still = async (page, name, open, close) => {
+    await recorder.take(page);
+    await open();
+    await page.waitForTimeout(ms);
+    const during = await recorder.take(page);
+    await close();
+    await page.waitForTimeout(ms);
+    const after = await restAfter(page);
+    check(during.length === 1 && after.length === 1 && during[0] === after[0], `${name}: opening and closing does not move the house (${during.length - 1} + ${after.length - 1} changes)`);
+  };
+  const esc = (page) => async () => page.keyboard.press('Escape');
+  const store = (page, fn) => () => page.evaluate(fn);
+  const account = (page, open) => () => page.evaluate((o) => window.__studio.account.setState(o ? { open: true, origin: 'menu', anchor: null } : { open: false }), open);
+  const pinCycle = async (page, label) => {
+    const base = (await recorder.take(page)).at(-1);
+    const name0 = await nameBlock(page);
+    await page.evaluate(() => window.__studio.store.getState().setPinned(true));
+    await page.waitForTimeout(300);
+    const pinning = await restAfter(page);
+    const name1 = await nameBlock(page);
+    // Smoothly: at least one frame between where it was and where it lands (software GL draws few frames).
+    check(pinning.length >= 3 && pinning[0] === base && pinning.at(-1) !== base, `${label}: pinning moves the house, smoothly (${pinning.length - 2} frames between), then it rests`);
+    check(name0 === name1, `${label}: the house name keeps its box and ink when pinned (${name1})`);
+    return { base, name0 };
+  };
+  const unpinCycle = async (page, label, base, name0) => {
+    await page.evaluate(() => window.__studio.store.getState().setPinned(false));
+    await page.waitForTimeout(300);
+    const back = await restAfter(page);
+    check(back.length >= 3 && back.at(-1) === base, `${label}: unpinning moves it back, smoothly (${back.length - 2} frames between), to exactly where it was (${back.at(-1) === base})`);
+    check((await nameBlock(page)) === name0, `${label}: the house name is back unchanged after unpinning`);
+  };
+
+  // Desktop 3D, sun study on (opening the sun panel then does not switch it on, which re-frames by its own rule).
+  {
+    const { ctx, page } = await open(DESKTOP, '/studio?sun=winter&time=10:00');
+    await page.waitForFunction(() => window.__studio?.ready3d === true, null, { timeout: 180000 });
+    await page.waitForTimeout(800);
+    await recorder.install(page);
+    for (const tool of ['views', 'levels', 'sun']) await still(page, `3D ${tool} panel`, () => page.getByTestId(`bar-${tool}`).click(), esc(page));
+    // Switching from one panel to another.
+    await still(page, '3D switching views -> sun panel', async () => {
+      await page.getByTestId('bar-views').click();
+      await page.waitForTimeout(300);
+      await page.getByTestId('bar-sun').click();
+    }, esc(page));
+    await still(page, '3D site panel', store(page, () => window.__studio.store.getState().setSitePanel({ kind: 'location' })), esc(page));
+    await still(page, '3D project menu', () => page.getByTestId('project-menu').click(), esc(page));
+    await still(page, '3D sign-in', account(page, true), account(page, false));
+    await still(page, '3D recent strip', store(page, () => window.__studio.store.getState().setRecent(true)), store(page, () => window.__studio.store.getState().setRecent(false)));
+    // A framing asked for with a panel open keeps clear of it.
+    await page.getByTestId('bar-views').click();
+    await page.waitForTimeout(400);
+    await recorder.take(page);
+    await page.evaluate(() => window.__studio.store.getState().resetView());
+    await page.waitForTimeout(ms);
+    const asked = await recorder.take(page);
+    const framed = await page.evaluate(() => window.__studio.engine.viewer.framedInsets);
+    check(asked.length > 1 && framed.right > 330, `3D: a framing asked for with a panel open frames clear of it (right inset ${framed.right})`);
+    await page.keyboard.press('Escape');
+    await page.evaluate(() => window.__studio.store.getState().resetView());
+    await page.waitForTimeout(ms);
+    // Pinned: the sidebar hangs under the name like the panel under the toolbar.
+    const { base, name0 } = await pinCycle(page, '3D');
+    await still(page, '3D pinned: views panel', () => page.getByTestId('bar-views').click(), esc(page));
+    await page.getByTestId('bar-views').click();
+    await page.waitForTimeout(600);
+    const geo = await page.evaluate(() => {
+      const r = (q) => document.querySelector(q).getBoundingClientRect();
+      return { side: r('[data-testid=chat-panel]'), name: r('[data-testid=title-block]'), panel: r('[data-testid=tray-views]'), bar: r('[role=toolbar]'), mode: r('[data-testid=mode-switch]') };
+    });
+    await page.keyboard.press('Escape');
+    await page.waitForTimeout(400);
+    const hang = geo.side.top - geo.name.bottom, panelHang = geo.panel.top - geo.bar.bottom;
+    check(Math.abs(hang - panelHang) < 0.5 && Math.abs(geo.side.left - (1440 - geo.panel.right)) < 0.5 && Math.abs(900 - geo.side.bottom - 12) < 0.5,
+      `pinned sidebar: ${hang.toFixed(1)} px under the name (panel under the toolbar: ${panelHang.toFixed(1)}), ${geo.side.left} from the edge (panel: ${1440 - geo.panel.right}), bottom inset ${900 - geo.side.bottom}`);
+    const modeCentre = geo.mode.left + geo.mode.width / 2, drawingCentre = (geo.side.right + 1440) / 2;
+    check(Math.abs(modeCentre - drawingCentre) < 1, `pinned: the mode switch stays centred over the drawing (${modeCentre.toFixed(1)} vs ${drawingCentre.toFixed(1)})`);
+    // The menu opens over the sidebar; the sidebar steps aside meanwhile.
+    const sideState = (want) =>
+      page
+        .waitForFunction((w) => {
+          const el = document.querySelector('[data-testid=chat-panel]');
+          return `${getComputedStyle(el).opacity} ${el.hasAttribute('inert')}` === w;
+        }, want, { timeout: 8000 })
+        .then(() => true, () => false);
+    await page.getByTestId('project-menu').click();
+    check(await sideState('0 true'), 'pinned: the project menu opens over the sidebar, which steps aside (no glass on glass)');
+    await page.keyboard.press('Escape');
+    check(await sideState('1 false'), 'pinned: the sidebar returns when the menu closes');
+    await recorder.take(page);
+    await unpinCycle(page, '3D', base, name0);
+    await ctx.close();
+  }
+
+  // Desktop plan.
+  {
+    const { ctx, page } = await open(DESKTOP, '/studio?mode=plan');
+    await page.waitForSelector('[data-testid=plan] svg', { timeout: 60000 });
+    await page.waitForTimeout(600);
+    await recorder.install(page);
+    await still(page, 'plan levels panel', () => page.getByTestId('bar-levels').click(), esc(page));
+    await still(page, 'plan site panel', store(page, () => window.__studio.store.getState().setSitePanel({ kind: 'orientation' })), esc(page));
+    await still(page, 'plan project menu', () => page.getByTestId('project-menu').click(), esc(page));
+    await still(page, 'plan sign-in', account(page, true), account(page, false));
+    await still(page, 'plan recent strip', store(page, () => window.__studio.store.getState().setRecent(true)), store(page, () => window.__studio.store.getState().setRecent(false)));
+    const { base, name0 } = await pinCycle(page, 'plan');
+    await still(page, 'plan pinned: levels panel', () => page.getByTestId('bar-levels').click(), esc(page));
+    await unpinCycle(page, 'plan', base, name0);
+    await ctx.close();
+  }
+
+  // Phone: the sheet at both detents, in 3D and plan.
+  for (const mode of ['3d', 'plan']) {
+    const { ctx, page } = await open(PHONE, `/studio?sun=winter&time=10:00${mode === 'plan' ? '&mode=plan' : ''}`);
+    if (mode === '3d') await page.waitForFunction(() => window.__studio?.ready3d === true, null, { timeout: 180000 });
+    else await page.waitForSelector('[data-testid=plan] svg', { timeout: 60000 });
+    await page.waitForTimeout(800);
+    await recorder.install(page);
+    const tool = mode === '3d' ? 'views' : 'levels';
+    await still(page, `phone ${mode}: ${tool} sheet (fit, large, closed)`, async () => {
+      await page.getByTestId(`bar-${tool}`).click();
+      await page.waitForTimeout(900);
+      const g = await page.getByTestId('sheet-grab').boundingBox();
+      const x = g.x + g.width / 2;
+      await page.mouse.move(x, g.y + 8);
+      await page.mouse.down();
+      for (let i = 1; i <= 12; i++) await page.mouse.move(x, g.y + 8 - i * 50);
+      await page.mouse.up();
+    }, () => page.getByTestId(`bar-${tool}`).click());
+    if (mode === '3d') await still(page, 'phone 3d: switching sheets views -> sun', async () => {
+      await page.getByTestId('bar-views').click();
+      await page.waitForTimeout(600);
+      await page.getByTestId('bar-sun').click();
+    }, () => page.getByTestId('bar-sun').click());
+    await ctx.close();
+  }
+}
+
 /** The eye-level preset turns to the south-east when a tree hides the facade's centre from the south-west (task 014). */
 async function eyeLevelChecks() {
   if (!wanted('check-eye')) return;
@@ -608,6 +830,7 @@ try {
     await compareWithRenderShots();
   }
   await controlChecks();
+  await stillHouseChecks();
   await walkChecks();
   await sunAndCutChecks();
   await siteChecks();

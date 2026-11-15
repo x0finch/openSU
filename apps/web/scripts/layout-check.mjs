@@ -366,7 +366,7 @@ if (wanted('checks')) {
     await settle(page, 500);
     const cw = await page.evaluate(() => document.querySelector('canvas').clientWidth);
     const side = await page.getByTestId('chat-panel').boundingBox();
-    check(await page.getByTestId('chat-panel').count() === 1 && side.x === 12 && side.width === 360 && cw === 1440, `pinned: a floating, inset glass sidebar; the canvas runs edge to edge (${side.x}, ${side.width} px; canvas ${cw} px)`);
+    check(await page.getByTestId('chat-panel').count() === 1 && side.x === 18 && side.width === 360 && cw === 1440, `pinned: a floating, inset glass sidebar under the name (task 021); the canvas runs edge to edge (${side.x}, ${side.width} px; canvas ${cw} px)`);
     await page.reload({ waitUntil: 'networkidle' });
     await page.waitForFunction(() => window.__studio?.ready3d === true, null, { timeout: 180000 });
     check(await page.getByTestId('chat-panel').count() === 1, 'the pin survives a reload');
