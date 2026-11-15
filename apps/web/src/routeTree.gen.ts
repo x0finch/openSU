@@ -13,6 +13,7 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as StudioRouteImport } from './routes/studio'
 import { Route as ApiChatRouteImport } from './routes/api/chat'
 import { Route as ApiHealthRouteImport } from './routes/api/health'
+import { Route as ApiKeysRouteImport } from './routes/api/keys'
 import { Route as ApiTurnsRouteImport } from './routes/api/turns'
 import { Route as SIdRouteImport } from './routes/s/$id'
 
@@ -36,6 +37,11 @@ const ApiHealthRoute = ApiHealthRouteImport.update({
   path: '/api/health',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiKeysRoute = ApiKeysRouteImport.update({
+  id: '/api/keys',
+  path: '/api/keys',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiTurnsRoute = ApiTurnsRouteImport.update({
   id: '/api/turns',
   path: '/api/turns',
@@ -52,6 +58,7 @@ export interface FileRoutesByFullPath {
   '/studio': typeof StudioRoute
   '/api/chat': typeof ApiChatRoute
   '/api/health': typeof ApiHealthRoute
+  '/api/keys': typeof ApiKeysRoute
   '/api/turns': typeof ApiTurnsRoute
   '/s/$id': typeof SIdRoute
 }
@@ -60,6 +67,7 @@ export interface FileRoutesByTo {
   '/studio': typeof StudioRoute
   '/api/chat': typeof ApiChatRoute
   '/api/health': typeof ApiHealthRoute
+  '/api/keys': typeof ApiKeysRoute
   '/api/turns': typeof ApiTurnsRoute
   '/s/$id': typeof SIdRoute
 }
@@ -69,21 +77,36 @@ export interface FileRoutesById {
   '/studio': typeof StudioRoute
   '/api/chat': typeof ApiChatRoute
   '/api/health': typeof ApiHealthRoute
+  '/api/keys': typeof ApiKeysRoute
   '/api/turns': typeof ApiTurnsRoute
   '/s/$id': typeof SIdRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
-    '/' | '/studio' | '/api/chat' | '/api/health' | '/api/turns' | '/s/$id'
+    | '/'
+    | '/studio'
+    | '/api/chat'
+    | '/api/health'
+    | '/api/keys'
+    | '/api/turns'
+    | '/s/$id'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/studio' | '/api/chat' | '/api/health' | '/api/turns' | '/s/$id'
+  to:
+    | '/'
+    | '/studio'
+    | '/api/chat'
+    | '/api/health'
+    | '/api/keys'
+    | '/api/turns'
+    | '/s/$id'
   id:
     | '__root__'
     | '/'
     | '/studio'
     | '/api/chat'
     | '/api/health'
+    | '/api/keys'
     | '/api/turns'
     | '/s/$id'
   fileRoutesById: FileRoutesById
@@ -93,6 +116,7 @@ export interface RootRouteChildren {
   StudioRoute: typeof StudioRoute
   ApiChatRoute: typeof ApiChatRoute
   ApiHealthRoute: typeof ApiHealthRoute
+  ApiKeysRoute: typeof ApiKeysRoute
   ApiTurnsRoute: typeof ApiTurnsRoute
   SIdRoute: typeof SIdRoute
 }
@@ -127,6 +151,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiHealthRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/keys': {
+      id: '/api/keys'
+      path: '/api/keys'
+      fullPath: '/api/keys'
+      preLoaderRoute: typeof ApiKeysRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/turns': {
       id: '/api/turns'
       path: '/api/turns'
@@ -149,6 +180,7 @@ const rootRouteChildren: RootRouteChildren = {
   StudioRoute: StudioRoute,
   ApiChatRoute: ApiChatRoute,
   ApiHealthRoute: ApiHealthRoute,
+  ApiKeysRoute: ApiKeysRoute,
   ApiTurnsRoute: ApiTurnsRoute,
   SIdRoute: SIdRoute,
 }

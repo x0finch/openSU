@@ -9,6 +9,7 @@ import { getMigrations } from 'better-auth/db/migration';
 import { accountRoute, startAuth } from '../src/server/accounts.ts';
 import { authTesting, lastTestCode, loadAuth, sessionUser, warmUp } from '../src/server/auth.ts';
 import { relayChat, relayStatus } from '../src/server/chat-relay.ts';
+import { keysRoute } from '../src/server/keys.ts';
 import { flagTurn, MAX_RECORD, saveTurn } from '../src/server/turns.ts';
 import { migratedD1 } from './d1-shim.ts';
 import { fixtureRecords } from './turn-fixtures.ts';
@@ -36,6 +37,7 @@ const env = {
   BETTER_AUTH_SECRET: 'test-secret-not-real-0123456789abcdef',
   AUTH_TEST_HOOK: '1',
   OPENROUTER_API_KEY: 'sk-or-test',
+  KEYS_SECRET: 'keys-secret-not-real-0123456789abcdef',
 };
 
 /** CPU of `fn` in this process minus the time spent inside SQLite (D1 runs that remotely). */
@@ -164,6 +166,40 @@ const chatReq = (turn: string, cookieHeader = '', ip = '203.0.113.50') =>
   for (const [k, v] of Object.entries(ms)) console.log(`  /api/chat ${names[k]}: median ${median(v.slice(5)).toFixed(2)} ms, p90 ${pct(v.slice(5), 0.9).toFixed(2)} ms, max ${Math.max(...v.slice(5)).toFixed(2)} ms (30 KB body, upstream mocked)`);
   const worst = Math.max(...Object.values(ms).map((v) => median(v.slice(5))), median(sendMs), median(signMs));
   check(worst < 5, `every path well under 10 ms in this approximation (worst median ${worst.toFixed(2)} ms)`);
+}
+
+// Keys saved with the account (task 022): list, save (one AES-GCM encryption),
+// and a relayed chat call that decrypts the key. The first call of an isolate
+// also derives the AES key (HKDF), included in "first".
+console.log('keys saved with the account (/api/keys, /api/chat with x-opensu-account-key)');
+{
+  const kenv = { ...env, QUOTA_IP_DAILY: '100000' };
+  const keysReq = (method: string, body?: unknown) =>
+    new Request(`${SITE}/api/keys`, { method, headers: { 'content-type': 'application/json', origin: SITE, cookie, 'cf-connecting-ip': '198.18.3.1' }, body: body === undefined ? undefined : JSON.stringify(body) });
+  const ms = { save: [] as number[], list: [] as number[], choose: [] as number[], relay: [] as number[] };
+  const firsts: Record<string, number> = {};
+  const now = Date.now;
+  for (let i = 0; i < 60; i++) {
+    // A new hour every 20 writes keeps the write limit (30 per hour) out of the measurement.
+    Date.now = () => now() + Math.floor(i / 10) * 3_600_000;
+    const save = await cpu(async () => (await keysRoute(keysReq('PUT', { provider: 'anthropic', key: `sk-ant-api03-not-real-${i}-abcdefgh`, model: '', use: true }), kenv)).text());
+    const list = await cpu(async () => (await keysRoute(keysReq('GET'), kenv)).text());
+    const choose = await cpu(async () => (await keysRoute(keysReq('PATCH', { active: 'anthropic' }), kenv)).text());
+    const relay = await cpu(async () => (await relayChat(new Request(`${SITE}/api/chat`, { method: 'POST', headers: { 'content-type': 'application/json', 'x-opensu-turn': `key-cpu-${i}-xxxx`, 'x-opensu-account-key': 'anthropic', cookie, 'cf-connecting-ip': '198.18.3.2' }, body: JSON.stringify({ model: 'default', messages: [{ role: 'user', content: 'x'.repeat(30000) }] }) }), kenv)).arrayBuffer());
+    if (i === 0) {
+      check(JSON.parse(save.value).active === 'anthropic' && JSON.parse(list.value).keys[0]?.hint === 'efgh', 'save and list answer with the hint, not the key');
+      Object.assign(firsts, { save: save.ms, list: list.ms, choose: choose.ms, relay: relay.ms });
+    }
+    ms.save.push(save.ms);
+    ms.list.push(list.ms);
+    ms.choose.push(choose.ms);
+    ms.relay.push(relay.ms);
+  }
+  Date.now = now;
+  const names: Record<string, string> = { save: 'PUT /api/keys (save, encrypt)', list: 'GET /api/keys (list)', choose: 'PATCH /api/keys (choose)', relay: '/api/chat POST with a saved key (decrypt, 30 KB body)' };
+  for (const [k, v] of Object.entries(ms)) console.log(`  ${names[k]}: median ${median(v.slice(5)).toFixed(2)} ms, p90 ${pct(v.slice(5), 0.9).toFixed(2)} ms, max ${Math.max(...v.slice(5)).toFixed(2)} ms; first call ${firsts[k]!.toFixed(2)} ms`);
+  const worst = Math.max(...Object.values(ms).map((v) => median(v.slice(5))));
+  check(worst < 5, `keys paths well under 10 ms in this approximation (worst median ${worst.toFixed(2)} ms)`);
 }
 
 // The relay's log line (task 020): one per POST, no content, keys or email.

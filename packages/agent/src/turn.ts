@@ -65,7 +65,9 @@ export interface TurnError {
    * `no-key`: the server has no provider key and none was given; `auth`: the
    * key was refused; `quota`: the site's daily credits on its own key are
    * used up (`code` "quota_exhausted"), one message made too many model calls
-   * ("quota_turn_limit"), or they cannot be counted now ("quota_unavailable").
+   * ("quota_turn_limit"), or they cannot be counted now ("quota_unavailable");
+   * a key saved with the account that cannot be used is `auth` with a code
+   * starting "account_key_" (signed out, missing, unreadable).
    */
   kind: 'no-key' | 'auth' | 'rate-limit' | 'quota' | 'upstream' | 'network';
   /** The relay's error code, when it sent one (e.g. "quota_exhausted"). */
@@ -148,6 +150,7 @@ export function classifyError(err: unknown): TurnError {
   const message = e?.error?.message ?? e?.message ?? String(err);
   if (code === 'no_key' || /no_key/.test(message)) return { kind: 'no-key', message, status };
   if (typeof code === 'string' && code.startsWith('quota_')) return { kind: 'quota', message, status, code };
+  if (typeof code === 'string' && code.startsWith('account_key_')) return { kind: 'auth', message, status, code };
   if (status === 401 || status === 403) return { kind: 'auth', message, status };
   if (status === 429) return { kind: 'rate-limit', message, status };
   if (status !== undefined) return { kind: 'upstream', message, status };

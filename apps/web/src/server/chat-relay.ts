@@ -8,13 +8,19 @@
 // own in `x-opensu-key` (with an optional `x-opensu-base-url`). Keys are
 // never logged, echoed, stored or put in URLs.
 //
+// A signed-in user may instead name a key saved with the account
+// (`x-opensu-account-key: <provider>`, task 022, keys.ts): the Worker
+// decrypts it for this call only.
+//
 // The owner's key is metered by the daily quota (task 019, quota.ts); a
-// visitor's own key never is.
-import { type AccountEnv, authConfig, quotaConfig } from './config.ts';
+// visitor's own key never is, nor is a key saved with the account.
+import { DEFAULT_MODELS as PROVIDER_DEFAULTS, PROVIDER_BASE_URLS } from '../lib/providers.ts';
+import { authConfig, quotaConfig } from './config.ts';
+import { ACCOUNT_KEY_HEADER, accountUpstream, keysConfig, type KeysEnv } from './keys.ts';
 import { consume, type QuotaStatus, type Subject, status as quotaStatus, TURN_ID } from './quota.ts';
 import { clientIp, newVisitor, verifyVisitor } from './visitor.ts';
 
-export interface RelayEnv extends AccountEnv {
+export interface RelayEnv extends KeysEnv {
   OPENROUTER_API_KEY?: string;
   OPENAI_API_KEY?: string;
   /** OpenAI-compatible base URL used with OPENAI_API_KEY (default https://api.openai.com/v1). */
@@ -23,10 +29,10 @@ export interface RelayEnv extends AccountEnv {
   OPENSU_MODEL?: string;
 }
 
-export const OPENROUTER_BASE_URL = 'https://openrouter.ai/api/v1';
-export const OPENAI_BASE_URL = 'https://api.openai.com/v1';
+export const OPENROUTER_BASE_URL = PROVIDER_BASE_URLS.openrouter;
+export const OPENAI_BASE_URL = PROVIDER_BASE_URLS.openai;
 /** Default models (see apps/web/README.md "AI assistant"). */
-export const DEFAULT_MODELS = { openrouter: 'anthropic/claude-sonnet-5.5', openai: 'gpt-6.1-sol' } as const;
+export const DEFAULT_MODELS = PROVIDER_DEFAULTS;
 
 /** Request headers of the bring-your-own-key flow. */
 export const BYO_KEY_HEADER = 'x-opensu-key';
@@ -38,13 +44,21 @@ export const TURN_HEADER = 'x-opensu-turn';
 const MAX_BODY = 256 * 1024;
 /** Output cap per model call on the owner's key. */
 const OWNER_MAX_TOKENS = 4096;
+/**
+ * Output cap sent to Anthropic when the request names none (the Messages
+ * API behind its compatibility layer requires one; every current Claude
+ * model allows at least 64K, the current ones 128K).
+ */
+const ANTHROPIC_MAX_TOKENS = 32000;
 
 interface Upstream {
   url: string;
   key: string;
   model: string;
-  provider: 'openrouter' | 'openai' | 'custom';
+  provider: 'openrouter' | 'openai' | 'anthropic' | 'custom';
   owner: boolean;
+  /** A key saved with the account: its model is the saved one. */
+  account?: boolean;
 }
 
 function jsonError(status: number, code: string, message: string): Response {
@@ -72,8 +86,13 @@ function userBase(raw: string | null): string | null {
   }
 }
 
-function pickUpstream(req: Request, env: RelayEnv): Upstream | Response {
+async function pickUpstream(req: Request, env: RelayEnv): Promise<Upstream | Response> {
   const byoKey = req.headers.get(BYO_KEY_HEADER)?.trim();
+  const account = req.headers.get(ACCOUNT_KEY_HEADER)?.trim();
+  if (!byoKey && account) {
+    const a = await accountUpstream(req, env, account);
+    return a instanceof Response ? a : { ...a, owner: false, account: true };
+  }
   if (byoKey) {
     const base = userBase(req.headers.get(BYO_BASE_HEADER));
     if (!base) return jsonError(400, 'bad_base_url', 'The base URL must be an https:// URL without credentials or query.');
@@ -214,6 +233,8 @@ export async function relayStatus(req: Request, env: RelayEnv): Promise<Response
       model: s?.model ?? null,
       auth: { email: auth.email, google: auth.google },
       user: email ? { email } : null,
+      // Keys can be saved with the account (task 022).
+      keys: keysConfig(env).enabled,
       quota,
       limits: s && cfg.enabled ? { user: cfg.userDaily, anon: cfg.anonTrial } : null,
       quotaError,
@@ -235,7 +256,7 @@ export async function relayChat(req: Request, env: RelayEnv): Promise<Response> 
 
 async function relay(req: Request, env: RelayEnv, log: ChatLog): Promise<Response> {
   const t0 = Date.now();
-  const up = pickUpstream(req, env);
+  const up = await pickUpstream(req, env);
   if (up instanceof Response) return up;
   log.key = up.owner ? 'owner' : 'own';
   const text = await req.text();
@@ -251,7 +272,7 @@ async function relay(req: Request, env: RelayEnv, log: ChatLog): Promise<Respons
   // Credits are taken only for a request that will reach the provider.
   const credits = await checkCredits(req, up, env, log);
   if (credits instanceof Response) return credits;
-  if (up.owner || typeof body.model !== 'string' || body.model === 'default') body.model = up.model;
+  if (up.owner || up.account || typeof body.model !== 'string' || body.model === 'default') body.model = up.model;
   log.model = String(body.model).slice(0, 200);
   body.stream = true;
   if (up.owner && up.provider !== 'custom') {
@@ -260,6 +281,7 @@ async function relay(req: Request, env: RelayEnv, log: ChatLog): Promise<Respons
     body[key] = Math.min(Number(body[key] ?? body.max_tokens) || OWNER_MAX_TOKENS, OWNER_MAX_TOKENS);
     if (key !== 'max_tokens') delete body.max_tokens;
   }
+  if (up.provider === 'anthropic' && body.max_tokens == null && body.max_completion_tokens == null) body.max_tokens = ANTHROPIC_MAX_TOKENS;
 
   const headers: Record<string, string> = {
     authorization: `Bearer ${up.key}`,
