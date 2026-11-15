@@ -3,17 +3,23 @@
 // has no per-request CPU readout locally, so these are V8-in-Node
 // approximations of the 10 ms free-tier limit, like relay-check.mjs.
 //
-//   node --experimental-strip-types --no-warnings scripts/auth-check.ts
+//   node --experimental-transform-types --no-warnings --import ./scripts/ts-resolve.mjs scripts/auth-check.ts
+// (the resolve hook lets the turn record fixtures load the agent's sources).
 import { getMigrations } from 'better-auth/db/migration';
 import { accountRoute, startAuth } from '../src/server/accounts.ts';
 import { authTesting, lastTestCode, loadAuth, sessionUser, warmUp } from '../src/server/auth.ts';
 import { relayChat, relayStatus } from '../src/server/chat-relay.ts';
+import { flagTurn, MAX_RECORD, saveTurn } from '../src/server/turns.ts';
 import { migratedD1 } from './d1-shim.ts';
+import { fixtureRecords } from './turn-fixtures.ts';
 
-// The test hook logs every code; keep the output readable.
+// The test hook logs every code and the relay one JSON line per call; keep the output readable.
 const log = console.log;
+const chatLines: string[] = [];
 console.log = (...a: unknown[]) => {
-  if (!String(a[0]).startsWith('[auth test hook]')) log(...a);
+  const first = String(a[0]);
+  if (first.startsWith('{"msg":"chat"')) chatLines.push(first);
+  else if (!first.startsWith('[auth test hook]')) log(...a);
 };
 
 const failures: string[] = [];
@@ -158,6 +164,62 @@ const chatReq = (turn: string, cookieHeader = '', ip = '203.0.113.50') =>
   for (const [k, v] of Object.entries(ms)) console.log(`  /api/chat ${names[k]}: median ${median(v.slice(5)).toFixed(2)} ms, p90 ${pct(v.slice(5), 0.9).toFixed(2)} ms, max ${Math.max(...v.slice(5)).toFixed(2)} ms (30 KB body, upstream mocked)`);
   const worst = Math.max(...Object.values(ms).map((v) => median(v.slice(5))), median(sendMs), median(signMs));
   check(worst < 5, `every path well under 10 ms in this approximation (worst median ${worst.toFixed(2)} ms)`);
+}
+
+// The relay's log line (task 020): one per POST, no content, keys or email.
+{
+  const n = chatLines.length;
+  await relayChat(chatReq('log-turn-0000', cookie, '198.18.0.1'), env);
+  await (await relayChat(chatReq('log-turn-0001', cookie, '198.18.0.1'), { ...env, QUOTA_USER_DAILY: '100000' })).arrayBuffer();
+  const own = await relayChat(new Request(`${SITE}/api/chat`, { method: 'POST', headers: { 'x-opensu-key': 'sk-own-secret-value', 'x-opensu-turn': 'log-turn-0002', cookie: 'opensu_v=abc' }, body: '{"messages":[{"role":"user","content":"secret message text"}]}' }), env);
+  await own.arrayBuffer();
+  const lines = chatLines.slice(n).map((l) => JSON.parse(l) as Record<string, unknown>);
+  check(lines.length === 3, `one log line per POST (${lines.length})`);
+  check(lines[0]?.quota === 'quota_exhausted' && lines[0]?.upstream === null && lines[0]?.caller === 'user', `refused by the quota: ${chatLines[n]}`);
+  lines.shift();
+  check(JSON.stringify(Object.keys(lines[0] ?? {})) === JSON.stringify(['msg', 'turn', 'caller', 'key', 'quota', 'model', 'upstream', 'ttfbMs']), `log fields: ${Object.keys(lines[0] ?? {}).join(', ')}`);
+  check(lines[0]?.turn === 'log-turn-0001' && lines[0]?.caller === 'user' && lines[0]?.key === 'owner' && lines[0]?.quota === 'ok' && lines[0]?.upstream === 200 && typeof lines[0]?.ttfbMs === 'number', `owner's key, signed in: ${chatLines[n + 1]}`);
+  check(lines[1]?.key === 'own' && lines[1]?.caller === 'anon' && lines[1]?.quota === null, `own key: ${chatLines[n + 2]}`);
+  const all = chatLines.slice(n).join('\n');
+  check(!/sk-own|sk-or|secret message|@example\.com/.test(all), 'no key, message or email in the log lines');
+}
+
+// Turn records (task 020): POST /api/turns with realistic records.
+console.log('turn records (POST /api/turns)');
+{
+  const { small, large } = await fixtureRecords();
+  // The largest body accepted: the large record padded with one long text piece.
+  const capRec = JSON.parse(large) as { parts: unknown[] };
+  capRec.parts.push({ type: 'text', text: '' });
+  const pad = MAX_RECORD - Buffer.byteLength(JSON.stringify(capRec)) - 64;
+  (capRec.parts.at(-1) as { text: string }).text = '房'.repeat(Math.floor(pad / 3));
+  const cap = JSON.stringify(capRec);
+  console.log(`  record sizes: small ${(Buffer.byteLength(small) / 1024).toFixed(1)} KB (one edit, sample house), large ${(Buffer.byteLength(large) / 1024).toFixed(1)} KB (largest template built in one turn), cap test ${(Buffer.byteLength(cap) / 1024).toFixed(1)} KB (limit ${MAX_RECORD / 1024} KB)`);
+  const tenv = { ...env, QUOTA_IP_DAILY: '100000' };
+  const anon = cookiesOf(await relayStatus(new Request(`${SITE}/api/chat`, { headers: { 'cf-connecting-ip': '198.18.1.1' } }), tenv));
+  const req = (body: string, who: string, method = 'POST') => new Request(`${SITE}/api/turns`, { method, headers: { 'content-type': 'application/json', cookie: who, 'cf-connecting-ip': `198.18.2.${Math.floor(Math.random() * 250)}` }, body });
+  const withTurn = (json: string, turn: string) => json.replace(/"turn":"[^"]+"/, `"turn":"${turn}"`);
+  const ms: Record<string, number[]> = { 'anonymous, small': [], 'anonymous, large': [], 'signed in, large': [], 'signed in, at the cap': [], 'undo flag (PATCH)': [] };
+  let statuses = new Set<number>();
+  for (let i = 0; i < 60; i++) {
+    const run = async (k: string, r: Request, f = saveTurn) => {
+      const x = await cpu(() => f(r, tenv));
+      statuses.add(x.value.status);
+      ms[k]!.push(x.ms);
+    };
+    await run('anonymous, small', req(withTurn(small, `cpu-small-${i}-xxxx`), anon));
+    await run('anonymous, large', req(withTurn(large, `cpu-large-${i}-xxxx`), anon));
+    await run('signed in, large', req(withTurn(large, `cpu-ularge-${i}-xxxx`), cookie));
+    await run('signed in, at the cap', req(withTurn(cap, `cpu-cap-${i}-xxxx`), cookie));
+    await run('undo flag (PATCH)', req(JSON.stringify({ turn: `cpu-ularge-${i}-xxxx`, undone: true }), cookie, 'PATCH'), flagTurn);
+  }
+  check(statuses.size === 1 && statuses.has(204), `every record stored (${[...statuses].join(',')})`);
+  const stored = db.sqlite.prepare("select count(*) as n, sum(undone) as u from turn_record where turn like 'cpu-%'").get() as { n: number; u: number };
+  check(stored.n === 240 && stored.u === 60, `240 rows, 60 flagged undone (${stored.n}, ${stored.u})`);
+  for (const [k, v] of Object.entries(ms)) console.log(`  /api/turns ${k}: median ${median(v.slice(5)).toFixed(2)} ms, p90 ${pct(v.slice(5), 0.9).toFixed(2)} ms, max ${Math.max(...v.slice(5)).toFixed(2)} ms`);
+  const worst = Math.max(...Object.values(ms).map((v) => median(v.slice(5))));
+  check(worst < 5, `/api/turns well under 10 ms in this approximation (worst median ${worst.toFixed(2)} ms)`);
+  statuses = new Set();
 }
 
 // A sign-in that cannot start must not take anything else down (task 019 review).

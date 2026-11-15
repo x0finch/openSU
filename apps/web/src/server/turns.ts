@@ -18,11 +18,13 @@ import { bump, quotaDay, subjectKey, TURN_ID } from './quota.ts';
 import { clientIp } from './visitor.ts';
 
 /**
- * Largest record accepted, in bytes. Records measured with the scripted
- * chat (scripts/turns-check.ts): about 25 KB for a one-edit turn on the
- * sample house, about 100 KB for a large house built in one turn; the house
- * after the turn is most of it. 256 KB leaves room for long tool results
- * and stays far below D1's 2 MB row limit.
+ * Largest record accepted, in bytes. Realistic records
+ * (scripts/turn-fixtures.ts, real agent turns on a scripted model): 13 KB
+ * for one edit on the sample house, 70 KB for the largest template built
+ * from a blank plot in one turn (a rejected 70-command batch, its repair,
+ * get_house); the house after the turn is 9-11 KB of it. 256 KB is more
+ * than three times the large turn, still cheap to check (about 3 ms of CPU
+ * in scripts/auth-check.ts) and far below D1's 2 MB row limit.
  */
 export const MAX_RECORD = 256 * 1024;
 /** Records and undo flags per IP per quota day. */
