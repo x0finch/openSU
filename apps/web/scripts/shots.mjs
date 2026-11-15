@@ -554,8 +554,11 @@ async function stillHouseChecks() {
   const esc = (page) => async () => page.keyboard.press('Escape');
   const store = (page, fn) => () => page.evaluate(fn);
   const account = (page, open) => () => page.evaluate((o) => window.__studio.account.setState(o ? { open: true, origin: 'menu', anchor: null } : { open: false }), open);
+  const framing = (page) => page.evaluate(() => JSON.stringify(window.__studio.engine?.viewer.framedInsets ?? null));
   const pinCycle = async (page, label) => {
-    const base = (await recorder.take(page)).at(-1);
+    // From rest (a framing asked for just before may still be landing).
+    const base = (await restAfter(page)).at(-1);
+    page.__framing = await framing(page);
     const name0 = await nameBlock(page);
     await page.evaluate(() => window.__studio.store.getState().setPinned(true));
     await page.waitForTimeout(300);
@@ -570,13 +573,14 @@ async function stillHouseChecks() {
     await page.evaluate(() => window.__studio.store.getState().setPinned(false));
     await page.waitForTimeout(300);
     const back = await restAfter(page);
-    check(back.length >= 3 && back.at(-1) === base, `${label}: unpinning moves it back, smoothly (${back.length - 2} frames between), to exactly where it was (${back.at(-1) === base})`);
+    check(back.length >= 3 && back.at(-1) === base, `${label}: unpinning moves it back, smoothly (${back.length - 2} frames between), to exactly where it was (${back.at(-1) === base}${back.at(-1) === base ? '' : `, max diff ${Math.max(...back.at(-1).split(',').map((v, i) => Math.abs(v - base.split(',')[i])))}, ${back.length} values`}; framed ${page.__framing} -> ${await framing(page)})`);
     check((await nameBlock(page)) === name0, `${label}: the house name is back unchanged after unpinning`);
   };
 
   // Desktop 3D, sun study on (opening the sun panel then does not switch it on, which re-frames by its own rule).
+  // Half the pixels: software GL then draws frames often enough to see the re-frame animate.
   {
-    const { ctx, page } = await open(DESKTOP, '/studio?sun=winter&time=10:00');
+    const { ctx, page } = await open(DESKTOP, '/studio?sun=winter&time=10:00&dpr=0.5');
     await page.waitForFunction(() => window.__studio?.ready3d === true, null, { timeout: 180000 });
     await page.waitForTimeout(800);
     await recorder.install(page);
@@ -596,13 +600,12 @@ async function stillHouseChecks() {
     await page.waitForTimeout(400);
     await recorder.take(page);
     await page.evaluate(() => window.__studio.store.getState().resetView());
-    await page.waitForTimeout(ms);
-    const asked = await recorder.take(page);
+    const asked = await restAfter(page);
     const framed = await page.evaluate(() => window.__studio.engine.viewer.framedInsets);
     check(asked.length > 1 && framed.right > 330, `3D: a framing asked for with a panel open frames clear of it (right inset ${framed.right})`);
     await page.keyboard.press('Escape');
     await page.evaluate(() => window.__studio.store.getState().resetView());
-    await page.waitForTimeout(ms);
+    await restAfter(page);
     // Pinned: the sidebar hangs under the name like the panel under the toolbar.
     const { base, name0 } = await pinCycle(page, '3D');
     await still(page, '3D pinned: views panel', () => page.getByTestId('bar-views').click(), esc(page));
@@ -678,7 +681,7 @@ async function stillHouseChecks() {
     }, () => page.getByTestId('bar-sun').click());
     if (mode === '3d') {
       // The pinned conversation's sheet stays: the house moves above it once; a tool sheet over it does not move it.
-      const base = (await recorder.take(page)).at(-1);
+      const base = (await restAfter(page)).at(-1);
       await page.evaluate(() => window.__studio.store.getState().setPinned(true));
       await page.waitForTimeout(300);
       const pinning = await restAfter(page);
