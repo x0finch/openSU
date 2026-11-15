@@ -388,7 +388,12 @@ export function measureDom(opts) {
     };
     // Icon-only buttons count by their box (their plate shows on hover and
     // press); buttons with a text label count by their ink while their plate is clear.
-    const iconOnly = (c) => c.matches('button, [role=button]') && !c.textContent.trim() && !!c.querySelector('svg');
+    const visibleText = (c) => {
+      const it = document.createTreeWalker(c, NodeFilter.SHOW_TEXT);
+      for (let n = it.nextNode(); n; n = it.nextNode()) if (n.textContent.trim() && !n.parentElement.closest('.lg-tip') && visible(n.parentElement)) return true;
+      return false;
+    };
+    const iconOnly = (c) => c.matches('button, [role=button]') && !visibleText(c) && !!c.querySelector('svg');
     const iks = items.map((c) => ({ c, k: iconOnly(c) || (c.matches('button, [role=button]') && isRound(c)) ? shapeBox(c) : ink(c) })).filter((x) => x.k);
     if (!iks.length) return;
     const left = iks.reduce((a, b) => (b.k.l < a.k.l ? b : a));

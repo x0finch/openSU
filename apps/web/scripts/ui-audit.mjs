@@ -219,7 +219,7 @@ async function capture(page, cfg, state, extra = {}) {
     errors.push(`${cfg.name} ${state}: measure failed: ${e.message.split('\n')[0]}`);
     return;
   }
-  if (!tokenColours) tokenColours = await page.evaluate(readTokenColours).catch(() => null);
+  if (!tokenColours?.length || !tokenColours.some(([n]) => n.endsWith('(glass)'))) tokenColours = await page.evaluate(readTokenColours).catch(() => null);
   const normal = await page.screenshot({ scale: 'css', timeout: 120000 });
   const hide = await page.addStyleTag({ content: HIDE_TEXT });
   await settle(page, 120);
