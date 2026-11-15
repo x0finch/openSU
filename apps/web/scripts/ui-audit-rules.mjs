@@ -340,7 +340,15 @@ export function measureDom(opts) {
       const k = ink(c);
       return (k.t + k.b) / 2;
     });
-    const spread = Math.max(...cents) - Math.min(...cents);
+    let spread = Math.max(...cents) - Math.min(...cents);
+    if (spread > 1.01 && items.some((c) => firstLine(c))) {
+      // A multi-line block may align by its first line or by its middle.
+      const mids = items.map((c) => {
+        const k = ink(c);
+        return (k.t + k.b) / 2;
+      });
+      spread = Math.min(spread, Math.max(...mids) - Math.min(...mids));
+    }
     if (spread <= 1.01) continue;
     // Text of mixed sizes may share a baseline instead.
     if (items.every(textOnly)) {
@@ -359,6 +367,7 @@ export function measureDom(opts) {
     // From a surface down to the row that holds its content.
     let cur = el;
     for (let i = 0; i < 6; i++) {
+      if (cur !== el && ownText(cur)) return [cur]; // text and icons flow together in this element
       const kids = [...cur.children].filter((c) => visible(c) && !decorative(c) && ink(c));
       if (kids.length !== 1) return kids.length ? kids : [cur];
       const k = kids[0];
@@ -573,7 +582,7 @@ export function measureDom(opts) {
   }
   for (const L of leaves) {
     const surf = L.closest('.lg');
-    if (!surf) continue;
+    if (!surf || L.closest('.lg-tip')) continue; // tooltips stand outside on purpose
     const sr = surf.getBoundingClientRect();
     for (const n of L.childNodes) {
       if (n.nodeType !== 3 || !n.textContent.trim()) continue;
@@ -767,15 +776,18 @@ export async function analysePixels(job) {
   for (const b of job.textBoxes) {
     const [ir, ig, ib, ia] = b.color;
     const lightInk = Lrel(ir, ig, ib) > 0.4;
-    let worst = null;
+    // The background is read where the text stands, text hidden: the pixel
+    // at the 95th percentile toward the ink (one stray rim pixel does not decide).
+    const pool = [];
     for (const [x, y, w, h] of b.rects) {
       for (let yy = Math.floor(y); yy < y + h; yy++) for (let xx = Math.floor(x); xx < x + w; xx++) {
         const p = px(bare, xx, yy);
-        const l = Lrel(...p);
-        if (!worst || (lightInk ? l > worst.l : l < worst.l)) worst = { l, rgb: p };
+        pool.push({ l: Lrel(...p), rgb: p });
       }
     }
-    if (!worst) continue;
+    if (!pool.length) continue;
+    pool.sort((a, c) => (lightInk ? a.l - c.l : c.l - a.l));
+    const worst = pool[Math.min(pool.length - 1, Math.floor(pool.length * 0.95))];
     const mix = [0, 1, 2].map((j) => b.color[j] * ia + worst.rgb[j] * (1 - ia));
     const li = Lrel(...mix);
     const ratio = (Math.max(li, worst.l) + 0.05) / (Math.min(li, worst.l) + 0.05);
