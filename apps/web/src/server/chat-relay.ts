@@ -94,7 +94,7 @@ interface Caller {
   setCookie: string | null;
 }
 
-async function identify(req: Request, env: RelayEnv): Promise<Caller> {
+export async function identify(req: Request, env: RelayEnv): Promise<Caller> {
   const auth = authConfig(env);
   if (auth.enabled) {
     // Better Auth loads only when sign-in is configured; if it cannot, the caller is anonymous.
@@ -124,23 +124,59 @@ function quotaError(st: QuotaStatus, setCookie: string | null): Response {
 }
 
 /**
+ * One structured log line per POST /api/chat (task 020). No message
+ * content, no keys, no email: `caller` is the kind of caller (checked when the
+ * quota counts; otherwise only read from which cookie is present),
+ * `key` whose key, `quota` the quota's answer ("ok", a refusal code, "off",
+ * or null when it does not apply), `upstream` the provider's HTTP status
+ * (null when the request never reached it), `ttfbMs` the time until the
+ * provider's response headers arrived.
+ */
+interface ChatLog {
+  msg: 'chat';
+  turn: string | null;
+  caller: 'user' | 'anon' | null;
+  key: 'owner' | 'own' | null;
+  quota: string | null;
+  model: string | null;
+  upstream: number | null;
+  ttfbMs: number | null;
+}
+
+/** On an own key nobody is identified: the caller kind as the cookies suggest it (not verified). */
+const callerHint = (req: Request): 'user' | 'anon' => (/opensu\.session_token=/.test(req.headers.get('cookie') ?? '') ? 'user' : 'anon');
+
+/**
  * Credits: decides whether this request may use the owner's key. Returns a
  * Response to refuse, else the Set-Cookie (if any) to add to the reply.
  */
-async function checkCredits(req: Request, upstream: Upstream, env: RelayEnv): Promise<Response | { setCookie: string | null }> {
-  if (!upstream.owner) return { setCookie: null };
+async function checkCredits(req: Request, upstream: Upstream, env: RelayEnv, log: ChatLog): Promise<Response | { setCookie: string | null }> {
+  if (!upstream.owner) {
+    log.caller = callerHint(req);
+    return { setCookie: null };
+  }
   const cfg = quotaConfig(env);
-  if (!cfg.enabled) return { setCookie: null };
-  if (!env.DB) return jsonError(503, 'quota_unavailable', 'The shared key is not available on this server. Use your own key.');
+  if (!cfg.enabled) {
+    log.caller = callerHint(req);
+    log.quota = 'off';
+    return { setCookie: null };
+  }
+  if (!env.DB) {
+    log.quota = 'quota_unavailable';
+    return jsonError(503, 'quota_unavailable', 'The shared key is not available on this server. Use your own key.');
+  }
   try {
     const caller = await identify(req, env);
+    log.caller = caller.subject.kind;
     const raw = req.headers.get(TURN_HEADER) ?? '';
     // Without a turn id every call is its own turn (older clients).
     const turn = TURN_ID.test(raw) ? raw : crypto.randomUUID();
     const r = await consume(env.DB, cfg, caller.subject, clientIp(req), turn);
+    log.quota = r.ok ? 'ok' : r.status.reason === 'turn' ? 'quota_turn_limit' : 'quota_exhausted';
     return r.ok ? { setCookie: caller.setCookie } : quotaError(r.status, caller.setCookie);
   } catch (e) {
     console.error('quota: database error', e instanceof Error ? e.message : e);
+    log.quota = 'quota_unavailable';
     return jsonError(503, 'quota_unavailable', 'The shared key is not available right now. Use your own key or try again later.');
   }
 }
@@ -186,10 +222,22 @@ export async function relayStatus(req: Request, env: RelayEnv): Promise<Response
   );
 }
 
-/** POST /api/chat: relay one Chat Completions call. */
+/** POST /api/chat: relay one Chat Completions call (and log one line about it). */
 export async function relayChat(req: Request, env: RelayEnv): Promise<Response> {
+  const raw = req.headers.get(TURN_HEADER) ?? '';
+  const log: ChatLog = { msg: 'chat', turn: TURN_ID.test(raw) ? raw : null, caller: null, key: null, quota: null, model: null, upstream: null, ttfbMs: null };
+  try {
+    return await relay(req, env, log);
+  } finally {
+    console.log(JSON.stringify(log));
+  }
+}
+
+async function relay(req: Request, env: RelayEnv, log: ChatLog): Promise<Response> {
+  const t0 = Date.now();
   const up = pickUpstream(req, env);
   if (up instanceof Response) return up;
+  log.key = up.owner ? 'owner' : 'own';
   const text = await req.text();
   if (text.length > MAX_BODY) return jsonError(413, 'too_large', 'The conversation is too long. Start a new chat.');
   // The only look at the request: set the model (and an output cap on the
@@ -201,9 +249,10 @@ export async function relayChat(req: Request, env: RelayEnv): Promise<Response> 
     return jsonError(400, 'bad_request', 'Request body is not JSON.');
   }
   // Credits are taken only for a request that will reach the provider.
-  const credits = await checkCredits(req, up, env);
+  const credits = await checkCredits(req, up, env, log);
   if (credits instanceof Response) return credits;
   if (up.owner || typeof body.model !== 'string' || body.model === 'default') body.model = up.model;
+  log.model = String(body.model).slice(0, 200);
   body.stream = true;
   if (up.owner && up.provider !== 'custom') {
     // OpenRouter takes max_tokens; OpenAI's newer models only max_completion_tokens.
@@ -225,8 +274,11 @@ export async function relayChat(req: Request, env: RelayEnv): Promise<Response> 
   try {
     res = await fetch(up.url, { method: 'POST', headers, body: JSON.stringify(body), signal: req.signal });
   } catch {
+    log.ttfbMs = Date.now() - t0;
     return jsonError(502, 'upstream_unreachable', 'The AI provider could not be reached.');
   }
+  log.upstream = res.status;
+  log.ttfbMs = Date.now() - t0;
   // Pass the body through as is; keep only the content type of the upstream headers.
   const out = new Headers({
     'content-type': res.headers.get('content-type') ?? 'text/event-stream',

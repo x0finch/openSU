@@ -46,6 +46,10 @@ export interface AccountEnv {
   QUOTA_CALLS_PER_TURN?: string;
   /** IANA time zone in which the quota day rolls over (default Asia/Shanghai). */
   QUOTA_TZ?: string;
+  /** "false" stops saving conversation turns (task 020, POST /api/turns answers 204). */
+  TURN_RECORDS?: string;
+  /** Days a saved turn is kept (default 30). */
+  TURN_RECORDS_DAYS?: string;
 }
 
 export const QUOTA_DEFAULTS = { userDaily: 10, anonTrial: 3, ipDaily: 60, siteDaily: 500, callsPerTurn: 8, tz: 'Asia/Shanghai' } as const;
@@ -112,6 +116,13 @@ export function quotaConfig(env: AccountEnv): QuotaConfig {
     callsPerTurn: Math.max(1, intVar(env.QUOTA_CALLS_PER_TURN, QUOTA_DEFAULTS.callsPerTurn)),
     tz: tz && validTz(tz) ? tz : QUOTA_DEFAULTS.tz,
   };
+}
+
+export const TURN_RECORDS_DEFAULT_DAYS = 30;
+
+/** Turn records (task 020): on whenever a database is bound, unless TURN_RECORDS is "false". */
+export function turnsConfig(env: AccountEnv): { enabled: boolean; days: number } {
+  return { enabled: !off(env.TURN_RECORDS) && !!env.DB, days: Math.max(1, intVar(env.TURN_RECORDS_DAYS, TURN_RECORDS_DEFAULT_DAYS)) };
 }
 
 /** The configured site URL as an origin (https, or http for localhost), else null. */
