@@ -5,9 +5,12 @@
 // D1 (migrations applied with wrangler), sign-in codes read from the
 // localhost-only test hook.
 //
-//   node scripts/account-e2e.mjs            checks + screenshots -> artifacts/task019/*.png, artifacts/task020/*.png
+// And of API keys saved with the account (task 022): the stub stands in for
+// OpenRouter, OpenAI and Anthropic (KEYS_TEST_UPSTREAM, localhost only).
+//
+//   node scripts/account-e2e.mjs            checks + screenshots -> artifacts/task019/*.png, artifacts/task020/*.png, artifacts/task022/*.png
 //   node scripts/account-e2e.mjs --smoke    checks only
-//   node scripts/account-e2e.mjs --only desktop,phone,limits,turns
+//   node scripts/account-e2e.mjs --only desktop,phone,limits,turns,keys
 //
 // Requires a build (`pnpm --filter @opensu/web build`).
 import { execFileSync, spawn } from 'node:child_process';
@@ -23,6 +26,7 @@ const here = dirname(fileURLToPath(import.meta.url));
 const appRoot = resolve(here, '..');
 const outDir = resolve(appRoot, '../../artifacts/task019');
 const outDir20 = resolve(appRoot, '../../artifacts/task020');
+const outDir22 = resolve(appRoot, '../../artifacts/task022');
 const devVars = resolve(appRoot, 'dist/server/.dev.vars');
 const smoke = process.argv.includes('--smoke');
 const onlyArg = process.argv.indexOf('--only');
@@ -30,6 +34,7 @@ const only = onlyArg > 0 ? process.argv[onlyArg + 1].split(',') : null;
 const wanted = (name) => !only || only.some((o) => name.startsWith(o));
 mkdirSync(outDir, { recursive: true });
 mkdirSync(outDir20, { recursive: true });
+mkdirSync(outDir22, { recursive: true });
 
 if (!existsSync(resolve(appRoot, 'dist/client/studio.html'))) {
   console.error('No build found: run `pnpm --filter @opensu/web build` first.');
@@ -453,6 +458,238 @@ try {
         await ctx.close();
       }
     }
+    preview.stop();
+  }
+  // --- Keys saved with the account (task 022) -------------------------------
+  if (wanted('keys')) {
+    const KEYS_SECRET = 'e2e-keys-secret-not-real-0123456789abcdef';
+    const OR = 'sk-or-v1-e2e-not-a-real-key-0r0r';
+    const ANT = 'sk-ant-api03-e2e-not-a-real-key-a7a7';
+    const OAI = 'sk-proj-e2e-not-a-real-key-0a10';
+    stub.config.keys = [OR, ANT, OAI];
+    const stubOrigin = stub.url.replace(/\/v1$/, '');
+    const preview = await startPreview({ KEYS_SECRET, KEYS_TEST_UPSTREAM: stubOrigin });
+    console.log(`keys: preview on ${preview.base}`);
+    const st = await (await fetch(`${preview.base}/api/chat`)).json();
+    check(st.keys === true, 'status: keys can be saved with an account here');
+    const off = await startPreview({ KEYS_TEST_UPSTREAM: stubOrigin });
+    const stOff = await (await fetch(`${off.base}/api/chat`)).json();
+    const offList = await fetch(`${off.base}/api/keys`);
+    check(stOff.keys === false && offList.status === 404, `no KEYS_SECRET: the feature is off (status keys=${stOff.keys}, /api/keys ${offList.status})`);
+    off.stop();
+
+    const label = (page) => page.getByTestId('key-picker-label').first().textContent();
+    const openPicker = async (page) => {
+      await page.getByTestId('key-picker').first().click();
+      await page.waitForSelector('[data-testid=key-menu]');
+      await page.waitForTimeout(700);
+    };
+    const closePicker = async (page) => {
+      await page.keyboard.press('Escape');
+      await page.waitForSelector('[data-testid=key-menu]', { state: 'detached' });
+      await page.waitForTimeout(300);
+    };
+    const sheetGone = (page) => page.waitForSelector('[data-testid=keys-sheet]', { state: 'detached', timeout: 10000 });
+    const lastCall = () => stub.received.at(-1);
+    const withBrowserKey = async (opts, path) => {
+      const ctx = await browser.newContext(opts);
+      await ctx.addInitScript((k) => {
+        localStorage.setItem('opensu.hints.v1', 'done');
+        if (!sessionStorage.getItem('e2e-key-set')) {
+          sessionStorage.setItem('e2e-key-set', '1');
+          localStorage.setItem('opensu.ai', JSON.stringify({ useOwn: true, provider: 'openrouter', key: k, baseUrl: '', model: '' }));
+        }
+      }, OR);
+      const page = await ctx.newPage();
+      page.on('pageerror', (e) => failures.push(`page error ${e.message}`));
+      page.on('console', (m) => {
+        if (m.type() === 'error' && !/Failed to load resource/.test(m.text())) failures.push(`console error ${m.text()}`);
+      });
+      await page.goto(`${preview.base}${path}`, { waitUntil: 'networkidle' });
+      await page.waitForFunction(() => window.__studio?.ready3d === true, null, { timeout: 180000 });
+      return { ctx, page };
+    };
+
+    // Desktop: a visitor with a key in this browser, the conversation pinned.
+    const { ctx, page } = await withBrowserKey(DESKTOP, '/studio?panel=pin');
+    check((await label(page)) === 'OpenRouter', `signed out: the picker shows the browser's key in use (${await label(page)})`);
+    await openPicker(page);
+    const outItems = await page.locator('[data-testid=key-menu] [role=menuitemradio], [data-testid=key-menu] [role=menuitem]').allTextContents();
+    check(outItems.length === 3 && (await page.getByTestId('key-own').count()) === 1 && (await page.getByTestId('key-add').count()) === 0, `signed out: free allowance, the browser's key, "use your own key" (${outItems.join(' | ')})`);
+    await shot(page, 'desktop-signed-out-picker-open', outDir22);
+    await closePicker(page);
+    // The signed-out browser-key path is unchanged: the key goes in its header (intercepted; the relay would call openrouter.ai).
+    const seen = [];
+    await page.route('**/api/chat', (route) => {
+      if (route.request().method() !== 'POST') return route.continue();
+      seen.push(route.request().headers());
+      return route.fulfill({ status: 401, contentType: 'application/json', body: JSON.stringify({ error: { message: 'Invalid API key (intercepted)' } }) });
+    });
+    await turn(page, '你好，浏览器里的密钥');
+    check(seen.length === 1 && seen[0]['x-opensu-key'] === OR && seen[0]['x-opensu-base-url'] === 'https://openrouter.ai/api/v1' && !seen[0]['x-opensu-account-key'], 'signed out: the browser key goes in x-opensu-key as before');
+    await page.unroute('**/api/chat');
+
+    // Sign in: the browser's key is offered once, never uploaded silently.
+    const before = (await (await fetch(`${preview.base}/api/keys`)).status);
+    check(before === 401, `signed out: /api/keys refuses (${before})`);
+    await openMenu(page);
+    await page.getByTestId('menu-signin').click();
+    await signInFlow(page, preview.base, 'keys@example.com', { shots: false, prefix: 'keys' });
+    await page.waitForSelector('[data-testid=keys-offer]', { timeout: 10000 });
+    await page.waitForTimeout(900);
+    const offerText = await page.getByTestId('keys-sheet').textContent();
+    check(/保存到账号，在其他设备也能用/.test(offerText) && /密钥加密保存在服务器上，只用于你的对话。/.test(offerText) && /0r0r/.test(offerText) && !offerText.includes(OR), `after sign-in: the offer, where the key is kept, the hint only (${offerText})`);
+    const listed0 = await page.evaluate(async () => (await (await fetch('/api/keys')).json()).keys.length);
+    check(listed0 === 0, 'nothing was saved before the user said so');
+    await shot(page, 'desktop-offer-after-signin', outDir22);
+    await page.getByTestId('keys-offer-save').click();
+    await sheetGone(page);
+    const ls = await page.evaluate(() => localStorage.getItem('opensu.ai') ?? '');
+    const k1 = await page.evaluate(() => window.__studio.keys.getState());
+    check(k1.keys.length === 1 && k1.keys[0].provider === 'openrouter' && k1.keys[0].hint === '0r0r' && k1.active === 'openrouter' && !ls.includes(OR), `saved with the account and in use; the browser copy removed (${JSON.stringify(k1.keys)}, active ${k1.active})`);
+    check((await label(page)) === 'OpenRouter', 'the picker shows the saved key');
+
+    // A turn goes out with the saved key and skips the quota.
+    const q0 = await quota(page);
+    await turn(page, '你好，账号里的 OpenRouter 密钥');
+    const c1 = lastCall();
+    check(c1?.provider === 'openrouter' && c1.authorization === `Bearer ${OR}` && c1.model === 'anthropic/claude-sonnet-5.5', `the relay calls OpenRouter's stand-in with the saved key and the default model (${c1?.provider}, ${c1?.model})`);
+    await page.evaluate(() => fetch('/api/chat').then((r) => r.json()).then((s) => window.__studio.chat.setState({ server: s })));
+    const q1 = await quota(page);
+    check(q1?.remaining === q0?.remaining && q1?.remaining === 10, `the quota is untouched (${q0?.remaining} -> ${q1?.remaining})`);
+    const rec = await page.evaluate(() => window.__studio.chat.getState().items.at(-1).run);
+    check(rec?.ownKey === true && rec.model === 'anthropic/claude-sonnet-5.5', `the turn is recorded as ownKey: true (${JSON.stringify(rec)})`);
+
+    // Add an Anthropic key in the sheet.
+    await openPicker(page);
+    await page.getByTestId('key-add').click();
+    await page.waitForSelector('[data-testid=keys-add]');
+    await page.waitForTimeout(900);
+    await page.getByTestId('keys-provider').getByText('Anthropic').click();
+    await page.getByTestId('keys-key').fill(ANT);
+    await shot(page, 'desktop-add-key-sheet', outDir22);
+    await page.getByTestId('keys-save').click();
+    await sheetGone(page);
+    check((await label(page)) === 'Anthropic', `a new key is in use at once (${await label(page)})`);
+    await page.waitForTimeout(500);
+    await shot(page, 'desktop-picker-closed', outDir22);
+    await openPicker(page);
+    const menuText = await page.getByTestId('key-menu').textContent();
+    check(/免费额度/.test(menuText) && /OpenRouter/.test(menuText) && /Anthropic/.test(menuText) && /a7a7/.test(menuText) && /claude-opus-5-5/.test(menuText) && !menuText.includes(ANT), `the menu lists the free allowance and each key with its hint and model (${menuText})`);
+    await shot(page, 'desktop-picker-open', outDir22);
+    await closePicker(page);
+    await turn(page, '把北侧房间加深');
+    const c2 = lastCall();
+    check(c2?.provider === 'anthropic' && c2.authorization === `Bearer ${ANT}` && c2.model === 'claude-opus-5-5' && c2.max_tokens === 32000, `Anthropic's stand-in: the saved key, claude-opus-5-5, an output cap (${c2?.provider}, ${c2?.model}, ${c2?.max_tokens})`);
+    const edited = await page.evaluate(() => window.__studio.chat.getState().items.at(-1));
+    check(!edited.error && edited.changes?.length === 1, 'the tool loop runs through the Anthropic path (an edit applied)');
+
+    // Change the model (the saved key's sheet).
+    await openPicker(page);
+    await page.getByTestId('key-edit-anthropic').click();
+    await page.waitForSelector('[data-testid=keys-edit]');
+    await page.waitForTimeout(900);
+    await shot(page, 'desktop-saved-key-sheet', outDir22);
+    await page.getByTestId('keys-model').fill('claude-sonnet-5-5');
+    await page.getByTestId('keys-save').click();
+    await sheetGone(page);
+    await turn(page, '你好，换了模型');
+    check(lastCall()?.model === 'claude-sonnet-5-5' && lastCall()?.authorization === `Bearer ${ANT}`, `the changed model is used, the key kept (${lastCall()?.model})`);
+
+    // The choice is remembered with the account.
+    await openPicker(page);
+    await page.getByTestId('key-free').click();
+    await page.waitForTimeout(800);
+    check((await label(page)) === '免费额度', 'choosing the free allowance switches at once');
+    await page.reload({ waitUntil: 'networkidle' });
+    await page.waitForFunction(() => window.__studio?.keys?.getState().ready === true, null, { timeout: 20000 });
+    check((await label(page)) === '免费额度', 'after a reload: still the free allowance');
+    await openPicker(page);
+    await page.getByTestId('key-anthropic').click();
+    await page.waitForTimeout(800);
+    await page.reload({ waitUntil: 'networkidle' });
+    await page.waitForFunction(() => window.__studio?.keys?.getState().ready === true, null, { timeout: 20000 });
+    check((await label(page)) === 'Anthropic', 'after a reload: Anthropic again (remembered per account)');
+
+    // Delete the key in use: the picker falls back to the free allowance, and turns are metered again.
+    await openPicker(page);
+    await page.getByTestId('key-edit-anthropic').click();
+    await page.waitForSelector('[data-testid=keys-edit]');
+    await page.waitForTimeout(600);
+    await page.getByTestId('keys-delete').click();
+    check(((await page.getByTestId('keys-delete').textContent()) ?? '').includes('确认删除'), 'delete asks once more');
+    await page.getByTestId('keys-delete').click();
+    await sheetGone(page);
+    check((await label(page)) === '免费额度', `after deleting the key in use: the free allowance (${await label(page)})`);
+    const q2 = (await quota(page))?.remaining;
+    await turn(page, '你好，免费额度');
+    const c3 = lastCall();
+    const q3 = (await quota(page))?.remaining;
+    check(c3?.provider === null && c3.authorization === `Bearer ${STUB_KEY}` && q3 === q2 - 1, `the site's key again, one credit taken (${q2} -> ${q3})`);
+
+    // Another user cannot see or use them.
+    const other = await browser.newContext(DESKTOP);
+    const op = await other.newPage();
+    await op.goto(`${preview.base}/studio`);
+    const otherList = await op.evaluate(async () => (await fetch('/api/keys')).status);
+    check(otherList === 401, `another (signed-out) browser cannot list them (${otherList})`);
+    await other.close();
+    await ctx.close();
+
+    // Phone: offered once; "not now" is remembered; the picker in the pinned sheet; the add sheet; a saved key.
+    const ph = await withBrowserKey(PHONE, '/studio');
+    await openMenu(ph.page);
+    await ph.page.getByTestId('menu-signin').click();
+    await ph.page.waitForSelector('[data-testid=signin-sheet]');
+    await ph.page.waitForTimeout(800);
+    await signInFlow(ph.page, preview.base, 'phone-keys@example.com', { shots: false, prefix: 'keys-phone' });
+    await ph.page.waitForSelector('[data-testid=keys-offer]', { timeout: 10000 });
+    await ph.page.waitForTimeout(900);
+    await shot(ph.page, 'phone-offer-after-signin', outDir22);
+    await ph.page.getByTestId('keys-offer-later').click();
+    await sheetGone(ph.page);
+    const kept = await ph.page.evaluate(() => localStorage.getItem('opensu.ai') ?? '');
+    check(kept.includes(OR), '"not now": the key stays in this browser only');
+    check((await ph.page.evaluate(async () => (await (await fetch('/api/keys')).json()).keys.length)) === 0, '"not now": nothing saved');
+    await ph.page.goto(`${preview.base}/studio?panel=pin`, { waitUntil: 'networkidle' });
+    await ph.page.waitForFunction(() => window.__studio?.keys?.getState().ready === true, null, { timeout: 30000 });
+    await ph.page.waitForTimeout(1500);
+    check((await ph.page.locator('[data-testid=keys-offer]').count()) === 0, 'the offer is made once');
+    await shot(ph.page, 'phone-picker-closed', outDir22);
+    await openPicker(ph.page);
+    await shot(ph.page, 'phone-picker-open', outDir22);
+    await ph.page.getByTestId('key-add').click();
+    await ph.page.waitForSelector('[data-testid=keys-add]');
+    await ph.page.waitForTimeout(900);
+    await ph.page.getByTestId('keys-provider').getByText('OpenAI').click();
+    await ph.page.getByTestId('keys-key').fill(OAI);
+    await ph.page.getByTestId('keys-model').fill('gpt-6-luna');
+    await ph.page.waitForTimeout(300);
+    await shot(ph.page, 'phone-add-key-sheet', outDir22);
+    await ph.page.getByTestId('keys-save').click();
+    await sheetGone(ph.page);
+    await ph.page.waitForTimeout(600);
+    check((await label(ph.page)) === 'OpenAI', `phone: the new key is in use (${await label(ph.page)})`);
+    await turn(ph.page, '你好，手机上的 OpenAI 密钥');
+    check(lastCall()?.provider === 'openai' && lastCall()?.authorization === `Bearer ${OAI}` && lastCall()?.model === 'gpt-6-luna', `phone: OpenAI's stand-in with the saved key and model (${lastCall()?.model})`);
+    await openPicker(ph.page);
+    await ph.page.getByTestId('key-edit-openai').click();
+    await ph.page.waitForSelector('[data-testid=keys-edit]');
+    await ph.page.waitForTimeout(900);
+    await shot(ph.page, 'phone-saved-key-sheet', outDir22);
+    await ph.page.getByTestId('keys-close').click();
+    await sheetGone(ph.page);
+    const w = await ph.page.evaluate(() => [document.documentElement.scrollWidth, window.innerWidth]);
+    check(w[0] <= w[1], `phone: no horizontal scroll (${w[0]} <= ${w[1]})`);
+    await ph.ctx.close();
+
+    // No key in any record, log line or response the stub did not need.
+    const exp = execFileSync(process.execPath, [resolve(here, 'turns-export.mjs'), '--local', '--persist-to', preview.state, '--out', join(preview.state, 'k.jsonl')], { cwd: appRoot, encoding: 'utf8' });
+    const recs = readFileSync(join(preview.state, 'k.jsonl'), 'utf8');
+    const own = recs.trim().split('\n').map((l) => JSON.parse(l)).filter((r) => r.ownKey);
+    check(own.length >= 5 && ![OR, ANT, OAI].some((k) => recs.includes(k)), `turn records: ${own.length} with ownKey true, no key in any record (${exp.trim()})`);
+    check(![OR, ANT, OAI].some((k) => preview.log.includes(k)), 'no key in the Worker log');
+    stub.config.keys = [];
     preview.stop();
   }
 } catch (e) {

@@ -8,16 +8,24 @@ import { ChevronRightIcon, SendIcon, SparkIcon } from '../components/icons';
 import { cx, IconButton } from '../components/ui';
 import { type MessageKey, useT } from '../lib/i18n';
 import { useStudio } from '../lib/store';
-import { type ChatItem, fetchServerStatus, loadAgent, newChat, redoTurn, retry, send, type ServerStatus, stop, undoTurn, useChat } from './chat-store';
+import { type ChatItem, fetchServerStatus, loadAgent, newChat, ownKeyInUse, redoTurn, retry, send, type ServerStatus, stop, undoTurn, useChat } from './chat-store';
 import { openSignIn } from './account';
 import type { Lang } from '../lib/i18n';
 import { ChevronDownIcon, ComposeIcon, DockIcon, HistoryIcon, NoteIcon, PlanCheckIcon, RedoIcon, RetryIcon, SlidersIcon, StopIcon, UndockIcon, UndoIcon } from './icons';
-import { usesOwnKey } from './settings';
+import { accountKeyInUse, openKeySheet, useKeys } from './keys';
+import { KeyPicker } from './KeyPicker';
 import { GlassInputBar, GlassTextSurface, GlassTurn, type GlassTurnEntry } from '../glass';
 import { turnView } from './turn-parts';
 import { SettingsSheet } from './SettingsSheet';
 
 const SUGGESTIONS: MessageKey[] = ['chat.s1', 'chat.s2', 'chat.s3', 'chat.s4'];
+
+/** True while turns go out on the user's own key (in this browser or saved with the account). */
+function useOwnKey(): boolean {
+  const settings = useChat((s) => s.settings);
+  useKeys((s) => `${s.ready}|${s.active}|${s.keys.length}`);
+  return ownKeyInUse(settings);
+}
 
 /* ------------------------------------------------------------------ */
 /* Message content                                                     */
@@ -198,6 +206,9 @@ function quotaText(t: ReturnType<typeof useT>, lang: Lang, code: string | undefi
 
 function errorText(t: ReturnType<typeof useT>, item: ChatItem, server: ServerStatus | null = null, lang: Lang = 'zh'): string {
   const e = item.error!;
+  // A key saved with the account that cannot be used (task 022).
+  if (e.code === 'account_key_signed_out') return t('keys.err.signedOutTurn');
+  if (e.code?.startsWith('account_key_')) return t('keys.err.unusable');
   switch (e.kind) {
     case 'quota': return quotaText(t, lang, e.code, server);
     case 'no-key': return t('chat.err.noKey');
@@ -218,9 +229,15 @@ function AssistantMessage({ item, latest, density }: { item: ChatItem; latest: b
   const running = item.phase !== 'done';
   const openSettings = useChat((s) => s.setSettingsOpen);
   const server = useChat((s) => s.server);
-  const ownKey = useChat((s) => usesOwnKey(s.settings));
+  const ownKey = useOwnKey();
   const lang = useStudio((s) => s.lang);
   const compact = density === 'compact';
+  /** "Open settings": the saved key in use (its sheet), else the browser's key settings. */
+  const openKeySettings = (el: HTMLElement) => {
+    const p = accountKeyInUse();
+    if (p) openKeySheet({ mode: 'edit', provider: p }, el);
+    else openSettings(true);
+  };
   const view = turnView(item);
   const changes = item.changes ?? [];
   const undone = item.undo === 'undone' || item.undo === 'can-redo';
@@ -282,10 +299,15 @@ function AssistantMessage({ item, latest, density }: { item: ChatItem; latest: b
                 </button>
               )}
               {item.error.kind === 'quota' && !ownKey && (
-                <SmallButton onClick={() => openSettings(true)} icon={<SlidersIcon width={14} height={14} />}>{t('quota.useOwnKey')}</SmallButton>
+                <SmallButton
+                  onClick={() => (useKeys.getState().ready ? openKeySheet({ mode: 'add' }, document.querySelector<HTMLElement>('[data-testid=prompt]')) : openSettings(true))}
+                  icon={<SlidersIcon width={14} height={14} />}
+                >
+                  {t('quota.useOwnKey')}
+                </SmallButton>
               )}
               {(item.error.kind === 'no-key' || item.error.kind === 'auth') && (
-                <SmallButton onClick={() => openSettings(true)} icon={<SlidersIcon width={14} height={14} />}>{t('chat.err.openSettings')}</SmallButton>
+                <SmallButton onClick={() => openKeySettings(document.querySelector<HTMLElement>('[data-testid=prompt]') ?? document.body)} icon={<SlidersIcon width={14} height={14} />}>{t('chat.err.openSettings')}</SmallButton>
               )}
               {/* Retrying cannot help until a key is set, or while no credit is left. */}
               {latest && item.error.kind !== 'no-key' && item.error.kind !== 'auth' && (item.error.kind !== 'quota' || (item.error.code !== 'quota_turn_limit' && (ownKey || (server?.quota?.remaining ?? 0) > 0))) && (
@@ -363,9 +385,9 @@ function UserMessage({ item }: { item: ChatItem }) {
 function EmptyState({ compact }: { compact?: boolean }) {
   const t = useT();
   const server = useChat((s) => s.server);
-  const settings = useChat((s) => s.settings);
+  const own = useOwnKey();
   const setSettingsOpen = useChat((s) => s.setSettingsOpen);
-  const noKey = server && !server.serverKey && !usesOwnKey(settings);
+  const noKey = server && !server.serverKey && !own;
   return (
     <div className={cx('flex flex-col', compact ? 'gap-3' : 'gap-4 pt-1')}>
       <p className="text-[14.5px] leading-[23px] font-medium text-ink-2">{t('chat.intro')}</p>
@@ -639,7 +661,8 @@ export function ChatInput({ phone, pinned, className }: { phone?: boolean; pinne
   const can = !!text.trim() && !running;
   const btn = phone ? 'size-[36px]' : 'size-[40px]';
   // Credits on the site's key, shown only when 3 or fewer are left (task 019).
-  const left = useChat((s) => (!usesOwnKey(s.settings) && s.server?.serverKey && s.server.quota && s.server.quota.remaining <= 3 ? s.server.quota.remaining : null));
+  const own = useOwnKey();
+  const left = useChat((s) => (!own && s.server?.serverKey && s.server.quota && s.server.quota.remaining <= 3 ? s.server.quota.remaining : null));
   return (
     <GlassInputBar ref={box} working={!!working} className={className} data-testid="prompt">
       <form
@@ -653,9 +676,8 @@ export function ChatInput({ phone, pinned, className }: { phone?: boolean; pinne
         className={cx('relative flex cursor-text items-end gap-2', phone ? 'min-h-12 px-1.5 py-1.5' : 'min-h-14 px-2 py-2')}
       >
         {pinned ? (
-          <span className={cx('grid shrink-0 place-items-center', btn)}>
-            <SparkIcon accent width={17} height={17} />
-          </span>
+          // Task 022: which key the conversation uses, a pop-up button where the spark stood.
+          <KeyPicker variant="input" phone={phone} />
         ) : (
           <button
             type="button"
@@ -763,6 +785,7 @@ export function RecentStrip({ phone, className }: { phone?: boolean; className?:
       <header className="flex h-[46px] shrink-0 items-center gap-1.5 pr-2 pl-5">
         <h2 className="text-[13px] font-semibold text-ink-2">{t('chat.recent')}</h2>
         <span className="flex-1" />
+        <KeyPicker variant="header" phone={phone} />
         <LinkButton onClick={() => setPinned(true)} icon={<DockIcon width={14} height={14} />} testId="chat-pin">
           {phone ? t('chat.pinPhone') : t('chat.pin')}
         </LinkButton>
@@ -790,7 +813,6 @@ export function RecentStrip({ phone, className }: { phone?: boolean; className?:
 function ConversationHeader({ phone }: { phone?: boolean }) {
   const t = useT();
   const hasItems = useChat((s) => s.items.length > 0);
-  const setSettingsOpen = useChat((s) => s.setSettingsOpen);
   const setPinned = useStudio((s) => s.setPinned);
   return (
     <header className={cx('flex shrink-0 items-center gap-1.5', phone ? 'h-10 pr-2 pl-4' : 'h-11 border-y border-hairline pr-2 pl-6')}>
@@ -802,9 +824,6 @@ function ConversationHeader({ phone }: { phone?: boolean }) {
           <ComposeIcon width={16} height={16} />
         </IconButton>
       )}
-      <IconButton label={t('chat.settings')} tipSide="bottom" onClick={() => setSettingsOpen(true)} className="hit size-8 text-ink-2" data-testid="chat-settings">
-        <SlidersIcon width={16} height={16} />
-      </IconButton>
       <LinkButton onClick={() => setPinned(false)} icon={<UndockIcon width={16} height={16} />} testId="chat-unpin">
         {t('chat.unpin')}
       </LinkButton>

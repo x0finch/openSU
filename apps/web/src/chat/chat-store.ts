@@ -6,6 +6,7 @@ import type { House } from '@opensu/model';
 import { countryName, loadPlaces } from '../lib/site';
 import { create } from 'zustand';
 import { useStudio } from '../lib/store';
+import { accountKeyInUse, DEFAULT_MODELS, syncKeys, useKeys } from './keys';
 import { type AiSettings, loadSettings, relayHeaders, requestModel, saveSettings, usesOwnKey } from './settings';
 import { addCall, addChange, addText, type TurnPart } from './turn-parts';
 import { buildRecord, download, postRecord, postUndo, recordJson, type ToolCallRecord, type TurnRecord, type TurnRun } from './turn-record';
@@ -79,6 +80,8 @@ export interface ServerStatus {
   user?: { email: string } | null;
   /** Credits on the site's key; null when not metered. */
   quota?: QuotaInfo | null;
+  /** Keys can be saved with the account here (task 022). */
+  keys?: boolean;
 }
 
 interface ChatState {
@@ -265,12 +268,16 @@ export async function fetchServerStatus(): Promise<void> {
   } catch {
     /* shown as unknown */
   }
+  await syncKeys();
 }
+
+/** A turn on the user's own key (in this browser or saved with the account): never metered. */
+export const ownKeyInUse = (s: AiSettings = useChat.getState().settings) => usesOwnKey(s) || !!accountKeyInUse();
 
 /** True when the next turn would use the site's key and no credit is left. */
 export function outOfCredits(): boolean {
   const s = useChat.getState();
-  return !usesOwnKey(s.settings) && !!s.server?.serverKey && s.server.quota?.remaining === 0;
+  return !ownKeyInUse(s.settings) && !!s.server?.serverKey && s.server.quota?.remaining === 0;
 }
 
 /** A turn id: one user message = one credit on the site's key, however many model calls it makes. */
@@ -313,11 +320,16 @@ export async function send(text: string): Promise<void> {
     const m = await loadAgent();
     const sess = syncSession(m);
     const turn = turnId();
-    const ownKey = usesOwnKey(settings);
-    patch(id, { run: { turn, ownKey, model: ownKey ? requestModel(settings) : (useChat.getState().server?.model ?? 'default'), startedAt } });
+    // A key saved with the account (task 022): the relay decrypts it; the browser only names the provider.
+    const account = usesOwnKey(settings) ? null : accountKeyInUse();
+    const saved = account ? useKeys.getState().keys.find((k) => k.provider === account) : undefined;
+    const ownKey = usesOwnKey(settings) || !!account;
+    const model = account ? saved?.model || DEFAULT_MODELS[account] : usesOwnKey(settings) ? requestModel(settings) : (useChat.getState().server?.model ?? 'default');
+    patch(id, { run: { turn, ownKey, model, startedAt } });
     /** Tool call id -> index in the item's `calls`. */
     const callIndex = new Map<string, number>();
-    const adapter = m.createRelayAdapter({ endpoint: endpoint(), model: requestModel(settings), headers: () => ({ ...relayHeaders(settings), 'x-opensu-turn': turn }) });
+    const keyHeaders = account ? { 'x-opensu-account-key': account } : relayHeaders(settings);
+    const adapter = m.createRelayAdapter({ endpoint: endpoint(), model: account ? 'default' : requestModel(settings), headers: () => ({ ...keyHeaders, 'x-opensu-turn': turn }) });
     const onEvent = (e: AgentEvent) => {
       if (e.type === 'text') patch(id, (it) => ({ text: it.text + e.delta, parts: addText(it.parts ?? [], e.delta), phase: 'writing' }));
       else if (e.type === 'tool-call') {
@@ -370,7 +382,7 @@ export async function send(text: string): Promise<void> {
     useChat.setState({ running: false });
     recordTurn(id, prompt);
     // The site's key: the credits changed (or ran out); show what is left.
-    if (!usesOwnKey(settings)) void fetchServerStatus();
+    if (!ownKeyInUse(settings)) void fetchServerStatus();
   }
 }
 

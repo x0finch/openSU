@@ -12,6 +12,7 @@
 import { type ReactNode, useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { cx } from '../components/ui';
 import { ChatInput, PinnedChat, RecentStrip } from '../chat/ChatPanel';
+import { useKeys } from '../chat/keys';
 import { useAccount } from '../chat/account';
 import { GlassSheet } from '../glass';
 import { useStudio } from '../lib/store';
@@ -51,7 +52,10 @@ export interface DockExtent {
 }
 
 export function PhoneDock({ derived, landscape, onExtent }: { derived: Derived | null; landscape: boolean; onExtent: (e: DockExtent) => void }) {
-  const signing = useAccount((s) => s.open);
+  // The sign-in sheet (task 019) or the key sheet (task 022) takes the bottom: the dock steps aside.
+  const signInOpen = useAccount((s) => s.open);
+  const keySheetOpen = useKeys((s) => !!s.sheet);
+  const signing = signInOpen || keySheetOpen;
   const walk = useStudio((s) => s.walk);
   const pinned = useStudio((s) => s.pinned);
   const recent = useStudio((s) => s.recent);

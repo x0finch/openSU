@@ -15,6 +15,8 @@ import { useT } from '../lib/i18n';
 import { ChatInput, PinnedColumn, RecentStrip, SettingsHost } from '../chat/ChatPanel';
 import { closeSignIn, restoreDraftAfterRedirect, useAccount } from '../chat/account';
 import { SignInHost } from '../chat/SignIn';
+import { KeySheetHost } from '../chat/KeyPicker';
+import { closeKeySheet, useKeys } from '../chat/keys';
 import { useChat } from '../chat/chat-store';
 import { useAutosave } from '../lib/autosave';
 import { restoreLang, useStudio } from '../lib/store';
@@ -137,7 +139,7 @@ function desktopInsets(W: number, H: number, left: number, o: { title: Box | nul
 function useInitialParams(): void {
   useEffect(() => {
     // Test hooks (screenshot scripts): the stores.
-    window.__studio = { ...window.__studio, store: useStudio, chat: useChat, account: useAccount };
+    window.__studio = { ...window.__studio, store: useStudio, chat: useChat, account: useAccount, keys: useKeys };
     restoreLang();
     const q = new URLSearchParams(location.search);
     applyParams(q, true);
@@ -160,6 +162,8 @@ function useEscapeCloses(): void {
       const s = useStudio.getState();
       if (useAccount.getState().open) {
         closeSignIn();
+      } else if (useKeys.getState().sheet) {
+        closeKeySheet();
       } else if (useChat.getState().settingsOpen) {
         useChat.getState().setSettingsOpen(false);
       } else if (s.sitePanel) {
@@ -399,6 +403,7 @@ export function Studio() {
           {!column && <DesktopDock onBox={setDockBox} onInput={setInputBox} />}
           <SettingsHost />
           <SignInHost />
+          <KeySheetHost />
         </div>
       ) : walkLandscape ? (
         <LandscapeWalkHUD derived={derived} />
@@ -418,6 +423,7 @@ export function Studio() {
           {mode !== 'sheet' ? <PhoneDock derived={derived} landscape={landscape} onExtent={onExtent} /> : <SheetInput />}
           <SettingsHost phone />
           <SignInHost phone />
+          <KeySheetHost phone />
         </>
       )}
     </div>

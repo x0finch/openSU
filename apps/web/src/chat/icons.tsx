@@ -128,3 +128,24 @@ export function UndockIcon(p: P) {
     </Svg>
   );
 }
+
+/** A key (the key picker's entries). */
+export function KeyIcon(p: P) {
+  return (
+    <Svg {...p}>
+      <circle cx="8" cy="15" r="3.5" />
+      <path d="m10.5 12.5 7.5-7.5M15.5 7.5l2 2M13.5 9.5l1.5 1.5" />
+    </Svg>
+  );
+}
+
+/** Info in a circle (a saved key's settings, as in a Wi-Fi list). */
+export function InfoIcon(p: P) {
+  return (
+    <Svg {...p}>
+      <circle cx="12" cy="12" r="8.5" />
+      <path d="M12 11v5.5" />
+      <circle cx="12" cy="7.8" r="0.4" fill="currentColor" />
+    </Svg>
+  );
+}

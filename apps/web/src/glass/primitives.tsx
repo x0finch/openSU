@@ -892,7 +892,9 @@ export function GlassSheet({ open, large, fixed, onClose, onClosed, onHeight, cl
     if (e.button > 0) return;
     const t = e.target as Element;
     const top = el.current!.getBoundingClientRect().top;
-    // The grabber and the top strip always drag; elsewhere controls keep their gestures and a scrolled list scrolls.
+    // The grabber and the top strip drag (a button there, such as a sheet's close, keeps its tap: capturing
+    // the pointer would send the click to the sheet); elsewhere controls keep their gestures and a scrolled list scrolls.
+    if (e.clientY - top <= 56 && t.closest('button, a')) return;
     if (e.clientY - top > 56 && (t.closest('button, input, textarea, a, select, [role=slider], [role=radio], [contenteditable]') || (body.current?.scrollTop ?? 0) > 0)) return;
     if (e.clientY - top > 56 && detent.current === 'large') return;
     drag.current = { id: e.pointerId, y: e.clientY, h0: spring.current!.value, t: performance.now(), v: 0, lastY: e.clientY };

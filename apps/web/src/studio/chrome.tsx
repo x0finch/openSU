@@ -13,6 +13,8 @@ import { resetToTemplate } from '../lib/autosave';
 import { bearingText, frontBearing, placeText } from '../lib/site';
 import { exportConversation, replaceHouse, useChat } from '../chat/chat-store';
 import { openSignIn, signOut } from '../chat/account';
+import { useKeys } from '../chat/keys';
+import { showKeyChoices } from '../chat/KeyPicker';
 import type { Derived } from './house-data';
 import { loadHouseData } from './useDerived';
 
@@ -270,7 +272,9 @@ function ProjectMenu({ open, anchor, onClose, compact, ref }: { open: boolean; a
         icon={<SparkDot />}
         onSelect={() => {
           onClose(false);
-          setSettingsOpen(true);
+          // Signed in where keys live with the account (task 022): the key picker; else the browser's key settings.
+          if (useKeys.getState().ready) showKeyChoices();
+          else setSettingsOpen(true);
         }}
       >
         {t('chat.settings')}

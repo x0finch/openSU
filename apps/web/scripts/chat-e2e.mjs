@@ -282,8 +282,10 @@ try {
     check((await shownArea(page)) === areaBefore, 'give-up: the house is unchanged');
     await shot(page, 'chat-giveup-desktop');
 
-    // 6. Settings sheet.
-    await page.getByTestId('chat-settings').click();
+    // 6. Settings sheet: through the key picker at the input (task 022; signed out: "use your own key").
+    await page.getByTestId('key-picker').click();
+    await page.waitForSelector('[data-testid=key-menu]');
+    await page.getByTestId('key-own').click();
     await page.waitForSelector('[data-testid=settings-sheet]');
     await page.getByTestId('settings-own').check({ force: true });
     await page.waitForTimeout(250);
@@ -309,7 +311,9 @@ try {
     check((await page.getByTestId('assistant-message').nth(4).textContent())?.includes('拒绝了这个密钥'), 'BYO: a refused key gets a calm message');
     await shot(page, 'chat-auth-error-desktop');
     await page.unroute('**/api/chat');
-    await page.getByTestId('chat-settings').click();
+    await page.getByTestId('key-picker').click();
+    await page.waitForSelector('[data-testid=key-menu]');
+    await page.getByTestId('key-own').click();
     await page.getByRole('button', { name: '清除我的密钥' }).click();
     await page.getByRole('button', { name: '完成' }).click();
     check(!(await page.evaluate(() => localStorage.getItem('opensu.ai') ?? '')).includes('sk-test'), 'BYO: clearing removes the key');

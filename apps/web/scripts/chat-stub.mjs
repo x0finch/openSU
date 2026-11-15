@@ -6,7 +6,9 @@
 //
 //   node scripts/chat-stub.mjs [port]      standalone, prints its base URL
 //
-// Endpoints: POST /v1/chat/completions, GET /__requests (what it received,
+// Endpoints: POST /v1/chat/completions (also /<provider>/v1/chat/completions,
+// standing in for OpenRouter, OpenAI or Anthropic when the relay uses a key
+// saved with an account, task 022), GET /__requests (what it received,
 // for assertions), POST /__config {"delay": ms, "holdMs": ms}. A step's `hold`
 // pauses after its text, `holdInArgs` after the summary in its tool arguments.
 import { createServer } from 'node:http';
@@ -177,7 +179,8 @@ function* chunks(step, call) {
 
 export function startStub(port = 0) {
   const received = [];
-  const config = { delay: 12, holdMs: 0 };
+  /** `keys`: further keys it accepts besides STUB_KEY (the account-key tests). */
+  const config = { delay: 12, holdMs: 0, keys: [] };
   let calls = 0;
   const server = createServer(async (req, res) => {
     const url = new URL(req.url, 'http://stub');
@@ -193,7 +196,8 @@ export function startStub(port = 0) {
       res.writeHead(204).end();
       return;
     }
-    if (req.method !== 'POST' || url.pathname !== '/v1/chat/completions') {
+    const route = /^(?:\/(openrouter|openai|anthropic))?\/v1\/chat\/completions$/.exec(url.pathname);
+    if (req.method !== 'POST' || !route) {
       res.writeHead(404).end();
       return;
     }
@@ -207,6 +211,7 @@ export function startStub(port = 0) {
     const steps = script.steps(cjk(text), results);
     const step = steps[Math.min(toolResults, steps.length - 1)];
     received.push({
+      provider: route[1] ?? null,
       authorization: req.headers.authorization ?? null,
       headers: Object.keys(req.headers),
       model: body.model,
@@ -219,7 +224,7 @@ export function startStub(port = 0) {
       toolResults: (body.messages ?? []).filter((m) => m.role === 'tool').map((m) => m.content),
       bytes: raw.length,
     });
-    if (req.headers.authorization !== `Bearer ${STUB_KEY}`) {
+    if (req.headers.authorization !== `Bearer ${STUB_KEY}` && !config.keys.some((k) => req.headers.authorization === `Bearer ${k}`)) {
       res.writeHead(401, { 'content-type': 'application/json' });
       res.end(JSON.stringify({ error: { message: 'stub: unexpected key' } }));
       return;
