@@ -398,6 +398,8 @@ try {
     await page.waitForFunction((a) => !document.querySelector('[data-testid=fact-area]')?.textContent?.startsWith(String(a)), area0, { timeout: 30000 });
     check(Math.abs((await shownArea(page)) - area1) < 0.05, 'redo survives a reload too');
     // A save made before task 018 (no turn structure) still loads and reads as plain text.
+    // First let the redo's autosave (a 600 ms timer) land, or it overwrites the old save written here.
+    await page.waitForTimeout(1500);
     await page.evaluate(() => {
       const s = JSON.parse(localStorage.getItem('opensu.autosave.v1'));
       s.chat = [
