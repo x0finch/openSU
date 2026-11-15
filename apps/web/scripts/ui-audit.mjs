@@ -170,7 +170,7 @@ const SEVERITY = {
   'inset-lr': (f) => (Math.abs(f.evidence.left - f.evidence.right) > 3 ? 'P1' : 'P2'),
   'inset-tb': (f) => (Math.abs(f.evidence.top - f.evidence.bottom) > 3 ? 'P1' : 'P2'),
   'capsule-radius': () => 'P2',
-  concentric: (f) => (Math.abs(f.evidence.radius - f.evidence.expected) > 6 ? 'P1' : 'P2'),
+  concentric: (f) => (f.evidence.glass && Math.abs(f.evidence.radius - f.evidence.expected) > 6 ? 'P1' : 'P2'),
   'glass-on-glass': () => 'P1',
   'card-in-card': () => 'P1',
   'box-in-panel': () => 'P2',
@@ -208,6 +208,8 @@ const PLACEHOLDER_MAX = 0.8;
 const DISABLED_ACCENT_MAX = 0.25;
 
 async function capture(page, cfg, state, extra = {}) {
+  // No hover: the pointer rests on the page's right edge (tooltips closed).
+  if (!cfg.phone) await page.mouse.move(cfg.w - 2, Math.round(cfg.h / 2)).catch(() => {});
   await settle(page);
   const opts = { phone: !!cfg.phone, minText: 12, hitMin: cfg.phone ? 44 : 28 };
   let dom;
@@ -329,6 +331,8 @@ function readTokenColours() {
     }
   }
   const host = document.querySelector('[data-glass-tone]') || document.body;
+  // The material's values are set inline on the glass layer.
+  for (const e of [host, document.documentElement]) for (const p of e.style) if (p.startsWith('--')) names.add(p);
   const out = [];
   const probe = document.createElement('span');
   host.appendChild(probe);
@@ -804,6 +808,7 @@ function crossState() {
   }
   // Disabled controls that look like their enabled selves.
   for (const d of disabledLooks) {
+    if (!d.round) continue; // filled round buttons: their mean colour is the button, not the row behind text
     const e = enabledLooks.find((x) => x.id === d.id && x.config === d.config);
     if (!e) continue;
     const dist = Math.abs(d.mean[0] - e.mean[0]) + Math.abs(d.mean[1] - e.mean[1]) + Math.abs(d.mean[2] - e.mean[2]);
@@ -838,6 +843,9 @@ function crossState() {
       const [a, wa] = list[i], [b, wb] = list[j];
       const na = norm(a), nb = norm(b);
       if (!na || !nb || /\d/.test(na + nb)) continue;
+      // Differences in symbols only (a close ×, an ellipsis) are the same label with an affordance.
+      const strip = (x) => x.replace(/[×…↗→←↑↓⌄✓]/g, '').trim();
+      if (strip(a) === strip(b)) continue;
       const same = na === nb;
       const near = Math.min(na.length, nb.length) >= 4 && lev(na, nb) === 1;
       if (same || near) out.push({ rule: 'label-dupe', config: lang, state: 'all', el: `"${a}" / "${b}"`, comp: 'consistency', msg: `${same ? 'the same words written two ways' : 'near-duplicate labels'}: "${a}" (${wa}) and "${b}" (${wb})`, evidence: { a, b, where: [wa, wb] } });

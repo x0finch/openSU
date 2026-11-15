@@ -90,7 +90,7 @@ export function measureDom(opts) {
     visCache.set(el, ok);
     return ok;
   };
-  const decorative = (el) => el.matches('.lg-halo, .lg-glow, .lg-lens, .lg-lens-face, .lg-lens-copy, .lg-tip, [data-audit-overlay]') || (el.getAttribute('aria-hidden') === 'true' && el.tagName !== 'svg' && !el.querySelector('svg'));
+  const decorative = (el) => el.matches('.lg-halo, .lg-glow, .lg-glow *, .lg-lens, .lg-lens-face, .lg-lens-copy, .lg-tip, [data-audit-overlay]');
 
   // ---- colours --------------------------------------------------------
   const parseColor = (c) => {
@@ -125,10 +125,28 @@ export function measureDom(opts) {
     const r = el.getBoundingClientRect();
     return Math.abs(r.width - r.height) <= 1 && radiusOf(el) >= r.height / 2 - 0.6;
   };
+  const clipCache = new Map();
+  const clipOf = (el) => {
+    if (clipCache.has(el)) return clipCache.get(el);
+    let c = { left: 0, top: 0, right: VW, bottom: VH };
+    for (let e = el; e && e !== document.body; e = e.parentElement) {
+      const s = cs(e);
+      if (s.overflow === 'visible' && s.overflowX === 'visible' && s.overflowY === 'visible') continue;
+      const a = e.getBoundingClientRect();
+      c = { left: Math.max(c.left, a.left), top: Math.max(c.top, a.top), right: Math.min(c.right, a.right), bottom: Math.min(c.bottom, a.bottom) };
+    }
+    clipCache.set(el, c);
+    return c;
+  };
+  /** Text rects of a text node, cut to what its clipping ancestors show. */
   const textNodeRects = (node) => {
     const rg = document.createRange();
     rg.selectNodeContents(node);
-    return [...rg.getClientRects()].filter((q) => q.width > 0.5 && q.height > 0.5);
+    const c = node.parentElement ? clipOf(node.parentElement) : null;
+    return [...rg.getClientRects()]
+      .map((q) => (c ? { left: Math.max(q.left, c.left), top: Math.max(q.top, c.top), right: Math.min(q.right, c.right), bottom: Math.min(q.bottom, c.bottom) } : q))
+      .map((q) => ({ ...q, width: q.right - q.left, height: q.bottom - q.top, left: q.left, top: q.top, right: q.right, bottom: q.bottom }))
+      .filter((q) => q.width > 0.5 && q.height > 3);
   };
   const mirror = (() => {
     let m = null;
@@ -200,23 +218,49 @@ export function measureDom(opts) {
   const add = (rule, el, msg, evidence, extra = {}) => findings.push({ rule, el: desc(el), comp: comp(el), msg, evidence, rect: box(el.getBoundingClientRect()), ...extra });
 
   // ---- text lines -----------------------------------------------------
+  // Lines of text flowing in one block (stacked blocks, e.g. a title over a
+  // detail, are not a wrap): the most lines any one block container shows.
+  const isInline = (e) => /^inline/.test(cs(e).display) && !/flex|grid/.test(cs(e.parentElement || e).display);
   const lineCount = (el) => {
-    const tops = [];
-    const walk = (e) => {
+    const groups = new Map();
+    const walk = (e, block) => {
       for (const n of e.childNodes) {
-        if (n.nodeType === 3 && n.textContent.trim()) for (const q of textNodeRects(n)) tops.push((q.top + q.bottom) / 2);
-        else if (n.nodeType === 1 && visible(n) && !decorative(n) && cs(n).position !== 'absolute') walk(n);
+        if (n.nodeType === 3 && n.textContent.trim()) {
+          if (!groups.has(block)) groups.set(block, []);
+          for (const q of textNodeRects(n)) groups.get(block).push((q.top + q.bottom) / 2);
+        } else if (n.nodeType === 1 && visible(n) && !decorative(n) && cs(n).position !== 'absolute') walk(n, isInline(n) ? block : n);
       }
     };
-    walk(el);
-    tops.sort((a, b) => a - b);
-    let lines = 0, last = -1e9;
+    walk(el, el);
+    let most = 0;
     const fs = parseFloat(cs(el).fontSize) || 14;
-    for (const t of tops) {
-      if (t - last > fs * 0.6) lines++;
-      last = t;
+    for (const tops of groups.values()) {
+      tops.sort((a, b) => a - b);
+      let lines = 0, last = -1e9;
+      for (const t of tops) {
+        if (t - last > fs * 0.6) lines++;
+        last = t;
+      }
+      most = Math.max(most, lines);
     }
-    return lines;
+    return most;
+  };
+  /** The first line of a multi-line text block (its centre is where a row aligns to it). */
+  const firstLine = (el) => {
+    if (el.matches('textarea, input') || ownShape(el)) return null;
+    const it = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
+    let first = null;
+    let lines = 0, last = -1e9;
+    for (let n = it.nextNode(); n; n = it.nextNode()) {
+      if (!n.textContent.trim() || !visible(n.parentElement)) continue;
+      for (const q of textNodeRects(n)) {
+        const c = (q.top + q.bottom) / 2;
+        if (!first) first = q;
+        if (Math.abs(c - last) > q.height * 0.6) lines++;
+        last = c;
+      }
+    }
+    return lines > 1 && first ? first : null;
   };
 
   // ==== rule: wrap (single-line controls never wrap) ======================
@@ -291,6 +335,8 @@ export function measureDom(opts) {
     if (s.flexWrap !== 'nowrap' && new Set(items.map((c) => Math.round(c.getBoundingClientRect().top / 8))).size > 1 && items.some((c) => ink(c).t > ink(items[0]).b)) continue;
     rows.push(el);
     const cents = items.map((c) => {
+      const fl = firstLine(c);
+      if (fl) return (fl.top + fl.bottom) / 2;
       const k = ink(c);
       return (k.t + k.b) / 2;
     });
@@ -331,26 +377,31 @@ export function measureDom(opts) {
       const q = c.getBoundingClientRect();
       return { l: q.left, t: q.top, r: q.right, b: q.bottom };
     };
-    const iks = items.map((c) => ({ c, k: c.matches('button, [role=button]') && isRound(c) ? shapeBox(c) : ink(c) })).filter((x) => x.k);
+    // Icon-only buttons count by their box (their plate shows on hover and
+    // press); buttons with a text label count by their ink while their plate is clear.
+    const iconOnly = (c) => c.matches('button, [role=button]') && !c.textContent.trim() && !!c.querySelector('svg');
+    const iks = items.map((c) => ({ c, k: iconOnly(c) || (c.matches('button, [role=button]') && isRound(c)) ? shapeBox(c) : ink(c) })).filter((x) => x.k);
     if (!iks.length) return;
     const left = iks.reduce((a, b) => (b.k.l < a.k.l ? b : a));
     const right = iks.reduce((a, b) => (b.k.r > a.k.r ? b : a));
     const L = left.k.l - r.left, Rr = r.right - right.k.r;
     const T = Math.min(...iks.map((x) => x.k.t)) - r.top, B = r.bottom - Math.max(...iks.map((x) => x.k.b));
     const conc = (x, inset) => {
-      if (!isRound(x.c)) return false;
+      if (!isRound(x.c) && !iconOnly(x.c) && !(ownShape(x.c) && radiusOf(x.c) >= x.c.getBoundingClientRect().height / 2 - 0.6)) return false;
       const d = x.c.getBoundingClientRect().height;
       return Math.abs(inset - (r.height - d) / 2) <= 1;
     };
     const lc = conc(left, L), rc = conc(right, Rr);
-    let lrOk = Math.abs(L - Rr) <= 1.01;
+    let lrOk = Math.abs(L - Rr) <= 1.01 || (lc && rc);
+    if (why === 'field' && (right.c.matches('input, textarea') || right.c.querySelector('input, textarea'))) lrOk = true; // left-aligned text field: no right inset to match
+    const stacked = iks.length > 1 && iks.some((a) => iks.some((b) => a !== b && a.k.t >= b.k.b - 1));
     if (!lrOk && lc !== rc) {
       const roundSide = lc ? L : Rr, other = lc ? Rr : L;
       lrOk = other >= roundSide - 1 && other - roundSide <= 4;
     }
     const ev = { left: R(L), right: R(Rr), top: R(T), bottom: R(B), height: R(r.height), leftEnd: desc(left.c), rightEnd: desc(right.c), concentricLeft: lc, concentricRight: rc, why };
     if (!lrOk) add('inset-lr', C, `left inset ${R(L)} px, right inset ${R(Rr)} px`, ev);
-    if (why !== 'header' && Math.abs(T - B) > 1.01 && r.height <= 80) add('inset-tb', C, `top inset ${R(T)} px, bottom inset ${R(B)} px`, ev);
+    if (why !== 'header' && !stacked && Math.abs(T - B) > 1.01 && r.height <= 80) add('inset-tb', C, `top inset ${R(T)} px, bottom inset ${R(B)} px`, ev);
   };
   for (const el of vis) {
     const r = el.getBoundingClientRect();
@@ -396,7 +447,7 @@ export function measureDom(opts) {
     const [gx, gy] = corners[0];
     const g = (gx + gy) / 2;
     const want = Math.max(0, RA - g), got = radiusOf(S);
-    if (Math.abs(got - want) > 2.01) add('concentric', S, `corner radius ${R(got)} px inside a ${R(RA)} px corner with a ${R(g)} px gap (concentric: ${R(want)} px)`, { radius: R(got), outer: R(RA), gapX: R(gx), gapY: R(gy), expected: R(want), outerEl: desc(A) });
+    if (Math.abs(got - want) > 2.01) add('concentric', S, `corner radius ${R(got)} px inside a ${R(RA)} px corner with a ${R(g)} px gap (concentric: ${R(want)} px)`, { radius: R(got), outer: R(RA), gapX: R(gx), gapY: R(gy), expected: R(want), outerEl: desc(A), glass: S.matches('.lg') });
   }
 
   // ==== rule: glass-on-glass and box-in-panel ================================
@@ -415,7 +466,7 @@ export function measureDom(opts) {
     if (r.width < 24 || r.height < 24) continue;
     const s = cs(el);
     const bg = parseColor(s.backgroundColor);
-    if (el.matches('[data-on], [aria-checked=true], [aria-selected=true], [aria-pressed=true]')) continue;
+    if (el.matches('[data-on], [aria-checked=true], [aria-selected=true], [aria-pressed=true], [role=img]')) continue;
     if (bg && bg[3] > 0.5 && Math.max(bg[0], bg[1], bg[2]) - Math.min(bg[0], bg[1], bg[2]) > 80) continue; // the accent (send, play)
     if (el.matches('button') && isRound(el)) continue;
     add('box-in-panel', el, 'a box (background, border or inset ring) inside a glass surface', { background: s.backgroundColor, border: `${s.borderTopWidth} ${s.borderTopColor}`, shadow: s.boxShadow === 'none' ? '' : s.boxShadow.slice(0, 60) });
@@ -450,8 +501,8 @@ export function measureDom(opts) {
 
   // ==== rule: field-passive-text (an input holds only its controls) ==========
   for (const f of vis.filter((e) => e.matches('textarea, input[type=text], input[type=email], input[type=search], input:not([type])'))) {
-    const holder = f.closest('form') || f.closest('.lg-field') || f.closest('.lg[data-kind=control]');
-    if (!holder || !holder.closest('.lg')) continue;
+    const holder = f.closest('.lg-field') || f.closest('.lg[data-kind=control]');
+    if (!holder) continue;
     const hr = holder.getBoundingClientRect();
     if (hr.height > 140) continue;
     for (const el of holder.querySelectorAll('*')) {
@@ -468,7 +519,12 @@ export function measureDom(opts) {
     if (!ownText(el) || el.closest('svg') || el.matches('textarea, input')) continue;
     if (el.closest('[data-testid=plan], [data-testid=sheets], .sheet-paper')) continue;
     const fs = parseFloat(cs(el).fontSize);
-    if (fs < opts.minText - 0.01) add('text-size', el, `${R(fs)} px text (minimum ${opts.minText} px)`, { fontSize: R(fs), text: short(ownText(el), 30) });
+    if (fs < opts.minText - 0.01) {
+      const key = `${comp(el)} ${R(fs)}`;
+      const prev = findings.find((f) => f.rule === 'text-size' && f.key === key);
+      if (prev) prev.evidence.examples.length < 6 && prev.evidence.examples.push(short(ownText(el), 20));
+      else findings.push({ rule: 'text-size', key, el: `[${comp(el)}] ${R(fs)} px text`, comp: comp(el), msg: `${R(fs)} px text (minimum ${opts.minText} px)`, evidence: { fontSize: R(fs), examples: [short(ownText(el), 20)] }, rect: box(el.getBoundingClientRect()) });
+    }
   }
 
   // ==== rule: hit-target ========================================================
@@ -476,6 +532,9 @@ export function measureDom(opts) {
   for (const el of interactive) {
     if (el.matches('input[type=range]') && el.closest('.lg-slider')) continue;
     const r = el.getBoundingClientRect();
+    if (r.width < 2 || r.height < 2) continue; // visually hidden (a switch's input): its label is the target
+    const proxy = el.matches('input, textarea') && el.closest('label, .lg-field');
+    if (proxy && Math.min(proxy.getBoundingClientRect().width, proxy.getBoundingClientRect().height) >= opts.hitMin) continue;
     let w = r.width, h = r.height;
     for (const p of ['::before', '::after']) {
       const ps = cs(el, p);
@@ -503,6 +562,11 @@ export function measureDom(opts) {
       for (const a of A.rs) for (const b of B.rs) {
         const ox = Math.min(a.right, b.right) - Math.max(a.left, b.left), oy = Math.min(a.bottom, b.bottom) - Math.max(a.top, b.top);
         if (ox > 2 && oy > 2) hit = { ox: R(ox), oy: R(oy) };
+      }
+      // The same words drawn twice in one place (a segmented control's label layer) is one label.
+      if (hit && ownText(A.el) === ownText(B.el)) {
+        const a = A.el.getBoundingClientRect(), b = B.el.getBoundingClientRect();
+        if (Math.abs(a.left + a.width / 2 - (b.left + b.width / 2)) < 3 && Math.abs(a.top + a.height / 2 - (b.top + b.height / 2)) < 3) hit = null;
       }
       if (hit) add('overlap', A.el, `text overlaps ${desc(B.el)}`, { other: desc(B.el), ...hit });
     }
@@ -785,7 +849,7 @@ export async function analysePixels(job) {
   };
   for (const d of job.disabled) {
     const s = stats(d.rect);
-    out.accent.push({ id: d.id, comp: d.comp, share: R(s.share), mean: s.mean, rect: d.rect });
+    out.accent.push({ id: d.id, comp: d.comp, share: R(s.share), mean: s.mean, rect: d.rect, round: d.round });
   }
   for (const d of job.enabledKeyed) {
     const s = stats(d.rect);
