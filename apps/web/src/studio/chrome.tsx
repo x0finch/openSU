@@ -80,10 +80,11 @@ function Facts({ derived, className }: { derived: Derived | null; className?: st
  * templates, reset, language, AI settings, about). Reports its extent so
  * the 3D view frames the house clear of it.
  */
-export function TitleMenu({ derived, onRect, compact }: { derived: Derived | null; onRect?: (r: { right: number; bottom: number }) => void; compact?: boolean }) {
+export function TitleMenu({ derived, onRect, onOpenChange, compact }: { derived: Derived | null; onRect?: (r: { right: number; bottom: number }) => void; onOpenChange?: (open: boolean) => void; compact?: boolean }) {
   const t = useT();
   const house = useStudio((s) => s.house);
   const [open, setOpen] = useState(false);
+  useEffect(() => onOpenChange?.(open), [open, onOpenChange]);
   const box = useRef<HTMLDivElement>(null);
   const trigger = useRef<HTMLButtonElement>(null);
   const pressOpened = useRef(-1e9);

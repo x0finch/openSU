@@ -2,7 +2,7 @@
 // button opens the translucent "recent" strip above it (the last exchange
 // with undo); pinned, the conversation is a column on the left (desktop) or
 // a half-height sheet (phone, see PhoneDock).
-import { type FormEvent, type KeyboardEvent, type ReactNode, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { type CSSProperties, type FormEvent, type KeyboardEvent, type ReactNode, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { create } from 'zustand';
 import { ChevronRightIcon, SendIcon, SparkIcon } from '../components/icons';
 import { cx, IconButton } from '../components/ui';
@@ -812,20 +812,31 @@ function ConversationHeader({ phone }: { phone?: boolean }) {
   );
 }
 
-/** Desktop: the conversation pinned as a 360 px column on the left, with the title on top and the input at its foot. */
-export function PinnedColumn({ title }: { title: ReactNode }) {
+/**
+ * Desktop: the conversation pinned as a column on the left, hanging under
+ * the house name (the studio places it), with the input at its foot.
+ * `aside`: something opened over it (the project menu): it steps aside
+ * (fades out, inert) so glass never sits on glass.
+ */
+export function PinnedColumn({ style, aside }: { style: CSSProperties; aside?: boolean }) {
   const t = useT();
   const settingsOpen = useChat((s) => s.settingsOpen);
   useEffect(() => {
     void loadAgent();
   }, []);
   return (
-    <GlassTextSurface as="aside" aria-label={t('chat.title')} className="absolute top-3 bottom-3 left-3 flex w-[360px] animate-[fade-in_200ms_ease-out] flex-col overflow-hidden" data-testid="chat-panel">
+    <GlassTextSurface
+      as="aside"
+      aria-label={t('chat.title')}
+      className={cx('absolute flex animate-[fade-in_200ms_ease-out] flex-col overflow-hidden transition-opacity duration-200', aside && 'opacity-0')}
+      style={style}
+      inert={aside || undefined}
+      data-testid="chat-panel"
+    >
       {settingsOpen ? (
         <SettingsSheet />
       ) : (
         <>
-          <div className="shrink-0 px-6 pt-4 pb-3">{title}</div>
           <ConversationHeader />
           <MessageList density="full" className="px-6 pt-4" />
           <div className="shrink-0 px-3 pt-2 pb-3">

@@ -30,7 +30,17 @@ export const planCommands: { zoom: (factor: number) => void; fit: () => void } =
 
 let planMod: Promise<typeof import('./plan-data')> | null = null;
 
-export function PlanView({ resolved, levelId, active, insets }: { resolved: ResolvedHouse; levelId: string; active: boolean; insets: Free }) {
+/** The plan's re-fit for a persistent layout change (pin / unpin): the 3D view's duration and curve (engine.ts). */
+const REFIT_MS = 420;
+const REFIT_EASE = 'cubic-bezier(0.65, 0, 0.35, 1)';
+
+/**
+ * The plan of one level. `insets` are what the chrome open now covers: a
+ * fit (a new level or house, the fit button, a resize) uses them, but a
+ * change alone does not move the plan (task 021). A change of `layoutKey`
+ * (the pinned conversation) fits it again, animated.
+ */
+export function PlanView({ resolved, levelId, active, insets, layoutKey }: { resolved: ResolvedHouse; levelId: string; active: boolean; insets: Free; layoutKey: string }) {
   const free = useRef<Free>(insets);
   free.current = insets;
   const t = useT();
@@ -58,22 +68,27 @@ export function PlanView({ resolved, levelId, active, insets }: { resolved: Reso
     };
   }, [resolved, levelId, size]);
 
-  const apply = useCallback(() => {
+  const apply = useCallback((animate = false) => {
     const el = sheet.current;
     if (!el) return;
     const { s, x, y } = xf.current;
+    const reduce = typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
+    el.style.transition = animate && !reduce ? `transform ${REFIT_MS}ms ${REFIT_EASE}` : '';
     el.style.transform = `translate(${x}px, ${y}px) scale(${s})`;
   }, []);
 
-  const fit = useCallback(() => {
-    const b = box.current;
-    if (!b || !plan) return;
-    const { ins, aw, ah } = fitArea(b.clientWidth, b.clientHeight, free.current);
-    const s = Math.min(aw / plan.width, ah / plan.height);
-    fitScale.current = s;
-    xf.current = { s, x: ins.left + (aw - plan.width * s) / 2, y: ins.top + (ah - plan.height * s) / 2 };
-    apply();
-  }, [plan, apply]);
+  const fit = useCallback(
+    (animate = false) => {
+      const b = box.current;
+      if (!b || !plan) return;
+      const { ins, aw, ah } = fitArea(b.clientWidth, b.clientHeight, free.current);
+      const s = Math.min(aw / plan.width, ah / plan.height);
+      fitScale.current = s;
+      xf.current = { s, x: ins.left + (aw - plan.width * s) / 2, y: ins.top + (ah - plan.height * s) / 2 };
+      apply(animate);
+    },
+    [plan, apply],
+  );
 
   const zoomAt = useCallback(
     (factor: number, px: number, py: number) => {
@@ -86,12 +101,15 @@ export function PlanView({ resolved, levelId, active, insets }: { resolved: Reso
     [apply],
   );
 
-  useLayoutEffect(fit, [fit]);
-  // The free area changed (a panel opened, a sheet rose): fit again.
-  const key = `${insets.top},${insets.right},${insets.bottom},${insets.left}`;
+  useLayoutEffect(() => fit(), [fit]);
+  // The persistent layout changed (pin / unpin): fit again, animated. A
+  // floating panel opening or closing leaves the plan where it is.
+  const fittedLayout = useRef(layoutKey);
   useEffect(() => {
-    fit();
-  }, [key, fit]);
+    if (fittedLayout.current === layoutKey) return;
+    fittedLayout.current = layoutKey;
+    fit(true);
+  }, [layoutKey, fit]);
 
   useEffect(() => {
     const b = box.current;
@@ -106,7 +124,7 @@ export function PlanView({ resolved, levelId, active, insets }: { resolved: Reso
       }
     });
     ro.observe(b);
-    planCommands.fit = fit;
+    planCommands.fit = () => fit();
     planCommands.zoom = (f) => zoomAt(f, b.clientWidth / 2, b.clientHeight / 2);
     return () => ro.disconnect();
   }, [fit, zoomAt]);

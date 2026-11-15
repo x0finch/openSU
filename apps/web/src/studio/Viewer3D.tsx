@@ -14,7 +14,7 @@ import { glassRegistry, type GlassTarget } from '../glass';
 declare global {
   interface Window {
     /** Test hooks for the smoke test / screenshot script. */
-    __studio?: { ready3d?: boolean; engine?: Engine; planReady?: boolean; growing?: boolean; store?: unknown; chat?: unknown; glass?: typeof glassRegistry };
+    __studio?: { ready3d?: boolean; engine?: Engine; planReady?: boolean; growing?: boolean; store?: unknown; chat?: unknown; account?: unknown; glass?: typeof glassRegistry };
   }
 }
 
@@ -74,11 +74,13 @@ function applySun(e: Engine, s: StudioState): void {
 }
 
 /**
- * The 3D view. `insets` are the screen areas taken by floating controls
- * (alternatives: the one showing the house largest wins); a change re-frames
- * the house in `insetMs` (the phone sheet passes its own slide duration).
+ * The 3D view. `insets` are the screen areas taken by the controls open now
+ * (alternatives: the one showing the house largest wins); the next framing
+ * asked for uses them, but a change alone does not move the house (task
+ * 021). Only a change of `layoutKey` (persistent layout: the pinned
+ * conversation, the window size) re-frames it, in `insetMs`.
  */
-export function Viewer3D({ resolved, active, insets, insetMs, compact = false, wide = compact, margin = 1 }: { resolved: ResolvedHouse; active: boolean; insets: readonly FrameInsets[]; insetMs?: number; compact?: boolean; wide?: boolean; margin?: number }) {
+export function Viewer3D({ resolved, active, insets, layoutKey, insetMs, compact = false, wide = compact, margin = 1 }: { resolved: ResolvedHouse; active: boolean; insets: readonly FrameInsets[]; layoutKey: string; insetMs?: number; compact?: boolean; wide?: boolean; margin?: number }) {
   wideFraming = wide;
   marginScale = margin;
   const t = useT();
@@ -123,7 +125,7 @@ export function Viewer3D({ resolved, active, insets, insetMs, compact = false, w
           },
         });
         const st = useStudio.getState();
-        e.setInsets(insetsRef.current, true);
+        e.setInsets(insetsRef.current, { instant: true });
         e.onMoved((m) => useStudio.getState().setViewMoved(m));
         // The sun first: the framing includes the shadows of the sun study's day.
         applySun(e, st);
@@ -189,13 +191,17 @@ export function Viewer3D({ resolved, active, insets, insetMs, compact = false, w
     engine.current?.setView(scenePreset(st), shownCut(st));
   }, [view, nonce, cut, wide, margin]);
 
-  // Floating UI changed (chat panel opened / closed, resize): re-frame around it.
+  // The open chrome changed: the engine learns the free area. The house
+  // moves only when the persistent layout changed (pin / unpin, resize).
   const insetKey = JSON.stringify(insets);
   const insetMsRef = useRef(insetMs);
   insetMsRef.current = insetMs;
+  const framedLayout = useRef(layoutKey);
   useEffect(() => {
-    engine.current?.setInsets(insetsRef.current, false, insetMsRef.current);
-  }, [insetKey]);
+    const reframe = framedLayout.current !== layoutKey;
+    framedLayout.current = layoutKey;
+    engine.current?.setInsets(insetsRef.current, { reframe, durationMs: insetMsRef.current });
+  }, [insetKey, layoutKey]);
 
   // Walk mode on / off.
   const walk = useStudio((s) => s.walk);

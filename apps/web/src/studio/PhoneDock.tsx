@@ -36,10 +36,16 @@ export const LAND_SHEET = 360;
 
 type SheetKind = 'tool' | 'chat';
 
-/** What the bottom takes from the drawing (CSS px from the bottom / left), in its settled state. */
+/**
+ * What the bottom takes from the drawing (CSS px from the bottom / left), in
+ * its settled state: with the open sheet (`bottom`, `left`), and the
+ * persistent part alone (`restBottom`: the tool bar and the input; the
+ * sheets and the first-visit hints lie over the drawing, task 021).
+ */
 export interface DockExtent {
   bottom: number;
   left: number;
+  restBottom: number;
 }
 
 export function PhoneDock({ derived, landscape, onExtent }: { derived: Derived | null; landscape: boolean; onExtent: (e: DockExtent) => void }) {
@@ -70,6 +76,9 @@ export function PhoneDock({ derived, landscape, onExtent }: { derived: Derived |
   useFocusOnOpen(content, want === 'tool' ? panelKey : null);
 
   const toolbarH = () => toolbar.current?.offsetHeight ?? 60;
+  const inputWrap = useRef<HTMLDivElement>(null);
+  /** The input's height, remembered while it is not shown (a pinned conversation holds it). */
+  const inputH = useRef(0);
   /** The large detent: up to the header (portrait), or the space above the row (landscape). */
   const large = landscape ? Math.max(160, vh - 58 - 60 - 24 - RIDE_GAP) : Math.max(240, vh - 120 - 60 - RIDE_GAP);
 
@@ -79,13 +88,18 @@ export function PhoneDock({ derived, landscape, onExtent }: { derived: Derived |
     const r = root.current, g = ride.current;
     if (!r || !g) return;
     const h = r.clientHeight;
+    const foot = h - g.offsetTop - g.offsetHeight;
+    inputH.current = inputWrap.current?.offsetHeight || inputH.current;
     if (landscape) {
       const row = h - g.offsetTop;
-      onExtent(want ? { bottom: row, left: 12 + LAND_SHEET } : { bottom: row, left: 0 });
+      const restBottom = foot + Math.max(toolbarH(), inputH.current);
+      onExtent(want ? { bottom: row, left: 12 + LAND_SHEET, restBottom } : { bottom: row, left: 0, restBottom });
       return;
     }
-    if (want) onExtent({ bottom: SHEET_GAP + settled.current + RIDE_GAP + toolbarH(), left: 0 });
-    else onExtent({ bottom: h - g.offsetTop, left: 0 });
+    // The column: hints (gone while a sheet is open), the input, the tool bar; flex gap 8.
+    const restBottom = foot + toolbarH() + 8 + inputH.current;
+    if (want) onExtent({ bottom: SHEET_GAP + settled.current + RIDE_GAP + toolbarH(), left: 0, restBottom });
+    else onExtent({ bottom: h - g.offsetTop, left: 0, restBottom });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [landscape, want, onExtent]);
   useLayoutEffect(() => {
@@ -170,7 +184,11 @@ export function PhoneDock({ derived, landscape, onExtent }: { derived: Derived |
             <div className={cx('relative flex min-w-0 flex-1 flex-col gap-2 transition-opacity duration-200', hideInput && 'pointer-events-none opacity-0')} inert={hideInput || undefined}>
               {!want && !shown && !walk && <Hints className="max-w-full" />}
               {above}
-              {!(pinned && want === 'chat') && <ChatInput phone pinned={pinned} />}
+              {!(pinned && want === 'chat') && (
+                <div ref={inputWrap}>
+                  <ChatInput phone pinned={pinned} />
+                </div>
+              )}
             </div>
           </>
         ) : (
@@ -180,7 +198,7 @@ export function PhoneDock({ derived, landscape, onExtent }: { derived: Derived |
                 <Hints className="max-w-full" />
               </div>
             )}
-            <div className={cx('relative transition-opacity duration-200', hideInput && 'pointer-events-none opacity-0')} inert={hideInput || undefined} data-testid="input-wrap">
+            <div ref={inputWrap} className={cx('relative transition-opacity duration-200', hideInput && 'pointer-events-none opacity-0')} inert={hideInput || undefined} data-testid="input-wrap">
               {above}
               {!pinned || walk ? <ChatInput phone pinned={pinned} /> : <div className="h-12" aria-hidden="true" />}
             </div>

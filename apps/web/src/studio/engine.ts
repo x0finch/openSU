@@ -52,13 +52,16 @@ export interface Engine {
   /** Jump to a level's stair arrival point while walking. */
   walkToLevel(levelId: string): void;
   /**
-   * Screen space (CSS px) taken by floating UI: presets frame the house in
-   * what is left. Re-frames the current preset (animated, `durationMs` or
-   * ~400 ms, so it can keep pace with a sliding sheet) unless the user has
-   * moved the camera. A change during a running preset transition re-aims
-   * that transition at the new framing.
+   * Screen space (CSS px) taken by the chrome that is open now: the next
+   * framing the user asks for (a preset, "fit", a new house, the sun study
+   * switched on) frames the house in what is left. By itself this moves
+   * nothing (task 021: a floating panel lies over the drawing). With
+   * `reframe` (a persistent layout change: the pinned conversation, a
+   * resize) the current preset is framed again at once (animated,
+   * `durationMs` or ~400 ms) unless the user has moved the camera; a change
+   * during a running preset transition re-aims that transition.
    */
-  setInsets(insets: FrameInsets | readonly FrameInsets[], instant?: boolean, durationMs?: number): void;
+  setInsets(insets: FrameInsets | readonly FrameInsets[], opts?: { reframe?: boolean; instant?: boolean; durationMs?: number }): void;
   /** Frames on the house with its entourage (phones) or on the architecture alone. */
   setWideFrame(on: boolean): void;
   /** Called with true when the user orbits / zooms / pans away from the preset, false when a preset is applied. */
@@ -491,8 +494,19 @@ export function createEngine(container: HTMLElement, resolved: ResolvedHouse, op
     setMoved(false);
   }
 
+  /**
+   * The insets the next framing uses (`setInsets`). The viewer frames with
+   * its own copy, which only takes these when a framing is asked for, so a
+   * floating panel opened during a transition does not change where it lands.
+   */
+  let known: readonly FrameInsets[] = viewer.frameInsets;
+  function takeInsets(): void {
+    if (JSON.stringify(viewer.frameInsets) !== JSON.stringify(known)) viewer.setFrameInsets(known, false);
+  }
+
   /** Keeps the preset framing on resize until the user takes over the camera. */
   function resize(): void {
+    takeInsets();
     viewer.resize();
     const view = viewer.currentView;
     if (movedFlag || fadeTimer || !view || viewer.walking) return;
@@ -543,6 +557,7 @@ export function createEngine(container: HTMLElement, resolved: ResolvedHouse, op
 
   function setView(requested: ViewPreset, cut: string | null = viewer.cutaway, instant = false, duration = DURATION): void {
     stop();
+    takeInsets();
     const preset = eyeSide(requested);
     goal = preset;
     if (viewer.walking) {
@@ -648,6 +663,7 @@ export function createEngine(container: HTMLElement, resolved: ResolvedHouse, op
   function exitWalk(): void {
     if (!viewer.walking) return;
     dissolve(() => {
+      takeInsets();
       viewer.exitWalk();
       emitWalk(null);
       const view = viewer.currentView;
@@ -688,11 +704,13 @@ export function createEngine(container: HTMLElement, resolved: ResolvedHouse, op
       dissolve(() => w.teleport(a.position[0], a.position[1], lv.elevation, a.headingDeg, { faceRoom: true }));
     },
     setView: (preset, cut, instant) => setView(preset, cut, instant),
-    setInsets(insets, instant = false, duration = DURATION) {
-      const list = Array.isArray(insets) ? insets : [insets];
-      if (JSON.stringify(viewer.frameInsets) === JSON.stringify(list)) return;
-      viewer.setFrameInsets(list, false);
-      if (movedFlag || viewer.walking || fadeTimer) return;
+    setInsets(insets, { reframe = false, instant = false, durationMs: duration = DURATION } = {}) {
+      const list: readonly FrameInsets[] = Array.isArray(insets) ? insets : [insets];
+      if (JSON.stringify(known) === JSON.stringify(list)) return;
+      known = list;
+      // Before any view: nothing is framed yet, the first view takes them.
+      if (!viewer.currentView) takeInsets();
+      if (!reframe || movedFlag || viewer.walking || fadeTimer) return;
       // A morph under way (another preset, or the previous inset change) is
       // re-aimed from where the camera is now at the new framing.
       const view = anim && goal ? goal : viewer.currentView;
@@ -729,6 +747,8 @@ export function createEngine(container: HTMLElement, resolved: ResolvedHouse, op
       stop();
       const cam = viewer.camera;
       const before = current.site;
+      // A new house is framed (unless the camera was moved) in what is free now.
+      if (!movedFlag) takeInsets();
       load(r);
       const s = r.site;
       // A new place or orientation moves the sun and its shadows: the house

@@ -4,7 +4,10 @@
 // top centre, the toolbar top-right with its panel hanging under it, one
 // input bottom centre. Phone: name and mode on one row; at the bottom the
 // toolbar, the input, and the sheets (PhoneDock). The 3D canvas keeps its
-// size; the house re-frames into what the controls leave free.
+// size. Floating panels lie over the drawing and never move the house
+// (task 021); a framing the user asks for (a view, fit, a level, a new
+// house) uses what they leave free, and only the pinned conversation, which
+// stays, moves the house once.
 import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { FrameInsets } from '@opensu/render';
 import { cx } from '../components/ui';
@@ -35,9 +38,17 @@ const DESKTOP_QUERY = '(min-width: 768px) and (min-height: 520px)';
 // Same condition as the `land` CSS variant (styles.css).
 const LANDSCAPE_QUERY = '(orientation: landscape) and (max-height: 519px)';
 
-/** The pinned conversation: a floating, inset glass sidebar (desktop): its right edge, CSS px. */
+/**
+ * The pinned conversation (desktop): a floating, inset glass sidebar that
+ * hangs under the house name the way a tool panel hangs under the toolbar
+ * (tools.tsx: the panel's top 72 under the 18 + 48 toolbar, 18 from the
+ * screen edge), down to 12 from the bottom. CSS px.
+ */
 const PIN_COLUMN = 360;
-const PIN_RIGHT = 12 + PIN_COLUMN;
+const PIN_LEFT = 18;
+const PIN_RIGHT = PIN_LEFT + PIN_COLUMN;
+const PIN_HANG = 72 - (18 + 48);
+const PIN_BOTTOM = 12;
 /** Space kept between a control and the framed house, CSS px (the renderer adds its own white margin). */
 const GAP_DESKTOP = 12;
 const GAP_PHONE = 6;
@@ -126,7 +137,7 @@ function desktopInsets(W: number, H: number, left: number, o: { title: Box | nul
 function useInitialParams(): void {
   useEffect(() => {
     // Test hooks (screenshot scripts): the stores.
-    window.__studio = { ...window.__studio, store: useStudio, chat: useChat };
+    window.__studio = { ...window.__studio, store: useStudio, chat: useChat, account: useAccount };
     restoreLang();
     const q = new URLSearchParams(location.search);
     applyParams(q, true);
@@ -191,15 +202,21 @@ function useClickAwayFromDrawing(ref: React.RefObject<HTMLElement | null>): void
   }, [ref]);
 }
 
-/** Desktop bottom centre: the input, the recent strip and the after-turn note above it, the first-visit hints. */
-function DesktopDock({ onBox }: { onBox: (b: Box | null) => void }) {
+/**
+ * Desktop bottom centre: the input, the recent strip and the after-turn note
+ * above it, the first-visit hints. Reports the whole dock (what is open now)
+ * and the input alone (the persistent layout; the hints come and go).
+ */
+function DesktopDock({ onBox, onInput }: { onBox: (b: Box | null) => void; onInput: (b: Box | null) => void }) {
   const recent = useStudio((s) => s.recent);
   const ref = useRef<HTMLDivElement>(null);
+  const input = useRef<HTMLDivElement>(null);
   useBox(ref, onBox);
+  useBox(input, onInput);
   return (
     <div ref={ref} className="pointer-events-none absolute bottom-[22px] left-1/2 flex w-[min(580px,calc(100%-48px))] -translate-x-1/2 flex-col items-center gap-3" data-testid="dock">
       <Hints />
-      <div className="relative w-full">
+      <div ref={input} className="relative w-full">
         {recent && <RecentStrip className="absolute inset-x-0 bottom-full mb-3" />}
         <ChatInput />
       </div>
@@ -265,15 +282,16 @@ export function Studio() {
   const [title, setTitle] = useBoxState();
   const [modeBox, setModeBox] = useBoxState();
   const [dockBox, setDockBox] = useBoxState();
+  const [inputBox, setInputBox] = useBoxState();
   const [header, setHeader] = useBoxState();
   const [panel, setPanel] = useState<{ left: number; bottom: number } | null>(null);
   const onPanel = useCallback((r: { left: number; bottom: number } | null) => setPanel((c) => (c && r && c.left === r.left && c.bottom === r.bottom ? c : r)), []);
   const [extent, setExtent] = useState<DockExtent | null>(null);
-  const onExtent = useCallback((e: DockExtent) => setExtent((c) => (c && c.bottom === e.bottom && c.left === e.left ? c : e)), []);
+  const onExtent = useCallback((e: DockExtent) => setExtent((c) => (c && c.bottom === e.bottom && c.left === e.left && c.restBottom === e.restBottom ? c : e)), []);
   const titleRef = useRef<HTMLDivElement>(null);
   const modeRef = useRef<HTMLDivElement>(null);
   const headerRef = useRef<HTMLElement>(null);
-  useBox(titleRef, setTitle, [column, desktop]);
+  useBox(titleRef, setTitle, [desktop]);
   useBox(modeRef, setModeBox, [column, desktop]);
   useBox(headerRef, setHeader, [desktop, landscape, walkLandscape]);
   const [vp, setVp] = useState(() => (typeof window === 'undefined' ? { w: 1440, h: 900 } : { w: window.innerWidth, h: window.innerHeight }));
@@ -283,18 +301,30 @@ export function Studio() {
     return () => window.removeEventListener('resize', on);
   }, []);
 
-  const insets = useMemo((): FrameInsets[] => {
-    if (fullFrame) return [{ top: 0, right: 0, bottom: 0, left: 0 }];
-    if (desktop) {
-      const top = Math.max(modeBox?.bottom ?? 56, 60);
-      return desktopInsets(vp.w - canvasLeft, vp.h, canvasLeft, { title: column ? null : title, top, dock: mode === '3d' && !column ? dockBox : null, panel: panelOpen ? panel : null, sidebar: sideRight });
-    }
-    const g = GAP_PHONE;
-    const top = (header?.bottom ?? 58) + g;
-    const bottom = (extent?.bottom ?? 130) + g;
-    // A small even margin at the sides: the house, its shadow and trees never touch the screen edge.
-    return [{ top, bottom, left: extent?.left ? extent.left + 12 : 10, right: 10 }];
-  }, [fullFrame, desktop, modeBox, vp, canvasLeft, sideRight, column, title, mode, dockBox, panelOpen, panel, header, extent]);
+  // Two sets of insets: what everything open now covers (`insets`: a framing
+  // the user asks for keeps clear of it), and what the persistent layout
+  // alone covers (`layout`: when it changes, the house moves). Floating
+  // panels, the phone sheets, the recent strip and the first-visit hints
+  // are only in the first.
+  const frameInsets = useCallback(
+    (persistent: boolean): FrameInsets[] => {
+      if (fullFrame) return [{ top: 0, right: 0, bottom: 0, left: 0 }];
+      if (desktop) {
+        const top = Math.max(modeBox?.bottom ?? 56, 60);
+        const dock = mode === '3d' && !column ? (persistent ? inputBox : dockBox) : null;
+        return desktopInsets(vp.w - canvasLeft, vp.h, canvasLeft, { title, top, dock, panel: !persistent && panelOpen ? panel : null, sidebar: sideRight });
+      }
+      const g = GAP_PHONE;
+      const top = (header?.bottom ?? 58) + g;
+      const bottom = ((persistent ? extent?.restBottom : extent?.bottom) ?? 130) + g;
+      const left = persistent ? 0 : (extent?.left ?? 0);
+      // A small even margin at the sides: the house, its shadow and trees never touch the screen edge.
+      return [{ top, bottom, left: left ? left + 12 : 10, right: 10 }];
+    },
+    [fullFrame, desktop, modeBox, vp, canvasLeft, sideRight, column, title, mode, dockBox, inputBox, panelOpen, panel, header, extent],
+  );
+  const insets = useMemo(() => frameInsets(false), [frameInsets]);
+  const layoutKey = useMemo(() => JSON.stringify([vp, frameInsets(true)]), [vp, frameInsets]);
 
   // The 3D viewer is created the first time 3D is shown and kept afterwards.
   const [want3d, setWant3d] = useState(mode === '3d');
@@ -303,11 +333,22 @@ export function Studio() {
   }, [mode]);
 
   const levelId = derived && level && derived.levels.some((l) => l.id === level) ? level : derived?.levels[0]?.id;
-  const titleNode = <TitleMenu derived={derived} />;
-  // Plan fitting: the same obstacles, as plain insets of the plan's box.
-  const planInsets = desktop
-    ? { top: 84, bottom: dockBox ? vp.h - dockBox.top + GAP_DESKTOP : 120, right: panelOpen && panel ? vp.w - panel.left + GAP_DESKTOP : 40, left: sideRight ? sideRight + 24 : 40 }
-    : { top: (header?.bottom ?? 58) + 8, bottom: (extent?.bottom ?? 130) + 8, right: 12, left: extent?.left ? extent.left + 24 : 12 };
+  // Plan fitting: the same obstacles, as plain insets of the plan's box
+  // (again what is open now, and the persistent layout alone).
+  const planFree = (persistent: boolean) => {
+    const dock = persistent ? inputBox : dockBox;
+    const sheetLeft = persistent ? 0 : (extent?.left ?? 0);
+    return desktop
+      ? { top: 84, bottom: dock ? vp.h - dock.top + GAP_DESKTOP : 120, right: !persistent && panelOpen && panel ? vp.w - panel.left + GAP_DESKTOP : 40, left: sideRight ? sideRight + 24 : 40 }
+      : { top: (header?.bottom ?? 58) + 8, bottom: ((persistent ? extent?.restBottom : extent?.bottom) ?? 130) + 8, right: 12, left: sheetLeft ? sheetLeft + 24 : 12 };
+  };
+  const planInsets = planFree(false);
+  const planLayoutKey = JSON.stringify([vp, planFree(true)]);
+  // The project menu (and the sign-in it opens) lies where the pinned
+  // sidebar is: the sidebar steps aside meanwhile, as the phone dock does
+  // for the sign-in sheet (glass never sits on glass).
+  const [menuOpen, setMenuOpen] = useState(false);
+  const signInFromMenu = useAccount((s) => s.open && s.origin === 'menu');
 
   return (
     <GlassLayer tone={glassTone}>
@@ -321,10 +362,10 @@ export function Studio() {
         {!derived && <Loading label={t('loading')} />}
         {derived && want3d && (
           <div className={mode === '3d' ? 'contents' : 'invisible'}>
-            <Viewer3D resolved={derived.resolved} active={mode === '3d'} insets={insets} insetMs={desktop ? undefined : SHEET_MS} compact={!desktop} wide={!fullFrame} margin={fullFrame ? 1 : desktop ? FRAME_MARGIN.desktop : FRAME_MARGIN.phone} />
+            <Viewer3D resolved={derived.resolved} active={mode === '3d'} insets={insets} layoutKey={layoutKey} insetMs={desktop ? undefined : SHEET_MS} compact={!desktop} wide={!fullFrame} margin={fullFrame ? 1 : desktop ? FRAME_MARGIN.desktop : FRAME_MARGIN.phone} />
           </div>
         )}
-        {derived && levelId && mode === 'plan' && <PlanView resolved={derived.resolved} levelId={levelId} active insets={planInsets} />}
+        {derived && levelId && mode === 'plan' && <PlanView resolved={derived.resolved} levelId={levelId} active insets={planInsets} layoutKey={planLayoutKey} />}
         {derived && mode === 'sheet' && (
           <Suspense fallback={<QuietLoading label={t('loading.sheets')} />}>
             <SheetGallery derived={derived} desktop={desktop} />
@@ -336,13 +377,11 @@ export function Studio() {
         <div className="pointer-events-none absolute inset-0">
           {/* A zoomed plan fades out under the top row instead of sliding beneath it. */}
           {mode === 'plan' && <div className="absolute top-0 right-0 h-24 bg-gradient-to-b from-white via-white/90 to-transparent" style={{ left: canvasLeft }} aria-hidden="true" />}
-          {column ? (
-            <PinnedColumn title={titleNode} />
-          ) : (
-            <div ref={titleRef} className="absolute top-[18px] left-6 w-max max-w-[min(360px,calc(50vw-200px))]">
-              {titleNode}
-            </div>
-          )}
+          {column && <PinnedColumn style={{ top: (title?.bottom ?? 72) + PIN_HANG, left: PIN_LEFT, bottom: PIN_BOTTOM, width: PIN_COLUMN }} aside={menuOpen || signInFromMenu} />}
+          {/* The name stays put, plain ink on the drawing, pinned or not; the sidebar hangs under it. */}
+          <div ref={titleRef} className="absolute top-[18px] left-6 w-max max-w-[min(360px,calc(50vw-200px))]" data-testid="title-block">
+            <TitleMenu derived={derived} onOpenChange={setMenuOpen} />
+          </div>
           <div
             ref={modeRef}
             className="absolute top-[18px] -translate-x-1/2"
@@ -355,7 +394,7 @@ export function Studio() {
           {mode !== 'sheet' && <PanelCard derived={derived} onRect={onPanel} />}
           {walk && <WalkHUD derived={derived} left={sideRight} />}
           {/* The input stays in the sheets view too (the column is not shown there). */}
-          {!column && <DesktopDock onBox={setDockBox} />}
+          {!column && <DesktopDock onBox={setDockBox} onInput={setInputBox} />}
           <SettingsHost />
           <SignInHost />
         </div>
