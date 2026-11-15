@@ -63,7 +63,14 @@ Update it when a milestone moves.
 - Owner to confirm (`docs/tasks/019-accounts-quota.md`, "Deviations"):
   the anonymous trial is 3 per day, not 3 once.
 - `pnpm -r test` takes 12-15 minutes.
-- Next: task 022, per-account API keys (OpenRouter, OpenAI, Anthropic).
+- 022: API keys saved with the account (OpenRouter, OpenAI, Anthropic),
+  encrypted with `KEYS_SECRET`, with a picker in the conversation. Off
+  until the owner sets `KEYS_SECRET` and sign-in works. Anthropic goes
+  through its OpenAI-compatible endpoint, which Anthropic does not call
+  production-ready; the native adapter would cost about 90 KB gzip. No
+  real provider was called; only the scripted stub.
+- Known bug: on the phone, after closing a sheet by tapping its tool, that
+  tool's icon and label stay invisible in the tab bar (GlassSegmented lens).
 
 ## Next, in order
 0. Done 2026-11-13: liquid glass chrome and Apple-style layout (task 017,
