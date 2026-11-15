@@ -1,16 +1,17 @@
-// End-to-end check of accounts and the daily quota (task 019) against the
+// End-to-end check of accounts and the daily quota (task 019), and of the
+// saved conversation turns and the conversation export (task 020), against the
 // SCRIPTED chat stub (no real model, no email, no network beyond
 // localhost): the built app in workerd (`vite preview`) with a fresh local
 // D1 (migrations applied with wrangler), sign-in codes read from the
 // localhost-only test hook.
 //
-//   node scripts/account-e2e.mjs            checks + screenshots -> artifacts/task019/*.png
+//   node scripts/account-e2e.mjs            checks + screenshots -> artifacts/task019/*.png, artifacts/task020/*.png
 //   node scripts/account-e2e.mjs --smoke    checks only
-//   node scripts/account-e2e.mjs --only desktop,phone,limits
+//   node scripts/account-e2e.mjs --only desktop,phone,limits,turns
 //
 // Requires a build (`pnpm --filter @opensu/web build`).
 import { execFileSync, spawn } from 'node:child_process';
-import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { createServer } from 'node:net';
 import { tmpdir } from 'node:os';
@@ -21,12 +22,14 @@ import { STUB_KEY, STUB_MODEL, startStub } from './chat-stub.mjs';
 const here = dirname(fileURLToPath(import.meta.url));
 const appRoot = resolve(here, '..');
 const outDir = resolve(appRoot, '../../artifacts/task019');
+const outDir20 = resolve(appRoot, '../../artifacts/task020');
 const devVars = resolve(appRoot, 'dist/server/.dev.vars');
 const smoke = process.argv.includes('--smoke');
 const onlyArg = process.argv.indexOf('--only');
 const only = onlyArg > 0 ? process.argv[onlyArg + 1].split(',') : null;
 const wanted = (name) => !only || only.some((o) => name.startsWith(o));
 mkdirSync(outDir, { recursive: true });
+mkdirSync(outDir20, { recursive: true });
 
 if (!existsSync(resolve(appRoot, 'dist/client/studio.html'))) {
   console.error('No build found: run `pnpm --filter @opensu/web build` first.');
@@ -71,7 +74,7 @@ async function startPreview(extra = {}) {
     stdio: ['ignore', 'pipe', 'pipe'],
     env: { ...process.env, CI: '1', OPENSU_STATE: state },
   });
-  const p = { base, log: '', stop: () => (proc.kill('SIGTERM'), rmSync(state, { recursive: true, force: true })) };
+  const p = { base, state, log: '', stop: () => (proc.kill('SIGTERM'), rmSync(state, { recursive: true, force: true })) };
   proc.stdout.on('data', (d) => (p.log += d));
   proc.stderr.on('data', (d) => (p.log += d));
   process.on('exit', () => proc.kill('SIGTERM'));
@@ -105,9 +108,9 @@ async function open(base, ctxOpts, path = '/studio') {
   return { ctx, page };
 }
 
-async function shot(page, name) {
+async function shot(page, name, dir = outDir) {
   if (smoke) return;
-  const file = resolve(outDir, `${name}.png`);
+  const file = resolve(dir, `${name}.png`);
   await page.screenshot({ path: file, timeout: 180000 });
   console.log(`  -> ${file}`);
 }
@@ -343,6 +346,113 @@ try {
     await page.waitForTimeout(500);
     await shot(page, 'phone-out-user');
     await ctx.close();
+    preview.stop();
+  }
+  // --- Turn records and the conversation export (task 020) -------------------
+  if (wanted('turns')) {
+    const preview = await startPreview();
+    console.log(`turns: preview on ${preview.base}`);
+    const exportTurns = (...extra) => {
+      const file = join(preview.state, `export-${Date.now()}.jsonl`);
+      const out = execFileSync(process.execPath, [resolve(here, 'turns-export.mjs'), '--local', '--persist-to', preview.state, '--out', file, ...extra], { cwd: appRoot, encoding: 'utf8' });
+      const text = readFileSync(file, 'utf8');
+      return { out: out.trim(), rows: text ? text.trim().split('\n').map((l) => JSON.parse(l)) : [] };
+    };
+    const settle = (page) => page.waitForTimeout(1200);
+
+    // Anonymous visitor: an edit (then undone), a plain answer.
+    const a = await open(preview.base, DESKTOP);
+    await openMenu(a.page);
+    check(await a.page.getByTestId('menu-export').isDisabled(), 'export is disabled while the conversation is empty');
+    await closeMenu(a.page);
+    await turn(a.page, '北侧房间加深一点');
+    await a.page.getByRole('button', { name: '撤销' }).first().click();
+    await a.page.waitForFunction(() => window.__studio.chat.getState().items.some((i) => i.undo === 'can-redo'));
+    await turn(a.page, '你好');
+    await settle(a.page);
+    await openMenu(a.page);
+    check(!(await a.page.getByTestId('menu-export').isDisabled()), 'export is enabled once there is a conversation');
+    await shot(a.page, 'desktop-menu-export', outDir20);
+    const [dl] = await Promise.all([a.page.waitForEvent('download'), a.page.getByTestId('menu-export').click()]);
+    const file = JSON.parse(readFileSync(await dl.path(), 'utf8'));
+    const t0 = file.turns?.[0];
+    const call = t0?.parts?.find((p) => p.type === 'call');
+    check(file.turns?.length === 2 && !!file.house?.levels && /^\d+\.\d+\.\d+\+\w+$/.test(file.app ?? '') && typeof file.conversation === 'string', `export: ${file.turns?.length} turns, the current house, app ${file.app} (${dl.suggestedFilename()})`);
+    check(t0?.user === '北侧房间加深一点' && t0.undone === true && call?.name === 'edit_house' && call.args?.commands?.[0]?.op === 'move_grid_line' && call.result?.ok === true && t0.parts.some((p) => p.type === 'change') && !!t0.final, 'export: the first turn with its message, the tool call (commands and result), the change, the final text, undone');
+    await closeMenu(a.page);
+
+    // A failing POST /api/turns changes nothing the user sees.
+    await a.page.route('**/api/turns', (r) => r.abort());
+    const errorsBefore = failures.length;
+    await turn(a.page, '把北侧房间再加深');
+    const last = await a.page.evaluate(() => window.__studio.chat.getState().items.at(-1));
+    check(!last.error && last.phase === 'done' && last.changes?.length === 1 && failures.length === errorsBefore, 'a failed POST /api/turns: the turn reads as usual, no error shown, nothing thrown');
+    check(/改好了/.test(last.text ?? ''), 'the reply is there as usual');
+    await shot(a.page, 'desktop-after-failed-record', outDir20);
+    await a.page.unroute('**/api/turns');
+
+    // Signed in.
+    await openMenu(a.page);
+    await a.page.getByTestId('menu-signin').click();
+    await signInFlow(a.page, preview.base, 'records@example.com', { shots: false, prefix: 'turns' });
+    await turn(a.page, '你好，登录以后');
+    await settle(a.page);
+    await a.ctx.close();
+
+    // Own key (the upstream is unreachable on purpose: the turn ends with an error, which is recorded too).
+    const OWN = 'sk-own-e2e-not-a-real-key-123';
+    const ownCtx = await browser.newContext(DESKTOP);
+    await ownCtx.addInitScript((k) => {
+      localStorage.setItem('opensu.hints.v1', 'done');
+      localStorage.setItem('opensu.ai', JSON.stringify({ useOwn: true, provider: 'custom', key: k, baseUrl: 'https://127.0.0.1:9/v1', model: 'my/own-model' }));
+    }, OWN);
+    const ownPage = await ownCtx.newPage();
+    await ownPage.goto(`${preview.base}/studio`, { waitUntil: 'networkidle' });
+    await ownPage.waitForFunction(() => window.__studio?.ready3d === true, null, { timeout: 180000 });
+    await turn(ownPage, '你好，用我自己的 key');
+    await settle(ownPage);
+    await ownCtx.close();
+
+    // The owner export script against the local database.
+    const all = exportTurns();
+    console.log(`  turns-export: ${all.out}`);
+    const anonRows = all.rows.filter((r) => r.who.startsWith('v:') && !r.ownKey);
+    const userRows = all.rows.filter((r) => r.who.startsWith('u:'));
+    const ownRows = all.rows.filter((r) => r.ownKey);
+    check(all.rows.length === 4 && anonRows.length === 2 && userRows.length === 1 && ownRows.length === 1, `stored: 2 anonymous, 1 signed in, 1 own key; the turn whose POST failed is absent (${all.rows.length} rows)`);
+    const first = anonRows.find((r) => r.record.user === '北侧房间加深一点');
+    check(first?.undone === true && anonRows.filter((r) => r.undone).length === 1, 'the undone turn is flagged, the other is not');
+    check(first?.record.house?.levels?.length > 0 && first.record.parts.some((p) => p.type === 'call' && p.result) && first.record.status === 'ok' && first.model === STUB_MODEL && first.record.durationMs > 0, 'a record holds the house after the turn, the tool calls with results, status, model, duration');
+    check(userRows[0]?.record.user === '你好，登录以后', 'the signed-in turn is recorded under the user');
+    check(ownRows[0]?.record.status === 'error' && ownRows[0].model === 'my/own-model' && !JSON.stringify(ownRows[0]).includes(OWN), `own key: recorded (status ${ownRows[0]?.record.status}), the key is nowhere in it`);
+    check(new Set(anonRows.map((r) => r.conversation)).size === 1, 'one conversation id for the anonymous chat');
+    const undone = exportTurns('--only', 'undone');
+    const errored = exportTurns('--only', 'error,gave-up');
+    check(undone.rows.length === 1 && errored.rows.length === 1 && errored.rows[0].ownKey, `export --only undone: ${undone.rows.length}, --only error,gave-up: ${errored.rows.length}`);
+    const sizes = all.rows.map((r) => Buffer.byteLength(JSON.stringify(r.record)));
+    console.log(`  record sizes in the browser: ${sizes.map((n) => `${(n / 1024).toFixed(1)} KB`).join(', ')}`);
+
+    // Phone: the menu entry; About (desktop and phone).
+    const ph = await open(preview.base, PHONE);
+    await turn(ph.page, '你好');
+    await openMenu(ph.page);
+    await shot(ph.page, 'phone-menu-export', outDir20);
+    await closeMenu(ph.page);
+    await ph.ctx.close();
+    for (const [label, opts] of [['desktop', DESKTOP], ['phone', PHONE]]) {
+      for (const lang of ['zh', 'en']) {
+        const ctx = await browser.newContext({ ...opts, locale: lang === 'zh' ? 'zh-CN' : 'en-US' });
+        await ctx.addInitScript((l) => localStorage.setItem('opensu.lang', l), lang);
+        const page = await ctx.newPage();
+        await page.goto(`${preview.base}/`, { waitUntil: 'networkidle' });
+        const about = await page.getByTestId('about-records').textContent();
+        check(lang === 'zh' ? /保存在服务器上.*30 天/.test(about) : /saved on the server.*30 days/.test(about), `${label} About (${lang}): ${about}`);
+        await page.getByTestId('about-records').scrollIntoViewIfNeeded();
+        if (lang === 'zh') await shot(page, `${label}-about`, outDir20);
+        else await shot(page, `${label}-about-en`, outDir20);
+        await ctx.close();
+      }
+    }
     preview.stop();
   }
 } catch (e) {

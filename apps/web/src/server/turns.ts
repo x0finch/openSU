@@ -28,7 +28,7 @@ import { clientIp } from './visitor.ts';
  */
 export const MAX_RECORD = 256 * 1024;
 /** Records and undo flags per IP per quota day. */
-export const TURNS_PER_IP_DAILY = 400;
+export const TURNS_PER_IP_DAILY = 200;
 /** Conversation ids: the same plain format as turn ids. */
 const CONVERSATION_ID = TURN_ID;
 

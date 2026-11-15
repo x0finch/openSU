@@ -71,6 +71,7 @@ pixel for pixel.
 | `/s/$id` | `ssr: 'data-only'`: the Worker runs a trivial loader so the `<head>` carries title / description / `og:*` metadata; the body renders on the client | Worker |
 | `/api/health` | server route, `{ ok: true }` | Worker |
 | `/api/chat` | server route: `POST` relays one Chat Completions call (counting credits on the owner's key), `GET` says whether a server key exists, the sign-in methods, who is signed in and the caller's credits | Worker |
+| `/api/turns` | server route: `POST` saves one conversation turn record, `PATCH` flags it undone or redone (task 020, "Conversation records") | Worker |
 | `/api/auth/*` | Better Auth (email code, Google, session, sign-out), answered by `src/server.ts` before TanStack Start | Worker |
 | `/auth-done` | end of the Google popup (`public/auth-done.html`): tells the studio and closes | static asset |
 
@@ -194,6 +195,9 @@ string formatting (well inside the 10 ms free-tier budget).
   `visitor.ts`, `auth.ts` and the Worker entry `src/server.ts`: accounts and
   the daily quota (see "Accounts and quota"). `src/chat/account.ts` and
   `SignIn.tsx`: the sign-in sheet.
+- `src/server/turns.ts` (`/api/turns`) and `src/chat/turn-record.ts`: saved
+  conversation turns and the conversation export (see "Conversation
+  records").
 - `src/lib/store.ts` the zustand store. The house model is the single source
   of truth: model -> resolve -> kernel -> render / plan.
 - `src/lib/i18n.ts` zh (default) and en dictionaries.
@@ -526,6 +530,96 @@ first sign-in on a fresh isolate and rare GC spikes (max 14-32 ms seen)
 may exceed 10 ms in this approximation; whether Cloudflare counts them the
 same way can only be seen on Cloudflare. The client retries a failed code
 request once.
+
+## Conversation records
+
+Task 020. Every finished assistant turn is saved in D1 so the owner can see
+where the assistant did not do what people meant. No opt-in, no feedback
+buttons; the About page says so in one sentence (Chinese and English).
+
+- **Table** `turn_record` (`migrations/0003_turns.sql`): one row per turn
+  id (the id the browser sends in `x-opensu-turn`): `at` (server time, ms),
+  `who` (`u:<user id>` or `v:<visitor id>`, identified like the quota),
+  `conversation` (one id per chat in the browser, autosaved; a new chat gets
+  a new one), `own_key`, `model`, `undone` and `record` (the browser's JSON
+  as sent).
+- **The record** (`src/chat/turn-record.ts`), built in the browser from the
+  chat store: the user's message; the turn's parts in order (text pieces,
+  tool calls with their arguments and results, including rejected batches
+  and their errors, and the applied changes); the final text; status (`ok`,
+  `gave-up`, `aborted`, `error`) with the error or the last validation
+  errors; start time and duration; model and key kind; app version
+  (`<package version>+<commit>`); the house after the turn. Never the
+  visitor's API key (it is also replaced by `[key]` should anything echo
+  it). Sizes measured with real agent turns (`scripts/turn-fixtures.ts`):
+  about 13 KB for one edit on the sample house, about 70 KB for the largest
+  template built from a blank plot in one turn.
+- **Sending**: `POST /api/turns` when a turn ends (success, error, give-up
+  or stop), for every user including own-key users; undo and redo send
+  `PATCH /api/turns` `{"turn", "undone"}`. Fire-and-forget: a failure is
+  never shown and never blocks the chat (the record of that turn is then
+  lost).
+- **Server** (`src/server/turns.ts`): refuses bodies over 256 KB (413) and
+  anything that is not a record with a valid turn id (400), counts writes
+  per IP per day with the quota's counter (200; then 429), and stores the
+  text as sent. A resend of a turn id replaces its row (only by whoever
+  wrote it); the undo flag is kept. About 1-3 ms of CPU (table below).
+  Rows older than `TURN_RECORDS_DAYS` are deleted on about one write in
+  fifty.
+- **Log**: every `POST /api/chat` logs one JSON line
+  (`{"msg":"chat","turn","caller","key","quota","model","upstream","ttfbMs"}`;
+  Workers Logs / Observability): the turn id, `user` or `anon` (checked
+  when the quota counts; otherwise read from which cookie is present),
+  `owner` or `own` key, the quota's answer, the model, the provider's HTTP
+  status and the ms until its response headers. No message content, keys
+  or email.
+- **User export**: the project menu's "导出对话" / "Export conversation"
+  downloads one JSON file built in the browser (no server call):
+  `{app, exportedAt, conversation, turns, house}`, the turns as in their
+  records (without a house each, plus `undone`; edits made in the studio
+  appear as `{manual: true, changes}`), and the current house. Disabled
+  while the conversation is empty.
+
+| Name | Kind | Default | Meaning |
+|---|---|---|---|
+| `TURN_RECORDS` | variable | on | `false`: nothing is saved (`/api/turns` answers 204 and stores nothing; so it does without a database) |
+| `TURN_RECORDS_DAYS` | variable | 30 | days a record is kept |
+
+Self-hosters who do not want this set `TURN_RECORDS=false` (and change the
+sentence on the About page, `landing.records` in `src/lib/i18n.ts`, which
+also names the 30 days).
+
+**Owner export** (`scripts/turns-export.mjs`): reads the database with
+wrangler (the same login or `CLOUDFLARE_API_TOKEN` as a deploy, with D1
+access) and writes JSON Lines, one turn per line
+(`{turn, at, who, conversation, ownKey, model, undone, record}`), to
+`artifacts/turns/` (git-ignored):
+
+```sh
+cd apps/web
+node scripts/turns-export.mjs                                  # the last 7 days (UTC), remote database
+node scripts/turns-export.mjs --from 2026-11-01 --to 2026-11-15
+node scripts/turns-export.mjs --only undone,error,gave-up      # any of these
+node scripts/turns-export.mjs --local [--persist-to <dir>]     # the local database
+node scripts/turns-export.mjs --out some/file.jsonl
+```
+
+Free tier: a record is one row (plus its index entry and one counter) in
+D1's 100,000 written rows a day. Storage is the limit to watch: D1 Free
+allows 500 MB per database, and 500 turns a day of about 20 KB kept 30
+days are about 300 MB. A full database also stops the quota counters (the
+owner's key is then refused), so lower `TURN_RECORDS_DAYS` if it grows.
+
+CPU of `POST /api/turns`, measured like the table above by
+`scripts/auth-check.ts` with the realistic records:
+
+| Path | Median | p90 |
+|---|---|---|
+| anonymous, 13 KB record | 0.9-1.0 ms | 1.1-1.8 ms |
+| anonymous, 70 KB record | 1.4 ms | 1.6-1.8 ms |
+| signed in, 70 KB record | 2.0 ms | 2.2-6.9 ms |
+| signed in, 256 KB record (the cap) | 3.2 ms | 3.4-3.9 ms |
+| undo flag (`PATCH`) | 1.4-1.5 ms | 1.8-3.8 ms |
 
 ## Deployment
 
