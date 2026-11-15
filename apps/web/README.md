@@ -561,8 +561,8 @@ buttons; the About page says so in one sentence (Chinese and English).
   lost).
 - **Server** (`src/server/turns.ts`): refuses bodies over 256 KB (413) and
   anything that is not a record with a valid turn id (400), counts writes
-  per IP per day with the quota's counter (200; then 429), and stores the
-  text as sent. A resend of a turn id replaces its row (only by whoever
+  per IP per day with the quota's counter (200; then 429), keeps within a
+  site-wide daily byte budget (below), and stores the text as sent. A resend of a turn id replaces its row (only by whoever
   wrote it); the undo flag is kept. About 1-3 ms of CPU (table below).
   Rows older than `TURN_RECORDS_DAYS` are deleted on about one write in
   fifty.
@@ -584,6 +584,7 @@ buttons; the About page says so in one sentence (Chinese and English).
 |---|---|---|---|
 | `TURN_RECORDS` | variable | on | `false`: nothing is saved (`/api/turns` answers 204 and stores nothing; so it does without a database) |
 | `TURN_RECORDS_DAYS` | variable | 30 | days a record is kept |
+| `TURN_RECORDS_DAILY_MB` | variable | 15 | site-wide MB of records stored per quota day; beyond it records are dropped silently |
 
 Self-hosters who do not want this set `TURN_RECORDS=false` (and change the
 sentence on the About page, `landing.records` in `src/lib/i18n.ts`, which
@@ -604,11 +605,17 @@ node scripts/turns-export.mjs --local [--persist-to <dir>]     # the local datab
 node scripts/turns-export.mjs --out some/file.jsonl
 ```
 
-Free tier: a record is one row (plus its index entry and one counter) in
-D1's 100,000 written rows a day. Storage is the limit to watch: D1 Free
-allows 500 MB per database, and 500 turns a day of about 20 KB kept 30
-days are about 300 MB. A full database also stops the quota counters (the
-owner's key is then refused), so lower `TURN_RECORDS_DAYS` if it grows.
+Free tier: a record is one row (plus its index entry and two counters) in
+D1's 100,000 written rows a day. Storage: D1 Free allows 500 MB per
+database. Records are stored up to a site-wide budget per quota day
+(`TURN_RECORDS_DAILY_MB`, default 15 MB: 1.5 times the normal maximum of
+500 turns at about 20 KB; 30 days of it stay under 500 MB), counted
+atomically in KB in `quota_counter` (`<day>|turns-kb`). Over the budget a
+record is dropped silently (the browser still gets 204; the Worker logs
+one line per isolate, `{"msg":"turns","budget":"full"}`). Undo flags do not
+count. So neither one IP (200 writes a day) nor many can fill the database,
+which would also stop the quota counters. Lower the budget or
+`TURN_RECORDS_DAYS` if other data needs the room.
 
 CPU of `POST /api/turns`, measured like the table above by
 `scripts/auth-check.ts` with the realistic records:

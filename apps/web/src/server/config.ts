@@ -50,6 +50,8 @@ export interface AccountEnv {
   TURN_RECORDS?: string;
   /** Days a saved turn is kept (default 30). */
   TURN_RECORDS_DAYS?: string;
+  /** Site-wide budget of saved records per quota day, MB (default 15). */
+  TURN_RECORDS_DAILY_MB?: string;
 }
 
 export const QUOTA_DEFAULTS = { userDaily: 10, anonTrial: 3, ipDaily: 60, siteDaily: 500, callsPerTurn: 8, tz: 'Asia/Shanghai' } as const;
@@ -119,10 +121,16 @@ export function quotaConfig(env: AccountEnv): QuotaConfig {
 }
 
 export const TURN_RECORDS_DEFAULT_DAYS = 30;
+/** 1.5 times the normal maximum (500 turns of about 20 KB); 30 days of it stay under D1 Free's 500 MB. */
+export const TURN_RECORDS_DEFAULT_DAILY_MB = 15;
 
 /** Turn records (task 020): on whenever a database is bound, unless TURN_RECORDS is "false". */
-export function turnsConfig(env: AccountEnv): { enabled: boolean; days: number } {
-  return { enabled: !off(env.TURN_RECORDS) && !!env.DB, days: Math.max(1, intVar(env.TURN_RECORDS_DAYS, TURN_RECORDS_DEFAULT_DAYS)) };
+export function turnsConfig(env: AccountEnv): { enabled: boolean; days: number; dailyKb: number } {
+  return {
+    enabled: !off(env.TURN_RECORDS) && !!env.DB,
+    days: Math.max(1, intVar(env.TURN_RECORDS_DAYS, TURN_RECORDS_DEFAULT_DAYS)),
+    dailyKb: intVar(env.TURN_RECORDS_DAILY_MB, TURN_RECORDS_DEFAULT_DAILY_MB) * 1024,
+  };
 }
 
 /** The configured site URL as an origin (https, or http for localhost), else null. */

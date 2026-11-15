@@ -9,7 +9,9 @@
 //
 // The caller is identified like the quota does (signed-in user, else the
 // anonymous visitor); a row is only replaced or flagged by whoever wrote
-// it. Writes per IP per day are limited with the quota's counter (`bump`).
+// it. Writes per IP per day are limited with the quota's counter (`bump`),
+// and the records stored per day site-wide by a byte budget
+// (TURN_RECORDS_DAILY_MB); over the budget a record is dropped silently (204).
 // Without a database, or with TURN_RECORDS=false, both answer 204 and store
 // nothing.
 import { identify, type RelayEnv } from './chat-relay.ts';
@@ -42,11 +44,11 @@ function done(setCookie: string | null): Response {
 }
 
 /** The body as text, or a refusal when it is larger than `max` bytes. */
-async function readBody(req: Request, max: number): Promise<string | Response> {
+async function readBody(req: Request, max: number): Promise<{ text: string; bytes: number } | Response> {
   if (Number(req.headers.get('content-length') ?? 0) > max) return jsonError(413, 'too_large', 'The record is too large.');
   const buf = await req.arrayBuffer();
   if (buf.byteLength > max) return jsonError(413, 'too_large', 'The record is too large.');
-  return new TextDecoder().decode(buf);
+  return { text: new TextDecoder().decode(buf), bytes: buf.byteLength };
 }
 
 function parseObject(text: string): Record<string, unknown> | null {
@@ -65,6 +67,23 @@ async function underLimit(req: Request, env: RelayEnv): Promise<boolean> {
   return (n ?? 0) <= TURNS_PER_IP_DAILY;
 }
 
+/**
+ * The site's record budget for the day, in KB: adds `kb` and returns true
+ * only while the total stays within `budget` (one atomic statement, like
+ * `bump`; a refused record takes nothing). The key starts with the day, so
+ * the quota's cleanup removes it.
+ */
+const BUDGET = `INSERT INTO quota_counter (key, n) SELECT ?1, ?2 WHERE ?2 <= ?3
+ON CONFLICT (key) DO UPDATE SET n = n + ?2 WHERE n + ?2 <= ?3 RETURNING n`;
+
+async function withinBudget(env: RelayEnv, kb: number, budget: number, now: number): Promise<boolean> {
+  const { day } = quotaDay(now, quotaConfig(env).tz);
+  return !!(await env.DB!.prepare(BUDGET).bind(`${day}|turns-kb`, kb, budget).first());
+}
+
+/** Over the budget: one log line per isolate, not per request. */
+let budgetLogged = false;
+
 const UPSERT = `INSERT INTO turn_record (turn, at, who, conversation, own_key, model, record) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)
 ON CONFLICT (turn) DO UPDATE SET at = excluded.at, conversation = excluded.conversation, own_key = excluded.own_key, model = excluded.model, record = excluded.record
 WHERE turn_record.who = excluded.who`;
@@ -73,8 +92,9 @@ WHERE turn_record.who = excluded.who`;
 export async function saveTurn(req: Request, env: RelayEnv): Promise<Response> {
   const cfg = turnsConfig(env);
   if (!cfg.enabled) return done(null);
-  const text = await readBody(req, MAX_RECORD);
-  if (text instanceof Response) return text;
+  const body = await readBody(req, MAX_RECORD);
+  if (body instanceof Response) return body;
+  const { text, bytes } = body;
   const rec = parseObject(text);
   const turn = rec?.turn, conversation = rec?.conversation, model = rec?.model, ownKey = rec?.ownKey;
   if (!rec || typeof turn !== 'string' || !TURN_ID.test(turn) || typeof conversation !== 'string' || !CONVERSATION_ID.test(conversation) || typeof model !== 'string' || model.length > 200 || typeof ownKey !== 'boolean') {
@@ -84,6 +104,13 @@ export async function saveTurn(req: Request, env: RelayEnv): Promise<Response> {
     const caller = await identify(req, env);
     if (!(await underLimit(req, env))) return jsonError(429, 'too_many', 'Too many records today.');
     const now = Date.now();
+    if (!(await withinBudget(env, Math.ceil(bytes / 1024), cfg.dailyKb, now))) {
+      if (!budgetLogged) {
+        budgetLogged = true;
+        console.log(JSON.stringify({ msg: 'turns', budget: 'full', dailyMb: cfg.dailyKb / 1024 }));
+      }
+      return done(caller.setCookie);
+    }
     await env.DB!.prepare(UPSERT).bind(turn, now, subjectKey(caller.subject), conversation, ownKey ? 1 : 0, model, text).run();
     // Housekeeping on roughly one record in fifty (range delete on the `at` index).
     if (Math.random() < 0.02) await cleanupTurns(env, now).catch(() => {});
@@ -97,9 +124,9 @@ export async function saveTurn(req: Request, env: RelayEnv): Promise<Response> {
 /** PATCH /api/turns: the turn's changes were undone (true) or redone (false). */
 export async function flagTurn(req: Request, env: RelayEnv): Promise<Response> {
   if (!turnsConfig(env).enabled) return done(null);
-  const text = await readBody(req, 1024);
-  if (text instanceof Response) return text;
-  const body = parseObject(text);
+  const read = await readBody(req, 1024);
+  if (read instanceof Response) return read;
+  const body = parseObject(read.text);
   if (!body || typeof body.turn !== 'string' || !TURN_ID.test(body.turn) || typeof body.undone !== 'boolean') return jsonError(400, 'bad_request', 'Expected {"turn", "undone"}.');
   try {
     const caller = await identify(req, env);

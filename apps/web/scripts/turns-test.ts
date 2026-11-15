@@ -35,7 +35,9 @@ async function visitor(db: ShimD1, turn = 'first-turn-000') {
 
 test('configuration: on with a database, off with TURN_RECORDS=false, 30 days by default', () => {
   const db = migratedD1();
-  assert.deepEqual(turnsConfig({ DB: db }), { enabled: true, days: 30 });
+  assert.deepEqual(turnsConfig({ DB: db }), { enabled: true, days: 30, dailyKb: 15 * 1024 });
+  assert.equal(turnsConfig({ DB: db, TURN_RECORDS_DAILY_MB: '40' }).dailyKb, 40 * 1024);
+  for (const v of ['', 'lots', '-1', '1.5']) assert.equal(turnsConfig({ DB: db, TURN_RECORDS_DAILY_MB: v }).dailyKb, 15 * 1024, `fallback for "${v}"`);
   assert.equal(turnsConfig({}).enabled, false);
   assert.equal(turnsConfig({ DB: db, TURN_RECORDS: 'false' }).enabled, false);
   assert.equal(turnsConfig({ DB: db, TURN_RECORDS_DAYS: '7' }).days, 7);
@@ -142,4 +144,59 @@ test('retention: rows older than TURN_RECORDS_DAYS are deleted', async () => {
   await cleanupTurns(envOf(db, { TURN_RECORDS_DAYS: '2' }), now);
   assert.deepEqual(rows(db).map((r) => r.turn), ['turn-new-00001']);
   assert.ok(cookie);
+});
+
+/** A record of about `kb` KB. */
+const sized = (turn: string, kb: number) => {
+  const r = record(turn, { final: '' });
+  r.final = 'x'.repeat(kb * 1024 - Buffer.byteLength(JSON.stringify(r)) - 10);
+  return JSON.stringify(r);
+};
+
+test('site-wide daily budget: stops storing at the limit, silently; flags still work; a new day resets it', async () => {
+  const db = migratedD1();
+  const env = envOf(db, { TURN_RECORDS_DAILY_MB: '1' });
+  const cookie = await visitor(db, 'turn-bud-first');
+  const logs: string[] = [];
+  const log = console.log;
+  console.log = (...a: unknown[]) => void logs.push(String(a[0]));
+  try {
+    const statuses: number[] = [];
+    // 1 KB used by the first record; 100 KB each: 10 more fit in 1024 KB.
+    for (let i = 0; i < 13; i++) statuses.push((await saveTurn(post(sized(`turn-bud-${String(i).padStart(4, '0')}`, 100), cookie), env)).status);
+    assert.ok(statuses.every((s) => s === 204), 'the browser always sees 204');
+    assert.equal(rows(db).length, 11, 'stored until the budget is used');
+    const n = db.sqlite.prepare("select n from quota_counter where key like '%|turns-kb'").get() as { n: number };
+    assert.ok(n.n <= 1024, `counter within the budget (${n.n} KB)`);
+    assert.equal(logs.filter((l) => l.includes('"budget":"full"')).length, 1, 'one log line, not one per request');
+    // Undo flags do not count against the budget.
+    await flagTurn(patch({ turn: 'turn-bud-0000', undone: true }, cookie), env);
+    assert.equal(rows(db).find((r) => r.turn === 'turn-bud-0000')!.undone, 1);
+    // Tomorrow starts afresh.
+    const now = Date.now;
+    Date.now = () => now() + 86_400_000;
+    try {
+      assert.equal((await saveTurn(post(sized('turn-bud-tomorrow', 100), cookie), env)).status, 204);
+    } finally {
+      Date.now = now;
+    }
+    assert.ok(rows(db).some((r) => r.turn === 'turn-bud-tomorrow'), 'a new day resets the budget');
+  } finally {
+    console.log = log;
+  }
+});
+
+test('site-wide daily budget holds under concurrent writes', async () => {
+  const db = migratedD1(2);
+  const env = envOf(db, { TURN_RECORDS_DAILY_MB: '1' });
+  const cookie = await visitor(db, 'turn-race-first');
+  const log = console.log;
+  console.log = () => {};
+  try {
+    const res = await Promise.all(Array.from({ length: 30 }, (_, i) => saveTurn(post(sized(`turn-race-${String(i).padStart(4, '0')}`, 100), cookie, `198.51.100.${i}`), env)));
+    assert.ok(res.every((r) => r.status === 204));
+  } finally {
+    console.log = log;
+  }
+  assert.equal(rows(db).length, 11, '1 small + 10 of 100 KB, never more');
 });

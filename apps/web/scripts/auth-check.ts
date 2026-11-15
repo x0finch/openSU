@@ -195,7 +195,7 @@ console.log('turn records (POST /api/turns)');
   (capRec.parts.at(-1) as { text: string }).text = '房'.repeat(Math.floor(pad / 3));
   const cap = JSON.stringify(capRec);
   console.log(`  record sizes: small ${(Buffer.byteLength(small) / 1024).toFixed(1)} KB (one edit, sample house), large ${(Buffer.byteLength(large) / 1024).toFixed(1)} KB (largest template built in one turn), cap test ${(Buffer.byteLength(cap) / 1024).toFixed(1)} KB (limit ${MAX_RECORD / 1024} KB)`);
-  const tenv = { ...env, QUOTA_IP_DAILY: '100000' };
+  const tenv = { ...env, QUOTA_IP_DAILY: '100000', TURN_RECORDS_DAILY_MB: '1000' };
   const anon = cookiesOf(await relayStatus(new Request(`${SITE}/api/chat`, { headers: { 'cf-connecting-ip': '198.18.1.1' } }), tenv));
   const req = (body: string, who: string, method = 'POST') => new Request(`${SITE}/api/turns`, { method, headers: { 'content-type': 'application/json', cookie: who, 'cf-connecting-ip': `198.18.2.${Math.floor(Math.random() * 250)}` }, body });
   const withTurn = (json: string, turn: string) => json.replace(/"turn":"[^"]+"/, `"turn":"${turn}"`);
