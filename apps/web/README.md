@@ -531,6 +531,57 @@ may exceed 10 ms in this approximation; whether Cloudflare counts them the
 same way can only be seen on Cloudflare. The client retries a failed code
 request once.
 
+## Keys saved with the account
+
+Task 022. A signed-in user can save their own OpenRouter, OpenAI or
+Anthropic key with the account and pick which one the assistant uses. The
+key held in the browser (above) stays for visitors who are not signed in.
+
+- **Table** `account_key` (`migrations/0004_account_keys.sql`): user,
+  provider, the key encrypted, its last 4 characters, the model (empty = the
+  default), `chosen` (the key in use; none = the free allowance), times.
+- **Encryption** (`src/server/keys.ts`): AES-256-GCM (Web Crypto) with a key
+  derived by HKDF-SHA-256 from the Worker secret `KEYS_SECRET`; the user id
+  and provider are bound in as additional data. A wrong secret or a copied
+  row fails closed (`account_key_unreadable`, no call is made). The browser
+  only ever gets the provider, the hint and the model; keys are never logged
+  or put in turn records.
+- **Routes** `/api/keys`: `GET` list, `PUT` save or replace, `PATCH` model or
+  `{active}`, `DELETE`. Signed-in users only; writes need the site's origin
+  (`SITE_URL`) and JSON, and are limited to 30 per user per hour
+  (`quota_counter`). Without `KEYS_SECRET` (or without sign-in) every route
+  answers 404 `keys_off`, `GET /api/chat` reports `keys: false` and the
+  studio does not offer it.
+- **Relay**: `x-opensu-account-key: <provider>` makes the Worker decrypt the
+  caller's key and call the provider's OpenAI-compatible Chat Completions
+  endpoint with it (Anthropic: `https://api.anthropic.com/v1`, see
+  <https://platform.claude.com/docs/en/api/openai-sdk>; a 32000-token output
+  cap is added when the request names none). No quota; the turn record says
+  `ownKey: true`. It never falls back to the site's key.
+- **Studio**: a pop-up button at the pinned conversation's input and in the
+  recent strip's header shows what is in use ("免费额度" or the provider) and
+  opens a menu: the free allowance, each saved key (hint and model, an info
+  button to change the model, replace or delete), the key in this browser,
+  "添加密钥". After sign-in a key held in the browser is offered once for
+  saving ("保存到账号，在其他设备也能用"); it is never uploaded without that.
+- **Default models** (checked 2026-11-15): OpenRouter
+  `anthropic/claude-sonnet-5.5`, OpenAI `gpt-6.1-sol` (OpenAI's models page:
+  the balanced choice), Anthropic `claude-opus-5-5` (Anthropic's models
+  overview: "start with Claude Opus 5.5").
+- **Not verified**: no real provider was called; OpenRouter, OpenAI and
+  Anthropic were stood in for by the scripted stub (`KEYS_TEST_UPSTREAM`,
+  honoured only for requests to localhost). Anthropic describes its
+  OpenAI-compatible layer as mainly for testing, and ignores `strict`.
+
+CPU (`scripts/auth-check.ts`, same method as above): save 2.2 ms median,
+list 2.0 ms, choose 2.1 ms, a relayed chat call with decryption 2.5 ms.
+
+**Owner setup**: GitHub -> Settings -> Secrets and variables -> Actions ->
+Secrets: `KEYS_SECRET` = the output of `openssl rand -base64 32` (a
+different value from `BETTER_AUTH_SECRET`). Changing it later makes every
+saved key unreadable (people add them again); leave it unset to keep the
+feature off.
+
 ## Conversation records
 
 Task 020. Every finished assistant turn is saved in D1 so the owner can see
