@@ -755,7 +755,8 @@ async function walkChecks() {
   check(door.y > 7.2, `the main door lets the walker through (y ${door.y.toFixed(2)} m, wall at 6.9 m)`);
   // Exit returns to the view.
   await page.getByRole('button', { name: '退出漫游' }).click();
-  await page.waitForTimeout(600);
+  // The exit is a dissolve driven by frames: wait for the state, not a fixed time.
+  await page.waitForFunction(() => window.__studio.engine.viewer.walking === false, null, { timeout: 15000 }).catch(() => {});
   check((await page.evaluate(() => window.__studio.engine.viewer.walking)) === false, 'exit leaves walk mode');
   await ctx.close();
 }
