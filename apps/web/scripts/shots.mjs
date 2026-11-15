@@ -682,7 +682,8 @@ async function stillHouseChecks() {
       await page.evaluate(() => window.__studio.store.getState().setPinned(true));
       await page.waitForTimeout(300);
       const pinning = await restAfter(page);
-      check(pinning.length >= 3 && pinning.at(-1) !== base, `phone 3d: pinning moves the house above the conversation sheet, smoothly (${pinning.length - 2} frames between)`);
+      const framedBottom = await page.evaluate(() => window.__studio.engine.viewer.framedInsets.bottom);
+      check(pinning.length >= 3 && pinning.at(-1) !== base && framedBottom > 844 * 0.47, `phone 3d: pinning moves the house above the conversation sheet, smoothly (${pinning.length - 2} frames between; bottom inset ${framedBottom})`);
       await still(page, 'phone 3d pinned: views sheet over the conversation', () => page.getByTestId('bar-views').click(), () => page.getByTestId('bar-views').click());
     }
     await ctx.close();

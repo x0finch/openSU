@@ -316,8 +316,9 @@ export function Studio() {
       }
       const g = GAP_PHONE;
       const top = (header?.bottom ?? 58) + g;
-      const bottom = ((persistent ? extent?.restBottom : extent?.bottom) ?? 130) + g;
-      const left = (persistent ? extent?.restLeft : extent?.left) ?? 0;
+      // What is open now includes the persistent part (a sheet still growing has not reached it yet).
+      const bottom = (extent ? (persistent ? extent.restBottom : Math.max(extent.bottom, extent.restBottom)) : 130) + g;
+      const left = extent ? (persistent ? extent.restLeft : Math.max(extent.left, extent.restLeft)) : 0;
       // A small even margin at the sides: the house, its shadow and trees never touch the screen edge.
       return [{ top, bottom, left: left ? left + 12 : 10, right: 10 }];
     },
@@ -337,10 +338,11 @@ export function Studio() {
   // (again what is open now, and the persistent layout alone).
   const planFree = (persistent: boolean) => {
     const dock = persistent ? inputBox : dockBox;
-    const sheetLeft = (persistent ? extent?.restLeft : extent?.left) ?? 0;
+    const sheetLeft = extent ? (persistent ? extent.restLeft : Math.max(extent.left, extent.restLeft)) : 0;
+    const sheetBottom = extent ? (persistent ? extent.restBottom : Math.max(extent.bottom, extent.restBottom)) : 130;
     return desktop
       ? { top: 84, bottom: dock ? vp.h - dock.top + GAP_DESKTOP : 120, right: !persistent && panelOpen && panel ? vp.w - panel.left + GAP_DESKTOP : 40, left: sideRight ? sideRight + 24 : 40 }
-      : { top: (header?.bottom ?? 58) + 8, bottom: ((persistent ? extent?.restBottom : extent?.bottom) ?? 130) + 8, right: 12, left: sheetLeft ? sheetLeft + 24 : 12 };
+      : { top: (header?.bottom ?? 58) + 8, bottom: sheetBottom + 8, right: 12, left: sheetLeft ? sheetLeft + 24 : 12 };
   };
   const planInsets = planFree(false);
   const planLayoutKey = JSON.stringify([vp, planFree(true)]);

@@ -165,7 +165,9 @@ try {
 } finally {
   await browser.close();
 }
+server.kill('SIGTERM');
 if (errors.length) {
   console.error(errors.join('\n'));
   process.exit(1);
 }
+process.exit(0);
