@@ -1,4 +1,4 @@
-# Task 022 notes (work in progress)
+# Task 022 notes
 
 ## Done
 - Server (committed e220d05): `migrations/0004_account_keys.sql` (one table,
@@ -21,7 +21,7 @@
   Claude Opus 5.5").
 - CPU (scripts/auth-check.ts, Node approximation): save 2.2 ms median, list
   2.0, choose 2.1, relayed chat with decryption 2.5 ms (30 KB body).
-- Client (uncommitted until this commit): `src/chat/keys.ts`,
+- Client: `src/chat/keys.ts`,
   `src/chat/KeyPicker.tsx` (pop-up button at the pinned input and in the
   recent strip header; menu portalled outside the glass surface; key sheet;
   one-time offer after sign-in), chat-store integration, strings zh/en.
@@ -30,11 +30,14 @@
 - Tests: `scripts/keys-test.ts` (8 tests pass), auth-check passes,
   `account-e2e.mjs --only keys` passes with screenshots in artifacts/task022/.
 
-## Left
-- Full `chat-e2e` run after replacing the header sliders button (test updated).
-- README section "Keys saved with the account" + owner setup for KEYS_SECRET.
-- Full `pnpm -r typecheck && pnpm -r test` run on the final tree.
-- Phone tab-bar icon bug: not looked at.
+- README "Keys saved with the account" with owner setup for KEYS_SECRET.
+- One clean `pnpm -r build && pnpm -r typecheck && pnpm -r test` on the
+  final code (735a5b9), exit 0. Bundle: /studio initial 175.5 -> 180.4 KB
+  gzip, assistant chunk unchanged (110.6 KB), Worker 659.6 -> 672.4 KB gzip.
+
+## Not done
+- Nothing tried against a real provider (no keys available).
+- Phone tab-bar icon bug: not fixed (not a few-line fix).
 
 ## Decisions
 - The picker is not in the idle input bar: the owner's 9-widget / 11-element
