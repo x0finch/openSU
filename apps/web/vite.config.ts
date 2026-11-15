@@ -1,3 +1,5 @@
+import { execFileSync } from 'node:child_process';
+import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { cloudflare } from '@cloudflare/vite-plugin';
 import tailwindcss from '@tailwindcss/vite';
@@ -7,8 +9,23 @@ import { defineConfig } from 'vite';
 
 const src = (p: string) => fileURLToPath(new URL(`../../packages/${p}/src/index.ts`, import.meta.url));
 
+/** "<package version>+<commit>": in turn records and the conversation export (task 020). */
+function appVersion(): string {
+  const pkg = JSON.parse(readFileSync(new URL('./package.json', import.meta.url), 'utf8')) as { version: string };
+  let commit = process.env.GITHUB_SHA?.slice(0, 7) ?? '';
+  if (!commit) {
+    try {
+      commit = execFileSync('git', ['rev-parse', '--short=7', 'HEAD'], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim();
+    } catch {
+      commit = 'unknown';
+    }
+  }
+  return `${pkg.version}+${commit}`;
+}
+
 export default defineConfig({
   server: { port: 5173 },
+  define: { __APP_VERSION__: JSON.stringify(appVersion()) },
   resolve: {
     // Workspace packages resolve to their TypeScript sources: no prior build
     // needed for `pnpm dev`, and one bundler pass tree-shakes everything.

@@ -8,6 +8,7 @@ import { create } from 'zustand';
 import { useStudio } from '../lib/store';
 import { type AiSettings, loadSettings, relayHeaders, requestModel, saveSettings, usesOwnKey } from './settings';
 import { addCall, addChange, addText, type TurnPart } from './turn-parts';
+import { buildRecord, download, postRecord, postUndo, recordJson, type ToolCallRecord, type TurnRecord, type TurnRun } from './turn-record';
 
 export type { TurnPart } from './turn-parts';
 
@@ -52,6 +53,10 @@ export interface ChatItem {
   lastErrors?: string[];
   /** An edit the user made in the UI (place, orientation, template): no model involved. */
   manual?: boolean;
+  /** Assistant (task 020): the turn's tool calls, in order (`parts` says where they happened). */
+  calls?: ToolCallRecord[];
+  /** Assistant (task 020): how the turn ran (turn id, model, key, time), for its record. */
+  run?: TurnRun;
 }
 
 /** The caller's credits on the site's key (task 019; GET /api/chat). */
@@ -78,6 +83,8 @@ export interface ServerStatus {
 
 interface ChatState {
   items: ChatItem[];
+  /** This conversation's id (task 020 records); a new chat gets a new one. */
+  conversation: string;
   running: boolean;
   settings: AiSettings;
   settingsOpen: boolean;
@@ -89,8 +96,15 @@ interface ChatState {
   setSettingsOpen: (open: boolean) => void;
 }
 
+/** A random id: turn and conversation ids (plain, 8-64 characters; see the server's TURN_ID). */
+const randomId = () => (globalThis.crypto?.randomUUID?.() ?? `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 12)}`);
+
+/** The app version in records and exports (vite.config.ts defines it). */
+export const APP_VERSION = typeof __APP_VERSION__ === 'string' ? __APP_VERSION__ : 'dev';
+
 export const useChat = create<ChatState>((set) => ({
   items: [],
+  conversation: randomId(),
   running: false,
   settings: loadSettings(),
   settingsOpen: false,
@@ -260,7 +274,19 @@ export function outOfCredits(): boolean {
 }
 
 /** A turn id: one user message = one credit on the site's key, however many model calls it makes. */
-const turnId = () => (globalThis.crypto?.randomUUID?.() ?? `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 12)}`);
+const turnId = randomId;
+
+/** Sends the record of a finished turn (task 020). Never throws, never waits. */
+function recordTurn(id: string, prompt: string): void {
+  try {
+    const s = useChat.getState();
+    const item = s.items.find((it) => it.id === id);
+    const rec = item && buildRecord(item, prompt, { conversation: s.conversation, app: APP_VERSION }, useStudio.getState().house);
+    if (rec) postRecord(recordJson(rec, s.settings.key));
+  } catch {
+    /* a record is never worth an error */
+  }
+}
 
 export async function send(text: string): Promise<void> {
   const prompt = text.trim();
@@ -282,14 +308,28 @@ export async function send(text: string): Promise<void> {
   }));
   abort = new AbortController();
   const settings = useChat.getState().settings;
+  const startedAt = Date.now();
   try {
     const m = await loadAgent();
     const sess = syncSession(m);
     const turn = turnId();
+    const ownKey = usesOwnKey(settings);
+    patch(id, { run: { turn, ownKey, model: ownKey ? requestModel(settings) : (useChat.getState().server?.model ?? 'default'), startedAt } });
+    /** Tool call id -> index in the item's `calls`. */
+    const callIndex = new Map<string, number>();
     const adapter = m.createRelayAdapter({ endpoint: endpoint(), model: requestModel(settings), headers: () => ({ ...relayHeaders(settings), 'x-opensu-turn': turn }) });
     const onEvent = (e: AgentEvent) => {
       if (e.type === 'text') patch(id, (it) => ({ text: it.text + e.delta, parts: addText(it.parts ?? [], e.delta), phase: 'writing' }));
-      else if (e.type === 'tool-call') patch(id, (it) => ({ parts: addCall(it.parts ?? []), phase: e.name === 'get_house' ? 'thinking' : 'working' }));
+      else if (e.type === 'tool-call') {
+        patch(id, (it) => {
+          const calls = [...(it.calls ?? []), { name: e.name }];
+          callIndex.set(e.id, calls.length - 1);
+          return { calls, parts: addCall(it.parts ?? [], calls.length - 1), phase: e.name === 'get_house' ? 'thinking' : 'working' };
+        });
+      } else if (e.type === 'tool-result') {
+        const k = callIndex.get(e.id);
+        if (k !== undefined) patch(id, (it) => ({ calls: (it.calls ?? []).map((c, i) => (i === k ? { name: e.name, args: e.args, result: e.result } : c)) }));
+      }
       else if (e.type === 'step') patch(id, { live: { summary: e.summary, applied: false } });
       else if (e.type === 'rejected') patch(id, { phase: 'repairing', lastErrors: e.errors });
       else if (e.type === 'house') {
@@ -326,7 +366,9 @@ export async function send(text: string): Promise<void> {
     patch(id, { phase: 'done', live: undefined, error: { kind: 'network', message: String(err) } });
   } finally {
     abort = null;
+    patch(id, (it) => (it.run ? { run: { ...it.run, durationMs: Date.now() - startedAt } } : {}));
     useChat.setState({ running: false });
+    recordTurn(id, prompt);
     // The site's key: the credits changed (or ran out); show what is left.
     if (!usesOwnKey(settings)) void fetchServerStatus();
   }
@@ -353,6 +395,7 @@ export function undoTurn(id: string): void {
   committed.pop();
   redoable.push(id);
   patch(id, { undo: 'can-redo' });
+  flagUndo(id, true);
   const prev = committed[committed.length - 1];
   if (prev) patch(prev, { undo: 'can-undo' });
   const p = past.get(id);
@@ -378,7 +421,14 @@ export function redoTurn(id: string): void {
   if (prev) patch(prev, { undo: 'kept' });
   committed.push(id);
   patch(id, { undo: 'can-undo' });
+  flagUndo(id, false);
   useStudio.getState().setHouse(house, growFrom(before, house));
+}
+
+/** Tells the server a recorded turn was undone or redone (task 020; the strongest sign of a mismatch). */
+function flagUndo(id: string, undone: boolean): void {
+  const turn = useChat.getState().items.find((it) => it.id === id)?.run?.turn;
+  if (turn) postUndo(turn, undone);
 }
 
 /** How an undo / redo should grow the 3D view: from the first changed level; not at all when no level changed (a site edit). */
@@ -407,8 +457,9 @@ export function retry(id: string): void {
  * then still offer undo and redo. Without them the cards read as kept. The
  * model gets the earlier turns as text memory again.
  */
-export function restoreItems(items: ChatItem[], history?: SavedHistory | null, house?: House): void {
+export function restoreItems(items: ChatItem[], history?: SavedHistory | null, house?: House, conversation?: string): void {
   if (useChat.getState().items.length) return;
+  if (conversation) useChat.setState({ conversation });
   past.clear();
   committed.length = 0;
   redoable.length = 0;
@@ -449,5 +500,41 @@ export function newChat(): void {
   steps.clear();
   pendingHistory = null;
   session = null;
-  useChat.setState({ items: [] });
+  useChat.setState({ items: [], conversation: randomId() });
+}
+
+/** The conversation's turns as records (no house each), for the export. */
+export function conversationTurns(items: ChatItem[], conversation: string): (TurnRecord | { manual: true; changes: AppliedBatch[] })[] {
+  const out: (TurnRecord | { manual: true; changes: AppliedBatch[] })[] = [];
+  items.forEach((it, i) => {
+    if (it.role !== 'assistant') return;
+    if (it.manual) {
+      out.push({ manual: true, changes: it.changes ?? [] });
+      return;
+    }
+    const prev = items[i - 1];
+    const rec = buildRecord(it, prev?.role === 'user' ? prev.text : (it.prompt ?? ''), { conversation, app: APP_VERSION });
+    if (rec) out.push({ ...rec, undone: it.undo === 'undone' || it.undo === 'can-redo' });
+  });
+  return out;
+}
+
+/**
+ * "Export conversation" (task 020): one JSON file built here, no server
+ * call: the turns as in their records, the current house and the app version.
+ */
+export function exportConversation(): void {
+  const s = useChat.getState();
+  if (!s.items.length) return;
+  const now = new Date();
+  const data = {
+    app: APP_VERSION,
+    exportedAt: now.toISOString(),
+    conversation: s.conversation,
+    turns: conversationTurns(s.items, s.conversation),
+    house: useStudio.getState().house,
+  };
+  const pad = (n: number) => String(n).padStart(2, '0');
+  const stamp = `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}-${pad(now.getHours())}${pad(now.getMinutes())}`;
+  download(`opensu-conversation-${stamp}.json`, recordJson(data, s.settings.key));
 }

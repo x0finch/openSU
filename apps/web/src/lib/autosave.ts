@@ -19,6 +19,8 @@ interface Saved {
   chat: ChatItem[];
   /** Undo / redo steps of `house` (optional: saves before task 014 have none). */
   history?: SavedHistory;
+  /** The conversation's id (task 020; saves before it have none). */
+  conversation?: string;
 }
 
 /** The saved state, or null (none, another version, or unreadable). */
@@ -42,8 +44,8 @@ export function clearSaved(): void {
   }
 }
 
-function save(house: House, chat: ChatItem[]): void {
-  const data: Saved = { v: VERSION, savedAt: Date.now(), house, chat, history: undoHistory() };
+function save(house: House, chat: ChatItem[], conversation: string): void {
+  const data: Saved = { v: VERSION, savedAt: Date.now(), house, chat, history: undoHistory(), conversation };
   try {
     globalThis.localStorage?.setItem(KEY, JSON.stringify(data));
   } catch {
@@ -74,7 +76,7 @@ export function restoreChat(): void {
   if (restoredChat || sampleRequested()) return;
   restoredChat = true;
   const s = loadSaved();
-  if (s?.chat.length) restoreItems(s.chat, s.history, s.house);
+  if (s?.chat.length) restoreItems(s.chat, s.history, s.house, typeof s.conversation === 'string' ? s.conversation : undefined);
 }
 
 /**
@@ -107,7 +109,7 @@ export function useAutosave(): void {
         const house = useStudio.getState().house;
         const chat = useChat.getState();
         if (!house || chat.running || sampleRequested()) return;
-        save(house, chat.items);
+        save(house, chat.items, chat.conversation);
       }, DELAY);
     };
     const offHouse = useStudio.subscribe((s, p) => {

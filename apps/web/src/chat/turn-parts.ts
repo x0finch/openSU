@@ -6,9 +6,10 @@
 /**
  * One piece of a turn. Text pieces are split at every tool call, so the
  * last text piece is always the text after the last tool call (the final
- * message). `change` is an index into the turn's `changes`.
+ * message). `change` is an index into the turn's `changes`, `call` (task
+ * 020, for the turn's record; not shown) an index into its `calls`.
  */
-export type TurnPart = { type: 'text'; text: string } | { type: 'change'; change: number };
+export type TurnPart = { type: 'text'; text: string } | { type: 'change'; change: number } | { type: 'call'; call: number };
 
 /** Reply text streamed in: it extends the current text piece. */
 export function addText(parts: readonly TurnPart[], delta: string): TurnPart[] {
@@ -19,13 +20,15 @@ export function addText(parts: readonly TurnPart[], delta: string): TurnPart[] {
 
 /**
  * A tool call started: text from now on is a new piece (calls in a row
- * share one). A call before any text leaves an empty first piece.
+ * share one). A call before any text leaves an empty first piece. With
+ * `call` (its index in the turn's `calls`) the call itself is kept in place.
  */
-export function addCall(parts: readonly TurnPart[]): TurnPart[] {
-  if (!parts.length) return [{ type: 'text', text: '' }, { type: 'text', text: '' }];
-  const last = parts[parts.length - 1];
-  if (parts.length > 1 && last?.type === 'text' && !last.text) return [...parts];
-  return [...parts, { type: 'text', text: '' }];
+export function addCall(parts: readonly TurnPart[], call?: number): TurnPart[] {
+  const mark: TurnPart[] = call === undefined ? [] : [{ type: 'call', call }];
+  if (!parts.length) return [{ type: 'text', text: '' }, ...mark, { type: 'text', text: '' }];
+  const last = parts[parts.length - 1]!;
+  if (parts.length > 1 && last.type === 'text' && !last.text) return [...parts.slice(0, -1), ...mark, last];
+  return [...parts, ...mark, { type: 'text', text: '' }];
 }
 
 /** A change was applied: it follows the text that led to it (before the still-empty piece of the call). */
@@ -63,13 +66,13 @@ export function turnView(item: { text: string; parts?: readonly TurnPart[] | nul
   parts.forEach((p, i) => {
     if (i === finalIndex) return;
     if (p.type === 'change') timeline.push(p);
-    else if (p.text.trim()) timeline.push({ type: 'text', text: p.text.trim() });
+    else if (p.type === 'text' && p.text.trim()) timeline.push({ type: 'text', text: p.text.trim() });
   });
   const textPieces = parts.filter((p) => p.type === 'text').length;
   return {
     timeline,
     final: finalIndex >= 0 ? (last as { text: string }).text.trim() : '',
     structured: true,
-    calledTools: textPieces > 1 || parts.some((p) => p.type === 'change'),
+    calledTools: textPieces > 1 || parts.some((p) => p.type !== 'text'),
   };
 }

@@ -85,3 +85,19 @@ test('building never mutates the previous parts (the store keeps old snapshots)'
   assert.deepEqual(b, [{ type: 'text', text: 'x' }, { type: 'text', text: '' }]);
   assert.deepEqual(c, [{ type: 'text', text: 'x' }, { type: 'change', change: 0 }, { type: 'text', text: '' }]);
 });
+
+test('with call indexes (task 020): calls stay in place, the view is unchanged', () => {
+  const events: (string | { call: number } | { change: number })[] = ['改一下。', { call: 0 }, { change: 0 }, '有一处不对，我修正。', { call: 1 }, { call: 2 }, { change: 1 }, { call: 3 }, '好了。'];
+  let parts: TurnPart[] = [];
+  let plain: TurnPart[] = [];
+  for (const e of events) {
+    if (typeof e === 'string') (parts = addText(parts, e)), (plain = addText(plain, e));
+    else if ('call' in e) (parts = addCall(parts, e.call)), (plain = addCall(plain));
+    else (parts = addChange(parts, e.change)), (plain = addChange(plain, e.change));
+  }
+  assert.deepEqual(parts.filter((p) => p.type === 'call').map((p) => (p as { call: number }).call), [0, 1, 2, 3]);
+  assert.deepEqual(parts.filter((p) => p.type !== 'call'), plain);
+  assert.deepEqual(parts.map((p) => (p.type === 'text' ? p.text : p.type === 'call' ? `c${p.call}` : `#${p.change}`)), ['改一下。', 'c0', '#0', '有一处不对，我修正。', 'c1', 'c2', '#1', 'c3', '好了。']);
+  assert.deepEqual(turnView({ text: '', parts }), turnView({ text: '', parts: plain }));
+  assert.equal(turnView({ text: '', parts: addCall([], 0) }).calledTools, true);
+});
