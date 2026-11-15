@@ -553,12 +553,12 @@ try {
     const q0 = await quota(page);
     await turn(page, '你好，账号里的 OpenRouter 密钥');
     const c1 = lastCall();
-    check(c1?.provider === 'openrouter' && c1.authorization === `Bearer ${OR}` && c1.model === 'anthropic/claude-sonnet-5.5', `the relay calls OpenRouter's stand-in with the saved key and the default model (${c1?.provider}, ${c1?.model})`);
+    check(c1?.provider === 'openrouter' && c1.authorization === `Bearer ${OR}` && c1.model === 'deepseek/deepseek-v4.1-flash', `the relay calls OpenRouter's stand-in with the saved key and the default model (${c1?.provider}, ${c1?.model})`);
     await page.evaluate(() => fetch('/api/chat').then((r) => r.json()).then((s) => window.__studio.chat.setState({ server: s })));
     const q1 = await quota(page);
     check(q1?.remaining === q0?.remaining && q1?.remaining === 10, `the quota is untouched (${q0?.remaining} -> ${q1?.remaining})`);
     const rec = await page.evaluate(() => window.__studio.chat.getState().items.at(-1).run);
-    check(rec?.ownKey === true && rec.model === 'anthropic/claude-sonnet-5.5', `the turn is recorded as ownKey: true (${JSON.stringify(rec)})`);
+    check(rec?.ownKey === true && rec.model === 'deepseek/deepseek-v4.1-flash', `the turn is recorded as ownKey: true (${JSON.stringify(rec)})`);
 
     // Add an Anthropic key in the sheet.
     await openPicker(page);

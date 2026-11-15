@@ -299,11 +299,10 @@ pnpm dlx wrangler secret put OPENROUTER_API_KEY   # production
 pnpm dlx wrangler secret put OPENSU_MODEL         # optional
 ```
 
-Default model: `anthropic/claude-sonnet-5.5` on OpenRouter (strong tool
-calling; listed with `tools` and `tool_choice` support in OpenRouter's
-`/api/v1/models` on 2026-11-11; $2 / $10 per M input / output tokens), and
-`gpt-6.1-sol` with `OPENAI_API_KEY` (taken from OpenRouter's `openai/`
-listing; not checked against OpenAI's own model list). Change it with
+Default model (the owner's decision, 2026-11-15; `src/lib/providers.ts`):
+`deepseek/deepseek-v4.1-flash` on OpenRouter (listed with `tools` and
+`tool_choice` support in OpenRouter's `/api/v1/models`), and `gpt-5.4-mini`
+with `OPENAI_API_KEY`. Change it with
 `OPENSU_MODEL`; any model that supports `tools` on
 <https://openrouter.ai/models?supported_parameters=tools> works with the
 relay. With the owner's key the relay always uses the configured model and
@@ -564,10 +563,11 @@ key held in the browser (above) stays for visitors who are not signed in.
   button to change the model, replace or delete), the key in this browser,
   "添加密钥". After sign-in a key held in the browser is offered once for
   saving ("保存到账号，在其他设备也能用"); it is never uploaded without that.
-- **Default models** (checked 2026-11-15): OpenRouter
-  `anthropic/claude-sonnet-5.5`, OpenAI `gpt-6.1-sol` (OpenAI's models page:
-  the balanced choice), Anthropic `claude-opus-5-5` (Anthropic's models
-  overview: "start with Claude Opus 5.5").
+- **Default models**: OpenRouter `deepseek/deepseek-v4.1-flash` and OpenAI
+  `gpt-5.4-mini` (the owner's decision, 2026-11-15; the same constants are
+  the site's default when `OPENSU_MODEL` is unset), Anthropic
+  `claude-opus-5-5` (Anthropic's models overview: "start with Claude Opus
+  5.5").
 - **Not verified**: no real provider was called; OpenRouter, OpenAI and
   Anthropic were stood in for by the scripted stub (`KEYS_TEST_UPSTREAM`,
   honoured only for requests to localhost). Anthropic describes its

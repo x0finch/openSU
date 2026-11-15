@@ -4,6 +4,7 @@ import { type ReactNode, useState } from 'react';
 import { ChevronLeftIcon } from '../components/icons';
 import { cx, Segmented } from '../components/ui';
 import { useT } from '../lib/i18n';
+import { DEFAULT_MODELS } from '../lib/providers';
 import { useChat } from './chat-store';
 import { type AiSettings, type ProviderId, PROVIDER_BASE, usesOwnKey } from './settings';
 
@@ -102,7 +103,7 @@ export function SettingsSheet() {
             <input
               value={draft.model}
               onChange={(e) => up({ model: e.target.value })}
-              placeholder={draft.provider === 'openrouter' ? server?.model ?? 'anthropic/claude-sonnet-5.5' : draft.provider === 'openai' ? 'gpt-6.1-sol' : ''}
+              placeholder={draft.provider === 'openrouter' ? server?.model ?? DEFAULT_MODELS.openrouter : draft.provider === 'openai' ? DEFAULT_MODELS.openai : ''}
               className={inputCls}
               spellCheck={false}
             />

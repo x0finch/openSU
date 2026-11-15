@@ -37,7 +37,8 @@ Update it when a milestone moves.
 - https://opensu-web.ocean4334.workers.dev via `.github/workflows/deploy.yml`
   (push to `main` or run it by hand; secrets live in the
   GitHub repository settings). Owner's OpenRouter key is a Worker secret;
-  default model `anthropic/claude-sonnet-5.5`.
+  default model `deepseek/deepseek-v4.1-flash` (owner's decision 2026-11-15;
+  `OPENSU_MODEL` overrides it).
 - First real-model edit on the live site works ("把北侧房间加深 600":
   159.5 -> 172.8 m2, ~20 s). It first failed: the tool schema used
   draft-7 tuples, which Anthropic models reject; fixed (draft 2020-12).

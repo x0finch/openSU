@@ -71,7 +71,7 @@ const req = (headers = {}, body = { model: 'default', stream: false, max_tokens:
   check(last.body.model === 'my/model' && !('max_tokens' in last.body), 'BYO: the user model is kept, no cap');
   check(![...last.headers.keys()].some((k) => k.startsWith('x-opensu')), 'BYO: the key header itself is not forwarded');
   await (await relayChat(req({ 'x-opensu-key': 'sk-user' }, { model: 'default', messages: [] }), env)).text();
-  check(last.url.startsWith('https://openrouter.ai/') && last.body.model === 'anthropic/claude-sonnet-5.5', 'BYO without base URL: OpenRouter and the default model');
+  check(last.url.startsWith('https://openrouter.ai/') && last.body.model === 'deepseek/deepseek-v4.1-flash', 'BYO without base URL: OpenRouter and the default model');
   const bad = await relayChat(req({ 'x-opensu-key': 'sk-user', 'x-opensu-base-url': 'http://169.254.169.254/latest' }), env);
   check(bad.status === 400, 'BYO: non-https base URLs are refused');
   const bad2 = await relayChat(req({ 'x-opensu-key': 'sk-user', 'x-opensu-base-url': 'https://u:p@evil.example/v1' }), env);

@@ -23,16 +23,16 @@ export const PROVIDER_BASE_URLS: Record<KeyProvider, string> = {
 };
 
 /**
- * Default model per provider, used when a saved key has no model of its own
- * (checked 2026-11-15, see apps/web/README.md "Keys saved with the account"):
- * OpenRouter: the site's default, listed with `tools` in /api/v1/models;
- * OpenAI: "Choose GPT-6.1 Sol to balance intelligence and cost" (models page);
- * Anthropic: "If you're unsure which model to use, start with Claude Opus 5.5"
- * (models overview, Claude API id `claude-opus-5-5`).
+ * Default model per provider: for a saved key without a model of its own,
+ * and the site's fallback for the owner's key when OPENSU_MODEL is unset.
+ * OpenRouter and OpenAI: the owner's decision (2026-11-15); DeepSeek V4.1
+ * Flash is listed with `tools` in OpenRouter's /api/v1/models. Anthropic:
+ * "If you're unsure which model to use, start with Claude Opus 5.5" (models
+ * overview, Claude API id `claude-opus-5-5`). See apps/web/README.md.
  */
 export const DEFAULT_MODELS: Record<KeyProvider, string> = {
-  openrouter: 'anthropic/claude-sonnet-5.5',
-  openai: 'gpt-6.1-sol',
+  openrouter: 'deepseek/deepseek-v4.1-flash',
+  openai: 'gpt-5.4-mini',
   anthropic: 'claude-opus-5-5',
 };
 

@@ -16,7 +16,8 @@
   Caveat: Anthropic calls that layer "not considered a long-term or
   production-ready solution for most use cases"; `strict` is ignored.
 - Default models (src/lib/providers.ts): OpenRouter
-  `anthropic/claude-sonnet-5.5`, OpenAI `gpt-6.1-sol` (OpenAI models page,
+  `anthropic/claude-sonnet-5.5`, OpenAI `gpt-6.1-sol` (later changed by the
+  owner to `deepseek/deepseek-v4.1-flash` and `gpt-5.4-mini`; OpenAI models page,
   balanced choice), Anthropic `claude-opus-5-5` (models overview: "start with
   Claude Opus 5.5").
 - CPU (scripts/auth-check.ts, Node approximation): save 2.2 ms median, list
