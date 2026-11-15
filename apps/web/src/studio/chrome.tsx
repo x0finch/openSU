@@ -4,14 +4,14 @@
 import { Link } from '@tanstack/react-router';
 import { type KeyboardEvent as RKeyboardEvent, type ReactNode, type RefObject, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { TEMPLATE_META } from '@opensu/agent/templates-meta';
-import { ChevronDownSmallIcon, CloseIcon, CompassIcon, LayersIcon, Mark, PersonIcon, PinIcon, ResetViewIcon } from '../components/icons';
+import { ChevronDownSmallIcon, CloseIcon, CompassIcon, DownloadIcon, LayersIcon, Mark, PersonIcon, PinIcon, ResetViewIcon } from '../components/icons';
 import { cx } from '../components/ui';
 import { GlassButton, GlassMenu, GlassMenuItem, GlassSegmented, GlassSep } from '../glass';
 import { type MessageKey, useT } from '../lib/i18n';
 import { freshView, type Mode, useStudio } from '../lib/store';
 import { resetToTemplate } from '../lib/autosave';
 import { bearingText, frontBearing, placeText } from '../lib/site';
-import { replaceHouse, useChat } from '../chat/chat-store';
+import { exportConversation, replaceHouse, useChat } from '../chat/chat-store';
 import { openSignIn, signOut } from '../chat/account';
 import type { Derived } from './house-data';
 import { loadHouseData } from './useDerived';
@@ -159,6 +159,7 @@ function ProjectMenu({ open, anchor, onClose, compact, ref }: { open: boolean; a
   const setSettingsOpen = useChat((s) => s.setSettingsOpen);
   const authOn = useChat((s) => !!(s.server?.auth?.email || s.server?.auth?.google));
   const user = useChat((s) => s.server?.user ?? null);
+  const hasChat = useChat((s) => s.items.length > 0);
   const [templates, setTemplates] = useState(false);
   const [confirm, setConfirm] = useState(false);
   // Arrow keys move between items; focus starts on the first.
@@ -171,7 +172,7 @@ function ProjectMenu({ open, anchor, onClose, compact, ref }: { open: boolean; a
     ref.current?.querySelector<HTMLElement>('[role=menuitem]')?.focus({ preventScroll: true });
   }, [ref, open]);
   const onKey = (e: RKeyboardEvent) => {
-    const items = [...(ref.current?.querySelectorAll<HTMLElement>('[role=menuitem]') ?? [])];
+    const items = [...(ref.current?.querySelectorAll<HTMLElement>('[role=menuitem]:not(:disabled)') ?? [])];
     const i = items.indexOf(document.activeElement as HTMLElement);
     const d = e.key === 'ArrowDown' ? 1 : e.key === 'ArrowUp' ? -1 : 0;
     if (d) {
@@ -273,6 +274,19 @@ function ProjectMenu({ open, anchor, onClose, compact, ref }: { open: boolean; a
       >
         {t('chat.settings')}
       </MenuItem>
+      {/* Task 020: the conversation as one JSON file, built here (no server call). */}
+      <GlassMenuItem
+        icon={<DownloadIcon width={16} height={16} />}
+        disabled={!hasChat}
+        className="disabled:text-ink-3"
+        onClick={() => {
+          onClose(false);
+          exportConversation();
+        }}
+        data-testid="menu-export"
+      >
+        {t('more.export')}
+      </GlassMenuItem>
       <Link to="/" role="menuitem" tabIndex={-1} className="lg-plate flex h-10 w-full items-center gap-2.5 rounded-[16px] px-3 text-[14px] font-medium focus-visible:outline-none">
         <span className="grid size-5 place-items-center"><Mark width={15} height={15} /></span>
         {t('more.about')}

@@ -15,6 +15,7 @@ const zh = {
   'landing.f3.title': '一键出图',
   'landing.f3.body': '轴测在上，彩色平面在下，直接分享。',
   'landing.footer': 'openSU · AGPL-3.0',
+  'landing.records': '与设计助手的对话会保存在服务器上，用于改进助手，保留 30 天。',
   'landing.heroCaption': '示例项目「{name}」',
 
   'project.title.modern-pitched': '现代坡顶自建房',
@@ -138,6 +139,7 @@ const zh = {
   'more.templates': '换一个模板',
   'more.lang': '语言',
   'more.about': '关于 openSU',
+  'more.export': '导出对话',
   'bar.views': '视角',
   'bar.levels': '楼层',
   'bar.sun': '日照',
@@ -224,6 +226,7 @@ const en: Record<MessageKey, string> = {
   'landing.f3.title': 'One-click sheets',
   'landing.f3.body': 'Axonometric on top, coloured plan below, ready to share.',
   'landing.footer': 'openSU · AGPL-3.0',
+  'landing.records': 'Conversations with the assistant are saved on the server to improve it, and kept for 30 days.',
   'landing.heroCaption': 'The sample project: {name}',
 
   'project.title.modern-pitched': 'Pitched-roof house',
@@ -347,6 +350,7 @@ const en: Record<MessageKey, string> = {
   'more.templates': 'Start from a template',
   'more.lang': 'Language',
   'more.about': 'About openSU',
+  'more.export': 'Export conversation',
   'bar.views': 'View',
   'bar.levels': 'Levels',
   'bar.sun': 'Sun',

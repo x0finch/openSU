@@ -107,7 +107,11 @@ function Landing() {
         </section>
       </main>
 
-      <footer className="mx-auto w-full max-w-[1200px] px-5 pb-10 text-xs text-ink-3 md:px-10">{t('landing.footer')}</footer>
+      <footer className="mx-auto w-full max-w-[1200px] px-5 pb-10 text-xs text-ink-3 md:px-10">
+        {/* Task 020: turn records (src/server/turns.ts). */}
+        <p className="mb-2 text-pretty" data-testid="about-records">{t('landing.records')}</p>
+        <p>{t('landing.footer')}</p>
+      </footer>
     </div>
   );
 }
