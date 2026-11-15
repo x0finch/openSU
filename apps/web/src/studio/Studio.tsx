@@ -287,7 +287,7 @@ export function Studio() {
   const [panel, setPanel] = useState<{ left: number; bottom: number } | null>(null);
   const onPanel = useCallback((r: { left: number; bottom: number } | null) => setPanel((c) => (c && r && c.left === r.left && c.bottom === r.bottom ? c : r)), []);
   const [extent, setExtent] = useState<DockExtent | null>(null);
-  const onExtent = useCallback((e: DockExtent) => setExtent((c) => (c && c.bottom === e.bottom && c.left === e.left && c.restBottom === e.restBottom ? c : e)), []);
+  const onExtent = useCallback((e: DockExtent) => setExtent((c) => (c && c.bottom === e.bottom && c.left === e.left && c.restBottom === e.restBottom && c.restLeft === e.restLeft ? c : e)), []);
   const titleRef = useRef<HTMLDivElement>(null);
   const modeRef = useRef<HTMLDivElement>(null);
   const headerRef = useRef<HTMLElement>(null);
@@ -317,7 +317,7 @@ export function Studio() {
       const g = GAP_PHONE;
       const top = (header?.bottom ?? 58) + g;
       const bottom = ((persistent ? extent?.restBottom : extent?.bottom) ?? 130) + g;
-      const left = persistent ? 0 : (extent?.left ?? 0);
+      const left = (persistent ? extent?.restLeft : extent?.left) ?? 0;
       // A small even margin at the sides: the house, its shadow and trees never touch the screen edge.
       return [{ top, bottom, left: left ? left + 12 : 10, right: 10 }];
     },
@@ -337,7 +337,7 @@ export function Studio() {
   // (again what is open now, and the persistent layout alone).
   const planFree = (persistent: boolean) => {
     const dock = persistent ? inputBox : dockBox;
-    const sheetLeft = persistent ? 0 : (extent?.left ?? 0);
+    const sheetLeft = (persistent ? extent?.restLeft : extent?.left) ?? 0;
     return desktop
       ? { top: 84, bottom: dock ? vp.h - dock.top + GAP_DESKTOP : 120, right: !persistent && panelOpen && panel ? vp.w - panel.left + GAP_DESKTOP : 40, left: sideRight ? sideRight + 24 : 40 }
       : { top: (header?.bottom ?? 58) + 8, bottom: ((persistent ? extent?.restBottom : extent?.bottom) ?? 130) + 8, right: 12, left: sheetLeft ? sheetLeft + 24 : 12 };

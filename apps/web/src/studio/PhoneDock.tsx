@@ -39,13 +39,15 @@ type SheetKind = 'tool' | 'chat';
 /**
  * What the bottom takes from the drawing (CSS px from the bottom / left), in
  * its settled state: with the open sheet (`bottom`, `left`), and the
- * persistent part alone (`restBottom`: the tool bar and the input; the
- * sheets and the first-visit hints lie over the drawing, task 021).
+ * persistent part alone (`restBottom`, `restLeft`: the tool bar and the
+ * input, and the pinned conversation's sheet, which stays; tool sheets and
+ * the first-visit hints lie over the drawing, task 021).
  */
 export interface DockExtent {
   bottom: number;
   left: number;
   restBottom: number;
+  restLeft: number;
 }
 
 export function PhoneDock({ derived, landscape, onExtent }: { derived: Derived | null; landscape: boolean; onExtent: (e: DockExtent) => void }) {
@@ -93,15 +95,17 @@ export function PhoneDock({ derived, landscape, onExtent }: { derived: Derived |
     if (landscape) {
       const row = h - g.offsetTop;
       const restBottom = foot + Math.max(toolbarH(), inputH.current);
-      onExtent(want ? { bottom: row, left: 12 + LAND_SHEET, restBottom } : { bottom: row, left: 0, restBottom });
+      const restLeft = pinned && !walk ? 12 + LAND_SHEET : 0;
+      onExtent(want ? { bottom: row, left: 12 + LAND_SHEET, restBottom, restLeft } : { bottom: row, left: 0, restBottom, restLeft });
       return;
     }
     // The column: hints (gone while a sheet is open), the input, the tool bar; flex gap 8.
-    const restBottom = foot + toolbarH() + 8 + inputH.current;
-    if (want) onExtent({ bottom: SHEET_GAP + settled.current + RIDE_GAP + toolbarH(), left: 0, restBottom });
-    else onExtent({ bottom: h - g.offsetTop, left: 0, restBottom });
+    // The pinned conversation's sheet stays, so it is persistent layout too (a tool sheet over it is not).
+    const restBottom = pinned && !walk ? SHEET_GAP + Math.round(vh * CHAT_SHARE) + RIDE_GAP + toolbarH() : foot + toolbarH() + 8 + inputH.current;
+    if (want) onExtent({ bottom: SHEET_GAP + settled.current + RIDE_GAP + toolbarH(), left: 0, restBottom, restLeft: 0 });
+    else onExtent({ bottom: h - g.offsetTop, left: 0, restBottom, restLeft: 0 });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [landscape, want, onExtent]);
+  }, [landscape, want, onExtent, pinned, walk, vh]);
   useLayoutEffect(() => {
     report();
     const g = ride.current;

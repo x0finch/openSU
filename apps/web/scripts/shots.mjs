@@ -676,6 +676,15 @@ async function stillHouseChecks() {
       await page.waitForTimeout(600);
       await page.getByTestId('bar-sun').click();
     }, () => page.getByTestId('bar-sun').click());
+    if (mode === '3d') {
+      // The pinned conversation's sheet stays: the house moves above it once; a tool sheet over it does not move it.
+      const base = (await recorder.take(page)).at(-1);
+      await page.evaluate(() => window.__studio.store.getState().setPinned(true));
+      await page.waitForTimeout(300);
+      const pinning = await restAfter(page);
+      check(pinning.length >= 3 && pinning.at(-1) !== base, `phone 3d: pinning moves the house above the conversation sheet, smoothly (${pinning.length - 2} frames between)`);
+      await still(page, 'phone 3d pinned: views sheet over the conversation', () => page.getByTestId('bar-views').click(), () => page.getByTestId('bar-views').click());
+    }
     await ctx.close();
   }
 }
