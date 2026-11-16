@@ -315,6 +315,18 @@
 .lg-field:focus {
   background: var(--lg-row-active);
 }
+/*
+ * A field drawn by its hairline alone (the pinned conversation's compose
+ * field, as Messages draws it): no lighter well, so its text keeps the
+ * panel's contrast; focused, the hairline grows a little.
+ */
+.lg-field[data-plain] {
+  background: transparent;
+}
+.lg-field[data-plain]:focus-within {
+  background: transparent;
+  box-shadow: inset 0 0 0 1px var(--lg-separator);
+}
 /* The sign-in code boxes have no caret: the box being typed in shows a thin ring. */
 .lg-code {
   caret-color: transparent;

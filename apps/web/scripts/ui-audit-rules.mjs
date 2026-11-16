@@ -161,7 +161,9 @@ export function measureDom(opts) {
       const padL = parseFloat(s.paddingLeft), padR = parseFloat(s.paddingRight);
       const bl = parseFloat(s.borderLeftWidth), br = parseFloat(s.borderRightWidth);
       const w = el.getBoundingClientRect().width - padL - padR - bl - br;
-      m.style.font = s.font;
+      // Longhands: Chrome serialises the computed \`font\` shorthand as '' when font features
+      // are set (the app sets "cv11", "ss01"), which left the mirror in the default font.
+      for (const k of ['fontFamily', 'fontSize', 'fontWeight', 'fontStyle', 'fontStretch', 'fontFeatureSettings', 'fontVariationSettings', 'fontKerning']) m.style[k] = s[k];
       m.style.letterSpacing = s.letterSpacing;
       m.style.lineHeight = s.lineHeight;
       m.style.whiteSpace = el.tagName === 'TEXTAREA' ? 'pre-wrap' : 'pre';

@@ -748,7 +748,8 @@ export function ChatInput({ phone, pinned, className }: { phone?: boolean; pinne
     </form>
   );
   return field ? (
-    <GlassField ref={box as React.Ref<HTMLDivElement>} working={!!working} radius={phone ? 22 : 18} className={className} data-testid="prompt">
+    // A hairline field (no lighter well): the picker's label and the text keep the panel's contrast (task 023 review).
+    <GlassField ref={box as React.Ref<HTMLDivElement>} working={!!working} radius={phone ? 22 : 18} plain className={className} data-testid="prompt">
       {form}
     </GlassField>
   ) : (

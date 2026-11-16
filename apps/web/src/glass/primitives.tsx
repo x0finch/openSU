@@ -651,7 +651,7 @@ export function GlassInputBar({ working, radius = 28, className, children, ref, 
  * with one line it is a capsule. `working`: the same yellow light round
  * its edge as the input capsule.
  */
-export function GlassField({ working, radius, className, style, children, ref, ...rest }: Omit<HTMLAttributes<HTMLDivElement>, 'ref'> & { working?: boolean; radius: number; ref?: Ref<HTMLDivElement> }) {
+export function GlassField({ working, radius, plain, className, style, children, ref, ...rest }: Omit<HTMLAttributes<HTMLDivElement>, 'ref'> & { working?: boolean; radius: number; plain?: boolean; ref?: Ref<HTMLDivElement> }) {
   const el = useRef<HTMLDivElement | null>(null);
   const merged = useMergedRef(el, ref);
   useLayoutEffect(() => {
@@ -664,7 +664,7 @@ export function GlassField({ working, radius, className, style, children, ref, .
     return () => ro.disconnect();
   }, []);
   return (
-    <div ref={merged} className={cx('lg-field relative', className)} style={{ borderRadius: radius, ...style }} data-working={working ? '' : undefined} {...rest}>
+    <div ref={merged} className={cx('lg-field relative', className)} style={{ borderRadius: radius, ...style }} data-working={working ? '' : undefined} data-plain={plain ? '' : undefined} {...rest}>
       <span className="lg-halo" aria-hidden="true" />
       <span className="lg-glow" aria-hidden="true">
         <i />

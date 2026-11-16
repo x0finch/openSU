@@ -244,17 +244,46 @@ function SheetInput() {
 /**
  * Walking, the scene behind the house name is a room, not the white
  * drawing: paper fades in under the name block alone (UI_STYLE rule 11:
- * the name is ink on paper), clear of the glass capsules and the walk
- * panel, which keep the scene behind them.
+ * the name is ink on paper). Opaque behind the text, it fades out softly on
+ * every side and stops short of any glass (the mode switch, the walk pill
+ * and panel keep the scene behind them).
  */
+const EDGE_FADE = 16;
 function WalkEdge({ box }: { box: Box | null }) {
-  if (!box) return null;
-  const fade = 'linear-gradient(to right, #000 calc(100% - 96px), transparent), linear-gradient(to bottom, #000 calc(100% - 10px), transparent)';
+  const [area, setArea] = useState<{ l: number; t: number; r: number; b: number } | null>(null);
+  useLayoutEffect(() => {
+    if (!box) return;
+    const measure = () => {
+      const a = { l: box.left - EDGE_FADE, t: box.top - EDGE_FADE, r: box.right + EDGE_FADE, b: box.bottom + EDGE_FADE };
+      for (const el of document.querySelectorAll<HTMLElement>('.lg')) {
+        const g = el.getBoundingClientRect();
+        if (!g.width || g.right <= a.l || g.left >= a.r || g.bottom <= a.t || g.top >= a.b) continue;
+        if (g.left >= box.right - 1) a.r = Math.min(a.r, g.left - 2);
+        else if (g.top >= box.bottom - 1) a.b = Math.min(a.b, g.top - 2);
+      }
+      setArea((c) => (c && c.l === a.l && c.t === a.t && c.r === a.r && c.b === a.b ? c : a));
+    };
+    measure();
+    // The walk pill and panel arrive after the name: measure again for a moment, and on resize.
+    const timer = window.setInterval(measure, 400);
+    const stop = window.setTimeout(() => clearInterval(timer), 4000);
+    window.addEventListener('resize', measure);
+    return () => {
+      clearInterval(timer);
+      clearTimeout(stop);
+      window.removeEventListener('resize', measure);
+    };
+  }, [box]);
+  if (!box || !area) return null;
+  // Opaque over the name block, fading to nothing over whatever room each side has.
+  const [pl, pr, pt, pb] = [box.left - area.l, area.r - box.right, box.top - area.t, area.b - box.bottom].map((v) => Math.max(0, v));
+  const fade = `linear-gradient(to right, transparent, #000 ${pl}px, #000 calc(100% - ${pr}px), transparent), linear-gradient(to bottom, transparent, #000 ${pt}px, #000 calc(100% - ${pb}px), transparent)`;
   return (
     <div
-      className="pointer-events-none absolute top-0 left-0"
-      style={{ width: box.right + 96, height: box.bottom + 12, background: 'var(--color-page)', maskImage: fade, WebkitMaskImage: fade, maskComposite: 'intersect', WebkitMaskComposite: 'source-in' }}
+      className="pointer-events-none absolute"
+      style={{ left: area.l, top: area.t, width: area.r - area.l, height: area.b - area.t, background: 'var(--color-page)', maskImage: fade, WebkitMaskImage: fade, maskComposite: 'intersect', WebkitMaskComposite: 'source-in' }}
       aria-hidden="true"
+      data-testid="walk-edge"
     />
   );
 }

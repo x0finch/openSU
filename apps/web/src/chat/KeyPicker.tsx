@@ -87,10 +87,10 @@ export function KeyPicker({ variant, phone }: { variant: 'input' | 'header'; pho
       window.removeEventListener('keydown', key, true);
     };
   }, [open]);
-  // In the pinned field (task 023): as high as send; its text 8 px from the field's edge (4 + 4), so
-  // the field's ends read even with send's concentric 4 px; no resting plate (a lighter plate costs
-  // the label contrast); pt-px: the glyphs' optical centre.
-  const size = variant === 'input' ? (phone ? 'h-9 pt-px pr-2 pl-1' : 'h-7 pt-px pr-2 pl-1') : 'h-[32px] pr-2 pl-3';
+  // In the pinned field (task 023): as high as send; its ends even (4 px), so its text is 8 px from the
+  // field's edge (4 + 4) and the field's ends read even with send's concentric 4 px; no resting plate
+  // (a lighter plate costs the label contrast); pt-px: the glyphs' optical centre.
+  const size = variant === 'input' ? (phone ? 'h-9 pt-px px-1' : 'h-7 pt-px px-1') : 'h-[32px] pr-2 pl-3';
   return (
     <>
       <button
@@ -100,7 +100,8 @@ export function KeyPicker({ variant, phone }: { variant: 'input' | 'header'; pho
         aria-haspopup="menu"
         aria-expanded={open}
         aria-label={t('keys.picker', { name: label })}
-        data-on={open ? '' : undefined}
+        // In the field the open state is the turned chevron, not a lighter plate (it would cost the label contrast).
+        data-on={open && variant !== 'input' ? '' : undefined}
         className={cx('hit lg-plate inline-flex max-w-[44%] shrink-0 items-center gap-1 text-[13px] font-medium whitespace-nowrap text-ink', size, variant === 'input' && 'self-end')}
         data-testid="key-picker"
       >
