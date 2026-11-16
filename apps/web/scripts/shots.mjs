@@ -679,7 +679,7 @@ async function stillHouseChecks() {
     await page.keyboard.press('Escape');
     await page.evaluate(() => window.__studio.store.getState().resetView());
     await restAfter(page);
-    // Pinned: the sidebar hangs under the name like the panel under the toolbar.
+    // Pinned: the sidebar hangs under the name; the panel is joined to the toolbar.
     const { base, name0 } = await pinCycle(page, '3D');
     await still(page, '3D pinned: views panel', () => page.getByTestId('bar-views').click(), esc(page));
     await page.getByTestId('bar-views').click();
@@ -691,8 +691,10 @@ async function stillHouseChecks() {
     await page.keyboard.press('Escape');
     await page.waitForTimeout(400);
     const hang = geo.side.top - geo.name.bottom, panelHang = geo.panel.top - geo.bar.bottom;
-    check(Math.abs(hang - panelHang) < 0.5 && Math.abs(geo.side.left - (1440 - geo.panel.right)) < 0.5 && Math.abs(900 - geo.side.bottom - 12) < 0.5,
-      `pinned sidebar: ${hang.toFixed(1)} px under the name (panel under the toolbar: ${panelHang.toFixed(1)}), ${geo.side.left} from the edge (panel: ${1440 - geo.panel.right}), bottom inset ${900 - geo.side.bottom}`);
+    // Task 025: a toolbar panel is joined to the toolbar (touching); the sidebar keeps its 6 px under the name
+    // (it is persistent layout: moving it would move the house).
+    check(Math.abs(hang - 6) < 0.5 && Math.abs(panelHang) < 0.5 && Math.abs(geo.side.left - (1440 - geo.panel.right)) < 0.5 && Math.abs(900 - geo.side.bottom - 12) < 0.5,
+      `pinned sidebar: ${hang.toFixed(1)} px under the name (6), panel joined to the toolbar (${panelHang.toFixed(1)} px), ${geo.side.left} from the edge (panel: ${1440 - geo.panel.right}), bottom inset ${900 - geo.side.bottom}`);
     // Task 023 (audit item 19): at the screen's centre, pinned or not (task 021 had it over the drawing).
     const modeCentre = geo.mode.left + geo.mode.width / 2;
     check(Math.abs(modeCentre - 720) < 1, `pinned: the mode switch stays at the screen centre (${modeCentre.toFixed(1)} vs 720)`);
