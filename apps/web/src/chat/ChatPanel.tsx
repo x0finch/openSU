@@ -8,13 +8,13 @@ import { ChevronRightIcon, SendIcon, SparkIcon } from '../components/icons';
 import { cx, IconButton } from '../components/ui';
 import { type MessageKey, useT } from '../lib/i18n';
 import { useStudio } from '../lib/store';
-import { type ChatItem, fetchServerStatus, loadAgent, newChat, ownKeyInUse, redoTurn, retry, send, type ServerStatus, stop, undoTurn, useChat } from './chat-store';
+import { type ChatItem, fetchServerStatus, loadAgent, newChat, outOfCredits, ownKeyInUse, redoTurn, retry, send, type ServerStatus, stop, undoTurn, useChat } from './chat-store';
 import { openSignIn } from './account';
 import type { Lang } from '../lib/i18n';
 import { ChevronDownIcon, ComposeIcon, DockIcon, HistoryIcon, NoteIcon, PlanCheckIcon, RedoIcon, RetryIcon, SlidersIcon, StopIcon, UndockIcon, UndoIcon } from './icons';
 import { accountKeyInUse, openKeySheet, useKeys } from './keys';
 import { KeyPicker } from './KeyPicker';
-import { GlassInputBar, GlassTextSurface, GlassTurn, type GlassTurnEntry } from '../glass';
+import { GlassField, GlassInputBar, GlassSep, GlassTextSurface, GlassTurn, type GlassTurnEntry } from '../glass';
 import { turnView } from './turn-parts';
 import { SettingsSheet } from './SettingsSheet';
 
@@ -658,85 +658,100 @@ export function ChatInput({ phone, pinned, className }: { phone?: boolean; pinne
       ref.current?.blur();
     }
   };
+  // Out of today's free credits (the site's key): the field says so instead
+  // of inviting a message, and send rests until there is text (sending then
+  // shows the calm note with sign-in and the own-key offer).
+  useOwnKey();
+  const out = useChat((s) => !s.running && outOfCredits());
   const can = !!text.trim() && !running;
-  const btn = phone ? 'size-[36px]' : 'size-[40px]';
-  // Credits on the site's key, shown only when 3 or fewer are left (task 019).
-  const own = useOwnKey();
-  const left = useChat((s) => (!own && s.server?.serverKey && s.server.quota && s.server.quota.remaining <= 3 ? s.server.quota.remaining : null));
-  return (
-    <GlassInputBar ref={box} working={!!working} className={className} data-testid="prompt">
-      <form
-        onSubmit={submit}
-        onPointerDown={(e) => {
-          if (e.target === e.currentTarget) {
-            e.preventDefault();
-            ref.current?.focus();
-          }
-        }}
-        className={cx('relative flex cursor-text items-end gap-2', phone ? 'min-h-12 px-1.5 py-1.5' : 'min-h-14 px-2 py-2')}
-      >
-        {pinned ? (
-          // Task 022: which key the conversation uses, a pop-up button where the spark stood.
-          <KeyPicker variant="input" phone={phone} />
-        ) : (
-          <button
-            type="button"
-            onClick={() => setRecent(!recent)}
-            aria-label={recent ? t('chat.historyClose') : t('chat.history')}
-            aria-expanded={recent}
-            aria-controls="recent-strip"
-            data-on={recent ? '' : undefined}
-            className={cx('hit lg-plate relative grid shrink-0 place-items-center text-ink-2 hover:text-ink', btn, recent && 'text-ink')}
-            data-testid="chat-history"
-          >
-            <HistoryIcon width={17} height={17} />
-            {unseen && !recent && !running && <span className="absolute top-[7px] right-[7px] size-[7px] rounded-full bg-accent" aria-hidden="true" />}
-          </button>
-        )}
-        <div className="relative min-w-0 flex-1">
-          <textarea
-            ref={ref}
-            rows={1}
-            value={text}
-            onChange={(e) => setText(e.target.value)}
-            onKeyDown={onKey}
-            placeholder={working || (note.item && !pinned) ? '' : t('prompt.placeholder')}
-            aria-label={t('chat.placeholder')}
-            className={cx('block max-h-[120px] w-full resize-none bg-transparent text-[15px] leading-5 font-medium outline-none placeholder:text-ink-2 [&:focus-visible]:outline-none', phone ? 'min-h-9 py-2' : 'min-h-10 py-2.5')}
-            data-testid="prompt-bar"
-          />
-          {!working && !text && note.item && !pinned && <ChangeNote item={note.item} hold={note.hold} />}
-          {working && !text && (
-            <p className="pointer-events-none absolute inset-0 flex items-center truncate text-[15px] font-medium text-ink" role="status" data-testid="chat-status" data-phase={working.phase}>
-              <span className="truncate" data-testid="chat-status-text">
-                {step ? step.slice(1) : t(statusKey(working.phase))}
-                {(!step || step[0] === '1') && <span className="text-accent-ink">…</span>}
-                {!phone && working.prompt && <span className="ml-1 text-ink-3">{`“${working.prompt.replace(/\s+/g, ' ')}”`}</span>}
-              </span>
-            </p>
+  // Pinned (task 023): a field of the sidebar, concentric with its bottom
+  // corner (desktop: 26 - 8, phone sheet: 34 - 12), one line high; its
+  // children (picker, text, send) share one centre line, 4 px from the edge.
+  const field = !!pinned;
+  const btn = field ? (phone ? 'size-9' : 'size-7') : phone ? 'size-[36px]' : 'size-[40px]';
+  const placeholder = working || (note.item && !pinned) ? '' : out ? t('quota.placeholder') : pinned ? t('chat.placeholder') : t('prompt.placeholder');
+  const form = (
+    <form
+      onSubmit={submit}
+      onPointerDown={(e) => {
+        if (e.target === e.currentTarget) {
+          e.preventDefault();
+          ref.current?.focus();
+        }
+      }}
+      className={cx('relative flex cursor-text items-end', field ? 'gap-1 p-1' : cx('gap-2', phone ? 'min-h-12 px-1.5 py-1.5' : 'min-h-14 px-2 py-2'))}
+    >
+      {pinned ? (
+        // Task 022: which key the conversation uses, a pop-up button where the spark stood.
+        <KeyPicker variant="input" phone={phone} />
+      ) : (
+        <button
+          type="button"
+          onClick={() => setRecent(!recent)}
+          aria-label={recent ? t('chat.historyClose') : t('chat.history')}
+          aria-expanded={recent}
+          aria-controls="recent-strip"
+          data-on={recent ? '' : undefined}
+          className={cx('hit lg-plate relative grid shrink-0 place-items-center text-ink-2 hover:text-ink', btn, recent && 'text-ink')}
+          data-testid="chat-history"
+        >
+          <HistoryIcon width={17} height={17} />
+          {unseen && !recent && !running && <span className="absolute top-[7px] right-[7px] size-[7px] rounded-full bg-accent" aria-hidden="true" />}
+        </button>
+      )}
+      <div className={cx('relative min-w-0 flex-1', field && 'pl-1')}>
+        <textarea
+          ref={ref}
+          rows={1}
+          value={text}
+          onChange={(e) => setText(e.target.value)}
+          onKeyDown={onKey}
+          placeholder={placeholder}
+          aria-label={t('chat.placeholder')}
+          className={cx(
+            // The placeholder reads clearly dimmer than what is typed (lighter ink, regular weight).
+            'block max-h-[120px] w-full resize-none bg-transparent text-[15px] leading-5 font-medium outline-none placeholder:font-normal placeholder:text-ink-2/70 [&:focus-visible]:outline-none',
+            field ? (phone ? 'min-h-9 py-2' : 'min-h-7 py-1') : phone ? 'min-h-9 py-2' : 'min-h-10 py-2.5',
           )}
-        </div>
-        {left !== null && !running && (
-          <span className={cx('tnum shrink-0 self-center text-ink-2', phone ? 'text-[12px]' : 'text-[12.5px]')} data-testid="quota-left" aria-live="polite">
-            {phone ? t('quota.leftShort', { n: left }) : t('quota.left', { n: left })}
-          </span>
+          data-testid="prompt-bar"
+          data-out={out ? '' : undefined}
+        />
+        {!working && !text && note.item && !pinned && <ChangeNote item={note.item} hold={note.hold} />}
+        {working && !text && (
+          <p className="pointer-events-none absolute inset-0 flex items-center truncate text-[15px] font-medium text-ink" role="status" data-testid="chat-status" data-phase={working.phase}>
+            <span className="truncate" data-testid="chat-status-text">
+              {step ? step.slice(1) : t(statusKey(working.phase))}
+              {(!step || step[0] === '1') && <span>…</span>}
+              {!phone && working.prompt && <span className="ml-1 text-ink-3">{`“${working.prompt.replace(/\s+/g, ' ')}”`}</span>}
+            </span>
+          </p>
         )}
-        {running ? (
-          <button type="button" onClick={stop} aria-label={t('chat.stop')} className={cx('hit lg-focus grid shrink-0 place-items-center rounded-full bg-ink text-on-ink transition-opacity hover:opacity-85', btn)}>
-            <StopIcon width={16} height={16} />
-          </button>
-        ) : (
-          <button
-            type="submit"
-            disabled={!can}
-            aria-label={t('chat.send')}
-            className={cx('hit lg-focus grid shrink-0 place-items-center rounded-full text-on-accent transition-[filter,opacity] duration-150', btn, 'bg-accent', can ? 'hover:brightness-95' : '[&>svg]:opacity-40')}
-            data-testid="chat-send"
-          >
-            <SendIcon width={16} height={16} />
-          </button>
-        )}
-      </form>
+      </div>
+      {running ? (
+        <button type="button" onClick={stop} aria-label={t('chat.stop')} className={cx('hit lg-focus grid shrink-0 place-items-center rounded-full bg-ink text-on-ink transition-opacity hover:opacity-85', btn)}>
+          <StopIcon width={field && !phone ? 14 : 16} height={field && !phone ? 14 : 16} />
+        </button>
+      ) : (
+        <button
+          type="submit"
+          disabled={!can}
+          aria-label={t('chat.send')}
+          // Ready: the accent. Nothing to send: a quiet plate, the arrow dimmed (it cannot act).
+          className={cx('hit lg-focus grid shrink-0 place-items-center rounded-full transition-[filter,background-color,color] duration-150', btn, can ? 'bg-accent text-on-accent hover:brightness-95' : 'bg-wash text-ink-3')}
+          data-testid="chat-send"
+        >
+          <SendIcon width={field && !phone ? 14 : 16} height={field && !phone ? 14 : 16} />
+        </button>
+      )}
+    </form>
+  );
+  return field ? (
+    <GlassField ref={box as React.Ref<HTMLDivElement>} working={!!working} radius={phone ? 22 : 18} className={className} data-testid="prompt">
+      {form}
+    </GlassField>
+  ) : (
+    <GlassInputBar ref={box} working={!!working} className={className} data-testid="prompt">
+      {form}
     </GlassInputBar>
   );
 }
@@ -815,7 +830,7 @@ function ConversationHeader({ phone }: { phone?: boolean }) {
   const hasItems = useChat((s) => s.items.length > 0);
   const setPinned = useStudio((s) => s.setPinned);
   return (
-    <header className={cx('flex shrink-0 items-center gap-1.5', phone ? 'h-10 pr-2 pl-4' : 'h-11 border-y border-hairline pr-2 pl-6')}>
+    <header className={cx('flex shrink-0 items-center gap-1.5', phone ? 'h-10 pr-2 pl-4' : 'h-11 pr-2 pl-6')}>
       <SparkIcon accent width={15} height={15} className="shrink-0" />
       <h2 className="truncate text-[13px] font-medium">{t('chat.title')}</h2>
       <span className="flex-1" />
@@ -857,8 +872,12 @@ export function PinnedColumn({ style, aside }: { style: CSSProperties; aside?: b
       ) : (
         <>
           <ConversationHeader />
+          {/* The module's hairline, inset from both edges (task 023), not a rule across the glass. */}
+          <div className="shrink-0 px-3">
+            <GlassSep />
+          </div>
           <MessageList density="full" className="px-6 pt-4" />
-          <div className="shrink-0 px-3 pt-2 pb-3">
+          <div className="shrink-0 p-2">
             <ChatInput pinned />
           </div>
         </>

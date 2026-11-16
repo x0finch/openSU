@@ -241,6 +241,24 @@ function SheetInput() {
   );
 }
 
+/**
+ * Walking, the scene behind the house name is a room, not the white
+ * drawing: paper fades in under the name block alone (UI_STYLE rule 11:
+ * the name is ink on paper), clear of the glass capsules and the walk
+ * panel, which keep the scene behind them.
+ */
+function WalkEdge({ box }: { box: Box | null }) {
+  if (!box) return null;
+  const fade = 'linear-gradient(to right, #000 calc(100% - 56px), transparent), linear-gradient(to bottom, #000 calc(100% - 14px), transparent)';
+  return (
+    <div
+      className="pointer-events-none absolute top-0 left-0"
+      style={{ width: box.right + 56, height: box.bottom + 10, background: 'var(--color-page)', maskImage: fade, WebkitMaskImage: fade, maskComposite: 'intersect', WebkitMaskComposite: 'source-in' }}
+      aria-hidden="true"
+    />
+  );
+}
+
 /** A loading line that only appears if the wait is noticeable (no flash for a quick lazy chunk). */
 function QuietLoading({ label }: { label: string }) {
   return (
@@ -298,6 +316,9 @@ export function Studio() {
   useBox(titleRef, setTitle, [desktop]);
   useBox(modeRef, setModeBox, [column, desktop]);
   useBox(headerRef, setHeader, [desktop, landscape, walkLandscape]);
+  const phoneTitleRef = useRef<HTMLDivElement>(null);
+  const [phoneTitle, setPhoneTitle] = useBoxState();
+  useBox(phoneTitleRef, setPhoneTitle, [desktop, landscape, walkLandscape]);
   const [vp, setVp] = useState(() => (typeof window === 'undefined' ? { w: 1440, h: 900 } : { w: window.innerWidth, h: window.innerHeight }));
   useEffect(() => {
     const on = () => setVp({ w: window.innerWidth, h: window.innerHeight });
@@ -315,7 +336,8 @@ export function Studio() {
       if (fullFrame) return [{ top: 0, right: 0, bottom: 0, left: 0 }];
       if (desktop) {
         const top = Math.max(modeBox?.bottom ?? 56, 60);
-        const dock = mode === '3d' && !column ? (persistent ? inputBox : dockBox) : null;
+        // 3D and plan share one framing area (task 023): both keep clear of the input.
+        const dock = mode !== 'sheet' && !column ? (persistent ? inputBox : dockBox) : null;
         return desktopInsets(vp.w - canvasLeft, vp.h, canvasLeft, { title, top, dock, panel: !persistent && panelOpen ? panel : null, sidebar: sideRight });
       }
       const g = GAP_PHONE;
@@ -338,18 +360,6 @@ export function Studio() {
   }, [mode]);
 
   const levelId = derived && level && derived.levels.some((l) => l.id === level) ? level : derived?.levels[0]?.id;
-  // Plan fitting: the same obstacles, as plain insets of the plan's box
-  // (again what is open now, and the persistent layout alone).
-  const planFree = (persistent: boolean) => {
-    const dock = persistent ? inputBox : dockBox;
-    const sheetLeft = extent ? (persistent ? extent.restLeft : Math.max(extent.left, extent.restLeft)) : 0;
-    const sheetBottom = extent ? (persistent ? extent.restBottom : Math.max(extent.bottom, extent.restBottom)) : 130;
-    return desktop
-      ? { top: 84, bottom: dock ? vp.h - dock.top + GAP_DESKTOP : 120, right: !persistent && panelOpen && panel ? vp.w - panel.left + GAP_DESKTOP : 40, left: sideRight ? sideRight + 24 : 40 }
-      : { top: (header?.bottom ?? 58) + 8, bottom: sheetBottom + 8, right: 12, left: sheetLeft ? sheetLeft + 24 : 12 };
-  };
-  const planInsets = planFree(false);
-  const planLayoutKey = JSON.stringify([vp, planFree(true)]);
   // The project menu (and the sign-in it opens) lies where the pinned
   // sidebar is: the sidebar steps aside meanwhile, as the phone dock does
   // for the sign-in sheet (glass never sits on glass).
@@ -371,7 +381,7 @@ export function Studio() {
             <Viewer3D resolved={derived.resolved} active={mode === '3d'} insets={insets} layoutKey={layoutKey} insetMs={desktop ? undefined : SHEET_MS} compact={!desktop} wide={!fullFrame} margin={fullFrame ? 1 : desktop ? FRAME_MARGIN.desktop : FRAME_MARGIN.phone} />
           </div>
         )}
-        {derived && levelId && mode === 'plan' && <PlanView resolved={derived.resolved} levelId={levelId} active insets={planInsets} layoutKey={planLayoutKey} />}
+        {derived && levelId && mode === 'plan' && <PlanView resolved={derived.resolved} levelId={levelId} active insets={insets} layoutKey={layoutKey} />}
         {derived && mode === 'sheet' && (
           <Suspense fallback={<QuietLoading label={t('loading.sheets')} />}>
             <SheetGallery derived={derived} desktop={desktop} />
@@ -383,6 +393,8 @@ export function Studio() {
         <div className="pointer-events-none absolute inset-0">
           {/* A zoomed plan fades out under the top row instead of sliding beneath it. */}
           {mode === 'plan' && <div className="absolute top-0 right-0 h-24 bg-gradient-to-b from-white via-white/90 to-transparent" style={{ left: canvasLeft }} aria-hidden="true" />}
+          {/* Walking, the scene behind the name is a room, not the white drawing: the paper fades in under the top row (a scroll-edge effect) so the name stays plain ink on paper. */}
+          {walk && <WalkEdge box={title} />}
           {column && <PinnedColumn style={{ top: (title?.bottom ?? 72) + PIN_HANG, left: PIN_LEFT, bottom: PIN_BOTTOM, width: PIN_COLUMN }} aside={menuOpen || signInFromMenu} />}
           {/* The name stays put, plain ink on the drawing, pinned or not; the sidebar hangs under it. */}
           <div ref={titleRef} className="absolute top-[18px] left-6 w-max max-w-[min(360px,calc(50vw-200px))]" data-testid="title-block">
@@ -391,8 +403,10 @@ export function Studio() {
           <div
             ref={modeRef}
             className="absolute top-[18px] -translate-x-1/2"
-            // Centred over the drawing; beside a pinned column on a narrow screen it moves left of the toolbar.
-            style={{ left: column && vp.w < 1180 ? sideRight + 24 + 98 : sideRight + (vp.w - sideRight) / 2 }}
+            // At the screen's centre, pinned or not (task 023, audit item 19; reverses task 021's
+            // "centred over the drawing"). Only where the pinned column would reach under it
+            // (narrow windows) does it stand beside the column instead.
+            style={{ left: column && vp.w / 2 - 110 < sideRight + 24 ? sideRight + 24 + 110 : vp.w / 2 }}
           >
             <ModeSwitch />
           </div>
@@ -414,11 +428,12 @@ export function Studio() {
             className="pointer-events-none absolute inset-x-0 top-0 z-10 flex items-start justify-between gap-2.5 pt-[max(10px,env(safe-area-inset-top))] pr-3 pl-4 land:items-center land:pt-[max(6px,env(safe-area-inset-top))]"
             style={landscape ? { paddingLeft: 'max(16px, env(safe-area-inset-left))', paddingRight: 'max(12px, env(safe-area-inset-right))' } : undefined}
           >
-            <div className="min-w-0 pt-0.5">
+            <div ref={phoneTitleRef} className="min-w-0 pt-0.5">
               <TitleMenu derived={derived} compact />
             </div>
             <ModeSwitch size="sm" className="shrink-0" />
           </header>
+          {walk && <WalkEdge box={phoneTitle} />}
           {walk && <MobileWalkHUD derived={derived} top={`${header?.bottom ?? 58}px`} bottom={extent?.bottom ?? 130} />}
           {mode !== 'sheet' ? <PhoneDock derived={derived} landscape={landscape} onExtent={onExtent} /> : <SheetInput />}
           <SettingsHost phone />

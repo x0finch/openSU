@@ -2,7 +2,7 @@
 // primitives; nothing outside this folder styles a chrome surface.
 export { cx, Glass, GlassLayer, GlassLens, useGlass, usePress, type GlassProps } from './Glass';
 export {
-  GlassButton, GlassButtonGroup, GlassChoice, GlassGroupButton, GlassInputBar, GlassMenu, GlassMenuItem, GlassPopover, GlassRow, GlassSegmented, GlassSep,
+  GlassButton, GlassButtonGroup, GlassChoice, GlassField, GlassGroupButton, GlassInputBar, GlassMenu, GlassMenuItem, GlassPopover, GlassRow, GlassSegmented, GlassSep,
   GlassSheet, GlassSlider, GlassTextSurface, GlassToast, type GlassSegment, type PopoverProps,
 } from './primitives';
 export { glassRegistry, newGroup, type GlassBackend, type GlassTarget } from './registry';

@@ -466,10 +466,10 @@ if (wanted('checks')) {
     check(ps.height > 844 * 0.44 && ps.height < 844 * 0.5 && (await page.getByTestId('phone-sheet').getByTestId('prompt-bar').count()) === 1, `phone pinned: an about half-height sheet with the input inside (${ps.height.toFixed(0)} px)`);
     await page.getByTestId('bar-sun').click();
     await settle(page, 900);
-    check(await page.getByTestId('phone-sheet').getAttribute('data-kind') === 'tool', 'phone pinned: a tool swaps the sheet');
+    check(await page.getByTestId('phone-sheet').getAttribute('data-sheet') === 'tool', 'phone pinned: a tool swaps the sheet');
     await page.getByTestId('bar-sun').click();
     await settle(page, 900);
-    check(await page.getByTestId('phone-sheet').getAttribute('data-kind') === 'chat', 'phone pinned: closing the tool brings the conversation back');
+    check(await page.getByTestId('phone-sheet').getAttribute('data-sheet') === 'chat', 'phone pinned: closing the tool brings the conversation back');
     // Touch targets.
     // The text field's target is the whole input face (a tap anywhere on it focuses the field).
     const small = await page.evaluate(() => [...document.querySelectorAll('button, [role=radio], textarea')].filter((el) => el.checkVisibility() && !el.closest('[inert]')).map((el) => {

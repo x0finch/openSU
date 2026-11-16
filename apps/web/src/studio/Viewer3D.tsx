@@ -18,6 +18,14 @@ declare global {
   }
 }
 
+/**
+ * The free area the 3D view last framed the house in (one of the insets it
+ * was given: the one that showed the house largest). The plan frames into
+ * the same one when it is among its own, so 3D and plan share one centre
+ * point (task 023 / audit item 20).
+ */
+export const framing: { chosen: () => FrameInsets | null } = { chosen: () => null };
+
 function hasWebGL2(): boolean {
   try {
     return !!document.createElement('canvas').getContext('webgl2');
@@ -131,6 +139,7 @@ export function Viewer3D({ resolved, active, insets, layoutKey, insetMs, compact
         applySun(e, st);
         e.setView(scenePreset(st), shownCut(st), true);
         engine.current = e;
+        framing.chosen = () => (e.viewer.currentView ? e.viewer.framedInsets : null);
         shown.current = latest.current;
         walkBridge.attach(e);
         if (st.walk) e.enterWalk();

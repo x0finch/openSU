@@ -620,8 +620,9 @@ async function stillHouseChecks() {
     const hang = geo.side.top - geo.name.bottom, panelHang = geo.panel.top - geo.bar.bottom;
     check(Math.abs(hang - panelHang) < 0.5 && Math.abs(geo.side.left - (1440 - geo.panel.right)) < 0.5 && Math.abs(900 - geo.side.bottom - 12) < 0.5,
       `pinned sidebar: ${hang.toFixed(1)} px under the name (panel under the toolbar: ${panelHang.toFixed(1)}), ${geo.side.left} from the edge (panel: ${1440 - geo.panel.right}), bottom inset ${900 - geo.side.bottom}`);
-    const modeCentre = geo.mode.left + geo.mode.width / 2, drawingCentre = (geo.side.right + 1440) / 2;
-    check(Math.abs(modeCentre - drawingCentre) < 1, `pinned: the mode switch stays centred over the drawing (${modeCentre.toFixed(1)} vs ${drawingCentre.toFixed(1)})`);
+    // Task 023 (audit item 19): at the screen's centre, pinned or not (task 021 had it over the drawing).
+    const modeCentre = geo.mode.left + geo.mode.width / 2;
+    check(Math.abs(modeCentre - 720) < 1, `pinned: the mode switch stays at the screen centre (${modeCentre.toFixed(1)} vs 720)`);
     // The menu opens over the sidebar; the sidebar steps aside meanwhile.
     const sideState = (want) =>
       page

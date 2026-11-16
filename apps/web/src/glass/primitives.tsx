@@ -4,7 +4,7 @@
 // glass (plates, rows, separators, choice chips, the lens slider). A
 // screen composes these; it never styles glass itself.
 import {
-  type ButtonHTMLAttributes, type CSSProperties, type KeyboardEvent as RKeyboardEvent, type ReactNode, type Ref, useCallback, useEffect, useLayoutEffect, useRef, useState,
+  type ButtonHTMLAttributes, type CSSProperties, type HTMLAttributes, type KeyboardEvent as RKeyboardEvent, type ReactNode, type Ref, useCallback, useEffect, useLayoutEffect, useRef, useState,
 } from 'react';
 import { cx, Glass, type GlassProps, GlassLens, useGlass, useMergedRef } from './Glass';
 import { GLASS, TONES } from './material';
@@ -129,7 +129,8 @@ export function GlassSegmented<T extends string>({ value, onChange, segments, la
     C.style.transform = `translate(${cxL - kx * CX}px, ${cyL - ky * CY}px) scale(${kx}, ${ky})`;
     // The labels under the lens give way to the copy.
     const a = CX - (w * sx) / 2, b = CX + (w * sx) / 2;
-    const m = `linear-gradient(to right, #000 ${a - R.offsetLeft}px, transparent ${a - R.offsetLeft}px, transparent ${b - R.offsetLeft}px, #000 ${b - R.offsetLeft}px)`;
+    // Nothing selected and the lens at rest: it is gone, and so is the gap it masks (task 023).
+    const m = valueRef.current === null && lift < 0.01 ? '' : `linear-gradient(to right, #000 ${a - R.offsetLeft}px, transparent ${a - R.offsetLeft}px, transparent ${b - R.offsetLeft}px, #000 ${b - R.offsetLeft}px)`;
     R.style.maskImage = m;
     R.style.webkitMaskImage = m;
   }, []);
@@ -138,7 +139,11 @@ export function GlassSegmented<T extends string>({ value, onChange, segments, la
 
   const goTo = useCallback((v: T | null, instant = false) => {
     const sl = v === null ? undefined : slots().find((s) => s.value === v);
-    if (!sl) return;
+    if (!sl) {
+      // Nothing (or nothing shown) selected: the lens fades out where it is.
+      paint();
+      return;
+    }
     const s = springs.current!;
     s.x.set(sl.left, { instant, preset: SPRINGS.slide });
     s.w.set(sl.width, { instant, preset: SPRINGS.slide });
@@ -161,7 +166,9 @@ export function GlassSegmented<T extends string>({ value, onChange, segments, la
     ro.observe(el);
     if (row.current) ro.observe(row.current);
     return () => ro.disconnect();
-  }, [goTo]);
+    // Other segments (the phone tab bar in plan) can keep every size: measure again (task 023).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [goTo, segments.map((s) => s.value).join('|')]);
   useEffect(() => {
     if (geo.current.ready && !drag.current) goTo(value);
   }, [value, goTo]);
@@ -637,6 +644,36 @@ export function GlassInputBar({ working, className, children, ref, ...rest }: Om
   );
 }
 
+/**
+ * The compose field inside a glass surface (the pinned conversation): a
+ * field of that surface, not a second glass (`.lg-field`: a quiet well,
+ * no shadow). `radius`: concentric with the surface corner it sits in;
+ * with one line it is a capsule. `working`: the same yellow light round
+ * its edge as the input capsule.
+ */
+export function GlassField({ working, radius, className, style, children, ref, ...rest }: Omit<HTMLAttributes<HTMLDivElement>, 'ref'> & { working?: boolean; radius: number; ref?: Ref<HTMLDivElement> }) {
+  const el = useRef<HTMLDivElement | null>(null);
+  const merged = useMergedRef(el, ref);
+  useLayoutEffect(() => {
+    const e = el.current;
+    if (!e) return;
+    const set = () => e.style.setProperty('--d', `${Math.ceil(Math.hypot(e.offsetWidth, e.offsetHeight)) + 4}px`);
+    set();
+    const ro = new ResizeObserver(set);
+    ro.observe(e);
+    return () => ro.disconnect();
+  }, []);
+  return (
+    <div ref={merged} className={cx('lg-field relative', className)} style={{ borderRadius: radius, ...style }} data-working={working ? '' : undefined} {...rest}>
+      <span className="lg-halo" aria-hidden="true" />
+      <span className="lg-glow" aria-hidden="true">
+        <i />
+      </span>
+      {children}
+    </div>
+  );
+}
+
 /** A small capsule above the input that disappears by itself (the caller times it). */
 export function GlassToast({ children, className, ...rest }: Omit<GlassProps, 'kind'>) {
   return (
@@ -824,6 +861,7 @@ export function GlassSheet({ open, large, fixed, onClose, onClosed, onHeight, cl
   children: ReactNode;
   testId?: string;
   ariaLabel?: string;
+  /** What the sheet holds (`data-sheet`; not `data-kind`, which is the glass role and picks the tint). */
   dataKind?: string;
 }) {
   const [mounted, setMounted] = useState(open);
@@ -946,7 +984,7 @@ export function GlassSheet({ open, large, fixed, onClose, onClosed, onHeight, cl
       className={cx('pointer-events-auto absolute flex flex-col overflow-hidden', className)}
       style={{ height: 0, ...style }}
       data-testid={testId}
-      data-kind={dataKind}
+      data-sheet={dataKind}
       data-open={open ? '' : undefined}
       onPointerDown={onPointerDown}
       onPointerMove={onPointerMove}

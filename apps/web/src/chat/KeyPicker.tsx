@@ -86,7 +86,8 @@ export function KeyPicker({ variant, phone }: { variant: 'input' | 'header'; pho
       window.removeEventListener('keydown', key, true);
     };
   }, [open]);
-  const size = variant === 'input' ? (phone ? 'h-[36px]' : 'h-[40px]') : 'h-[32px]';
+  // In the pinned field (task 023): a quiet plate at rest (a pop-up button reads as one), as high as send.
+  const size = variant === 'input' ? (phone ? 'h-9 bg-wash' : 'h-7 bg-wash') : 'h-[32px]';
   return (
     <>
       <button
@@ -128,6 +129,22 @@ function Check({ on }: { on: boolean }) {
   return on ? <CheckIcon width={16} height={16} className="text-ink" /> : <span className="size-4" />;
 }
 
+/**
+ * The free allowance's trailing text (task 023: the hint left the input):
+ * what is left today once 3 or fewer (task 019's threshold), "used up"
+ * at none, else where it comes from.
+ */
+function FreeDetail() {
+  const t = useT();
+  const left = useChat((s) => (s.server?.serverKey && s.server.quota ? s.server.quota.remaining : null));
+  if (left === null || left > 3) return <>{t('keys.freeDetail')}</>;
+  return (
+    <span className="tnum" data-testid="quota-left">
+      {left > 0 ? t('quota.left', { n: left }) : t('quota.usedUp')}
+    </span>
+  );
+}
+
 function KeyMenuBody({ anchor }: { anchor: () => HTMLElement | null }) {
   const t = useT();
   const settings = useChat((s) => s.settings);
@@ -152,7 +169,7 @@ function KeyMenuBody({ anchor }: { anchor: () => HTMLElement | null }) {
   return (
     <div onKeyDown={onKey} className="flex flex-col">
       {server?.serverKey && (
-        <GlassMenuItem role="menuitemradio" aria-checked={src.kind === 'site'} icon={<Check on={src.kind === 'site'} />} detail={t('keys.freeDetail')} onClick={() => pick(() => choose({ kind: 'site' }))} data-testid="key-free">
+        <GlassMenuItem role="menuitemradio" aria-checked={src.kind === 'site'} icon={<Check on={src.kind === 'site'} />} detail={<FreeDetail />} onClick={() => pick(() => choose({ kind: 'site' }))} data-testid="key-free">
           {t('keys.free')}
         </GlassMenuItem>
       )}
