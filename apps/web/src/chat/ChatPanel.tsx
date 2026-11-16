@@ -710,7 +710,9 @@ export function ChatInput({ phone, pinned, className }: { phone?: boolean; pinne
           aria-label={t('chat.placeholder')}
           className={cx(
             // The placeholder reads clearly dimmer than what is typed (lighter ink, regular weight).
-            'block max-h-[120px] w-full resize-none bg-transparent text-[15px] leading-5 font-medium outline-none placeholder:font-normal placeholder:text-ink-2/70 [&:focus-visible]:outline-none',
+            'block max-h-[120px] w-full resize-none bg-transparent leading-5 font-medium outline-none placeholder:font-normal placeholder:text-ink-2/70 [&:focus-visible]:outline-none',
+            // In the sidebar, the conversation's text size (UI_STYLE: 14.5); the capsule over the drawing keeps 15.
+            field ? 'text-[14.5px]' : 'text-[15px]',
             field ? (phone ? 'min-h-9 py-2' : 'min-h-7 py-1') : phone ? 'min-h-9 py-2' : 'min-h-10 py-2.5',
           )}
           data-testid="prompt-bar"

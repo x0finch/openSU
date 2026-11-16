@@ -21,14 +21,14 @@ import {
 type T = ReturnType<typeof useT>;
 
 /** What is in use, as the pop-up button reads it. */
-function useCurrentLabel(t: T): string {
+function useCurrentLabel(t: T, short = false): string {
   const settings = useChat((s) => s.settings);
   const serverKey = useChat((s) => !!s.server?.serverKey);
   useKeys((s) => `${s.ready}|${s.active}|${s.keys.length}`);
   const src = currentSource(settings);
   if (src.kind === 'account') return PROVIDER_NAMES[src.provider];
   if (src.kind === 'browser') return settings.provider === 'custom' ? (browserKeyProvider(settings) ? PROVIDER_NAMES[browserKeyProvider(settings)!] : t('settings.p.custom')) : PROVIDER_NAMES[settings.provider];
-  return serverKey ? t('keys.free') : t('keys.none');
+  return serverKey ? (short ? t('keys.freeShort') : t('keys.free')) : t('keys.none');
 }
 
 /**
@@ -40,7 +40,8 @@ export function KeyPicker({ variant, phone }: { variant: 'input' | 'header'; pho
   const t = useT();
   const id = useId();
   const open = useKeys((s) => s.picker === id || (s.picker === 'any' && variant === 'header') || (s.picker === 'pinned' && variant === 'input'));
-  const label = useCurrentLabel(t);
+  // In the pinned field the short name, so a typed sentence keeps one line (task 023).
+  const label = useCurrentLabel(t, variant === 'input');
   const btn = useRef<HTMLButtonElement>(null);
   const menu = useRef<HTMLElement | null>(null);
   const desktop = !phone;
@@ -86,8 +87,9 @@ export function KeyPicker({ variant, phone }: { variant: 'input' | 'header'; pho
       window.removeEventListener('keydown', key, true);
     };
   }, [open]);
-  // In the pinned field (task 023): as high as send, its text 8 px from the field's edge (4 + 4).
-  const size = variant === 'input' ? (phone ? 'h-9 pl-1' : 'h-7 pl-1') : 'h-[32px] pl-3';
+  // In the pinned field (task 023): a pop-up button on a quiet plate, as high as send and inset as
+  // send is (4 px, concentric); its text even inside the plate (pt-px: the glyphs' optical centre).
+  const size = variant === 'input' ? (phone ? 'h-9 bg-wash px-3 pt-px' : 'h-7 bg-wash px-2 pt-px') : 'h-[32px] pr-2 pl-3';
   return (
     <>
       <button
@@ -98,7 +100,7 @@ export function KeyPicker({ variant, phone }: { variant: 'input' | 'header'; pho
         aria-expanded={open}
         aria-label={t('keys.picker', { name: label })}
         data-on={open ? '' : undefined}
-        className={cx('hit lg-plate inline-flex max-w-[44%] shrink-0 items-center gap-1 pr-2 text-[13px] font-medium whitespace-nowrap text-ink', size, variant === 'input' && 'self-end')}
+        className={cx('hit lg-plate inline-flex max-w-[44%] shrink-0 items-center gap-1 text-[13px] font-medium whitespace-nowrap text-ink', size, variant === 'input' && 'self-end')}
         data-testid="key-picker"
       >
         <span className="truncate" data-testid="key-picker-label">{label}</span>
