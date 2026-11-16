@@ -425,6 +425,20 @@ export function measureDom(opts) {
       // Items: the element children, or (text directly inside) a range over the text.
       const kids = [...el.children].filter((c) => visible(c) && !decorative(c) && ink(c));
       if (kids.length && !ownText(el)) checkInsets(el, kids, 'button');
+      else if (ownText(el)) {
+        // Text (and icons) directly inside a shaped button: the union of what it draws.
+        let k = null;
+        for (const n of el.childNodes) {
+          const qs = n.nodeType === 3 && n.textContent.trim() ? textNodeRects(n).map((q) => ({ l: q.left, t: q.top, r: q.right, b: q.bottom })) : n.nodeType === 1 && ink(n) ? [ink(n)] : [];
+          for (const q of qs) k = k ? { l: Math.min(k.l, q.l), t: Math.min(k.t, q.t), r: Math.max(k.r, q.r), b: Math.max(k.b, q.b) } : q;
+        }
+        if (k) {
+          const L = k.l - r.left, Rr = r.right - k.r, T = k.t - r.top, B = r.bottom - k.b;
+          const ev = { left: R(L), right: R(Rr), top: R(T), bottom: R(B), height: R(r.height), why: 'button' };
+          if (Math.abs(L - Rr) > 1.01) add('inset-lr', el, `left inset ${R(L)} px, right inset ${R(Rr)} px`, ev);
+          if (Math.abs(T - B) > 1.51) add('inset-tb', el, `top inset ${R(T)} px, bottom inset ${R(B)} px`, ev);
+        }
+      }
     }
   }
   // Panel headers: the first and last items against the surface's edges.
@@ -601,6 +615,18 @@ export function measureDom(opts) {
     }
   }
   const surfacesEls = vis.filter((e) => e.matches('.lg'));
+  // Text outside the glass that a glass surface covers (or touches within 2 px).
+  for (const L of leaves) {
+    if (L.closest('.lg')) continue;
+    for (const S of surfacesEls) {
+      const sr = S.getBoundingClientRect();
+      const q = [...L.childNodes].filter((n) => n.nodeType === 3 && n.textContent.trim()).flatMap(textNodeRects).find((t) => Math.min(t.right, sr.right) - Math.max(t.left, sr.left) > 2 && Math.min(t.bottom, sr.bottom + 2) - Math.max(t.top, sr.top - 2) > 0);
+      if (q) {
+        add('overlap', L, `text on the drawing is covered or touched by ${desc(S)}`, { surface: desc(S), textBottom: R(q.bottom), surfaceTop: R(sr.top) });
+        break;
+      }
+    }
+  }
   for (let i = 0; i < surfacesEls.length; i++) {
     for (let j = i + 1; j < surfacesEls.length; j++) {
       const A = surfacesEls[i], B = surfacesEls[j];
@@ -743,9 +769,53 @@ export function measureDom(opts) {
     }
     comps.push({ key, name, kind: el.getAttribute('data-kind') || 'plain', guides });
   }
+  // ==== rule: accent-use (ginkgo yellow only for sun, play, send, the working glow) ====
+  const accentRgb = (() => {
+    const p = document.createElement('span');
+    p.style.color = 'var(--color-accent)';
+    document.body.appendChild(p);
+    const c = parseColor(getComputedStyle(p).color);
+    p.remove();
+    return c;
+  })();
+  const ALLOWED_ACCENT = '[data-testid=chat-send], [data-testid^=tray-sun], [data-testid^=sun-], [data-testid=bar-sun], .lg-slider, .lg-glow, .lg-halo, [data-testid=signin-continue], [data-testid=keys-save], [data-testid=settings-save], [data-testid=keys-offer-save]';
+  if (accentRgb) {
+    const isAcc = (c) => {
+      const v = parseColor(c);
+      return v && v[3] > 0.5 && Math.abs(v[0] - accentRgb[0]) + Math.abs(v[1] - accentRgb[1]) + Math.abs(v[2] - accentRgb[2]) < 30;
+    };
+    const seenAcc = new Set();
+    for (const el of vis) {
+      if (el.closest(ALLOWED_ACCENT) || el.closest('svg') && !el.matches('svg')) continue;
+      const s = cs(el);
+      const hit = isAcc(s.backgroundColor) ? 'background' : ownText(el) && isAcc(s.color) ? 'text' : null;
+      if (!hit) continue;
+      const k = `${comp(el)}|${hit}`;
+      if (seenAcc.has(k)) continue;
+      seenAcc.add(k);
+      add('accent-use', el, `accent (${hit}) outside the sun, play, send and the working glow`, { use: hit, colour: hit === 'text' ? s.color : s.backgroundColor });
+    }
+  }
+  // ==== rule: same-label (two controls side by side with one name) ====
+  for (const grp of vis.filter((e) => e.matches('[role=toolbar], [role=menu], [role=radiogroup], [role=tablist], [data-testid=dock], [data-testid=toolbar]'))) {
+    const names = new Map();
+    for (const b of grp.querySelectorAll('button, [role^=menuitem], [role=radio], [role=tab]')) {
+      if (!visible(b)) continue;
+      const t = (b.innerText || '').replace(/\s+/g, ' ').trim();
+      if (!t) continue;
+      if (names.has(t) && names.get(t) !== b) {
+        add('same-label', b, `two controls in one group are both labelled "${t}"`, { label: t, other: desc(names.get(t)) });
+        break;
+      }
+      names.set(t, b);
+    }
+  }
+  const toolbarEl = document.querySelector('[data-testid=toolbar]');
+  const toolbar = toolbarEl && visible(toolbarEl) ? box(toolbarEl.getBoundingClientRect()) : null;
+
   const findingGuides = findings.map((f) => f.rect);
 
-  return { findings, comps, findingGuides, textBoxes, surfaces, nested, fields, disabled, enabledKeyed, selected, strings, subject, modeSwitch, rules, colours: [...colours.entries()], radii: [...radii.entries()], vw: VW, vh: VH };
+  return { toolbar, findings, comps, findingGuides, textBoxes, surfaces, nested, fields, disabled, enabledKeyed, selected, strings, subject, modeSwitch, rules, colours: [...colours.entries()], radii: [...radii.entries()], vw: VW, vh: VH };
 }
 
 /**
@@ -791,6 +861,18 @@ export async function analysePixels(job) {
       }
     }
     if (!pool.length) continue;
+    // The two screenshots must show the same glass here (a surface still
+    // moving between them would decide the ratio): compare their medians.
+    const med = (im) => {
+      const v = [];
+      for (const [x, y, w, h] of b.rects) for (let yy = Math.floor(y); yy < y + h; yy += 2) for (let xx = Math.floor(x); xx < x + w; xx += 2) v.push(luma(...px(im, xx, yy)));
+      v.sort((p, q) => p - q);
+      return v[Math.floor(v.length / 2)] ?? 0;
+    };
+    if (Math.abs(med(normal) - med(bare)) > 60) {
+      out.unstable = (out.unstable ?? 0) + 1;
+      continue;
+    }
     pool.sort((a, c) => (lightInk ? a.l - c.l : c.l - a.l));
     const worst = pool[Math.min(pool.length - 1, Math.floor(pool.length * 0.95))];
     const mix = [0, 1, 2].map((j) => b.color[j] * ia + worst.rgb[j] * (1 - ia));

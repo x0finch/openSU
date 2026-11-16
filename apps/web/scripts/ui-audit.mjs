@@ -156,6 +156,7 @@ const disabledLooks = [];
 const enabledLooks = [];
 const colourUse = new Map();
 const radiusUse = new Map();
+const toolbars = []; // the toolbar's box per state (it keeps its width)
 const subjects = []; // { config, state, mode, pinned, centre }
 let tokenColours = null;
 const cropHashes = new Map();
@@ -192,6 +193,9 @@ const SEVERITY = {
   'label-dupe': () => 'P2',
   'off-token-colour': () => 'P2',
   'off-token-radius': () => 'P2',
+  'accent-use': () => 'P2',
+  'stable-width': () => 'P2',
+  'same-label': () => 'P1',
 };
 
 // A bright rule: a line inside a glass surface brighter than the glass on
@@ -309,6 +313,7 @@ async function capture(page, cfg, state, extra = {}) {
   for (const s of dom.selected) selectedSigs.push({ config: cfg.name, state, backend: cfg.css ? 'css' : 'webgl', ...s });
   for (const [k, v] of dom.colours) if (!colourUse.has(k)) colourUse.set(k, `${v} (${cfg.name} ${state})`);
   for (const [k, v] of dom.radii) if (!radiusUse.has(k)) radiusUse.set(k, `${v} (${cfg.name} ${state})`);
+  if (dom.toolbar) toolbars.push({ config: cfg.name, state, mode: dom.subject?.mode ?? null, ...dom.toolbar });
   if (dom.subject?.centre) subjects.push({ config: cfg.name, state, mode: dom.subject.mode, pinned: !!extra.pinned, key: extra.layout ?? null, centre: dom.subject.centre, box: dom.subject.box });
   states.push({ config: cfg.name, state, findings: found.length, subject: dom.subject, modeSwitch: dom.modeSwitch, rules: px.rules.map((r) => ({ comp: r.comp, y: r.y, delta: r.delta })), shot: `shots/${shotName}.png` });
   console.log(`  ${cfg.name} ${state}: ${found.length} findings`);
@@ -805,6 +810,13 @@ function crossState() {
       const tol = Math.max(8, 0.01 * cfg.w);
       if (Math.abs(dx) > tol || Math.abs(dy) > tol) out.push({ rule: 'subject-same-point', config: cfg.name, state: `${a} vs ${b}`, phone: !!cfg.phone, el: '[viewer] / [plan] svg', comp: 'drawing', msg: `the house in 3D is centred at (${A.centre.x}, ${A.centre.y}), the plan at (${B.centre.x}, ${B.centre.y}): off by (${Math.round(dx)}, ${Math.round(dy)}) px`, evidence: { three: A.centre, plan: B.centre, dx: Math.round(dx), dy: Math.round(dy) }, shot: `shots/${cfg.name}--${b}.png` });
     }
+  }
+  // The toolbar keeps its width (UI_STYLE: panels open without changing it), per mode.
+  for (const cfg of configs) {
+    const ts = toolbars.filter((t) => t.config === cfg.name && t.mode === '3d');
+    if (ts.length < 2) continue;
+    const ws = [...new Set(ts.map((t) => Math.round(t.w)))];
+    if (ws.length > 1) out.push({ rule: 'stable-width', config: cfg.name, state: 'all 3D states', phone: !!cfg.phone, el: '[toolbar]', comp: 'toolbar', msg: `the toolbar changes width between states: ${ws.join(', ')} px`, evidence: Object.fromEntries(ws.map((w) => [w, ts.filter((t) => Math.round(t.w) === w).map((t) => t.state).slice(0, 6)])) });
   }
   // Disabled controls that look like their enabled selves.
   for (const d of disabledLooks) {
