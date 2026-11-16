@@ -610,9 +610,19 @@ async function stillHouseChecks() {
     const base = (await restAfter(page)).at(-1);
     page.__framing = await framing(page);
     const name0 = await nameBlock(page);
-    await page.evaluate(() => window.__studio.store.getState().setPinned(true));
-    await page.waitForTimeout(300);
-    const pinning = await restAfter(page);
+    const pin = async () => {
+      await page.evaluate(() => window.__studio.store.getState().setPinned(true));
+      await page.waitForTimeout(300);
+      return restAfter(page);
+    };
+    let pinning = await pin();
+    // As for unpinning below: moved, but software GL drew no frame between; one more cycle before judging.
+    if (pinning.length < 3 && pinning[0] === base && pinning.at(-1) !== base) {
+      await page.evaluate(() => window.__studio.store.getState().setPinned(false));
+      await page.waitForTimeout(300);
+      await restAfter(page);
+      pinning = await pin();
+    }
     const name1 = await nameBlock(page);
     // Smoothly: at least one frame between where it was and where it lands (software GL draws few frames).
     check(pinning.length >= 3 && pinning[0] === base && pinning.at(-1) !== base, `${label}: pinning moves the house, smoothly (${pinning.length - 2} frames between), then it rests`);
