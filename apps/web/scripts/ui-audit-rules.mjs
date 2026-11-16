@@ -1004,3 +1004,345 @@ export async function inkStrength(job) {
   const p995 = dev[Math.floor(dev.length * 0.995)];
   return { bg: Math.round(bg), p98: Math.round(p98 * 10) / 10, p995: Math.round(p995 * 10) / 10 };
 }
+
+/* ------------------------------------------------------------------ */
+/* Interaction rules (task 025): hover, anchors, motion                */
+/* ------------------------------------------------------------------ */
+
+/**
+ * In the page: the controls a hover pass visits (visible, enabled, on top at
+ * their centre), tagged `data-audit-h`, and a baseline of the text that is
+ * visible now (a tooltip is text that becomes visible on hover).
+ */
+export function hoverTargets() {
+  const VW = innerWidth, VH = innerHeight;
+  document.querySelectorAll('[data-audit-h]').forEach((e) => e.removeAttribute('data-audit-h'));
+  const shown = (el) => {
+    const r = el.getBoundingClientRect();
+    if (r.width < 1 || r.height < 1 || r.right <= 0 || r.bottom <= 0 || r.left >= VW || r.top >= VH) return 0;
+    let o = 1;
+    for (let e = el; e && e.nodeType === 1; e = e.parentElement) {
+      const s = getComputedStyle(e);
+      if (s.visibility === 'hidden' || s.display === 'none' || e.hasAttribute('inert')) return 0;
+      o *= Number(s.opacity);
+    }
+    return o;
+  };
+  const tid = (el) => el.getAttribute('data-testid');
+  const desc = (el) => {
+    const t = tid(el);
+    if (t) return `[${t}]`;
+    let up = el.parentElement, anc = '';
+    while (up && !anc) {
+      if (tid(up)) anc = `[${tid(up)}] `;
+      up = up.parentElement;
+    }
+    const l = (el.getAttribute('aria-label') || el.innerText || '').replace(/\s+/g, ' ').trim().slice(0, 18);
+    return `${anc}${el.tagName.toLowerCase()}${el.getAttribute('role') ? `[role=${el.getAttribute('role')}]` : ''}${l ? ` "${l}"` : ''}`;
+  };
+  const comp = (el) => {
+    for (let e = el; e && e !== document.body; e = e.parentElement) if (e.classList?.contains('lg')) return tid(e) || e.getAttribute('aria-label') || e.getAttribute('role') || 'glass';
+    return 'page';
+  };
+  const out = [];
+  let i = 0;
+  for (const el of document.querySelectorAll('button, a[href], [role=menuitem], [role=menuitemradio], [role=radio]')) {
+    if (el.disabled || el.closest('[data-audit-overlay]')) continue;
+    if (shown(el) < 0.5) continue;
+    const r = el.getBoundingClientRect();
+    const cx = r.left + r.width / 2, cy = r.top + r.height / 2;
+    if (cx < 0 || cy < 0 || cx >= VW || cy >= VH) continue;
+    const top = document.elementFromPoint(cx, cy);
+    if (!top || !(top === el || el.contains(top))) continue;
+    if (getComputedStyle(el).pointerEvents === 'none') continue;
+    el.setAttribute('data-audit-h', String(i));
+    el.__auditRestBg = getComputedStyle(el).backgroundColor;
+    out.push({ i, id: desc(el), comp: comp(el), x: cx, y: cy });
+    i++;
+  }
+  // Baseline: elements with their own visible text right now.
+  const base = new Set();
+  for (const el of document.querySelectorAll('body *')) {
+    if (![...el.childNodes].some((n) => n.nodeType === 3 && n.textContent.trim())) continue;
+    if (shown(el) >= 0.5) base.add(el);
+  }
+  window.__auditTextBase = base;
+  return out;
+}
+
+/**
+ * In the page, the pointer resting on control `i`: its hover plate (the
+ * background it now shows, its radius and box) and any tooltip (text that
+ * was not visible before the hover), and the row the control stands in.
+ */
+export function hoverRead(i) {
+  const el = document.querySelector(`[data-audit-h="${i}"]`);
+  if (!el) return null;
+  const shown = (e0) => {
+    const r = e0.getBoundingClientRect();
+    if (r.width < 1 || r.height < 1) return 0;
+    let o = 1;
+    for (let e = e0; e && e.nodeType === 1; e = e.parentElement) {
+      const s = getComputedStyle(e);
+      if (s.visibility === 'hidden' || s.display === 'none') return 0;
+      o *= Number(s.opacity);
+    }
+    return o;
+  };
+  const alpha = (c) => {
+    const m = /rgba?\(([^)]+)\)/.exec(c || '');
+    if (!m) return 0;
+    const p = m[1].split(/[ ,/]+/).filter(Boolean).map(Number);
+    return p.length > 3 ? p[3] : 1;
+  };
+  const r = el.getBoundingClientRect();
+  const s = getComputedStyle(el);
+  const radius = Math.min(parseFloat(s.borderTopLeftRadius) || 0, r.height / 2, r.width / 2);
+  const changed = s.backgroundColor !== (el.__auditRestBg ?? 'rgba(0, 0, 0, 0)');
+  const plate = changed && alpha(s.backgroundColor) > 0.02 ? { bg: s.backgroundColor, radius: Math.round(radius * 10) / 10, w: Math.round(r.width * 10) / 10, h: Math.round(r.height * 10) / 10, full: radius >= r.height / 2 - 0.5 } : null;
+  // The row: the nearest flex row (at most 80 px high) holding the control.
+  let row = null;
+  for (let e = el.parentElement; e && e !== document.body; e = e.parentElement) {
+    const cs = getComputedStyle(e);
+    // A wrapper around this control alone (a tooltip's anchor) is not the row.
+    const controls = e.querySelectorAll('button, a[href], [role=menuitem], [role=radio]').length;
+    if (controls >= 2 && (cs.display === 'flex' || cs.display === 'inline-flex') && !cs.flexDirection.startsWith('column') && e.getBoundingClientRect().height <= 80 && !e.matches('[role=menu], [role=menu] *')) {
+      row = e;
+      break;
+    }
+  }
+  if (row && !row.hasAttribute('data-audit-row')) row.setAttribute('data-audit-row', String(document.querySelectorAll('[data-audit-row]').length));
+  const base = window.__auditTextBase ?? new Set();
+  const tips = [];
+  for (const t of document.querySelectorAll('body *')) {
+    if (base.has(t) || el.contains(t)) continue;
+    if (![...t.childNodes].some((n) => n.nodeType === 3 && n.textContent.trim())) continue;
+    if (shown(t) < 0.5) continue;
+    const tr = t.getBoundingClientRect();
+    if (tr.height > 40 || tr.width > 320) continue;
+    // The tooltip's plate: the text element itself or its nearest ancestor with a background.
+    let p = t;
+    while (p && p !== document.body && alpha(getComputedStyle(p).backgroundColor) < 0.5) p = p.parentElement;
+    const pr = (p && p !== document.body ? p : t).getBoundingClientRect();
+    const prad = p && p !== document.body ? parseFloat(getComputedStyle(p).borderTopLeftRadius) || 0 : 0;
+    tips.push({ text: t.textContent.trim().slice(0, 24), rect: { x: pr.left, y: pr.top, w: pr.width, h: pr.height }, radius: Math.min(prad, pr.height / 2) });
+  }
+  return { plate, row: row ? row.getAttribute('data-audit-row') : null, rect: { x: r.left, y: r.top, w: r.width, h: r.height }, tips };
+}
+
+/**
+ * In the analysis page: the contrast of a tooltip on rendered pixels. `job`:
+ * { png } of the tooltip's plate (corners cut off by the caller). The plate
+ * is the commonest colour, the ink the pixel furthest from it (98th percentile).
+ */
+export async function tipContrast(job) {
+  const img = new Image();
+  img.src = `data:image/png;base64,${job.png}`;
+  await img.decode();
+  const c = document.createElement('canvas');
+  c.width = img.width;
+  c.height = img.height;
+  const g = c.getContext('2d', { willReadFrequently: true });
+  g.drawImage(img, 0, 0);
+  const d = g.getImageData(0, 0, img.width, img.height).data;
+  const lin = (v) => ((v /= 255) <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4);
+  const L = [];
+  const bins = new Map();
+  for (let i = 0; i < d.length; i += 4) {
+    const l = 0.2126 * lin(d[i]) + 0.7152 * lin(d[i + 1]) + 0.0722 * lin(d[i + 2]);
+    L.push(l);
+    const k = Math.round(l * 50);
+    bins.set(k, (bins.get(k) ?? 0) + 1);
+  }
+  const mode = [...bins].sort((a, b) => b[1] - a[1])[0][0];
+  const inBin = L.filter((l) => Math.round(l * 50) === mode).sort((a, b) => a - b);
+  const plate = inBin[Math.floor(inBin.length / 2)];
+  const dev = L.map((l) => [Math.abs(l - plate), l]).sort((a, b) => a[0] - b[0]);
+  const ink = dev[Math.floor(dev.length * 0.98)][1];
+  const ratio = (Math.max(plate, ink) + 0.05) / (Math.min(plate, ink) + 0.05);
+  return { ratio: Math.round(ratio * 100) / 100, plate: Math.round(plate * 1000) / 1000, ink: Math.round(ink * 1000) / 1000 };
+}
+
+/**
+ * In the page: every open anchored surface and its anchor. A surface is
+ * found from its trigger (`aria-expanded=true`: `aria-controls`, else the
+ * visible menu) or from the glass module (`data-anchored` surfaces expose
+ * their anchor). A trigger inside a toolbar anchors its panel to the whole
+ * toolbar, joined (UI_STYLE: panels flow out of the toolbar group).
+ */
+export function anchoredSurfaces() {
+  const box = (e) => {
+    const r = e.getBoundingClientRect();
+    return { x: r.left, y: r.top, w: r.width, h: r.height };
+  };
+  const tid = (el) => el?.getAttribute?.('data-testid');
+  const desc = (el) => (tid(el) ? `[${tid(el)}]` : `${el.tagName.toLowerCase()}${el.getAttribute('role') ? `[role=${el.getAttribute('role')}]` : ''}${el.getAttribute('aria-label') ? ` "${el.getAttribute('aria-label').slice(0, 18)}"` : ''}`);
+  const open = (el) => {
+    if (!el || !el.isConnected) return false;
+    const r = el.getBoundingClientRect();
+    if (r.width < 4 || r.height < 4) return false;
+    for (let e = el; e && e.nodeType === 1; e = e.parentElement) {
+      const s = getComputedStyle(e);
+      if (s.visibility === 'hidden' || s.display === 'none' || Number(s.opacity) < 0.5) return false;
+    }
+    return el.hasAttribute('data-open') || !el.hasAttribute('data-morph');
+  };
+  const out = [];
+  const seen = new Set();
+  const add = (surface, trigger, anchorEl, joinedHint) => {
+    if (!surface || seen.has(surface) || !open(surface)) return;
+    seen.add(surface);
+    const toolbar = trigger?.closest('[role=toolbar]');
+    const joined = joinedHint ?? !!toolbar;
+    const a = joined && toolbar ? toolbar : anchorEl ?? trigger;
+    if (!a) return;
+    const mode = window.__studio?.store?.getState?.().mode ?? null;
+    out.push({ surface: desc(surface), anchor: desc(a), s: box(surface), a: box(a), joined, mode, toolbar: toolbar ? desc(toolbar) : null });
+  };
+  for (const s of document.querySelectorAll('[data-anchored]')) {
+    const a = s.__anchor?.();
+    add(s, a, a, s.getAttribute('data-attach') === 'joined');
+  }
+  for (const t of document.querySelectorAll('[aria-expanded=true]')) {
+    const ids = (t.getAttribute('aria-controls') || '').split(/\s+/).filter(Boolean);
+    let s = ids.map((id) => document.getElementById(id)).find(Boolean) ?? null;
+    if (!s && t.getAttribute('aria-haspopup')) {
+      const menus = [...document.querySelectorAll('[role=menu]')].filter(open);
+      s = menus.sort((p, q) => box(q).w * box(q).h - box(p).w * box(p).h)[0] ?? null;
+    }
+    add(s, t, null, undefined);
+  }
+  return out;
+}
+
+/**
+ * In the analysis page: how much of the gap between a toolbar and its
+ * joined panel is glass. `job`: { png (bare, CSS scale), band: rect of the
+ * gap, inside: a rect inside the panel near the gap }.
+ */
+export async function joinFill(job) {
+  const img = new Image();
+  img.src = `data:image/png;base64,${job.png}`;
+  await img.decode();
+  const c = document.createElement('canvas');
+  c.width = img.width;
+  c.height = img.height;
+  const g = c.getContext('2d', { willReadFrequently: true });
+  g.drawImage(img, 0, 0);
+  const at = (x, y) => {
+    const d = g.getImageData(Math.max(0, Math.min(img.width - 1, Math.round(x))), Math.max(0, Math.min(img.height - 1, Math.round(y))), 1, 1).data;
+    return 0.299 * d[0] + 0.587 * d[1] + 0.114 * d[2];
+  };
+  const vals = [];
+  for (let y = job.inside.y; y < job.inside.y + job.inside.h; y += 2) for (let x = job.inside.x; x < job.inside.x + job.inside.w; x += 3) vals.push(at(x, y));
+  vals.sort((a, b) => a - b);
+  const glass = vals[Math.floor(vals.length / 2)] ?? 0;
+  let n = 0, hit = 0;
+  for (let y = job.band.y; y < job.band.y + job.band.h; y += 1) for (let x = job.band.x; x < job.band.x + job.band.w; x += 2) {
+    n++;
+    if (Math.abs(at(x, y) - glass) <= (job.tol ?? 28)) hit++;
+  }
+  return { glass: Math.round(glass), fill: n ? Math.round((hit / n) * 100) / 100 : 1 };
+}
+
+/**
+ * In the page, one frame of a surface opening or closing: the glass shape's
+ * box (the module's own shape when it reports one; else the element's
+ * transformed box minus a clip-path inset), how opaque the glass is and how
+ * visible its content is.
+ */
+export function motionFrame(el) {
+  if (!el || !el.isConnected) return { gone: true };
+  const r = el.getBoundingClientRect();
+  let b = { x: r.left, y: r.top, w: r.width, h: r.height };
+  let radius = parseFloat(getComputedStyle(el).borderTopLeftRadius) || 0;
+  const dbg = window.__glass?.shapeOf?.(el);
+  if (dbg) {
+    b = { x: dbg.x, y: dbg.y, w: dbg.width, h: dbg.height };
+    radius = dbg.radius;
+  } else {
+    const m = /inset\(([-\d.]+)px ([-\d.]+)px ([-\d.]+)px ([-\d.]+)px(?: round ([-\d.]+)px)?\)/.exec(el.style.clipPath || '');
+    if (m) {
+      const [t, rt, bt, l] = m.slice(1, 5).map(Number);
+      b = { x: b.x + l, y: b.y + t, w: b.w - l - rt, h: b.h - t - bt };
+      if (m[5]) radius = Number(m[5]);
+    }
+  }
+  let alpha = 1;
+  for (let e = el; e && e.nodeType === 1; e = e.parentElement) {
+    const s = getComputedStyle(e);
+    if (s.visibility === 'hidden' || s.display === 'none') alpha = 0;
+    alpha *= Number(s.opacity);
+  }
+  if (dbg && dbg.alpha !== undefined) alpha *= dbg.alpha;
+  // Content: the most visible text inside (opacity through its ancestors up to the surface).
+  let content = 0;
+  for (const t of el.querySelectorAll('*')) {
+    if (![...t.childNodes].some((n) => n.nodeType === 3 && n.textContent.trim())) continue;
+    let o = 1;
+    for (let e = t; e && e !== el; e = e.parentElement) {
+      const s = getComputedStyle(e);
+      if (s.visibility === 'hidden' || s.display === 'none') o = 0;
+      o *= Number(s.opacity);
+    }
+    content = Math.max(content, o);
+  }
+  return { b, radius, alpha: Math.round(alpha * 1000) / 1000, content: Math.round(content * 1000) / 1000 };
+}
+
+/**
+ * In the analysis page: the glass outline of one frame. `job`: { png (bare,
+ * CSS scale), b (the frame's shape box), thr (luma below which a pixel is
+ * glass) }. The mask is the glass pixels inside the box (2 px margin); it is
+ * compared with the best rounded rectangle of the mask's own bounding box.
+ */
+export async function shapeMask(job) {
+  const img = new Image();
+  img.src = `data:image/png;base64,${job.png}`;
+  await img.decode();
+  const c = document.createElement('canvas');
+  c.width = img.width;
+  c.height = img.height;
+  const g = c.getContext('2d', { willReadFrequently: true });
+  g.drawImage(img, 0, 0);
+  // A joined surface merges with its anchor by design: its mask stops at its own box.
+  const mg = job.margin ?? 2;
+  const x0 = Math.max(0, Math.floor(job.b.x - mg)), y0 = Math.max(0, Math.floor(job.b.y - mg));
+  const x1 = Math.min(img.width, Math.ceil(job.b.x + job.b.w + mg)), y1 = Math.min(img.height, Math.ceil(job.b.y + job.b.h + mg));
+  const W = x1 - x0, H = y1 - y0;
+  if (W < 6 || H < 6) return { skip: true };
+  const d = g.getImageData(x0, y0, W, H).data;
+  const m = new Uint8Array(W * H);
+  let bx0 = W, by0 = H, bx1 = -1, by1 = -1, n = 0;
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+    const i = (y * W + x) * 4;
+    if (0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2] < job.thr) {
+      m[y * W + x] = 1;
+      n++;
+      if (x < bx0) bx0 = x;
+      if (x > bx1) bx1 = x;
+      if (y < by0) by0 = y;
+      if (y > by1) by1 = y;
+    }
+  }
+  if (n < 30) return { skip: true, n };
+  const bw = bx1 - bx0 + 1, bh = by1 - by0 + 1;
+  // Fill of the box itself: a shape that leaves most of its own box empty is not the box's shape.
+  const boxArea = Math.max(1, Math.round(job.b.w) * Math.round(job.b.h));
+  let best = { iou: 0, r: 0 };
+  const maxR = Math.floor(Math.min(bw, bh) / 2);
+  for (let r = 0; r <= maxR; r += Math.max(1, Math.floor(maxR / 24))) {
+    let inter = 0, rr = 0;
+    for (let y = 0; y < bh; y++) for (let x = 0; x < bw; x++) {
+      // Inside the rounded rect of the bounding box?
+      const px = x + 0.5, py = y + 0.5;
+      const qx = Math.max(r - px, px - (bw - r), 0), qy = Math.max(r - py, py - (bh - r), 0);
+      const inside = r === 0 || qx * qx + qy * qy <= r * r;
+      if (inside) rr++;
+      if (inside && m[(y + by0) * W + (x + bx0)]) inter++;
+    }
+    const iou = inter / (rr + n - inter);
+    if (iou > best.iou) best = { iou, r };
+  }
+  return { iou: Math.round(best.iou * 1000) / 1000, r: best.r, n, cover: Math.round((n / boxArea) * 1000) / 1000, bbox: { x: bx0 + x0, y: by0 + y0, w: bw, h: bh } };
+}

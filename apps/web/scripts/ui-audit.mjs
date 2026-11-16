@@ -26,7 +26,7 @@ import { tmpdir } from 'node:os';
 import { dirname, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { STUB_KEY, STUB_MODEL, startStub } from './chat-stub.mjs';
-import { analysePixels, inkStrength, measureDom } from './ui-audit-rules.mjs';
+import { analysePixels, anchoredSurfaces, hoverRead, hoverTargets, inkStrength, joinFill, measureDom, motionFrame, shapeMask, tipContrast } from './ui-audit-rules.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const appRoot = resolve(here, '..');
@@ -41,6 +41,8 @@ const writeAllow = flag('--write-allow');
 const onlyStates = listArg('--only');
 const onlyConfigs = listArg('--configs');
 const crops = !smoke && !flag('--no-crops');
+const noHover = flag('--no-hover');
+const noMotion = flag('--no-motion');
 const DPR = 3;
 
 if (!existsSync(resolve(appRoot, 'dist/client/studio.html'))) {
@@ -196,6 +198,13 @@ const SEVERITY = {
   'accent-use': () => 'P2',
   'stable-width': () => 'P2',
   'same-label': () => 'P1',
+  'tip-contrast': (f) => (f.evidence.ratio < 3 ? 'P0' : 'P1'),
+  'hover-plate': () => 'P1',
+  'anchor-gap': () => 'P1',
+  'anchor-joined': () => 'P1',
+  'panel-attach': () => 'P1',
+  'motion-shape': () => 'P1',
+  'motion-empty': () => 'P1',
 };
 
 // A bright rule: a line inside a glass surface brighter than the glass on
@@ -210,6 +219,21 @@ const BRIGHT_RULE_DELTA = 36;
 const PLACEHOLDER_MAX = 0.8;
 // Disabled controls: share of the box in the accent colour.
 const DISABLED_ACCENT_MAX = 0.25;
+// The module's gap between a floating surface and its anchor (material.ts
+// `GLASS.anchorGap`; 8 px, the menus' old margin, where it is not defined).
+const ANCHOR_GAP = (() => {
+  try {
+    const m = /anchorGap:\s*(\d+(?:\.\d+)?)/.exec(readFileSync(resolve(appRoot, 'src/glass/material.ts'), 'utf8'));
+    return m ? Number(m[1]) : 8;
+  } catch {
+    return 8;
+  }
+})();
+// Tooltips: the contrast of their text on rendered pixels.
+const TIP_MIN = 4.5;
+// Motion: a frame's glass outline against the rounded rectangle of its bounding box.
+const MOTION_IOU_MIN = 0.9;
+const attachments = []; // toolbar panels: how each one attaches, per state and mode
 
 async function capture(page, cfg, state, extra = {}) {
   // No hover: the pointer rests on the page's right edge (tooltips closed).
@@ -303,6 +327,37 @@ async function capture(page, cfg, state, extra = {}) {
       errors.push(`${cfg.name} ${state}: placeholder test ${f.id}: ${e.message.split('\n')[0]}`);
     }
   }
+  // Anchored surfaces (task 025): at their anchor, within the module's gap; joined panels touch their toolbar.
+  const anchored = await page.evaluate(anchoredSurfaces).catch(() => []);
+  for (const a of anchored) {
+    const s = a.s, b = a.a;
+    const xOver = Math.min(s.x + s.w, b.x + b.w) - Math.max(s.x, b.x);
+    const yOver = Math.min(s.y + s.h, b.y + b.h) - Math.max(s.y, b.y);
+    // Main axis: vertical when the two overlap horizontally (a menu below or above), else horizontal.
+    const vertical = xOver > 0 || yOver <= 0;
+    const gap = vertical ? Math.max(s.y - (b.y + b.h), b.y - (s.y + s.h)) : Math.max(s.x - (b.x + b.w), b.x - (s.x + s.w));
+    const cross = vertical ? xOver : yOver;
+    const ev = { gap: Math.round(gap * 10) / 10, crossOverlap: Math.round(cross * 10) / 10, surface: s, anchor: b, joined: a.joined };
+    if (a.joined) {
+      let fill = gap <= 1 ? 1 : 0;
+      if (gap > 1 && cross > 8) {
+        const ox = Math.max(s.x, b.x), ow = cross;
+        const top = s.y >= b.y + b.h - 1;
+        // The middle rows of the gap (its edges carry the rim light of either shape).
+        const mid = top ? b.y + b.h + gap / 2 : s.y + s.h + gap / 2;
+        const band = { x: Math.round(ox + ow * 0.25), y: Math.round(mid - 1), w: Math.max(2, Math.round(ow * 0.5)), h: 2 };
+        const inside = { x: Math.round(s.x + s.w * 0.3), y: Math.round(top ? s.y + 6 : s.y + s.h - 12), w: Math.round(s.w * 0.4), h: 6 };
+        const j = await lab.evaluate(joinFill, { png: bare.toString('base64'), band, inside, tol: 40 });
+        fill = j.fill;
+        ev.fill = j.fill;
+      }
+      const attach = fill >= 0.8 ? 'joined' : `floats ${Math.round(gap)} px`;
+      attachments.push({ config: cfg.name, state, toolbar: a.anchor, mode: a.mode, attach, backend: cfg.css ? 'css' : (a.mode === '3d' ? 'webgl' : 'css') });
+      if (fill < 0.8) at('anchor-joined', { el: a.surface, comp: a.surface.replace(/[[\]]/g, ''), msg: `a toolbar panel does not touch its toolbar ${a.anchor}: ${Math.round(gap)} px apart, ${Math.round((ev.fill ?? 0) * 100)}% of the gap is glass`, evidence: ev, rect: { x: Math.min(s.x, b.x), y: Math.min(s.y, b.y), w: Math.max(s.x + s.w, b.x + b.w) - Math.min(s.x, b.x), h: Math.max(s.y + s.h, b.y + b.h) - Math.min(s.y, b.y) } });
+    } else if (cross <= 0 || gap > ANCHOR_GAP + 1.5 || gap < -1) {
+      at('anchor-gap', { el: a.surface, comp: a.surface.replace(/[[\]]/g, ''), msg: cross <= 0 ? `an open surface does not overlap its anchor ${a.anchor} on the cross axis (${Math.round(gap)} px away)` : `an open surface is ${Math.round(gap)} px from its anchor ${a.anchor} (the module's gap is ${ANCHOR_GAP} px)`, evidence: ev, rect: { x: Math.min(s.x, b.x), y: Math.min(s.y, b.y), w: Math.max(s.x + s.w, b.x + b.w) - Math.min(s.x, b.x), h: Math.max(s.y + s.h, b.y + b.h) - Math.min(s.y, b.y) } });
+    }
+  }
   if (crops) await cropState(page, cfg, state, dom, found);
   // record
   for (const f of found) raw.push({ ...f, config: cfg.name, state, phone: !!cfg.phone, lang: cfg.lang, backend: cfg.css ? 'css' : 'webgl', shot: `shots/${shotName}.png` });
@@ -317,6 +372,169 @@ async function capture(page, cfg, state, extra = {}) {
   if (dom.subject?.centre) subjects.push({ config: cfg.name, state, mode: dom.subject.mode, pinned: !!extra.pinned, key: extra.layout ?? null, centre: dom.subject.centre, box: dom.subject.box });
   states.push({ config: cfg.name, state, findings: found.length, subject: dom.subject, modeSwitch: dom.modeSwitch, rules: px.rules.map((r) => ({ comp: r.comp, y: r.y, delta: r.delta })), shot: `shots/${shotName}.png` });
   console.log(`  ${cfg.name} ${state}: ${found.length} findings`);
+}
+
+
+/* ------------------------------------------------------------------ */
+/* Interaction passes (task 025): hover, motion                        */
+/* ------------------------------------------------------------------ */
+
+// States whose controls are hovered one by one (desktop: phones do not hover).
+const HOVER_STATES = ['3d-idle', 'panel-views', 'panel-levels', 'panel-sun', 'project-menu', 'plan-L2', 'plan-levels-panel', 'pinned-turn', 'pinned-menu', 'pinned-picker', 'chat-recent', 'site-location', 'signin-email', 'sheets'];
+
+/** Hovers every control: tooltip contrast on rendered pixels, one hover plate shape and height per row. */
+async function hoverPass(page, cfg, state) {
+  if (cfg.phone) return [];
+  const found = [];
+  const targets = await page.evaluate(hoverTargets);
+  const plates = [];
+  for (const t of targets) {
+    await page.mouse.move(t.x, t.y);
+    await page.waitForTimeout(650);
+    const h = await page.evaluate(hoverRead, t.i).catch(() => null);
+    if (!h) continue;
+    if (h.plate) plates.push({ ...t, ...h });
+    for (const tip of h.tips) {
+      // The plate without its rounded ends (they show what lies behind).
+      const inset = Math.max(2, Math.min(tip.radius, tip.rect.h / 2));
+      const clip = { x: tip.rect.x + inset, y: tip.rect.y + 2, width: tip.rect.w - 2 * inset, height: tip.rect.h - 4 };
+      if (clip.width < 4 || clip.height < 4 || clip.x < 0 || clip.y < 0 || clip.x + clip.width > cfg.w || clip.y + clip.height > cfg.h) continue;
+      const png = await page.screenshot({ clip, scale: 'device' });
+      const c = await lab.evaluate(tipContrast, { png: png.toString('base64') });
+      tipsSeen.push({ config: cfg.name, state, control: t.id, text: tip.text, ratio: c.ratio });
+      if (c.ratio < TIP_MIN) found.push({ rule: 'tip-contrast', el: t.id, comp: t.comp, msg: `tooltip "${tip.text}" reads ${c.ratio}:1 on its plate (minimum ${TIP_MIN}:1)`, evidence: { ratio: c.ratio, plate: c.plate, ink: c.ink, text: tip.text }, rect: { x: tip.rect.x, y: tip.rect.y, w: tip.rect.w, h: tip.rect.h } });
+    }
+  }
+  await page.mouse.move(cfg.w - 2, Math.round(cfg.h / 2));
+  // One shape and one height per row (round ends count as one shape: capsule or circle).
+  const rows = new Map();
+  for (const p of plates) {
+    if (p.row === null) continue;
+    if (!rows.has(p.row)) rows.set(p.row, []);
+    rows.get(p.row).push(p);
+  }
+  for (const list of rows.values()) {
+    if (list.length < 2) continue;
+    const shapeOf = (p) => (p.plate.full ? 'round ends' : `corner radius ${p.plate.radius}`);
+    const shapes = [...new Set(list.map(shapeOf))];
+    const hs = list.map((p) => p.plate.h);
+    if (shapes.length > 1 || Math.max(...hs) - Math.min(...hs) > 1) {
+      const x0 = Math.min(...list.map((p) => p.rect.x)), y0 = Math.min(...list.map((p) => p.rect.y));
+      const x1 = Math.max(...list.map((p) => p.rect.x + p.rect.w)), y1 = Math.max(...list.map((p) => p.rect.y + p.rect.h));
+      found.push({ rule: 'hover-plate', el: list.map((p) => p.id).join(' / '), comp: list[0].comp, msg: `hover plates in one row differ: ${list.map((p) => `${p.id.replace(/^\[[^\]]+\] /, '')} ${shapeOf(p)}, ${p.plate.h} px`).join('; ')}`, evidence: list.map((p) => ({ id: p.id, ...p.plate })), rect: { x: x0, y: y0, w: x1 - x0, h: y1 - y0 } });
+    }
+  }
+  return found;
+}
+const tipsSeen = [];
+
+/**
+ * Frames of a surface opening (`act` opens it) or closing, with the module's
+ * clock stepped by hand (the springs) and CSS transitions slowed: on every
+ * frame the glass outline is a rounded rectangle and the surface is not an
+ * empty shape at full opacity.
+ */
+const MOTION_FRAMES = 12;
+const MOTION_STEP_MS = 55;
+async function motionPass(page, cfg, state, { open, close, find, between, joined }) {
+  const found = [];
+  const cdp = await page.context().newCDPSession(page);
+  await cdp.send('Animation.enable');
+  let hide = null;
+  const dir = resolve(outDir, 'motion', cfg.name);
+  mkdirSync(dir, { recursive: true });
+  const run = async (label, act, handle) => {
+    const frames = [];
+    hide = await page.addStyleTag({ content: HIDE_TEXT });
+    await page.evaluate(() => window.__auditClock.freeze());
+    await cdp.send('Animation.setPlaybackRate', { playbackRate: 0.03 });
+    await act();
+    let el = handle ?? null;
+    for (let k = 0; k < MOTION_FRAMES; k++) {
+      await page.evaluate((ms) => window.__auditClock.advance(ms), MOTION_STEP_MS);
+      await page.evaluate(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))));
+      if (!el) el = await find();
+      const f = el ? await page.evaluate(motionFrame, el).catch(() => ({ gone: true })) : { gone: true };
+      const png = await page.screenshot({ scale: 'css', timeout: 120000 });
+      const file = `${state}-${label}-${String(k).padStart(2, '0')}.png`;
+      writeFileSync(resolve(dir, file), png);
+      frames.push({ k, f, png, file });
+    }
+    await cdp.send('Animation.setPlaybackRate', { playbackRate: 1 });
+    await page.evaluate(() => window.__auditClock.release());
+    await settle(page, 900);
+    return { frames, el };
+  };
+  const unhide = async () => {
+    await hide?.evaluate((n) => n.remove()).catch(() => {});
+    hide = null;
+  };
+  try {
+    const o = await run('open', open, null);
+    // The settled surface: its area and the luma of its glass.
+    const el = o.el ?? (await find());
+    const fin = el ? await page.evaluate(motionFrame, el) : null;
+    const finPng = await page.screenshot({ scale: 'css' });
+    const name = el ? await el.evaluate((e) => e.getAttribute('data-testid') || e.getAttribute('aria-label') || e.getAttribute('role')).catch(() => null) : null;
+    let thr = 170;
+    if (fin && !fin.gone) {
+      const b = fin.b;
+      const inside = { x: Math.round(b.x + Math.min(24, b.w / 4)), y: Math.round(b.y + Math.min(24, b.h / 4)), w: Math.max(4, Math.round(b.w - 2 * Math.min(24, b.w / 4))), h: 4 };
+      const j = await lab.evaluate(joinFill, { png: finPng.toString('base64'), band: inside, inside });
+      thr = Math.min(205, j.glass + 0.45 * (250 - j.glass));
+    }
+    await unhide();
+    if (between) await between();
+    const c = close ? await run('close', close, el) : { frames: [] };
+    await unhide();
+    const area = fin && !fin.gone ? fin.b.w * fin.b.h : 0;
+    for (const [label, seq] of [['open', o.frames], ['close', c.frames]]) {
+      let worst = null, empty = null;
+      for (const fr of seq) {
+        const f = fr.f;
+        if (f.gone || f.alpha < 0.05 || f.b.w < 6 || f.b.h < 6) continue;
+        const m = await lab.evaluate(shapeMask, { png: fr.png.toString('base64'), b: f.b, thr, margin: joined ? 0 : 2 });
+        fr.m = m;
+        if (!m.skip && (m.iou < MOTION_IOU_MIN || (m.cover < 0.6 && f.alpha >= 0.6)) && (!worst || m.iou < worst.m.iou)) worst = fr;
+        if (area && f.alpha >= 0.9 && (f.b.w * f.b.h) / area >= 0.25 && f.content < 0.15 && !empty) empty = fr;
+      }
+      const id = name ? `[${name}]` : state;
+      motionSeen.push({ config: cfg.name, state, dir: label, frames: seq.map((fr) => ({ file: fr.file, ...fr.f, iou: fr.m?.iou, cover: fr.m?.cover })) });
+      if (worst) found.push({ rule: 'motion-shape', el: id, comp: id.replace(/[[\]]/g, ''), msg: `while it ${label}s, the glass is not a rounded rectangle (frame ${worst.k}: ${Math.round(worst.m.iou * 100)}% of its outline matches its box's rounded rectangle, ${Math.round(worst.m.cover * 100)}% of its box is glass)`, evidence: { frame: `motion/${cfg.name}/${worst.file}`, iou: worst.m.iou, cover: worst.m.cover, box: worst.f.b, mask: worst.m.bbox, thr: Math.round(thr) }, rect: { x: worst.f.b.x, y: worst.f.b.y, w: worst.f.b.w, h: worst.f.b.h } });
+      if (empty) found.push({ rule: 'motion-empty', el: id, comp: id.replace(/[[\]]/g, ''), msg: `while it ${label}s, the surface is an empty shape at full opacity (frame ${empty.k}: glass ${Math.round(empty.f.alpha * 100)}%, ${Math.round(((empty.f.b.w * empty.f.b.h) / area) * 100)}% of its size, content ${Math.round(empty.f.content * 100)}%)`, evidence: { frame: `motion/${cfg.name}/${empty.file}`, ...empty.f }, rect: { x: empty.f.b.x, y: empty.f.b.y, w: empty.f.b.w, h: empty.f.b.h } });
+    }
+  } catch (e) {
+    errors.push(`${cfg.name} ${state}: motion: ${e.message.split('\n')[0]}`);
+  } finally {
+    await unhide();
+    await page.evaluate(() => window.__auditClock.release()).catch(() => {});
+    await cdp.detach().catch(() => {});
+  }
+  for (const f of found) raw.push({ ...f, config: cfg.name, state, phone: !!cfg.phone, lang: cfg.lang, backend: cfg.css ? 'css' : 'webgl', shot: `shots/${cfg.name}--${state}.png` });
+  console.log(`  ${cfg.name} ${state}: motion, ${found.length} findings`);
+  return found;
+}
+const motionSeen = [];
+
+/** The module's clock, for stepping springs frame by frame (performance.now, scaled or frozen). */
+function auditClock() {
+  const real = performance.now.bind(performance);
+  let base = 0, at = 0, frozen = false;
+  performance.now = () => (frozen ? base : base + (real() - at));
+  window.__auditClock = {
+    freeze() {
+      base = performance.now();
+      frozen = true;
+    },
+    advance(ms) {
+      base += ms;
+    },
+    release() {
+      if (!frozen) return;
+      at = real();
+      frozen = false;
+    },
+  };
 }
 
 /** Resolves every colour custom property of the glass layer (the tokens). */
@@ -442,6 +660,7 @@ async function newPage(cfg, { hints = false, init } = {}) {
     { hints, lang: cfg.lang },
   );
   if (init) await ctx.addInitScript(init.fn, init.arg);
+  await ctx.addInitScript(auditClock);
   const page = await ctx.newPage();
   page.on('pageerror', (e) => errors.push(`${cfg.name}: page error ${e.message}`));
   return { ctx, page };
@@ -500,12 +719,32 @@ async function runConfig(cfg) {
     try {
       if (fn) await fn();
       await capture(page, cfg, name, extra);
+      if (!cfg.phone && HOVER_STATES.includes(name) && !noHover) {
+        const hf = await hoverPass(page, cfg, name);
+        for (const f of hf) raw.push({ ...f, config: cfg.name, state: name, phone: !!cfg.phone, lang: cfg.lang, backend: cfg.css ? 'css' : 'webgl', shot: `shots/${cfg.name}--${name}.png` });
+        console.log(`  ${cfg.name} ${name}: hover, ${hf.length} findings`);
+      }
     } catch (e) {
       errors.push(`${cfg.name} ${name}: ${e.message.split('\n')[0]}`);
     }
     return true;
   };
   const tl = T[cfg.lang];
+  // A surface that opens: its frames (open and close) around the state's capture.
+  const M = async (page, name, { open, close, find, extra, joined }) => {
+    if (!wants(cfg, name)) return false;
+    if (noMotion) {
+      await open();
+      await settle(page, 1200);
+      await S(page, name, null, extra);
+      if (close) await close();
+      await settle(page, 600);
+      return true;
+    }
+    await motionPass(page, cfg, name, { open, close, find, joined, between: () => S(page, name, null, extra) });
+    return true;
+  };
+  const byTestId = (page, id) => () => page.$(`[data-testid="${id}"]`);
 
   if (wants(cfg, 'landing')) {
     const { ctx, page } = await newPage(cfg);
@@ -526,6 +765,12 @@ async function runConfig(cfg) {
   await S(page, '3d-idle');
   for (const tool of ['views', 'levels', 'sun']) {
     if (!wants(cfg, `panel-${tool}`)) continue;
+    // Desktop panels are anchored surfaces: one of them is filmed opening and closing.
+    if (!cfg.phone && tool === 'views') {
+      await M(page, 'panel-views', { open: () => page.getByTestId('bar-views').first().click(), close: () => page.keyboard.press('Escape'), find: byTestId(page, 'tray-views'), joined: true });
+      await settle(page, 600);
+      continue;
+    }
     await S(page, `panel-${tool}`, async () => {
       await page.getByTestId(`bar-${tool}`).first().click();
       await settle(page, 1200);
@@ -547,13 +792,14 @@ async function runConfig(cfg) {
       await settle(page, 1500);
     });
   }
-  await S(page, 'project-menu', async () => {
-    await page.getByTestId('project-menu').first().click();
-    await settle(page, 900);
-  });
-  if (wants(cfg, 'project-menu')) await esc(page);
+  await M(page, 'project-menu', { open: () => page.getByTestId('project-menu').first().click(), close: () => page.keyboard.press('Escape'), find: () => page.$('[role=menu]') });
   for (const kind of ['location', 'orientation']) {
     if (!wants(cfg, `site-${kind}`)) continue;
+    if (!cfg.phone && kind === 'location') {
+      await M(page, 'site-location', { open: () => store(page, () => window.__studio.store.getState().setSitePanel({ kind: 'location' })), close: () => store(page, () => window.__studio.store.getState().setSitePanel(null)), find: byTestId(page, 'panel-site') });
+      await settle(page, 700);
+      continue;
+    }
     await S(page, `site-${kind}`, async () => {
       await store(page, (k) => window.__studio.store.getState().setSitePanel({ kind: k }), kind);
       await settle(page, 1300);
@@ -580,12 +826,13 @@ async function runConfig(cfg) {
         await store(page, (id) => window.__studio.store.getState().setLevel(id), levels[1]);
         await settle(page, 1500);
       });
-      await S(page, 'plan-levels-panel', async () => {
-        await page.getByTestId('bar-levels').first().click();
-        await settle(page, 1200);
-      });
-      if (cfg.phone) await page.getByTestId('bar-levels').first().click().catch(() => {});
-      else await esc(page);
+      if (cfg.phone) {
+        await S(page, 'plan-levels-panel', async () => {
+          await page.getByTestId('bar-levels').first().click();
+          await settle(page, 1200);
+        });
+        await page.getByTestId('bar-levels').first().click().catch(() => {});
+      } else await M(page, 'plan-levels-panel', { open: () => page.getByTestId('bar-levels').first().click(), close: () => page.keyboard.press('Escape'), find: byTestId(page, 'tray-levels'), joined: true });
       await store(page, (id) => window.__studio.store.getState().setLevel(id), levels[0]);
     }
     await store(page, () => window.__studio.store.getState().setMode('3d'));
@@ -635,11 +882,9 @@ async function runConfig(cfg) {
   if (wants(cfg, 'pinned-') || wants(cfg, 'plan-pinned')) {
     await pin(true);
     await S(page, 'pinned-turn', null, { pinned: true });
-    await S(page, 'pinned-picker', async () => {
-      await page.getByTestId('key-picker').first().click();
-      await settle(page, 900);
-    });
-    if (wants(cfg, 'pinned-picker')) await esc(page);
+    // The project menu over the pinned conversation (it steps aside), and the key menu at its button.
+    await M(page, 'pinned-menu', { open: () => page.getByTestId('project-menu').first().click(), close: () => page.keyboard.press('Escape'), find: () => page.$('[role=menu]') });
+    await M(page, 'pinned-picker', { open: () => page.getByTestId('key-picker').first().click(), close: () => page.keyboard.press('Escape'), find: () => page.$('[role=menu]') });
     if (wants(cfg, 'plan-pinned')) {
       await S(page, 'plan-pinned', async () => {
         await store(page, () => window.__studio.store.getState().setMode('plan'));
@@ -818,6 +1063,15 @@ function crossState() {
     const ws = [...new Set(ts.map((t) => Math.round(t.w)))];
     if (ws.length > 1) out.push({ rule: 'stable-width', config: cfg.name, state: 'all 3D states', phone: !!cfg.phone, el: '[toolbar]', comp: 'toolbar', msg: `the toolbar changes width between states: ${ws.join(', ')} px`, evidence: Object.fromEntries(ws.map((w) => [w, ts.filter((t) => Math.round(t.w) === w).map((t) => t.state).slice(0, 6)])) });
   }
+  // Panels of one toolbar attach one way, in every mode (task 025).
+  for (const cfg of configs) {
+    const as = attachments.filter((a) => a.config === cfg.name);
+    for (const tb of new Set(as.map((a) => a.toolbar))) {
+      const list = as.filter((a) => a.toolbar === tb);
+      const kinds = [...new Set(list.map((a) => (a.attach === 'joined' ? 'joined' : 'floats')))];
+      if (kinds.length > 1) out.push({ rule: 'panel-attach', config: cfg.name, state: 'all panel states', phone: !!cfg.phone, el: tb, comp: tb.replace(/[[\]]/g, ''), msg: `panels of one toolbar attach two ways: ${[...new Set(list.map((a) => `${a.mode} ${a.attach}`))].join('; ')}`, evidence: list.map((a) => ({ state: a.state, mode: a.mode, attach: a.attach })) });
+    }
+  }
   // Disabled controls that look like their enabled selves.
   for (const d of disabledLooks) {
     if (!d.round) continue; // filled round buttons: their mean colour is the button, not the row behind text
@@ -939,6 +1193,13 @@ const KNOWN = [
   ['8 send looks active when empty', (g) => (g.rule === 'disabled-affordance' || g.rule === 'disabled-same') && g.el === '[chat-send]'],
   ['9 mode switch off-centre when pinned', (g) => g.rule === 'mode-centre' && g.where.some((w) => /pinned/.test(w))],
   ['10 house and plan not on one point', (g) => g.rule === 'subject-same-point' || g.rule === 'subject-centre'],
+  // Task 025: the owner's recording (2026-11-16).
+  ['11 project menu is not a rounded rectangle while it moves', (g) => g.rule === 'motion-shape' && g.where.some((w) => /menu/.test(w))],
+  ['12a tooltip unreadable in the pinned header', (g) => g.rule === 'tip-contrast' && g.where.some((w) => /pinned/.test(w))],
+  ['12b hover plates of one row differ (pinned header)', (g) => g.rule === 'hover-plate' && g.where.some((w) => /pinned/.test(w))],
+  ['13 key menu opens away from its button', (g) => g.rule === 'anchor-gap' && /key-menu|menu/.test(g.el) && g.where.some((w) => /picker/.test(w))],
+  ['14a plan levels panel attaches unlike the 3D panels', (g) => g.rule === 'panel-attach' || (g.rule === 'anchor-joined' && g.where.some((w) => /plan/.test(w)))],
+  ['14b a panel is an empty shape mid-animation', (g) => g.rule === 'motion-empty'],
 ];
 const selfTest = KNOWN.map(([name, test]) => {
   const hits = list.filter(test);
@@ -947,7 +1208,7 @@ const selfTest = KNOWN.map(([name, test]) => {
 
 const perRule = {};
 for (const g of list) perRule[g.rule] = (perRule[g.rule] ?? 0) + 1;
-writeFileSync(resolve(outDir, smoke ? 'smoke.json' : 'findings.json'), JSON.stringify({ when: new Date().toISOString(), configs: configs.map((c) => c.name), states, findings: list, raw, selfTest, perRule, errors }, null, 1));
+writeFileSync(resolve(outDir, smoke ? 'smoke.json' : 'findings.json'), JSON.stringify({ when: new Date().toISOString(), configs: configs.map((c) => c.name), states, findings: list, raw, selfTest, perRule, errors, attachments, tips: tipsSeen, motion: motionSeen }, null, 1));
 
 if (!smoke) {
   writeFileSync(resolve(outDir, 'findings.md'), findingsMd());
