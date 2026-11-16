@@ -249,11 +249,11 @@ function SheetInput() {
  */
 function WalkEdge({ box }: { box: Box | null }) {
   if (!box) return null;
-  const fade = 'linear-gradient(to right, #000 calc(100% - 56px), transparent), linear-gradient(to bottom, #000 calc(100% - 14px), transparent)';
+  const fade = 'linear-gradient(to right, #000 calc(100% - 96px), transparent), linear-gradient(to bottom, #000 calc(100% - 10px), transparent)';
   return (
     <div
       className="pointer-events-none absolute top-0 left-0"
-      style={{ width: box.right + 56, height: box.bottom + 10, background: 'var(--color-page)', maskImage: fade, WebkitMaskImage: fade, maskComposite: 'intersect', WebkitMaskComposite: 'source-in' }}
+      style={{ width: box.right + 96, height: box.bottom + 12, background: 'var(--color-page)', maskImage: fade, WebkitMaskImage: fade, maskComposite: 'intersect', WebkitMaskComposite: 'source-in' }}
       aria-hidden="true"
     />
   );

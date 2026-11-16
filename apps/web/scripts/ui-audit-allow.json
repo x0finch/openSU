@@ -2,28 +2,9 @@
   "note": "Known findings of `ui-audit.mjs --smoke` (task 024). A new finding fails the test; a fixed one must be removed from this list.",
   "smoke": [
     "accent-use|chat-panel|[turn-change] span|accent (background) outside the sun, play, send and the working glow",
-    "bright-rule|chat-panel|[prompt] top edge|bright rule ([prompt] top edge) at y #: luma # above the glass around it (the module hairline measures #)",
-    "capsule-radius|prompt|[prompt]|control surface radius # px, height # px (a capsule is #)",
-    "card-in-card|prompt|[prompt]|nested surface reads as its own card: fill luma # inside vs # around it (#)",
-    "concentric|prompt|[prompt]|corner radius # px inside a # px corner with a # px gap (concentric: # px)",
-    "disabled-affordance|prompt|[chat-send]|cannot act but #% of it is solid accent (looks ready)",
-    "field-passive-text|prompt|[quota-left]|status text inside the input: \"今天还剩 # 次\"",
-    "glass-on-glass|prompt|[prompt]|a glass surface inside [chat-panel] (card in card)",
-    "hairline|chat-panel|[chat-panel] header \"AI 设计助手 取消固定\"|rule (border-bottom) # px thick (the module hairline is # px); runs edge to edge (hairlines are inset from both edges)",
-    "hairline|chat-panel|[chat-panel] header \"AI 设计助手 取消固定\"|rule (border-top) # px thick (the module hairline is # px); runs edge to edge (hairlines are inset from both edges); lies on the surface's own edge",
-    "hairline|chat-panel|[chat-panel] header \"AI 设计助手 新对话 取消固定\"|rule (border-bottom) # px thick (the module hairline is # px); runs edge to edge (hairlines are inset from both edges)",
-    "hairline|chat-panel|[chat-panel] header \"AI 设计助手 新对话 取消固定\"|rule (border-top) # px thick (the module hairline is # px); runs edge to edge (hairlines are inset from both edges); lies on the surface's own edge",
     "inset-lr|chat-panel|[chat-panel] header \"AI 设计助手 取消固定\"|panel header: left inset # px, right inset # px",
     "inset-lr|chat-panel|[chat-panel] header \"AI 设计助手 新对话 取消固定\"|panel header: left inset # px, right inset # px",
-    "inset-lr|prompt|[prompt]|left inset # px, right inset # px",
-    "inset-tb|prompt|[prompt]|top inset # px, bottom inset # px",
-    "mode-centre|mode-switch|[mode-switch]|mode switch centre x # px, screen centre # px (off by #)",
-    "placeholder-dim|prompt|[prompt-bar]|placeholder is #% as strong as entered text, same size and weight (#px, #)",
-    "row-align|prompt|[prompt] form \"免费额度 今天还剩 2 次\"|# children on # different centre lines (spread # px)",
-    "row-align|prompt|[prompt] form \"免费额度 今天还剩 3 次\"|# children on # different centre lines (spread # px)",
-    "subject-centre|plan|[plan] svg|plan centre (#, #) is off the framing area's centre (#, #) by (#, #) px",
     "text-size|chat-panel|[chat-panel] 10.5 px text|# px text (minimum # px)",
-    "text-size|project-menu-list|[project-menu-list] 11 px text|# px text (minimum # px)",
-    "wrap|prompt|[prompt-bar]|placeholder wraps to # lines"
+    "text-size|project-menu-list|[project-menu-list] 11 px text|# px text (minimum # px)"
   ]
 }

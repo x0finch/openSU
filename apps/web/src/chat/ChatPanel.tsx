@@ -750,7 +750,8 @@ export function ChatInput({ phone, pinned, className }: { phone?: boolean; pinne
       {form}
     </GlassField>
   ) : (
-    <GlassInputBar ref={box} working={!!working} className={className} data-testid="prompt">
+    // A capsule at one line (phone 48 high, desktop 56); grown, it keeps that radius (a rounded field, as Messages does).
+    <GlassInputBar ref={box} working={!!working} radius={phone ? 24 : 28} className={className} data-testid="prompt">
       {form}
     </GlassInputBar>
   );

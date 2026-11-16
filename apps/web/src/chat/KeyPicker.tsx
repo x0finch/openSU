@@ -86,8 +86,8 @@ export function KeyPicker({ variant, phone }: { variant: 'input' | 'header'; pho
       window.removeEventListener('keydown', key, true);
     };
   }, [open]);
-  // In the pinned field (task 023): a quiet plate at rest (a pop-up button reads as one), as high as send.
-  const size = variant === 'input' ? (phone ? 'h-9 bg-wash' : 'h-7 bg-wash') : 'h-[32px]';
+  // In the pinned field (task 023): as high as send, its text 8 px from the field's edge (4 + 4).
+  const size = variant === 'input' ? (phone ? 'h-9 pl-1' : 'h-7 pl-1') : 'h-[32px] pl-3';
   return (
     <>
       <button
@@ -98,7 +98,7 @@ export function KeyPicker({ variant, phone }: { variant: 'input' | 'header'; pho
         aria-expanded={open}
         aria-label={t('keys.picker', { name: label })}
         data-on={open ? '' : undefined}
-        className={cx('hit lg-plate inline-flex max-w-[44%] shrink-0 items-center gap-1 pr-2 pl-3 text-[13px] font-medium whitespace-nowrap text-ink', size, variant === 'input' && 'self-end')}
+        className={cx('hit lg-plate inline-flex max-w-[44%] shrink-0 items-center gap-1 pr-2 text-[13px] font-medium whitespace-nowrap text-ink', size, variant === 'input' && 'self-end')}
         data-testid="key-picker"
       >
         <span className="truncate" data-testid="key-picker-label">{label}</span>

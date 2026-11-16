@@ -133,6 +133,22 @@ async function turn(page, text) {
 }
 const lastError = (page) => page.evaluate(() => window.__studio.chat.getState().items.at(-1)?.error ?? null);
 const quota = (page) => page.evaluate(() => window.__studio.chat.getState().server?.quota ?? null);
+/**
+ * The remaining-uses hint (task 023: on the free allowance's row of the key
+ * menu, not in the input). Opens the recent strip and its key menu, reads
+ * the hint, closes both.
+ */
+async function quotaHint(page) {
+  await page.evaluate(() => window.__studio.store.getState().setRecent(true));
+  await page.getByTestId('recent-strip').getByTestId('key-picker').click();
+  await page.waitForSelector('[data-testid=key-menu] [data-testid=key-free]');
+  const text = await page.locator('[data-testid=key-menu] [data-testid=quota-left]').textContent({ timeout: 3000 }).catch(() => null);
+  const inInput = await page.getByTestId('prompt').getByTestId('quota-left').count();
+  await page.keyboard.press('Escape');
+  await page.evaluate(() => window.__studio.store.getState().setRecent(false));
+  await page.waitForTimeout(300);
+  return { text: text ?? '', inInput };
+}
 const code = async (base, email) => (await (await fetch(`${base}/api/auth-test/code?email=${encodeURIComponent(email)}`)).json()).code;
 
 async function closeMenu(page) {
@@ -212,10 +228,15 @@ try {
     await shot(page, 'desktop-menu-signin');
     await closeMenu(page);
 
-    check(((await page.getByTestId('quota-left').textContent()) ?? '').includes('3'), 'the input shows 3 left (3 or fewer)');
+    const h3 = await quotaHint(page);
+    check(h3.text.includes('3') && h3.inInput === 0, `the key menu's free row shows 3 left (3 or fewer), the input does not (${JSON.stringify(h3)})`);
+    // Task 023 section 6: the hint follows each finished turn.
+    await turn(page, '你好 1');
+    const h2 = await quotaHint(page);
+    check(h2.text.includes('2'), `after one turn the free row shows 2 left (${h2.text})`);
     await page.getByTestId('prompt-bar').fill('');
     await shot(page, 'desktop-remaining-3');
-    for (let i = 1; i <= 3; i++) await turn(page, `你好 ${i}`);
+    for (let i = 2; i <= 3; i++) await turn(page, `你好 ${i}`);
     const q0 = await quota(page);
     check(q0?.remaining === 0 && q0?.kind === 'anon', `after 3 anonymous turns no credit is left (${JSON.stringify(q0)})`);
     const calls = stub.received.length;
@@ -246,8 +267,8 @@ try {
     for (let i = 1; i <= 10; i++) {
       await turn(page, `你好 ${i}`);
       if (i === 7) {
-        const left = await page.getByTestId('quota-left').textContent();
-        check((left ?? '').includes('3'), `the hint appears at 3 left (${left})`);
+        const left = (await quotaHint(page)).text;
+        check(left.includes('3'), `the hint appears at 3 left (${left})`);
         await shot(page, 'desktop-remaining-hint');
       }
     }
@@ -326,7 +347,8 @@ try {
     const preview = await startPreview({ QUOTA_ANON_TRIAL: '1', QUOTA_USER_DAILY: '2' });
     console.log(`phone: preview on ${preview.base}`);
     const { ctx, page } = await open(preview.base, PHONE);
-    check(((await page.getByTestId('quota-left').textContent()) ?? '').includes('1'), 'phone: the input shows 1 left');
+    const h1 = await quotaHint(page);
+    check(h1.text.includes('1') && h1.inInput === 0, `phone: the key menu's free row shows 1 left (${h1.text})`);
     await shot(page, 'phone-remaining');
     await openMenu(page);
     await shot(page, 'phone-menu-signin');

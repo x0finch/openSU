@@ -621,7 +621,7 @@ export function GlassTextSurface({ className, children, ...rest }: Omit<GlassPro
 }
 
 /** The input capsule (Apple's compose field). `working`: the yellow light travels round its edge. */
-export function GlassInputBar({ working, className, children, ref, ...rest }: Omit<GlassProps, 'kind' | 'radius'> & { working?: boolean }) {
+export function GlassInputBar({ working, radius = 28, className, children, ref, ...rest }: Omit<GlassProps, 'kind' | 'radius'> & { working?: boolean; radius?: number }) {
   const el = useRef<HTMLElement | null>(null);
   const merged = useMergedRef(el, ref);
   useLayoutEffect(() => {
@@ -634,7 +634,7 @@ export function GlassInputBar({ working, className, children, ref, ...rest }: Om
     return () => ro.disconnect();
   }, []);
   return (
-    <Glass ref={merged} kind="control" radius={28} className={cx('pointer-events-auto', className)} data-working={working ? '' : undefined} {...rest}>
+    <Glass ref={merged} kind="control" radius={radius} className={cx('pointer-events-auto', className)} data-working={working ? '' : undefined} {...rest}>
       <span className="lg-halo" aria-hidden="true" />
       <span className="lg-glow" aria-hidden="true">
         <i />

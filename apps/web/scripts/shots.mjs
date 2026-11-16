@@ -517,6 +517,49 @@ async function restAfter(page) {
   return all;
 }
 
+/** Screen position of the model origin on the level shown (the plan's registered frame) and the plan transform. */
+const planOrigin = (page) =>
+  page.evaluate(() => {
+    const el = document.querySelector('[data-testid=plan] [data-level]');
+    const r = el.getBoundingClientRect();
+    const [ox, oy] = el.dataset.origin.split(',').map(Number);
+    const k = r.width / el.offsetWidth;
+    return { level: el.dataset.level, x: Math.round((r.left + ox * k) * 100) / 100, y: Math.round((r.top + oy * k) * 100) / 100, xf: getComputedStyle(el.parentElement).transform };
+  });
+
+/**
+ * Task 023: floors stay registered. Switching level, with the levels panel
+ * open and closed, keeps the plan transform and puts a model point (the
+ * origin) on the same screen pixel on every level.
+ */
+async function levelsRegistered(page, label) {
+  const ids = await page.evaluate(() => window.__studio.store.getState().house.levels.map((l) => l.id));
+  if (ids.length < 2) return check(false, `${label}: the sample house has more than one level`);
+  const setLevel = (id) => page.evaluate((i) => window.__studio.store.getState().setLevel(i), id);
+  await setLevel(ids[0]);
+  await page.waitForTimeout(400);
+  const seen = [];
+  for (const open of [false, true]) {
+    if (open) {
+      await page.getByTestId('bar-levels').click();
+      await page.waitForTimeout(500);
+    }
+    for (const id of [...ids, ids[0]]) {
+      await setLevel(id);
+      await page.waitForFunction((i) => document.querySelector(`[data-testid=plan] [data-level="${i}"]`), id);
+      await page.waitForTimeout(250);
+      seen.push(await planOrigin(page));
+    }
+    if (open) {
+      await page.keyboard.press('Escape');
+      await page.waitForTimeout(400);
+    }
+  }
+  const a = seen[0];
+  const same = seen.every((o) => o.xf === a.xf && Math.abs(o.x - a.x) < 0.01 && Math.abs(o.y - a.y) < 0.01);
+  check(same && new Set(seen.map((o) => o.level)).size === ids.length, `${label}: every level keeps the plan transform and the model origin on the same pixel, levels panel open and closed (${seen.map((o) => `${o.level} ${o.x},${o.y}`).join('; ')})`);
+}
+
 /** The name block: its box, the menu trigger's box, and the name's ink. */
 const nameBlock = (page) =>
   page.evaluate(() => {
@@ -651,8 +694,10 @@ async function stillHouseChecks() {
     await still(page, 'plan project menu', () => page.getByTestId('project-menu').click(), esc(page));
     await still(page, 'plan sign-in', account(page, true), account(page, false));
     await still(page, 'plan recent strip', store(page, () => window.__studio.store.getState().setRecent(true)), store(page, () => window.__studio.store.getState().setRecent(false)));
+    await levelsRegistered(page, 'plan');
     const { base, name0 } = await pinCycle(page, 'plan');
     await still(page, 'plan pinned: levels panel', () => page.getByTestId('bar-levels').click(), esc(page));
+    await levelsRegistered(page, 'plan pinned');
     await unpinCycle(page, 'plan', base, name0);
     await ctx.close();
   }
