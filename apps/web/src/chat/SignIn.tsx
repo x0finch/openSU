@@ -256,9 +256,9 @@ const MENU_TRIGGER = '[data-testid=project-menu]';
 const INPUT = '[data-testid=prompt]';
 
 /**
- * Hosts the sheet. Desktop: a popover that grows out of the opening
- * control (a fixed stand-in at its box, since a menu row closes with its
- * menu) and flows back into the house name (menu) or that control.
+ * Hosts the sheet. Desktop: a popover at the house name (from its menu)
+ * or above the input, grown out of the opening control's box (a menu row
+ * closes with its menu); it flows back into the house name or that control.
  */
 export function SignInHost({ phone }: { phone?: boolean }) {
   const t = useT();
@@ -266,7 +266,6 @@ export function SignInHost({ phone }: { phone?: boolean }) {
   const origin = useAccount((s) => s.origin);
   const from = useAccount((s) => s.anchor);
   const [shown, setShown] = useState(open);
-  const ghost = useRef<HTMLDivElement>(null);
   const panel = useRef<HTMLElement>(null);
   const [rect, setRect] = useState<DOMRect | null>(null);
   useLayoutEffect(() => {
@@ -286,11 +285,13 @@ export function SignInHost({ phone }: { phone?: boolean }) {
     window.addEventListener('pointerdown', down, true);
     return () => window.removeEventListener('pointerdown', down, true);
   }, [open, phone]);
-  const anchor = () => {
-    if (open) return ghost.current;
+  // Where it stands: under the house name (from its menu), else above the input, where the draft waits.
+  const anchor = () => document.querySelector<HTMLElement>(origin === 'menu' ? MENU_TRIGGER : INPUT);
+  // What it grows out of: the opening control's box (a menu row closes with its menu); it flows back into the house name or that control.
+  const grow = () => {
+    if (open && rect) return { x: rect.left, y: rect.top, width: rect.width, height: rect.height };
     if (origin === 'menu') return document.querySelector<HTMLElement>(MENU_TRIGGER);
-    // Back into the input (where the draft waits), or the control if it is still there.
-    return from?.isConnected ? from : document.querySelector<HTMLElement>(INPUT) ?? ghost.current;
+    return from?.isConnected ? from : document.querySelector<HTMLElement>(INPUT);
   };
   if (!shown) return null;
   const onClosed = () => {
@@ -325,18 +326,18 @@ export function SignInHost({ phone }: { phone?: boolean }) {
   const width = 380;
   return (
     <>
-      {rect && <div ref={ghost} className="pointer-events-none fixed" style={{ left: rect.left, top: rect.top, width: rect.width, height: rect.height }} aria-hidden="true" />}
       <GlassPopover
         ref={panel}
         open={open}
         anchor={anchor}
+        placement={origin === 'menu' ? 'below-start' : 'above-center'}
+        from={grow}
         kind="text"
         onClosed={onClosed}
         ariaRole="dialog"
         aria-modal="true"
         aria-labelledby="signin-title"
-        className="absolute z-50"
-        style={origin === 'menu' ? { top: 74, left: 24, width } : { bottom: 96, left: `calc(50% - ${width / 2}px)`, width }}
+        style={{ width }}
         data-testid="signin-sheet"
       >
         <SignInBody />

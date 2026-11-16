@@ -113,6 +113,9 @@ export const GLASS = {
   lensStretchMax: 26,
   /** A lifted lens is clear: its tint falls to this share. */
   lensClear: 0.12,
+  /** Anchored surfaces (task 025): a floating menu or panel stands this far from its anchor, and this far inside the screen edge. */
+  anchorGap: 8,
+  screenInset: 12,
   /** Radii, CSS px. */
   radiusPanel: 30,
   radiusText: 26,
@@ -160,6 +163,8 @@ export function cssVars(tone: GlassTone): Record<string, string> {
     '--lg-tint-lens': String(t.tintLens),
     '--lg-lens-face': t.lensFace,
     '--lg-thumb-face': t.thumbFace,
+    // The tooltip's plate and ink: their own names, never remapped inside a panel (.lg remaps --color-ink).
+    '--lg-tip-plate': t.ink,
     '--lg-tip-ink': t.tipInk,
     '--lg-on-ink': t.tipInk,
     '--lg-sat': String(t.saturation),

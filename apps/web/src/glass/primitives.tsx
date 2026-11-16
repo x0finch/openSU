@@ -6,7 +6,9 @@
 import {
   type ButtonHTMLAttributes, type CSSProperties, type HTMLAttributes, type KeyboardEvent as RKeyboardEvent, type ReactNode, type Ref, useCallback, useEffect, useLayoutEffect, useRef, useState,
 } from 'react';
-import { cx, Glass, type GlassProps, GlassLens, useGlass, useMergedRef } from './Glass';
+import { createPortal } from 'react-dom';
+import { type Attach, coveredBy, type Placement, place, registerFloating, subscribeFloating } from './anchor';
+import { cx, Glass, type GlassProps, GlassLens, useGlass, useMergedRef, usePortalHost } from './Glass';
 import { GLASS, TONES } from './material';
 import { glassRegistry, type Rect, type ShapeOverride } from './registry';
 import { prefersReducedMotion, Spring, SPRINGS } from './spring';
@@ -53,9 +55,10 @@ export function GlassGroupButton({ icon, label, reading: value, named, text, on,
   );
 }
 
-/** A standalone glass button: circular (icon) or a capsule (icon and label). */
-export function GlassButton({ icon, children, label, size = 48, accent, className, glassClassName, group, ref, ...rest }: ButtonHTMLAttributes<HTMLButtonElement> & { icon?: ReactNode; label?: string; size?: number; accent?: boolean; glassClassName?: string; group?: number; ref?: Ref<HTMLButtonElement> }) {
+/** A standalone glass button: circular (icon) or a capsule (icon and label). `tip`: its label as the module's tooltip. */
+export function GlassButton({ icon, children, label, size = 48, accent, tip, className, glassClassName, group, ref, ...rest }: ButtonHTMLAttributes<HTMLButtonElement> & { icon?: ReactNode; label?: string; size?: number; accent?: boolean; tip?: boolean; glassClassName?: string; group?: number; ref?: Ref<HTMLButtonElement> }) {
   const round = !children;
+  if (tip && label) return <GlassTip label={label}><GlassButton icon={icon} label={label} size={size} accent={accent} className={className} glassClassName={glassClassName} group={group} ref={ref} {...rest}>{children}</GlassButton></GlassTip>;
   return (
     <Glass press group={group} className={cx('pointer-events-auto inline-flex', glassClassName)} style={{ height: size, minWidth: size }}>
       <button
@@ -357,35 +360,52 @@ export function GlassSegmented<T extends string>({ value, onChange, segments, la
 }
 
 /* ------------------------------------------------------------------ */
-/* Popover / menu that flows out of its control                        */
+/* Anchored surfaces: popover, menu, toolbar panel                     */
 /* ------------------------------------------------------------------ */
 
-export interface PopoverProps extends Omit<GlassProps, 'shape' | 'kind' | 'radius'> {
+/** The size of an anchored surface; where it stands is the module's job (`anchor`, `placement`, `attach`). */
+type SizeStyle = Pick<CSSProperties, 'width' | 'minWidth' | 'maxWidth' | 'height' | 'minHeight' | 'maxHeight'>;
+
+export interface PopoverProps extends Omit<GlassProps, 'shape' | 'kind' | 'radius' | 'style' | 'layer'> {
   open: boolean;
-  /** The control it grows out of (and flows back into). */
+  /** The control it stands at. */
   anchor: () => HTMLElement | null;
+  /** Side of the anchor and alignment along it (flipped or shifted only to stay on screen). Default below-start. */
+  placement?: Placement;
+  /** `joined`: touches the anchor's glass and merges with it (pass the anchor's `group`); `float`: the module's gap away. Default float. */
+  attach?: Attach;
+  /** What it grows out of and flows back into, when not the anchor: an element, or the box a control had (a menu row that closed with its menu). */
+  from?: () => HTMLElement | Rect | null;
   radius?: number;
   kind?: 'control' | 'text';
+  style?: SizeStyle;
   /** Called once it has flowed back and unmounted. */
   onClosed?: () => void;
-  /** Reports the settled box (offset geometry) while open, null when closed. */
+  /** Reports the box it stands in while open (viewport px), null when closed. */
   onBox?: (b: { left: number; top: number; right: number; bottom: number } | null) => void;
-  /** Class of the content wrapper (it fades in over the last part of the morph). */
+  /** Class of the content wrapper (it fades in with the shape). */
   bodyClassName?: string;
 }
 
 /**
- * A glass panel that grows out of `anchor` (shape, radius, tint and frost
- * follow one spring, with a slight jelly: height trails width a little)
- * and flows back into it on close. Content fades in over the last part.
- * Reduced motion: it fades in place.
+ * The one anchored surface (task 025): a glass panel placed at `anchor`
+ * (`placement`, `attach`; see anchor.ts) that grows out of it with the
+ * module's spring and flows back on close. The glass is a rounded
+ * rectangle on every frame; its opacity and its content fade in with the
+ * shape. Reduced motion: no scale, a short fade. A floating surface is
+ * drawn above the chrome layer (it may lie over other glass, a menu over
+ * the conversation it was opened from) and, while open, tells the module
+ * what it covers (`coveredBy`). It renders in the glass layer's portal
+ * host, so no surface around its anchor clips or transforms it.
  */
-export function GlassPopover({ open, anchor, radius = GLASS.radiusPanel, kind = 'text', onClosed, onBox, bodyClassName, className, style, children, ref, ...rest }: PopoverProps) {
+export function GlassPopover({ open, anchor, placement = 'below-start', attach = 'float', from, radius = GLASS.radiusPanel, kind = 'text', onClosed, onBox, bodyClassName, className, style, children, ref, ...rest }: PopoverProps) {
   const [mounted, setMounted] = useState(open);
   const el = useRef<HTMLElement | null>(null);
   const merged = useMergedRef(el, ref);
   const inner = useRef<HTMLDivElement>(null);
   const applied = useRef({ dx: 0, dy: 0, sx: 1, sy: 1 });
+  const placed = useRef<Rect | null>(null);
+  const host = usePortalHost();
   const { backend, tone } = useGlass();
   const backendRef = useRef(backend);
   backendRef.current = backend;
@@ -395,6 +415,14 @@ export function GlassPopover({ open, anchor, radius = GLASS.radiusPanel, kind = 
   onClosedRef.current = onClosed;
   const anchorRef = useRef(anchor);
   anchorRef.current = anchor;
+  const fromRef = useRef<() => HTMLElement | Rect | null>(from ?? anchor);
+  fromRef.current = from ?? anchor;
+  const onBoxRef = useRef(onBox);
+  onBoxRef.current = onBox;
+  const cfg = useRef({ placement, attach });
+  cfg.current = { placement, attach };
+  const cap = useRef('');
+  cap.current = style?.maxHeight === undefined ? '' : typeof style.maxHeight === 'number' ? `${style.maxHeight}px` : String(style.maxHeight);
 
   /** The panel's own box in the viewport, without the morph transform. */
   const natural = (): Rect | null => {
@@ -404,12 +432,49 @@ export function GlassPopover({ open, anchor, radius = GLASS.radiusPanel, kind = 
     const a = applied.current;
     return { x: r.left - a.dx, y: r.top - a.dy, width: r.width / a.sx, height: r.height / a.sy };
   };
+
+  /** Places the surface at its anchor (the only place an anchored surface is positioned). */
+  const layout = useCallback(() => {
+    const e = el.current;
+    const a = anchorRef.current();
+    if (!e || !a || !a.isConnected) return;
+    // The audit reads which control a surface stands at (task 025).
+    (e as HTMLElement & { __anchor?: () => HTMLElement | null }).__anchor = () => anchorRef.current();
+    const ar = toRect(a.getBoundingClientRect());
+    // The glass surface the anchor sits in (a menu stays inside the pinned conversation when it fits).
+    const surface = a.closest<HTMLElement>('.lg');
+    const within = surface && surface !== e ? toRect(surface.getBoundingClientRect()) : null;
+    // Natural size: only the caller's cap while measuring.
+    e.style.maxHeight = cap.current;
+    const size = { w: e.offsetWidth, h: e.offsetHeight };
+    const p = place(ar, size, cfg.current.placement, cfg.current.attach, { w: innerWidth, h: innerHeight }, within);
+    e.style.left = `${Math.round(p.x)}px`;
+    e.style.top = `${Math.round(p.y)}px`;
+    // The room on its side, and the caller's own cap (what it keeps clear of further on).
+    e.style.maxHeight = cap.current ? `min(${cap.current}, ${Math.floor(p.maxHeight)}px)` : `${Math.floor(p.maxHeight)}px`;
+    const h = Math.min(size.h, p.maxHeight);
+    const box = { x: Math.round(p.x), y: Math.round(p.y), width: size.w, height: h };
+    const prev = placed.current;
+    placed.current = box;
+    if (openRef.current && onBoxRef.current && (!prev || prev.x !== box.x || prev.y !== box.y || prev.width !== box.width || prev.height !== box.height)) onBoxRef.current({ left: box.x, top: box.y, right: box.x + box.width, bottom: box.y + box.height });
+    floatReg.current?.update();
+  }, []);
+  const floatReg = useRef<ReturnType<typeof registerFloating> | null>(null);
+
+  const progress = () => {
+    const s = springs.current!;
+    return s.reduced ? 1 : clamp(Math.max(0, s.px.value), 0, 1);
+  };
+  /** Glass opacity and content opacity: both follow the shape from the first frame. */
+  const glassAlpha = () => (springs.current!.reduced ? springs.current!.fade.value : clamp(progress() / 0.35, 0, 1));
+  const contentAlpha = () => (springs.current!.reduced ? 1 : clamp((progress() - 0.05) / 0.45, 0, 1));
+
   const morphRect = (): { rect: Rect; t: number; a: Rect | null } | null => {
     const n = natural();
     if (!n) return null;
     const s = springs.current!;
-    const anc = anchorRef.current();
-    const a = anc && anc.isConnected ? toRect(anc.getBoundingClientRect()) : null;
+    const anc = fromRef.current();
+    const a = !anc ? null : anc instanceof HTMLElement ? (anc.isConnected ? toRect(anc.getBoundingClientRect()) : null) : anc;
     if (!a || s.reduced) return { rect: n, t: 1, a };
     const tx = Math.max(0, s.px.value), ty = Math.max(0, s.py.value);
     return { rect: { x: lerp(a.x, n.x, tx), y: lerp(a.y, n.y, ty), width: lerp(a.width, n.width, tx), height: lerp(a.height, n.height, ty) }, t: tx, a };
@@ -419,11 +484,12 @@ export function GlassPopover({ open, anchor, radius = GLASS.radiusPanel, kind = 
     if (!e) return;
     const s = springs.current!;
     const p = s.px.value;
-    const fade = s.reduced ? s.fade.value : 1;
-    if (inner.current) inner.current.style.opacity = String(s.reduced ? 1 : clamp((p - 0.55) / 0.45, 0, 1));
-    e.style.opacity = s.reduced ? String(fade) : '';
-    e.style.visibility = (s.reduced ? fade : p) < 0.02 && !openRef.current ? 'hidden' : '';
-    if (backendRef.current === 'css' && !s.reduced) {
+    if (inner.current) inner.current.style.opacity = contentAlpha().toFixed(3);
+    const css = backendRef.current === 'css';
+    // The CSS backend fades the element (its glass and content); WebGL fades the shape it draws.
+    e.style.opacity = s.reduced || css ? glassAlpha().toFixed(3) : '';
+    e.style.visibility = (s.reduced ? s.fade.value : p) < 0.02 && !openRef.current ? 'hidden' : '';
+    if (css && !s.reduced) {
       // The CSS backend morphs the element itself (transform from its box).
       applied.current = { dx: 0, dy: 0, sx: 1, sy: 1 };
       e.style.transform = '';
@@ -434,28 +500,35 @@ export function GlassPopover({ open, anchor, radius = GLASS.radiusPanel, kind = 
         const dx = m.rect.x - n.x, dy = m.rect.y - n.y;
         applied.current = { dx, dy, sx, sy };
         e.style.transform = `translate(${dx}px, ${dy}px) scale(${sx}, ${sy})`;
-      }
+        // The corners scale with the box: keep them round (the radius in the box's own units).
+        e.style.borderRadius = sx > 0.01 && sy > 0.01 ? `${(radiusAt(m) / sx).toFixed(2)}px / ${(radiusAt(m) / sy).toFixed(2)}px` : '';
+      } else e.style.borderRadius = '';
     } else {
       if (e.style.transform) {
         e.style.transform = '';
+        e.style.borderRadius = '';
         applied.current = { dx: 0, dy: 0, sx: 1, sy: 1 };
       }
       // WebGL draws the morphing shape; the content stays clipped inside it.
       const m = !s.reduced ? morphRect() : null;
       const n = m && natural();
-      const ins = m && n ? [Math.max(0, m.rect.y - n.y), Math.max(0, n.x + n.width - (m.rect.x + m.rect.width)), Math.max(0, n.y + n.height - (m.rect.y + m.rect.height)), Math.max(0, m.rect.x - n.x)] : null;
-      if (m && n && ins && ins.some((v) => v > 0.5)) {
+      if (m && n) {
         const top = Math.max(0, m.rect.y - n.y), left = Math.max(0, m.rect.x - n.x);
         const right = Math.max(0, n.x + n.width - (m.rect.x + m.rect.width)), bottom = Math.max(0, n.y + n.height - (m.rect.y + m.rect.height));
-        const rad = lerp(m.a ? Math.min(m.a.width, m.a.height) / 2 : radius, radius, clamp(m.t, 0, 1));
-        e.style.clipPath = `inset(${top}px ${right}px ${bottom}px ${left}px round ${rad}px)`;
+        if (top + left + right + bottom > 0.5) e.style.clipPath = `inset(${top}px ${right}px ${bottom}px ${left}px round ${radiusAt(m)}px)`;
+        else if (e.style.clipPath) e.style.clipPath = '';
       } else if (e.style.clipPath) e.style.clipPath = '';
     }
-    const done = s.reduced ? fade <= 0.001 : p <= 0.001 && s.py.value <= 0.001;
+    const done = s.reduced ? s.fade.value <= 0.001 : p <= 0.001 && s.py.value <= 0.001;
     if (!openRef.current && done && !s.px.moving && !s.py.moving && !s.fade.moving) {
       setMounted(false);
       onClosedRef.current?.();
     }
+  };
+  /** The radius on the way: from the anchor's round ends to the panel's radius, never more than half the short side. */
+  const radiusAt = (m: { rect: Rect; t: number; a: Rect | null }) => {
+    const aRad = m.a ? Math.min(m.a.width, m.a.height) / 2 : radius;
+    return Math.min(lerp(aRad, radius, clamp(m.t, 0, 1)), m.rect.width / 2, m.rect.height / 2);
   };
   const springs = useRef<{ px: Spring; py: Spring; fade: Spring; reduced: boolean } | null>(null);
   if (!springs.current) {
@@ -466,6 +539,23 @@ export function GlassPopover({ open, anchor, radius = GLASS.radiusPanel, kind = 
   useLayoutEffect(() => {
     if (open) setMounted(true);
   }, [open]);
+  // Stands at its anchor: placed now, again when it, its anchor or the window changes.
+  useLayoutEffect(() => {
+    const e = el.current;
+    if (!mounted || !e) return;
+    layout();
+    const ro = new ResizeObserver(() => layout());
+    ro.observe(e);
+    const a = anchorRef.current();
+    if (a) ro.observe(a);
+    window.addEventListener('resize', layout);
+    window.addEventListener('scroll', layout, true);
+    return () => {
+      ro.disconnect();
+      window.removeEventListener('resize', layout);
+      window.removeEventListener('scroll', layout, true);
+    };
+  }, [mounted, layout, placement, attach]);
   useLayoutEffect(() => {
     if (!mounted) return;
     const s = springs.current!;
@@ -477,44 +567,59 @@ export function GlassPopover({ open, anchor, radius = GLASS.radiusPanel, kind = 
     glassRegistry.kick();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, mounted]);
-
+  // While open: what it covers (the one rule for what lies under a surface), and its box.
   useLayoutEffect(() => {
-    const e = el.current;
-    if (!onBox) return;
-    if (!e || !open) {
-      onBox(null);
+    if (!open || !mounted) {
+      if (!open) onBoxRef.current?.(null);
       return;
     }
-    const report = () => onBox({ left: e.offsetLeft, top: e.offsetTop, right: e.offsetLeft + e.offsetWidth, bottom: e.offsetTop + e.offsetHeight });
-    report();
-    const ro = new ResizeObserver(report);
-    ro.observe(e);
-    return () => ro.disconnect();
-  }, [open, mounted, onBox]);
+    if (attach === 'float') floatReg.current = registerFloating({ rect: () => placed.current, anchor: () => anchorRef.current(), menu: rest.ariaRole === 'menu' });
+    const b = placed.current;
+    if (b) onBoxRef.current?.({ left: b.x, top: b.y, right: b.x + b.width, bottom: b.y + b.height });
+    return () => {
+      floatReg.current?.remove();
+      floatReg.current = null;
+    };
+  }, [open, mounted, attach, rest.ariaRole]);
 
   if (!mounted) return null;
   const shape = (): ShapeOverride | null => {
     const s = springs.current!;
-    if (s.reduced) return { radius };
+    if (s.reduced) return { radius, alpha: s.fade.value };
     const m = morphRect();
     if (!m) return null;
     const t = clamp(m.t, 0, 1.2);
     if (t <= 0.003 && s.py.value <= 0.003) return null;
-    const aRad = m.a ? Math.min(m.a.width, m.a.height) / 2 : radius;
     return {
       rect: m.rect,
-      radius: lerp(aRad, radius, clamp(t, 0, 1)),
+      radius: radiusAt(m),
       tint: lerp(TONES[tone].tintControl, kind === 'text' ? TONES[tone].tintText : TONES[tone].tintControl, clamp(t, 0, 1)),
       frost: lerp(GLASS.frostControl, GLASS.frostPanel, clamp(t, 0, 1)),
+      alpha: glassAlpha(),
     };
   };
-  return (
-    <Glass ref={merged} kind={kind} radius={radius} shape={shape} className={cx('pointer-events-auto', className)} style={style} data-morph="" data-open={open ? '' : undefined} {...rest}>
+  const surface = (
+    <Glass
+      ref={merged}
+      kind={kind}
+      radius={radius}
+      shape={shape}
+      layer={attach === 'float' ? 1 : 0}
+      className={cx('pointer-events-auto z-50', className)}
+      style={{ position: 'fixed', left: 0, top: 0, ...style, maxHeight: undefined }}
+      data-morph=""
+      data-anchored=""
+      data-attach={attach}
+      data-placement={placement}
+      data-open={open ? '' : undefined}
+      {...rest}
+    >
       <div ref={inner} className={bodyClassName} style={{ opacity: 0 }}>
         {children}
       </div>
     </Glass>
   );
+  return host ? createPortal(surface, host) : surface;
 }
 
 /**
@@ -611,13 +716,57 @@ export function GlassSep({ className }: { className?: string }) {
 /* Surfaces                                                            */
 /* ------------------------------------------------------------------ */
 
-/** A surface that holds body text (the latest exchange): denser tint, radius 26. */
-export function GlassTextSurface({ className, children, ...rest }: Omit<GlassProps, 'kind'>) {
+/**
+ * A surface that holds body text (the latest exchange, the pinned
+ * conversation): denser tint, radius 26. `stepAside`: it fades out and is
+ * inert while a floating surface lies over it (the module's one rule for
+ * what is under an open surface, anchor.ts `coveredBy`).
+ */
+export function GlassTextSurface({ className, children, stepAside, ref, ...rest }: Omit<GlassProps, 'kind'> & { stepAside?: boolean }) {
+  const el = useRef<HTMLElement | null>(null);
+  const merged = useMergedRef(el, ref);
+  const [aside, setAside] = useState(false);
+  useEffect(() => {
+    if (!stepAside) return setAside(false);
+    const check = () => setAside(!!el.current && coveredBy(el.current));
+    check();
+    return subscribeFloating(check);
+  }, [stepAside]);
   return (
-    <Glass kind="text" radius={GLASS.radiusText} className={cx('pointer-events-auto', className)} {...rest}>
+    <Glass ref={merged} kind="text" radius={GLASS.radiusText} className={cx('pointer-events-auto', stepAside && 'lg-step-aside', className)} inert={aside || undefined} data-aside={aside ? '' : undefined} {...rest}>
       {children}
     </Glass>
   );
+}
+
+/**
+ * The one tooltip (task 025): the name of a control, below it, after one
+ * delay, on its own plate and ink (readable on paper, on glass and inside
+ * dark panels: it never takes the panel's ink). Visual only: the control
+ * keeps its own accessible name.
+ */
+export function GlassTip({ label, children, className }: { label: ReactNode; children: ReactNode; className?: string }) {
+  return (
+    <span className={cx('lg-tipped relative inline-flex', className)}>
+      {children}
+      <span className="lg-tip" aria-hidden="true">
+        {label}
+      </span>
+    </span>
+  );
+}
+
+/**
+ * A round icon button inside glass (a header's new conversation, a panel's
+ * close): the module's plate, a circle of the row's height.
+ */
+export function GlassIconButton({ label, size = 32, tip = true, className, children, ...rest }: ButtonHTMLAttributes<HTMLButtonElement> & { label: string; size?: number; tip?: boolean }) {
+  const btn = (
+    <button type="button" aria-label={label} className={cx('hit lg-plate grid shrink-0 place-items-center text-ink-2 hover:text-ink', className)} style={{ width: size, height: size }} {...rest}>
+      {children}
+    </button>
+  );
+  return tip ? <GlassTip label={label}>{btn}</GlassTip> : btn;
 }
 
 /** The input capsule (Apple's compose field). `working`: the yellow light travels round its edge. */

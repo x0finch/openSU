@@ -96,6 +96,13 @@ class Registry {
   private wired = false;
   /** Glass pushes to the viewer (tests count them while a panel animates). */
   pushes = 0;
+  /** The last shape drawn per element, viewport px (tests read it: `window.__glass.shapeOf`). */
+  private drawn = new WeakMap<HTMLElement, Rect & { radius: number; alpha: number }>();
+
+  /** The shape the WebGL backend drew last for `el` (null on the CSS backend or when not drawn). */
+  shapeOf(el: HTMLElement): (Rect & { radius: number; alpha: number }) | null {
+    return this.target ? (this.drawn.get(el) ?? null) : null;
+  }
 
   get backend(): GlassBackend {
     return this.target ? 'webgl' : 'css';
@@ -127,6 +134,7 @@ class Registry {
     window.addEventListener('scroll', kick, true);
     for (const ev of ['transitionrun', 'transitionend', 'animationstart', 'animationend']) document.addEventListener(ev, kick, true);
     onSpringFrame(() => this.collect());
+    (window as unknown as { __glass?: unknown }).__glass = { shapeOf: (el: HTMLElement) => this.shapeOf(el) };
     const mq = matchMedia('(prefers-reduced-transparency: reduce)');
     const onMq = () => this.setOpaque(mq.matches);
     mq.addEventListener?.('change', onMq);
@@ -204,6 +212,7 @@ class Registry {
     const base = target.canvas.getBoundingClientRect();
     const shapes: GlassShape[] = [];
     for (const s of this.surfaces.values()) {
+      this.drawn.delete(s.el);
       if (!s.el.isConnected) continue;
       const o = s.shape ? s.shape() : {};
       if (o === null) continue;
@@ -212,6 +221,7 @@ class Registry {
       const seen = visibleAlpha(s.el);
       if (seen <= 0) continue;
       const radius = o.radius ?? (s.radius === 'capsule' ? Math.min(r.width, r.height) / 2 : s.radius);
+      this.drawn.set(s.el, { ...r, radius: Math.min(radius, r.width / 2, r.height / 2), alpha: o.alpha ?? 1 });
       shapes.push({
         x: r.x - base.left,
         y: r.y - base.top,

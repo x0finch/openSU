@@ -2,7 +2,8 @@
 // browser only). Slides over the message list.
 import { type ReactNode, useState } from 'react';
 import { ChevronLeftIcon } from '../components/icons';
-import { cx, Segmented } from '../components/ui';
+import { cx } from '../components/ui';
+import { GlassChoice } from '../glass';
 import { useT } from '../lib/i18n';
 import { DEFAULT_MODELS } from '../lib/providers';
 import { useChat } from './chat-store';
@@ -46,7 +47,7 @@ export function SettingsSheet() {
   return (
     <div className="flex min-h-0 flex-1 animate-[fade-in_140ms_ease-out] flex-col" role="dialog" aria-label={t('settings.title')} data-testid="settings-sheet">
       <div className="flex h-11 shrink-0 items-center gap-1 border-b border-hairline px-1.5">
-        <button type="button" onClick={close} className="inline-flex h-8 items-center gap-0.5 rounded-[6px] pr-2 pl-1 text-sm text-ink-2 transition-colors hover:bg-wash hover:text-ink">
+        <button type="button" onClick={close} className="lg-plate inline-flex h-8 items-center gap-0.5 pr-2.5 pl-1.5 text-sm text-ink-2 hover:text-ink">
           <ChevronLeftIcon width={17} height={17} />
           {t('settings.done')}
         </button>
@@ -70,12 +71,11 @@ export function SettingsSheet() {
         <div className={cx('space-y-4 transition-opacity', !own && 'pointer-events-none opacity-40')} inert={!own}>
           <div>
             <span className="mb-1.5 block text-xs font-medium text-ink-2">{t('settings.provider')}</span>
-            <Segmented<ProviderId>
+            <GlassChoice<ProviderId>
               label={t('settings.provider')}
               value={draft.provider}
               onChange={(provider) => up({ provider })}
-              className="bg-wash"
-              segments={[
+              options={[
                 { value: 'openrouter', label: t('settings.p.openrouter') },
                 { value: 'openai', label: t('settings.p.openai') },
                 { value: 'custom', label: t('settings.p.custom') },
@@ -117,7 +117,7 @@ export function SettingsSheet() {
       </div>
       <div className="flex shrink-0 items-center justify-between gap-2 border-t border-hairline px-4 py-3">
         {usesOwnKey(saved) ? (
-          <button type="button" onClick={clear} className="h-9 rounded-sm px-2 text-xs text-ink-2 transition-colors hover:bg-wash hover:text-ink">
+          <button type="button" onClick={clear} className="lg-plate h-9 px-3 text-xs text-ink-2 hover:text-ink">
             {t('settings.clear')}
           </button>
         ) : (

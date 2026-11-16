@@ -82,11 +82,10 @@ function Facts({ derived, className }: { derived: Derived | null; className?: st
  * templates, reset, language, AI settings, about). Reports its extent so
  * the 3D view frames the house clear of it.
  */
-export function TitleMenu({ derived, onRect, onOpenChange, compact }: { derived: Derived | null; onRect?: (r: { right: number; bottom: number }) => void; onOpenChange?: (open: boolean) => void; compact?: boolean }) {
+export function TitleMenu({ derived, onRect, compact }: { derived: Derived | null; onRect?: (r: { right: number; bottom: number }) => void; compact?: boolean }) {
   const t = useT();
   const house = useStudio((s) => s.house);
   const [open, setOpen] = useState(false);
-  useEffect(() => onOpenChange?.(open), [open, onOpenChange]);
   const box = useRef<HTMLDivElement>(null);
   const trigger = useRef<HTMLButtonElement>(null);
   const pressOpened = useRef(-1e9);
@@ -198,9 +197,10 @@ function ProjectMenu({ open, anchor, onClose, compact, ref }: { open: boolean; a
       ref={ref as RefObject<HTMLElement | null>}
       open={open}
       anchor={anchor}
+      placement="below-start"
       label={t('more.open')}
       onKeyDown={onKey}
-      className={cx('absolute top-full left-0 z-40 mt-2 w-[300px]', compact && 'w-[min(300px,calc(100vw-24px))]')}
+      style={{ width: compact ? 'min(300px, calc(100vw - 24px))' : 300 }}
       data-testid={open ? 'project-menu-list' : undefined}
     >
       {/* The account (task 019): hidden when this server offers no sign-in. */}
@@ -439,7 +439,7 @@ export function Hints({ className }: { className?: string }) {
           {t(k)}
         </GlassButton>
       ))}
-      <GlassButton size={32} className="hit text-ink-2" onClick={done} label={t('hint.dismiss')} title={t('hint.dismiss')} icon={<CloseIcon width={14} height={14} />} />
+      <GlassButton size={32} className="hit text-ink-2" onClick={done} label={t('hint.dismiss')} tip icon={<CloseIcon width={14} height={14} />} />
     </div>
   );
 }

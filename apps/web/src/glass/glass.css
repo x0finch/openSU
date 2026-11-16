@@ -138,6 +138,28 @@
 .lg-plate:active:not(:disabled) {
   background: var(--lg-row-active);
 }
+/*
+ * One hover and pressed state for every control on glass (task 025): the
+ * plate takes the control's own shape (round ends unless the control is a
+ * row or a tile with its own radius), one fill, one transition. A button
+ * that rests on a wash (a secondary action) takes the pressed fill on hover.
+ */
+.lg-plate[data-filled] {
+  background: var(--lg-row-hover);
+}
+@media (hover: hover) and (pointer: fine) {
+  .lg-plate[data-filled]:hover:not(:disabled) {
+    background: var(--lg-row-active);
+  }
+}
+
+/* The one rule for what lies under an open surface: it steps aside (anchor.ts `coveredBy`). */
+.lg-step-aside {
+  transition: opacity 200ms ease;
+}
+.lg-step-aside[data-aside] {
+  opacity: 0;
+}
 .lg-plate:focus-visible,
 .lg-focus:focus-visible {
   outline: 2px solid var(--lg-ink);
@@ -252,16 +274,22 @@
   }
 }
 
-/* Tooltips of icon-only glass buttons (Apple shows them on hover). */
+/*
+ * The one tooltip (GlassTip; Apple shows the name of an icon on hover): one
+ * offset, one delay, its own plate and ink. Inside glass `.lg` remaps the
+ * ink levels to the glass's light ink, so the tooltip never reads them; on
+ * paper (no glass layer) it falls back to the page's ink and paper.
+ */
 .lg-tip {
   position: absolute;
+  z-index: 60;
   top: calc(100% + 10px);
   left: 50%;
   transform: translateX(-50%);
   padding: 4px 8px;
   border-radius: 7px;
-  background: var(--lg-ink);
-  color: var(--lg-tip-ink);
+  background: var(--lg-tip-plate, var(--color-ink));
+  color: var(--lg-tip-ink, var(--color-page));
   font-size: 12px;
   line-height: 16px;
   white-space: nowrap;
@@ -335,8 +363,9 @@
   box-shadow: inset 0 0 0 1px var(--lg-ink-2);
 }
 
-/* No tooltip under a tool whose panel is open (the panel hangs there). */
-.lg-tipped:has([data-on]) > .lg-tip {
+/* No tooltip under a tool whose panel is open, nor in a toolbar while its panel hangs under it (it would lie under the panel). */
+.lg-tipped:has([data-on]) > .lg-tip,
+[role="toolbar"]:has([aria-expanded="true"]) .lg-tip {
   opacity: 0 !important;
 }
 

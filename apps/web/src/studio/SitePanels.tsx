@@ -38,7 +38,7 @@ function PanelHead({ title, sub, onClose }: { title: string; sub?: string; onClo
         <h2 className="text-[15px] font-semibold">{title}</h2>
         {sub && <p className="mt-0.5 text-xs leading-[18px] text-ink-2">{sub}</p>}
       </div>
-      <button type="button" onClick={onClose} aria-label={t('panel.done')} className="hit grid size-9 shrink-0 place-items-center rounded-full text-ink-2 transition-colors hover:bg-wash hover:text-ink">
+      <button type="button" onClick={onClose} aria-label={t('panel.done')} className="hit lg-plate grid size-9 shrink-0 place-items-center text-ink-2 hover:text-ink">
         <CloseIcon width={18} height={18} />
       </button>
     </header>
@@ -144,7 +144,7 @@ export function LocationPanel({ panel, desktop, onClose }: { panel: SitePanel; d
             {places && !results.length && <li className="px-1 py-2 text-xs leading-5 text-ink-2">{t('loc.none')}</li>}
             {results.map((p, i) => (
               <li key={`${p.en}-${p.lat}-${p.lon}-${i}`}>
-                <button type="button" onClick={() => void choose(p)} className="flex w-full items-center gap-3 rounded-[9px] px-2 py-2 text-left transition-colors hover:bg-wash focus-visible:bg-wash">
+                <button type="button" onClick={() => void choose(p)} className="lg-plate flex w-full items-center gap-3 rounded-[14px] px-2 py-2 text-left">
                   <span className="min-w-0 flex-1">
                     <span className="block truncate text-[14px] font-medium">
                       {placeName(p, lang)}
@@ -164,7 +164,8 @@ export function LocationPanel({ panel, desktop, onClose }: { panel: SitePanel; d
             type="button"
             onClick={locate}
             disabled={busy === 'locating'}
-            className="flex h-10 w-full items-center justify-center gap-2 rounded-[11px] bg-wash text-[13px] font-medium text-ink transition-colors hover:bg-hairline disabled:opacity-70"
+            data-filled=""
+            className="lg-plate flex h-10 w-full items-center justify-center gap-2 text-[13px] font-medium text-ink disabled:opacity-70"
             data-testid="loc-mine"
           >
             <LocateIcon width={17} height={17} />
@@ -183,7 +184,7 @@ export function LocationPanel({ panel, desktop, onClose }: { panel: SitePanel; d
         </div>
 
         {panel.intro && (
-          <button type="button" onClick={() => setPanel(null)} className="mt-3 h-10 w-full rounded-[11px] border border-hairline text-[13px] text-ink-2 transition-colors hover:bg-wash hover:text-ink" data-testid="loc-skip">
+          <button type="button" onClick={() => setPanel(null)} className="lg-plate mt-3 h-10 w-full border border-hairline text-[13px] text-ink-2 hover:text-ink" data-testid="loc-skip">
             {site && isDefaultPlace(site) ? t('loc.skip') : t('panel.done')}
           </button>
         )}
@@ -297,7 +298,8 @@ export function OrientationPanel({ onClose }: { onClose: () => void }) {
                   setNorth(n);
                   commit(n);
                 }}
-                className={cx('h-8 rounded-full px-3 text-xs font-medium transition-colors', on ? 'bg-ink text-on-ink' : 'bg-wash text-ink hover:bg-hairline')}
+                data-filled={on ? undefined : ''}
+                className={cx('lg-plate h-8 px-3 text-xs font-medium', on ? 'bg-ink text-on-ink' : 'text-ink')}
               >
                 {bearingText(b, lang)}
               </button>

@@ -3,6 +3,13 @@
 // itself; that is the glass module's job (src/glass/). Fails on the
 // patterns below unless the line is on the allow-list.
 //
+// Task 025: nothing outside src/glass/ positions an anchored surface (a
+// menu, a panel, a popover: GlassPopover / GlassMenu take an anchor and a
+// placement, never a position; no portals, no fixed stand-ins placed from a
+// measured box), styles a hover plate (`hover:bg-*`) or draws a tooltip
+// (`lg-tip`, a `Tip`, a native `title` attribute): those are GlassPopover,
+// `.lg-plate` and GlassTip.
+//
 //   node scripts/glass-check.mjs
 import { readdirSync, readFileSync } from 'node:fs';
 import { dirname, join, relative, resolve } from 'node:path';
@@ -34,6 +41,64 @@ const PENDING_PHASE_B = [];
 
 const files = DIRS.flatMap((d) => readdirSync(join(src, d)).filter((f) => /\.(tsx?|css)$/.test(f)).map((f) => join(src, d, f)));
 const failures = [];
+
+/* ---- task 025: anchored surfaces, hover plates, tooltips (every file outside src/glass/) ---- */
+const walk = (dir) => readdirSync(dir, { withFileTypes: true }).flatMap((e) => (e.isDirectory() ? walk(join(dir, e.name)) : [join(dir, e.name)]));
+const outside = walk(src).filter((f) => /\.(tsx?|css)$/.test(f) && !relative(src, f).replaceAll('\\', '/').startsWith('glass/') && !f.endsWith('routeTree.gen.ts'));
+const ALLOW_025 = [
+  { file: 'routes/index.tsx', rule: 'hover plate', why: 'the landing page is paper with no glass (DESIGN.md: "a light, editorial page ... with no glass at all")' },
+  { file: 'components/ui.tsx', rule: 'hover plate', line: /hover:bg-wash hover:text-ink/, why: 'LangToggle, used on the landing page only (paper, no glass)' },
+];
+/** JSX opening tags: name, attribute text, line. */
+function tags(text) {
+  const out = [];
+  const re = /<([A-Za-z][\w.]*)(?=[\s>/])/g;
+  let m;
+  while ((m = re.exec(text))) {
+    let i = re.lastIndex, depth = 0, q = null;
+    for (; i < text.length && i - re.lastIndex < 4000; i++) {
+      const c = text[i];
+      if (q) {
+        if (c === q && text[i - 1] !== '\\') q = null;
+        continue;
+      }
+      if (c === '"' || c === "'" || c === '`') q = c;
+      else if (c === '{') depth++;
+      else if (c === '}') depth--;
+      else if (c === '>' && depth === 0) break;
+    }
+    out.push({ name: m[1], attrs: text.slice(re.lastIndex, i), line: text.slice(0, m.index).split('\n').length });
+  }
+  return out;
+}
+const POSITION = /(^|[\s'"`])(-?(absolute|fixed|sticky|inset-[\w[\]-]+|top-[\w[\]-]+|left-[\w[\]-]+|right-[\w[\]-]+|bottom-[\w[\]-]+|m[tblrxy]?-[\w[\]-]+|-?translate-[xy]-[\w[\]/-]+))(?=[\s'"`])/;
+for (const f of outside) {
+  const rel = relative(src, f).replaceAll('\\', '/');
+  const text = readFileSync(f, 'utf8');
+  const fail = (rule, line, what) => {
+    const code = text.split('\n')[line - 1] ?? '';
+    if (ALLOW_025.some((a) => a.file === rel && a.rule === rule && (!a.line || a.line.test(code)))) return;
+    failures.push(`${rel}:${line}: ${rule}: ${what.trim().slice(0, 140)}`);
+  };
+  text.split('\n').forEach((line, i) => {
+    const code = line.replace(/^\s*(\/\/|\*|\/\*).*$/, '');
+    if (/(^|[\s'"`:])hover:bg-/.test(code)) fail('hover plate', i + 1, code);
+    if (/\blg-tip(ped)?\b|role=["']tooltip["']|group-hover\/tip/.test(code)) fail('tooltip', i + 1, code);
+    if (/\bcreatePortal\(/.test(code)) fail('anchored surface positioned outside glass (portal)', i + 1, code);
+  });
+  for (const t of tags(text)) {
+    const native = /^[a-z]/.test(t.name) || t.name.startsWith('Glass') || t.name === 'Link';
+    if (native && /(^|\s)title=/.test(t.attrs)) fail('tooltip', t.line, `<${t.name} title=...> (a native tooltip; use GlassTip)`);
+    if (t.name === 'Tip' || t.name === 'IconButton') fail('tooltip', t.line, `<${t.name}> (use GlassTip / GlassIconButton)`);
+    if (/^Glass(Popover|Menu)$/.test(t.name)) {
+      const cls = /className=(\{[^}]*\}|"[^"]*")/.exec(t.attrs)?.[1] ?? '';
+      const style = /style=\{\{([^}]*)\}\}/.exec(t.attrs)?.[1] ?? '';
+      if (POSITION.test(cls) || /\b(left|top|right|bottom|inset|transform|position|margin\w*)\s*:/.test(style)) fail('anchored surface positioned outside glass', t.line, `<${t.name} ${cls} ${style}> (give it an anchor and a placement)`);
+    }
+    // A stand-in placed from a measured box (the old way to grow a surface out of a closed menu row).
+    if (/^[a-z]/.test(t.name) && /className=\{?["'`][^"'`]*\bfixed\b/.test(t.attrs) && /style=\{\{[^}]*\b(left|top)\s*:/.test(t.attrs)) fail('anchored surface positioned outside glass', t.line, `<${t.name} fixed ... style={{ left/top }}>`);
+  }
+}
 let pending = 0;
 for (const f of files) {
   const rel = relative(src, f).replaceAll('\\', '/');
@@ -51,6 +116,6 @@ for (const f of files) {
     }
   });
 }
-console.log(`glass check: ${files.length} files, ${failures.length} violations, ${pending} lines pending (Phase B)`);
+console.log(`glass check: ${files.length} chrome files, ${outside.length} files outside src/glass/, ${failures.length} violations, ${pending} lines pending (Phase B)`);
 for (const f of failures) console.log(`  FAIL ${f}`);
 process.exit(failures.length ? 1 : 0);

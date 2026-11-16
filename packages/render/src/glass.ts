@@ -219,8 +219,9 @@ void main() {
   if (i1 >= 0) {
     col = outside(col, p, d1, 1., i1);
     if (d1 < 1.5 * uDpr) {
-      // A lens on the chrome: its tint adds to the glass under it.
-      float tb = (i0 >= 0 && d0 < 0.) ? uB[i0].y : 0.;
+      // A lens or a floating menu on the chrome: its tint adds to the glass
+      // under it, as far as that glass is shown (a surface fading out adds less).
+      float tb = (i0 >= 0 && d0 < 0.) ? uB[i0].y * uB[i0].w : 0.;
       float ta = 1. - (1. - tb) * (1. - uB[i1].y);
       vec3 g = glass(p, d1, i1, 1., ta);
       col = mix(col, g, clamp(.5 - d1 / uDpr, 0., 1.) * uB[i1].w);

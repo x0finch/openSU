@@ -208,7 +208,7 @@ function SheetCard({ index, meta, file, desktop, onOpen }: { index: number; meta
         </button>
         {file && desktop && (
           <span className="absolute top-2 right-2 opacity-0 transition-opacity duration-150 group-hover:opacity-100 focus-within:opacity-100">
-            <GlassButton size={36} label={t('sheets.download')} title={t('sheets.download')} icon={<DownloadIcon width={16} height={16} />} onClick={() => downloadFile(file, meta.file)} />
+            <GlassButton size={36} label={t('sheets.download')} tip icon={<DownloadIcon width={16} height={16} />} onClick={() => downloadFile(file, meta.file)} />
           </span>
         )}
       </div>
@@ -311,10 +311,10 @@ function Preview({
         {desktop && (
           <>
             <div className="absolute top-1/2 left-6 -translate-y-1/2">
-              <GlassButton size={48} label={t('sheets.prev')} title={t('sheets.prev')} icon={<ChevronLeftIcon width={22} height={22} />} onClick={() => go(-1)} />
+              <GlassButton size={48} label={t('sheets.prev')} tip icon={<ChevronLeftIcon width={22} height={22} />} onClick={() => go(-1)} />
             </div>
             <div className="absolute top-1/2 right-6 -translate-y-1/2">
-              <GlassButton size={48} label={t('sheets.next')} title={t('sheets.next')} icon={<ChevronRightIcon width={22} height={22} />} onClick={() => go(1)} />
+              <GlassButton size={48} label={t('sheets.next')} tip icon={<ChevronRightIcon width={22} height={22} />} onClick={() => go(1)} />
             </div>
           </>
         )}

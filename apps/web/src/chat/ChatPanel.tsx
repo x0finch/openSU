@@ -5,7 +5,7 @@
 import { type CSSProperties, type FormEvent, type KeyboardEvent, type ReactNode, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { create } from 'zustand';
 import { ChevronRightIcon, SendIcon, SparkIcon } from '../components/icons';
-import { cx, IconButton } from '../components/ui';
+import { cx } from '../components/ui';
 import { type MessageKey, useT } from '../lib/i18n';
 import { useStudio } from '../lib/store';
 import { type ChatItem, fetchServerStatus, loadAgent, newChat, outOfCredits, ownKeyInUse, redoTurn, retry, send, type ServerStatus, stop, undoTurn, useChat } from './chat-store';
@@ -14,7 +14,7 @@ import type { Lang } from '../lib/i18n';
 import { ChevronDownIcon, ComposeIcon, DockIcon, HistoryIcon, NoteIcon, PlanCheckIcon, RedoIcon, RetryIcon, SlidersIcon, StopIcon, UndockIcon, UndoIcon } from './icons';
 import { accountKeyInUse, openKeySheet, useKeys } from './keys';
 import { KeyPicker } from './KeyPicker';
-import { GlassField, GlassInputBar, GlassSep, GlassTextSurface, GlassTurn, type GlassTurnEntry } from '../glass';
+import { GlassField, GlassIconButton, GlassInputBar, GlassSep, GlassTextSurface, GlassTurn, type GlassTurnEntry } from '../glass';
 import { turnView } from './turn-parts';
 import { SettingsSheet } from './SettingsSheet';
 
@@ -135,14 +135,14 @@ function UndoButtons({ item }: { item: ChatItem }) {
   const t = useT();
   if (item.undo === 'can-undo') {
     return (
-      <SmallButton onClick={() => undoTurn(item.id)} icon={<UndoIcon width={14} height={14} />} className="lg-plate h-[28px] px-2.5">
+      <SmallButton onClick={() => undoTurn(item.id)} icon={<UndoIcon width={14} height={14} />} className="h-[28px] px-2.5">
         {t('chat.undo')}
       </SmallButton>
     );
   }
   if (item.undo === 'can-redo') {
     return (
-      <SmallButton onClick={() => redoTurn(item.id)} icon={<RedoIcon width={14} height={14} />} className="lg-plate h-[28px] px-2.5">
+      <SmallButton onClick={() => redoTurn(item.id)} icon={<RedoIcon width={14} height={14} />} className="h-[28px] px-2.5">
         {t('chat.redo')}
       </SmallButton>
     );
@@ -150,12 +150,14 @@ function UndoButtons({ item }: { item: ChatItem }) {
   return null;
 }
 
-function SmallButton({ onClick, icon, children, className }: { onClick: () => void; icon?: ReactNode; children: ReactNode; className?: string }) {
+/** A small text action on glass: the module's plate (`filled`: resting on a wash). */
+function SmallButton({ onClick, icon, children, className, filled }: { onClick: () => void; icon?: ReactNode; children: ReactNode; className?: string; filled?: boolean }) {
   return (
     <button
       type="button"
       onClick={onClick}
-      className={cx('hit inline-flex h-7 items-center gap-1 rounded-[6px] px-2 text-xs font-medium text-ink transition-colors hover:bg-wash', className)}
+      data-filled={filled ? '' : undefined}
+      className={cx('hit lg-plate inline-flex h-7 items-center gap-1 px-2 text-xs font-medium text-ink', className)}
     >
       {icon}
       {children}
@@ -839,9 +841,9 @@ function ConversationHeader({ phone }: { phone?: boolean }) {
       <h2 className="truncate text-[13px] font-medium">{t('chat.title')}</h2>
       <span className="flex-1" />
       {hasItems && (
-        <IconButton label={t('chat.newChat')} tipSide="bottom" onClick={newChat} className="hit size-8 text-ink-2">
+        <GlassIconButton label={t('chat.newChat')} onClick={newChat}>
           <ComposeIcon width={16} height={16} />
-        </IconButton>
+        </GlassIconButton>
       )}
       <LinkButton onClick={() => setPinned(false)} icon={<UndockIcon width={16} height={16} />} testId="chat-unpin">
         {t('chat.unpin')}
@@ -852,11 +854,11 @@ function ConversationHeader({ phone }: { phone?: boolean }) {
 
 /**
  * Desktop: the conversation pinned as a column on the left, hanging under
- * the house name (the studio places it), with the input at its foot.
- * `aside`: something opened over it (the project menu): it steps aside
- * (fades out, inert) so glass never sits on glass.
+ * the house name (the studio places it), with the input at its foot. A
+ * menu or panel opened over it makes it step aside (fades out, inert), the
+ * glass module's one rule for what lies under an open surface.
  */
-export function PinnedColumn({ style, aside }: { style: CSSProperties; aside?: boolean }) {
+export function PinnedColumn({ style }: { style: CSSProperties }) {
   const t = useT();
   const settingsOpen = useChat((s) => s.settingsOpen);
   useEffect(() => {
@@ -866,9 +868,9 @@ export function PinnedColumn({ style, aside }: { style: CSSProperties; aside?: b
     <GlassTextSurface
       as="aside"
       aria-label={t('chat.title')}
-      className={cx('absolute flex animate-[fade-in_200ms_ease-out] flex-col overflow-hidden transition-opacity duration-200', aside && 'opacity-0')}
+      className="absolute flex animate-[fade-in_200ms_ease-out] flex-col overflow-hidden"
       style={style}
-      inert={aside || undefined}
+      stepAside
       data-testid="chat-panel"
     >
       {settingsOpen ? (
@@ -986,7 +988,7 @@ function ChangeNote({ item, hold }: { item: ChatItem; hold: (on: boolean) => voi
   const n = item.changes?.length ?? 0;
   const undone = item.undo === 'undone' || item.undo === 'can-redo';
   const problem = !n && (item.error || item.gaveUp);
-  const btn = 'pointer-events-auto h-7 shrink-0 rounded-full bg-wash hover:bg-hairline';
+  const btn = 'pointer-events-auto h-7 shrink-0';
   return (
     <div
       className="pointer-events-none absolute inset-0 flex animate-[fade-in_200ms_ease-out] items-center gap-2 text-[14px] whitespace-nowrap"
@@ -1001,7 +1003,7 @@ function ChangeNote({ item, hold }: { item: ChatItem; hold: (on: boolean) => voi
         <>
           <NoteIcon width={15} height={15} className="shrink-0 text-ink-2" />
           <span className="min-w-0 truncate text-ink-2">{item.gaveUp ? t('chat.gaveUp') : errorText(t, item, server, lang)}</span>
-          <SmallButton onClick={() => useStudio.getState().setRecent(true)} className={btn}>{t('chat.show')}</SmallButton>
+          <SmallButton onClick={() => useStudio.getState().setRecent(true)} className={btn} filled>{t('chat.show')}</SmallButton>
         </>
       ) : (
         <>
@@ -1011,12 +1013,12 @@ function ChangeNote({ item, hold }: { item: ChatItem; hold: (on: boolean) => voi
           </span>
           {n > 1 && <span className="tnum shrink-0 text-ink-3">+{n - 1}</span>}
           {item.undo === 'can-undo' && (
-            <SmallButton onClick={() => undoTurn(item.id)} icon={<UndoIcon width={14} height={14} />} className={btn}>
+            <SmallButton onClick={() => undoTurn(item.id)} icon={<UndoIcon width={14} height={14} />} className={btn} filled>
               {t('chat.undo')}
             </SmallButton>
           )}
           {item.undo === 'can-redo' && (
-            <SmallButton onClick={() => redoTurn(item.id)} icon={<RedoIcon width={14} height={14} />} className={btn}>
+            <SmallButton onClick={() => redoTurn(item.id)} icon={<RedoIcon width={14} height={14} />} className={btn} filled>
               {t('chat.redo')}
             </SmallButton>
           )}

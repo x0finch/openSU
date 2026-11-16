@@ -2,7 +2,7 @@
 // the registry (shape, role, merge group) and renders the element the
 // active backend needs: transparent over the WebGL canvas, the CSS
 // material elsewhere. Everything else in the module is built on it.
-import { type CSSProperties, type HTMLAttributes, type ReactNode, type Ref, useCallback, useEffect, useLayoutEffect, useRef, useSyncExternalStore } from 'react';
+import { createContext, type CSSProperties, type HTMLAttributes, type ReactNode, type Ref, useCallback, useContext, useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } from 'react';
 import './glass.css';
 import { cssVars, GLASS, type GlassRole, type GlassTone } from './material';
 import { type GlassBackend, glassRegistry, type ShapeOverride } from './registry';
@@ -27,11 +27,21 @@ export function useGlass(): { backend: GlassBackend; tone: GlassTone; opaque: bo
  */
 export function GlassLayer({ tone = 'dark', children }: { tone?: GlassTone; children: ReactNode }) {
   useEffect(() => glassRegistry.setTone(tone), [tone]);
+  const [host, setHost] = useState<HTMLElement | null>(null);
   return (
     <div className="contents" style={cssVars(tone) as CSSProperties} data-glass-tone={tone}>
-      {children}
+      <PortalHost value={host}>{children}</PortalHost>
+      {/* Anchored surfaces (menus, panels) render here: out of any transformed or filtered surface, still inside the glass layer's properties. */}
+      <div ref={setHost} className="contents" data-glass-portal="" />
     </div>
   );
+}
+
+const PortalCtx = createContext<HTMLElement | null>(null);
+const PortalHost = PortalCtx.Provider;
+/** Where anchored surfaces render (the glass layer's portal host). */
+export function usePortalHost(): HTMLElement | null {
+  return useContext(PortalCtx);
 }
 
 /** Merges refs. */
@@ -142,13 +152,15 @@ export interface GlassProps extends Omit<HTMLAttributes<HTMLElement>, 'role'> {
   shape?: () => ShapeOverride | null;
   /** Lift and light on press. */
   press?: boolean;
+  /** 1: drawn over the chrome layer with its own rim (a floating menu over other glass). */
+  layer?: 0 | 1;
   /** ARIA role of the element. */
   ariaRole?: string;
   ref?: Ref<HTMLElement>;
 }
 
 /** The base glass surface. */
-export function Glass({ as = 'div', kind = 'control', radius = 'capsule', group, shape, press = false, ariaRole, className, style, children, ref, ...rest }: GlassProps) {
+export function Glass({ as = 'div', kind = 'control', radius = 'capsule', group, shape, press = false, layer = 0, ariaRole, className, style, children, ref, ...rest }: GlassProps) {
   const { backend, opaque } = useGlass();
   const el = useRef<HTMLElement | null>(null);
   const merged = useMergedRef(el, ref);
@@ -163,6 +175,7 @@ export function Glass({ as = 'div', kind = 'control', radius = 'capsule', group,
       role: kind,
       radius,
       group,
+      layer,
       shape: () => {
         const o = shapeRef.current ? shapeRef.current() : {};
         if (o === null) return null;
@@ -171,7 +184,7 @@ export function Glass({ as = 'div', kind = 'control', radius = 'capsule', group,
       },
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [kind, radius, group]);
+  }, [kind, radius, group, layer]);
   const Tag = as as 'div';
   return (
     <Tag

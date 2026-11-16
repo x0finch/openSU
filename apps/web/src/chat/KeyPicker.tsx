@@ -3,11 +3,8 @@
 // saved with the account, the key held in this browser), and a sheet for
 // entering or changing a key. Apple's pattern: a pop-up button shows the
 // current choice; choosing switches at once; entering a key is a sheet.
-// The menu opens just outside the glass surface it belongs to (beside the
-// pinned column, above the recent strip or the phone sheet), so glass
-// never sits on glass.
+// The menu opens at its button (task 025: the glass module places it).
 import { type FormEvent, type KeyboardEvent as RKeyboardEvent, type ReactNode, useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
-import { createPortal } from 'react-dom';
 import { ChevronDownSmallIcon, CheckIcon, CloseIcon, PlusIcon } from '../components/icons';
 import { cx, GlassChoice, GlassMenu, GlassMenuItem, GlassPopover, GlassSep, GlassSheet } from '../glass';
 import { type MessageKey, useT } from '../lib/i18n';
@@ -44,26 +41,6 @@ export function KeyPicker({ variant, phone }: { variant: 'input' | 'header'; pho
   const label = useCurrentLabel(t, variant === 'input');
   const btn = useRef<HTMLButtonElement>(null);
   const menu = useRef<HTMLElement | null>(null);
-  const desktop = !phone;
-  const [pos, setPos] = useState<{ left: number; bottom: number } | null>(null);
-  // Where the menu stands: beside the pinned column (desktop), else above the surface holding the button.
-  useLayoutEffect(() => {
-    if (!open || !btn.current) return;
-    const b = btn.current.getBoundingClientRect();
-    const surface = btn.current.closest<HTMLElement>('[data-testid=chat-panel], [data-testid=recent-strip]') ?? btn.current.closest<HTMLElement>('[data-testid=prompt]');
-    const s = (surface ?? btn.current).getBoundingClientRect();
-    const W = Math.min(300, innerWidth - 24);
-    if (desktop && surface?.dataset.testid === 'chat-panel') setPos({ left: s.right + 12, bottom: innerHeight - b.bottom });
-    else {
-      // A toolbar riding on the surface's top edge (the phone's pinned sheet): above that too.
-      let top = s.top;
-      for (const tb of document.querySelectorAll<HTMLElement>('[role=toolbar]')) {
-        const r = tb.getBoundingClientRect();
-        if (r.width && r.bottom <= s.top + 1 && r.bottom >= s.top - 48) top = Math.min(top, r.top);
-      }
-      setPos({ left: Math.max(12, Math.min(b.left, innerWidth - W - 12)), bottom: innerHeight - top + 8 });
-    }
-  }, [open, desktop]);
   // A press outside closes it; Escape closes it and returns to the button.
   useEffect(() => {
     if (!open) return;
@@ -108,23 +85,18 @@ export function KeyPicker({ variant, phone }: { variant: 'input' | 'header'; pho
         <span className="truncate" data-testid="key-picker-label">{label}</span>
         <ChevronDownSmallIcon width={14} height={14} className={cx('shrink-0 text-ink-2 transition-transform', open && 'rotate-180')} />
       </button>
-      {(open || pos) &&
-        createPortal(
-        <GlassMenu
-          ref={menu}
-          open={open}
-          anchor={() => btn.current}
-          label={t('keys.menu')}
-          onClosed={() => setPos(null)}
-          className="fixed z-50"
-          style={{ left: pos?.left ?? 12, bottom: pos?.bottom ?? 96, width: Math.min(300, (typeof window === 'undefined' ? 390 : innerWidth) - 24) }}
-          data-testid={open ? 'key-menu' : undefined}
-        >
-          <KeyMenuBody anchor={() => btn.current} />
-        </GlassMenu>,
-          // Out of the surface the button sits in (a transformed glass panel), still inside the glass layer's custom properties.
-          document.querySelector('[data-glass-tone]') ?? document.body,
-        )}
+      {/* At the button (Apple's pop-up menu): above it in a field, below it in a header; inside the pinned conversation when it fits. */}
+      <GlassMenu
+        ref={menu}
+        open={open}
+        anchor={() => btn.current}
+        placement={variant === 'input' ? 'above-start' : 'below-start'}
+        label={t('keys.menu')}
+        style={{ width: 'min(300px, calc(100vw - 24px))' }}
+        data-testid={open ? 'key-menu' : undefined}
+      >
+        <KeyMenuBody anchor={() => btn.current} />
+      </GlassMenu>
     </>
   );
 }
@@ -401,7 +373,6 @@ export function KeySheetHost({ phone }: { phone?: boolean }) {
   const from = useKeys((s) => s.anchor);
   const [shown, setShown] = useState<KeySheetMode | null>(sheet);
   const [rect, setRect] = useState<DOMRect | null>(null);
-  const ghost = useRef<HTMLDivElement>(null);
   const panel = useRef<HTMLElement>(null);
   const open = !!sheet;
   useLayoutEffect(() => {
@@ -446,18 +417,19 @@ export function KeySheetHost({ phone }: { phone?: boolean }) {
   const width = 380;
   return (
     <>
-      {rect && <div ref={ghost} className="pointer-events-none fixed" style={{ left: rect.left, top: rect.top, width: rect.width, height: rect.height }} aria-hidden="true" />}
+      {/* Above the input (where the draft waits), grown out of the control that opened it (its box: a menu row closes with its menu). */}
       <GlassPopover
         ref={panel}
         open={open}
-        anchor={() => (open ? ghost.current : from?.isConnected ? from : document.querySelector<HTMLElement>('[data-testid=prompt]'))}
+        anchor={() => document.querySelector<HTMLElement>('[data-testid=prompt]')}
+        placement="above-center"
+        from={() => (open && rect ? { x: rect.left, y: rect.top, width: rect.width, height: rect.height } : from?.isConnected ? from : document.querySelector<HTMLElement>('[data-testid=prompt]'))}
         kind="text"
         onClosed={onClosed}
         ariaRole="dialog"
         aria-modal="true"
         aria-labelledby="keys-title"
-        className="absolute z-50"
-        style={{ bottom: 96, left: `calc(50% - ${width / 2}px)`, width }}
+        style={{ width }}
         data-testid="keys-sheet"
       >
         {body}

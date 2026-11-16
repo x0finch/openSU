@@ -98,6 +98,7 @@ function useBox(ref: React.RefObject<HTMLElement | null>, on: (r: { top: number;
 }
 
 type Box = { top: number; bottom: number; left: number; right: number };
+type PanelBox = { left: number; right: number; bottom: number };
 const sameBox = (a: Box | null, b: Box | null) => (a && b ? a.top === b.top && a.bottom === b.bottom && a.left === b.left && a.right === b.right : a === b);
 function useBoxState(): [Box | null, (b: Box | null) => void] {
   const [box, setBox] = useState<Box | null>(null);
@@ -111,7 +112,7 @@ function useBoxState(): [Box | null, (b: Box | null) => void] {
  * top-left corner and the card in the top-right: the house keeps clear of
  * each from below or from the side, whichever shows it larger.
  */
-function desktopInsets(W: number, H: number, left: number, o: { title: Box | null; top: number; dock: Box | null; panel: { left: number; bottom: number } | null; sidebar: number }): FrameInsets[] {
+function desktopInsets(W: number, H: number, left: number, o: { title: Box | null; top: number; dock: Box | null; panel: PanelBox | null; sidebar: number }): FrameInsets[] {
   const g = GAP_DESKTOP;
   const base = { top: o.top + g, right: 24, left: Math.max(24, o.sidebar ? o.sidebar + g : 0), bottom: o.dock ? H - o.dock.top + g : 24 };
   const tops = [base];
@@ -121,9 +122,12 @@ function desktopInsets(W: number, H: number, left: number, o: { title: Box | nul
   if (o.title) tops.push({ ...base, top: Math.max(base.top, o.title.bottom + g) }, { ...base, left: side, right: Math.max(base.right, side) });
   const out = o.title ? tops.slice(1) : tops;
   if (!o.panel) return out;
+  // A panel hangs under the toolbar (top right) or under the house name (a site panel from its menu, top left).
+  const p = o.panel;
+  const leading = p.left + p.right < 2 * left + W;
   const all = out.flatMap((i) => [
-    { ...i, right: Math.max(i.right, W - (o.panel!.left - left) + g) },
-    { ...i, top: Math.max(i.top, o.panel!.bottom + g) },
+    leading ? { ...i, left: Math.max(i.left, p.right - left + g) } : { ...i, right: Math.max(i.right, W - (p.left - left) + g) },
+    { ...i, top: Math.max(i.top, p.bottom + g) },
   ]);
   // The renderer ignores insets that leave less than a third free (and then
   // frames on the whole canvas): such a candidate must not compete.
@@ -335,8 +339,8 @@ export function Studio() {
   const [dockBox, setDockBox] = useBoxState();
   const [inputBox, setInputBox] = useBoxState();
   const [header, setHeader] = useBoxState();
-  const [panel, setPanel] = useState<{ left: number; bottom: number } | null>(null);
-  const onPanel = useCallback((r: { left: number; bottom: number } | null) => setPanel((c) => (c && r && c.left === r.left && c.bottom === r.bottom ? c : r)), []);
+  const [panel, setPanel] = useState<PanelBox | null>(null);
+  const onPanel = useCallback((r: PanelBox | null) => setPanel((c) => (c && r && c.left === r.left && c.right === r.right && c.bottom === r.bottom ? c : r)), []);
   const [extent, setExtent] = useState<DockExtent | null>(null);
   const onExtent = useCallback((e: DockExtent) => setExtent((c) => (c && c.bottom === e.bottom && c.left === e.left && c.restBottom === e.restBottom && c.restLeft === e.restLeft ? c : e)), []);
   const titleRef = useRef<HTMLDivElement>(null);
@@ -389,11 +393,6 @@ export function Studio() {
   }, [mode]);
 
   const levelId = derived && level && derived.levels.some((l) => l.id === level) ? level : derived?.levels[0]?.id;
-  // The project menu (and the sign-in it opens) lies where the pinned
-  // sidebar is: the sidebar steps aside meanwhile, as the phone dock does
-  // for the sign-in sheet (glass never sits on glass).
-  const [menuOpen, setMenuOpen] = useState(false);
-  const signInFromMenu = useAccount((s) => s.open && s.origin === 'menu');
 
   return (
     <GlassLayer tone={glassTone}>
@@ -424,10 +423,11 @@ export function Studio() {
           {mode === 'plan' && <div className="absolute top-0 right-0 h-24 bg-gradient-to-b from-white via-white/90 to-transparent" style={{ left: canvasLeft }} aria-hidden="true" />}
           {/* Walking, the scene behind the name is a room, not the white drawing: the paper fades in under the top row (a scroll-edge effect) so the name stays plain ink on paper. */}
           {walk && <WalkEdge box={title} />}
-          {column && <PinnedColumn style={{ top: (title?.bottom ?? 72) + PIN_HANG, left: PIN_LEFT, bottom: PIN_BOTTOM, width: PIN_COLUMN }} aside={menuOpen || signInFromMenu} />}
+          {/* A menu or panel opened over it makes it step aside (the glass module's rule, `stepAside`). */}
+          {column && <PinnedColumn style={{ top: (title?.bottom ?? 72) + PIN_HANG, left: PIN_LEFT, bottom: PIN_BOTTOM, width: PIN_COLUMN }} />}
           {/* The name stays put, plain ink on the drawing, pinned or not; the sidebar hangs under it. */}
           <div ref={titleRef} className="absolute top-[18px] left-6 w-max max-w-[min(360px,calc(50vw-200px))]" data-testid="title-block">
-            <TitleMenu derived={derived} onOpenChange={setMenuOpen} />
+            <TitleMenu derived={derived} />
           </div>
           <div
             ref={modeRef}

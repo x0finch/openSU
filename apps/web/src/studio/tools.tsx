@@ -9,7 +9,7 @@ import {
   SunIcon, ViewIcon,
 } from '../components/icons';
 import { cx } from '../components/ui';
-import { GlassButtonGroup, GlassChoice, GlassSegmented, GlassGroupButton, GlassPopover, GlassRow, GlassSep, GlassSlider } from '../glass';
+import { GlassButtonGroup, GlassChoice, GlassSegmented, GlassGroupButton, GlassPopover, GlassRow, GlassSep, GlassSlider, GlassTip } from '../glass';
 import { levelName, type MessageKey, useT } from '../lib/i18n';
 import { bearingText, bearingWords, frontBearing, placeText, utcText } from '../lib/site';
 import { SUN_DATES, type SunDateId, type Tray, useStudio } from '../lib/store';
@@ -255,7 +255,7 @@ export function PhoneTools({ derived }: { derived: Derived | null }) {
 export function CloseButton({ onClick, label }: { onClick: () => void; label?: string }) {
   const t = useT();
   return (
-    <button type="button" onClick={onClick} aria-label={label ?? t('tools.close')} className="hit grid size-[30px] shrink-0 place-items-center rounded-[8px] text-ink-2 transition-colors hover:bg-wash hover:text-ink" data-testid="panel-close">
+    <button type="button" onClick={onClick} aria-label={label ?? t('tools.close')} className="hit lg-plate grid size-[30px] shrink-0 place-items-center text-ink-2 hover:text-ink" data-testid="panel-close">
       <CloseIcon width={16} height={16} />
     </button>
   );
@@ -279,18 +279,19 @@ function ViewsPanel({ onClose }: { onClose: () => void }) {
   const resetView = useStudio((s) => s.resetView);
   const label = (id: ViewId) => (presetById(id).kind === 'elevation' ? t(`view.${id}`) : t(`viewShort.${id}` as MessageKey));
   const cell = (id: ViewId) => (
-    <button
-      key={id}
-      type="button"
-      aria-label={t(`view.${id}`)}
-      aria-pressed={view === id}
-      title={t(`view.${id}`)}
-      onClick={() => setView(id)}
-      className={cx('flex h-[50px] min-w-0 flex-col items-center justify-center gap-[3px] rounded-[8px] text-[11.5px] leading-[14px] transition-colors', view === id ? 'bg-ink text-on-ink' : 'text-ink-2 hover:bg-wash hover:text-ink')}
-    >
-      <ViewIcon id={id} width={20} height={20} className={view === id ? 'text-on-ink' : 'text-ink'} />
-      <span className="max-w-full truncate">{label(id)}</span>
-    </button>
+    <GlassTip key={id} label={t(`view.${id}`)} className="min-w-0">
+      <button
+        type="button"
+        aria-label={t(`view.${id}`)}
+        aria-pressed={view === id}
+        onClick={() => setView(id)}
+        // A tile: the module's plate with the tile's own corners.
+        className={cx('lg-plate flex h-[50px] min-w-0 flex-1 flex-col items-center justify-center gap-[3px] rounded-[8px] text-[11.5px] leading-[14px]', view === id ? 'bg-ink text-on-ink' : 'text-ink-2 hover:text-ink')}
+      >
+        <ViewIcon id={id} width={20} height={20} className={view === id ? 'text-on-ink' : 'text-ink'} />
+        <span className="max-w-full truncate">{label(id)}</span>
+      </button>
+    </GlassTip>
   );
   return (
     <>
@@ -312,12 +313,13 @@ function ViewsPanel({ onClose }: { onClose: () => void }) {
           aria-label={t('view.eye-sw')}
           aria-pressed={view === 'eye-sw'}
           onClick={() => setView('eye-sw')}
-          className={cx('inline-flex h-8 flex-1 items-center justify-center gap-1.5 rounded-full text-[12.5px] transition-colors', view === 'eye-sw' ? 'bg-ink text-on-ink' : 'bg-wash text-ink hover:bg-hairline')}
+          data-filled={view === 'eye-sw' ? undefined : ''}
+          className={cx('lg-plate inline-flex h-8 flex-1 items-center justify-center gap-1.5 text-[12.5px]', view === 'eye-sw' ? 'bg-ink text-on-ink' : 'text-ink')}
         >
           <ViewIcon id="eye-sw" width={15} height={15} />
           {t('views.eye')}
         </button>
-        <button type="button" aria-label={t('view.reset')} onClick={resetView} className="inline-flex h-8 flex-1 items-center justify-center gap-1.5 rounded-full bg-wash text-[12.5px] text-ink transition-colors hover:bg-hairline">
+        <button type="button" aria-label={t('view.reset')} onClick={resetView} data-filled="" className="lg-plate inline-flex h-8 flex-1 items-center justify-center gap-1.5 text-[12.5px] text-ink">
           <ResetViewIcon width={14} height={14} />
           {t('view.resetShort')}
         </button>
@@ -351,7 +353,8 @@ function RadioRows<T extends string>({ label, value, onChange, rows }: { label: 
             tabIndex={on ? 0 : -1}
             data-value={r.value}
             onClick={() => onChange(r.value)}
-            className={cx('flex h-10 items-center gap-2.5 rounded-[8px] px-3 text-left text-[13px] transition-colors', on ? 'bg-wash font-medium' : 'hover:bg-wash')}
+            data-on={on ? '' : undefined}
+            className={cx('lg-plate flex h-10 items-center gap-2.5 rounded-[14px] px-3 text-left text-[13px]', on && 'font-medium')}
           >
             {on ? <CheckIcon width={16} height={16} className="shrink-0" /> : <span className="w-4 shrink-0" />}
             <span className="min-w-0 flex-1 truncate">{r.label}</span>
@@ -650,7 +653,7 @@ function SitePanelBody({ phone }: { phone?: boolean }) {
   return (
     <div className="-mx-4 -mt-3.5 -mb-4 flex min-h-0 flex-1 flex-col" role="dialog" aria-label={panel.kind === 'location' ? t('loc.title') : t('ori.title')} data-testid={`panel-${panel.kind}`}>
       {back && (
-        <button type="button" onClick={back} className="hit mt-2 ml-2 inline-flex h-8 items-center gap-0.5 self-start rounded-[7px] pr-2 pl-1 text-[12.5px] text-ink-2 transition-colors hover:bg-wash hover:text-ink" data-testid="panel-back">
+        <button type="button" onClick={back} className="hit lg-plate mt-2 ml-2 inline-flex h-8 items-center gap-0.5 self-start pr-2.5 pl-1.5 text-[12.5px] text-ink-2 hover:text-ink" data-testid="panel-back">
           <ChevronLeftIcon width={16} height={16} />
           {t('sun.label')}
         </button>
@@ -695,32 +698,26 @@ export function useFocusOnOpen(ref: React.RefObject<HTMLElement | null>, key: st
   }, [key]); // eslint-disable-line react-hooks/exhaustive-deps
 }
 
-/** What a panel grows out of: the whole tool group (owner's decision), or the house name for a site panel opened from its menu. */
-function panelAnchor(panel: Tray | 'site'): HTMLElement | null {
-  const sp = panel === 'site' ? useStudio.getState().sitePanel : null;
-  if (sp && !sp.fromSun) return document.querySelector<HTMLElement>('[data-testid=project-menu]');
-  return document.querySelector<HTMLElement>('[data-testid=toolbar]');
-}
-
-/**
- * Desktop: the open panel as a glass popover that flows out of its tool's
- * button and hangs under the toolbar (one at a time; a panel being
- * replaced flows back into its own button). Reports its box so the house
- * frames beside or below it.
- */
-/** Panels hang from the tool group and join it (not a site panel opened from the house menu). */
+/** Panels hang from the tool group and join it (owner's decision); a site panel opened from the house menu floats under the house name. */
 function fromGroup(panel: Tray | 'site'): boolean {
   const sp = panel === 'site' ? useStudio.getState().sitePanel : null;
   return !sp || !!sp.fromSun;
 }
 
-export function PanelCard({ derived, onRect }: { derived: Derived | null; onRect: (r: { left: number; bottom: number } | null) => void }) {
+/**
+ * Desktop: the open panel, an anchored glass surface (task 025): joined to
+ * the whole tool group, right edges aligned (one at a time; a panel being
+ * replaced flows back into the group), or under the house name for a site
+ * panel from its menu. Reports its box so the house frames beside or below it.
+ */
+export function PanelCard({ derived, onRect }: { derived: Derived | null; onRect: (r: { left: number; right: number; bottom: number } | null) => void }) {
   const open = useOpenPanel();
   const siteKind = useStudio((s) => s.sitePanel?.kind ?? null);
   const current = open ? (open === 'site' ? `site-${siteKind}` : open) : null;
-  const [panels, setPanels] = useState<{ key: string; panel: Tray | 'site' }[]>([]);
+  // Each panel keeps the attachment it opened with (a site panel flows back where it came from).
+  const [panels, setPanels] = useState<{ key: string; panel: Tray | 'site'; joined: boolean }[]>([]);
   useLayoutEffect(() => {
-    if (current && open && !panels.some((p) => p.key === current)) setPanels((ps) => [...ps, { key: current, panel: open }]);
+    if (current && open && !panels.some((p) => p.key === current)) setPanels((ps) => [...ps, { key: current, panel: open, joined: fromGroup(open) }]);
     if (!current) onRect(null);
   }, [current]); // eslint-disable-line react-hooks/exhaustive-deps
   const ref = useRef<HTMLElement>(null);
@@ -729,12 +726,15 @@ export function PanelCard({ derived, onRect }: { derived: Derived | null; onRect
     <>
       {panels.map((p) => {
         const on = p.key === current;
+        const joined = p.joined;
         return (
           <GlassPopover
             key={p.key}
             ref={on ? ref : undefined}
             open={on}
-            anchor={() => panelAnchor(p.panel)}
+            anchor={() => document.querySelector<HTMLElement>(joined ? '[data-testid=toolbar]' : '[data-testid=project-menu]')}
+            placement={joined ? 'below-end' : 'below-start'}
+            attach={joined ? 'joined' : 'float'}
             onClosed={() => setPanels((ps) => ps.filter((q) => q.key !== p.key))}
             onBox={on ? onRect : undefined}
             id={p.panel === 'site' ? undefined : TRAY_ID[p.panel]}
@@ -742,8 +742,10 @@ export function PanelCard({ derived, onRect }: { derived: Derived | null; onRect
             aria-label={p.panel === 'site' ? undefined : p.panel}
             data-testid={on ? (p.panel === 'site' ? 'panel-site' : TRAY_ID[p.panel]) : undefined}
             data-panel={on ? '' : undefined}
-            group={fromGroup(p.panel) ? TOOLS_GROUP : undefined}
-            className="absolute top-[72px] right-[18px] flex max-h-[calc(100%-72px-112px)] w-[330px] flex-col overflow-y-auto overscroll-contain"
+            group={joined ? TOOLS_GROUP : undefined}
+            // Clear of the input at the bottom (its 112 px), as before.
+            style={{ width: 330, maxHeight: 'calc(100vh - 66px - 112px)' }}
+            className="flex flex-col overflow-y-auto overscroll-contain"
             bodyClassName="flex min-h-0 flex-col gap-4 p-[22px]"
           >
             {/* A panel flowing back is an empty shape: its controls are gone at once (no duplicates for keyboard, screen readers and tests). */}
