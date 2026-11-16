@@ -79,6 +79,11 @@ node apps/web/scripts/ui-audit.mjs --smoke       # small set vs ui-audit-allow.j
 | `label-dupe` | visible strings per language: the same words written two ways, or one edit apart | - |
 | `off-token-colour` / `off-token-radius` | colours in the chrome against every colour custom property (resolved in and outside glass); radii against the material, `glass.css` and `styles.css` | 2/255, 0.02 alpha |
 
+Task 025 added the interaction rules (`tip-contrast`, `hover-plate`,
+`anchor-gap`, `anchor-joined`, `panel-attach`, `motion-shape`,
+`motion-empty`); see `docs/tasks/025-notes.md`. Options `--no-hover` and
+`--no-motion` skip those passes.
+
 ## Rule decisions after batch 1 (lead, 2026-11-16)
 
 - `subject-centre` / `subject-same-point` in plan measure the union of all

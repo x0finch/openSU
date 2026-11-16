@@ -171,8 +171,14 @@ compose these and do not style surfaces themselves.
   visit; the active tool shows its value (for example the sun time).
 - **Accent button**: the send and play buttons are solid ginkgo circles
   with dark icons.
-- **Plates**: rows and small actions inside glass get a wash on hover and
-  a stronger wash when pressed or selected; focus is a 2 px ink outline.
+- **Plates** (`.lg-plate`, the only hover state on glass): the plate takes
+  the control's own shape (round ends for buttons, the row's or tile's own
+  corners), a wash on hover and a stronger wash when pressed or selected,
+  one transition; buttons resting on a wash (`data-filled`) take the
+  stronger wash on hover. Icon buttons in a row with text buttons share
+  their height (`GlassIconButton`). Focus is a 2 px ink outline.
+- **Tooltip** (`GlassTip`, the only tooltip): below the control, one delay,
+  one offset, its own plate and ink (never the panel's ink).
 
 ### Segmented control
 - **View switch and phone tab bar** (`GlassSegmented`): a capsule with a
@@ -188,8 +194,19 @@ compose these and do not style surfaces themselves.
   ring instead.
 
 ### Panels, menus, sheets
-- **Popover / panel** (`GlassPopover`): grows out of its capsule with a
-  critically damped spring and merges with it.
+- **Anchored surface** (`GlassPopover`, task 025): the one primitive for
+  every menu, toolbar panel and popover. It takes an anchor, a placement
+  (`below-start`, `above-center`, ...) and an attachment: `joined` (touches
+  the anchor's glass and merges with it: the toolbar panels, in 3D and plan
+  alike) or `float` (the module's gap away: menus, sign-in). The module
+  places it (`anchor.ts`: at the anchor, flipped or shifted only to stay on
+  screen, inside the glass surface it was opened from when it fits), grows
+  it out of its control with the spring (a rounded rectangle on every
+  frame, content fading in with it) and flows it back.
+- **What lies under an open surface**: a floating surface over the pinned
+  conversation makes it step aside (fades out, inert), unless it is a menu
+  opened from inside it (`GlassTextSurface stepAside`). Nothing else is
+  restyled.
 - **Menu** (`GlassMenu`, `GlassMenuItem`): rows separated by inset
   hairlines, touch scrubbing.
 - **Sheet** (`GlassSheet`): phone panels with a grabber and detents.
