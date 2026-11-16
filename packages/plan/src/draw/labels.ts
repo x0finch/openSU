@@ -62,8 +62,11 @@ export interface LabelResult { svg: string; boxes: TextBox[]; removed: Set<strin
  * `compact` (small screens): Chinese names only, and furniture yields before
  * a name is set smaller, so names stay as large as the room allows.
  */
-export function placeLabels(plan: LevelPlan, v: View, items: Placement[], swings: Rect[], taken: TextBox[], wallBoxes: Rect[], ty: Typography = typography(), compact = false): LabelResult {
-  const VARIANTS = variants(ty.font);
+export function placeLabels(plan: LevelPlan, v: View, items: Placement[], swings: Rect[], taken: TextBox[], wallBoxes: Rect[], ty: Typography = typography(), compact = false, uniform = false): LabelResult {
+  // `uniform` (the studio's registered levels, task 023): every name at the
+  // one size; a label that does not fit drops its subtitle, never shrinks.
+  const one = (vs: Variant[]) => (uniform ? vs.filter((x) => x.cn === ty.font.cnSize) : vs);
+  const VARIANTS = one(variants(ty.font));
   const removed = new Set<string>();
   const boxes: TextBox[] = [];
   const missing: string[] = [];
@@ -136,7 +139,7 @@ export function placeLabels(plan: LevelPlan, v: View, items: Placement[], swings
       // Items on top of a removed piece go with it.
       for (const p of live) if (p.layer === 'top' && victim.kind === 'counter' && overlaps(footprint(p), footprint(victim))) removed.add(p.id);
     }
-    if (!done && lastResort(ty.font).length) done = attemptWith(removed, lastResort(ty.font));
+    if (!done && one(lastResort(ty.font)).length) done = attemptWith(removed, one(lastResort(ty.font)));
     if (!done && !sp.outdoor) missing.push(sp.id);
   }
   return { svg, boxes, removed, missing };

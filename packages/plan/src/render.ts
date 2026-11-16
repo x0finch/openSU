@@ -34,6 +34,12 @@ export interface PlanOptions {
    * the north arrow above the drawing's top-left corner.
    */
   compact?: boolean;
+  /**
+   * One size for every room name (a name that does not fit at full size
+   * drops its English line instead of shrinking). The studio sets it so the
+   * registered levels of a house share their typography (task 023).
+   */
+  uniformText?: boolean;
 }
 
 export interface PlanReport {
@@ -112,7 +118,7 @@ export function renderPlanDetailed(house: ResolvedHouse, levelId: string, option
   // --- Labels first so furniture can yield; then draw what is left.
   const ownCanopies = plan.openings.map((o) => openingCanopy(o.op, o.thickness)).filter((r): r is Rect => !!r);
   // Labels keep clear of walls and of canopy outlines drawn over the floor.
-  const labels = placeLabels(plan, v, items0, openings.swings, texts, [...walls.wallBoxes, ...ownCanopies], ty, options.compact === true);
+  const labels = placeLabels(plan, v, items0, openings.swings, texts, [...walls.wallBoxes, ...ownCanopies], ty, options.compact === true, options.uniformText === true);
   const items = items0.filter((p) => !labels.removed.has(p.id));
   texts.push(...labels.boxes);
 

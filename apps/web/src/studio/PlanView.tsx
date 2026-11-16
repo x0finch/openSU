@@ -290,7 +290,7 @@ export function PlanView({ resolved, levelId, active, insets, layoutKey }: { res
     >
       {plan && level ? (
         // The house frame: one transform for every level; the level's drawing sits at its registered offset.
-        <div ref={sheet} className="absolute top-0 left-0 size-0 origin-top-left" data-text-scale={plan.textScale}>
+        <div ref={sheet} className="absolute top-0 left-0 size-0 origin-top-left" data-text-scale={plan.textScale} data-union={union ? [union.x0, union.y0, union.x1, union.y1].map((n) => Math.round(n * 100) / 100).join(',') : undefined}>
           <div
             key={levelId}
             className="absolute animate-[fade-in_220ms_ease-out] [&>svg]:block [&>svg]:h-full [&>svg]:w-full"

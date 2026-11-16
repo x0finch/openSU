@@ -323,10 +323,17 @@ export function measureDom(opts) {
   };
   const textOnly = (el) => !ownShape(el) && !el.querySelector('svg, img, textarea, input') && !!el.textContent.trim();
   const rowItems = (el) => [...el.children].filter((c) => visible(c) && !decorative(c) && ink(c) && cs(c).position !== 'fixed');
+  // A field grown past one line keeps its buttons at the bottom (as Messages does): not a row to centre.
+  const grown = (el) => [...el.querySelectorAll('textarea')].some((t) => {
+    const ts = cs(t);
+    const lh = parseFloat(ts.lineHeight) || parseFloat(ts.fontSize) * 1.3;
+    return t.clientHeight - parseFloat(ts.paddingTop) - parseFloat(ts.paddingBottom) > lh * 1.5;
+  });
   const rows = [];
   for (const el of vis) {
     const s = cs(el);
     if (!/flex/.test(s.display) || !/^row/.test(s.flexDirection)) continue;
+    if (grown(el)) continue;
     if (!inChrome(el) && !el.closest('button, nav, header')) continue;
     const r = el.getBoundingClientRect();
     if (r.height > 80) continue;
@@ -415,7 +422,7 @@ export function measureDom(opts) {
     }
     const ev = { left: R(L), right: R(Rr), top: R(T), bottom: R(B), height: R(r.height), leftEnd: desc(left.c), rightEnd: desc(right.c), concentricLeft: lc, concentricRight: rc, why };
     if (!lrOk) add('inset-lr', C, `left inset ${R(L)} px, right inset ${R(Rr)} px`, ev);
-    if (why !== 'header' && !stacked && Math.abs(T - B) > 1.01 && r.height <= 80) add('inset-tb', C, `top inset ${R(T)} px, bottom inset ${R(B)} px`, ev);
+    if (why !== 'header' && !stacked && !grown(C) && Math.abs(T - B) > 1.01 && r.height <= 80) add('inset-tb', C, `top inset ${R(T)} px, bottom inset ${R(B)} px`, ev);
   };
   for (const el of vis) {
     const r = el.getBoundingClientRect();
@@ -640,7 +647,8 @@ export function measureDom(opts) {
   // ==== rule: mode-centre ==========================================================
   let modeSwitch = null;
   const ms = document.querySelector('[data-testid=mode-switch]');
-  if (ms && visible(ms)) {
+  // Desktop only: the phone header has its own layout (name leading, the switch trailing).
+  if (ms && visible(ms) && !opts.phone) {
     const r = ms.getBoundingClientRect();
     const cx = r.left + r.width / 2;
     modeSwitch = { cx: R(cx), screen: VW / 2 };
@@ -670,7 +678,15 @@ export function measureDom(opts) {
       subject = { mode: '3d', box: { x0: R(x0), x1: R(x1), y0: R(y0), y1: R(y1) }, free };
     } else if (st?.mode === 'plan') {
       const svg = document.querySelector('[data-testid=plan] svg');
-      if (svg && visible(svg)) {
+      // Registered levels (task 023): the plan is framed as the union of all levels; measure that.
+      const frame = document.querySelector('[data-testid=plan] [data-union]');
+      const lvl = frame?.querySelector('[data-level]');
+      if (svg && visible(svg) && frame && lvl) {
+        const o = frame.getBoundingClientRect();
+        const k = lvl.getBoundingClientRect().width / lvl.offsetWidth;
+        const [ux0, uy0, ux1, uy1] = frame.dataset.union.split(',').map(Number);
+        subject = { mode: 'plan', box: { x0: R(o.left + ux0 * k), x1: R(o.left + ux1 * k), y0: R(o.top + uy0 * k), y1: R(o.top + uy1 * k) }, sheet: box(svg.getBoundingClientRect()), free, union: true };
+      } else if (svg && visible(svg)) {
         const sr = svg.getBoundingClientRect();
         let x0 = 1e9, x1 = -1e9, y0 = 1e9, y1 = -1e9;
         for (const ch of svg.children) {
@@ -744,6 +760,15 @@ export function measureDom(opts) {
     if (ownShape(el) && !el.matches('.lg')) {
       const r = parseFloat(s.borderTopLeftRadius);
       const h = el.getBoundingClientRect().height;
+      // A radius derived as the shaped parent's radius minus the gap (concentric) is not a token of its own.
+      let P = el.parentElement;
+      while (P && P !== document.body && !(ownShape(P) && visible(P))) P = P.parentElement;
+      if (P && P !== document.body) {
+        const a = P.getBoundingClientRect(), b = el.getBoundingClientRect();
+        const RA = radiusOf(P);
+        const gaps = [[b.left - a.left, b.top - a.top], [a.right - b.right, b.top - a.top], [b.left - a.left, a.bottom - b.bottom], [a.right - b.right, a.bottom - b.bottom]].filter(([gx, gy]) => gx >= -0.5 && gy >= -0.5 && gx < RA && gy < RA);
+        if (gaps.some(([gx, gy]) => Math.abs(r - (RA - (gx + gy) / 2)) <= 1)) continue;
+      }
       const key = r >= h / 2 - 0.5 ? 'capsule' : `${R(r)}`;
       if (!radii.has(key)) radii.set(key, desc(el));
     }

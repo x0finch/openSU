@@ -79,6 +79,18 @@ node apps/web/scripts/ui-audit.mjs --smoke       # small set vs ui-audit-allow.j
 | `label-dupe` | visible strings per language: the same words written two ways, or one edit apart | - |
 | `off-token-colour` / `off-token-radius` | colours in the chrome against every colour custom property (resolved in and outside glass); radii against the material, `glass.css` and `styles.css` | 2/255, 0.02 alpha |
 
+## Rule decisions after batch 1 (lead, 2026-11-16)
+
+- `subject-centre` / `subject-same-point` in plan measure the union of all
+  levels (the plan sheet's `data-union`), not the level shown: levels stay
+  registered (task 023), so the union is what is framed.
+- `mode-centre` is desktop only: the phone header has its own layout (name
+  leading, the switch trailing).
+- `row-align` and `inset-tb` skip a field grown past one line: its buttons
+  sit at the bottom, as in Messages.
+- `off-token-radius` allows a radius equal to its shaped parent's radius
+  minus the gap (concentric, the parent visible to the audit); no new token.
+
 ## False positives and tuning
 
 Counted on d1440-zh plus its CSS-glass twin (60 states), de-duplicated

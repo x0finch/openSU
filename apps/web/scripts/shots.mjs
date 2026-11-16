@@ -524,7 +524,10 @@ const planOrigin = (page) =>
     const r = el.getBoundingClientRect();
     const [ox, oy] = el.dataset.origin.split(',').map(Number);
     const k = r.width / el.offsetWidth;
-    return { level: el.dataset.level, x: Math.round((r.left + ox * k) * 100) / 100, y: Math.round((r.top + oy * k) * 100) / 100, xf: getComputedStyle(el.parentElement).transform };
+    // Font sizes per kind of text (room names without the stair arrows, their English lines, dimension figures).
+    const sizes = (fill, skip = /^$/) => [...new Set([...el.querySelectorAll(`text[fill="${fill}"]`)].filter((t) => !skip.test(t.textContent)).map((t) => t.getAttribute('font-size')))].join('/');
+    const type = { names: sizes('#333333', /^[上下]$/), en: sizes('#7A7A7A'), dims: sizes('#3A3A3A') };
+    return { level: el.dataset.level, x: Math.round((r.left + ox * k) * 100) / 100, y: Math.round((r.top + oy * k) * 100) / 100, xf: getComputedStyle(el.parentElement).transform, type: JSON.stringify(type) };
   });
 
 /**
@@ -558,6 +561,10 @@ async function levelsRegistered(page, label) {
   const a = seen[0];
   const same = seen.every((o) => o.xf === a.xf && Math.abs(o.x - a.x) < 0.01 && Math.abs(o.y - a.y) < 0.01);
   check(same && new Set(seen.map((o) => o.level)).size === ids.length, `${label}: every level keeps the plan transform and the model origin on the same pixel, levels panel open and closed (${seen.map((o) => `${o.level} ${o.x},${o.y}`).join('; ')})`);
+  // One typography for the house: per level one size for room names, one for their English lines, one for dimension figures; the same on every level.
+  const t0 = JSON.parse(seen[0].type);
+  const oneSize = seen.every((o) => o.type === seen[0].type) && Object.values(t0).every((v) => v && !v.includes('/'));
+  check(oneSize, `${label}: on every level all room names share one font size, their English lines one, dimension figures one, and the levels share them (${[...new Set(seen.map((o) => `${o.level} ${o.type}`))].join('; ')})`);
 }
 
 /** The name block: its box, the menu trigger's box, and the name's ink. */

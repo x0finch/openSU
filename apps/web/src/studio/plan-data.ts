@@ -102,33 +102,74 @@ export interface HousePlan {
   levels: Record<string, LevelSheet>;
 }
 
-function sheetsAt(house: ResolvedHouse, k: number, compact: boolean): { all: (Drawn & { ox: number; oy: number })[]; w: number; h: number } {
-  const all = house.levels.map((l) => {
-    const d = draw(house, l.id, k, compact);
-    const [x0, y0] = d.px(0, 0);
-    return { ...d, ox: -x0, oy: -y0 };
-  });
+/** Every font size used by texts of one colour (room names: the stair arrows 上 / 下 aside). */
+function sizesOf(svg: string, fill: string): Set<number> {
+  const re = new RegExp(`<text[^>]*font-size="([\\d.]+)"[^>]*fill="${fill}"[^>]*>([^<]*)</text>`, 'g');
+  const out = new Set<number>();
+  for (const m of svg.matchAll(re)) if (m[2] !== '上' && m[2] !== '下') out.add(Number(m[1]));
+  return out;
+}
+
+type Sheet = Drawn & { ox: number; oy: number; uniform: boolean };
+
+/** Registered drawings use one size per kind of text: cached apart from the others. */
+const uniformCache = new WeakMap<ResolvedHouse, Map<string, Sheet>>();
+function sheet(house: ResolvedHouse, levelId: string, k: number, compact: boolean): Sheet {
+  let byLevel = uniformCache.get(house);
+  if (!byLevel) uniformCache.set(house, (byLevel = new Map()));
+  const key = `${levelId}@${k.toFixed(2)}${compact ? 'c' : ''}`;
+  let d = byLevel.get(key);
+  if (!d) {
+    const r = renderPlanDetailed(house, levelId, { ...(k === 1 ? {} : { textScale: k }), ...(compact ? { compact } : {}), uniformText: true });
+    const v = r.view;
+    // The plan's name for assistive tech without the browser's hover tooltip (task 023): aria-label, no <title>.
+    const name = /<title>([^<]*)<\/title>/.exec(r.svg)?.[1] ?? '';
+    const svg = r.svg.replace(/<title>[^<]*<\/title>/, '').replace('<svg ', `<svg role="img" aria-label="${name.replace(/"/g, "&quot;")}" `);
+    const [x0, y0] = [v.x(0), v.y(0)];
+    const one = (fill: string) => sizesOf(svg, fill).size <= 1;
+    d = {
+      svg, width: r.width, height: r.height, textScale: k, px: (x, y) => [v.x(x), v.y(y)], minLabel: minRoomLabel(svg), ox: -x0, oy: -y0,
+      clean: k === 1 || (checkPlan(r).length === 0 && r.missingLabels.length === 0),
+      uniform: one(tokens.color.labelCn) && one(tokens.color.labelEn) && one(tokens.color.dimText),
+    };
+    byLevel.set(key, d);
+  }
+  return d;
+}
+
+function sheetsAt(house: ResolvedHouse, k: number, compact: boolean): { all: Sheet[]; w: number; h: number } {
+  const all = house.levels.map((l) => sheet(house, l.id, k, compact));
   const x0 = Math.min(...all.map((d) => d.ox)), x1 = Math.max(...all.map((d) => d.ox + d.width));
   const y0 = Math.min(...all.map((d) => d.oy)), y1 = Math.max(...all.map((d) => d.oy + d.height));
   return { all, w: x1 - x0, h: y1 - y0 };
 }
 
+/**
+ * The text size of a registered house plan (task 023): one for every level,
+ * so a level switch changes neither the drawing's place nor its type, and
+ * within a drawing one size for room names, one for their English lines and
+ * one for dimension figures. The smallest size that brings room names to
+ * `minLabelPx` on screen at the fitted zoom, or the largest size below it at
+ * which every level still keeps that typography (clean, every room named);
+ * text then stays the same size on screen on every level.
+ */
 export function housePlan(house: ResolvedHouse, fit: (w: number, h: number) => number, minLabelPx: number, compact = false): HousePlan {
-  const pack = (k: number, all: (Drawn & { ox: number; oy: number })[]): HousePlan => ({
+  const pack = (k: number, all: Sheet[]): HousePlan => ({
     textScale: k,
     levels: Object.fromEntries(all.map((d, i) => [house.levels[i]!.id, { svg: d.svg, width: d.width, height: d.height, textScale: d.textScale, px: d.px, ox: d.ox, oy: d.oy }])),
   });
-  const shown = (p: ReturnType<typeof sheetsAt>) => Math.min(...p.all.map((d) => d.minLabel)) * fit(p.w, p.h);
-  const base = sheetsAt(house, 1, compact);
-  if (!house.levels.length || shown(base) >= minLabelPx - 0.05) return pack(1, base.all);
-  const lower = minLabelPx / (tokens.font.cnSize * fit(base.w, base.h));
-  let best = { k: 1, p: base };
+  if (!house.levels.length) return { textScale: 1, levels: {} };
+  // The size room names need: names are cnSize x k, all of them.
+  let need = 1;
   for (const k of SCALES) {
-    if (k <= 1 || k < lower - 0.25) continue;
+    need = k;
     const p = sheetsAt(house, k, compact);
-    if (!p.all.every((d) => d.clean)) continue;
-    if (shown(p) >= minLabelPx - 0.05) return pack(k, p.all);
-    if (shown(p) > shown(best.p) + 0.05) best = { k, p };
+    if (tokens.font.cnSize * k * fit(p.w, p.h) >= minLabelPx - 0.05) break;
   }
-  return pack(best.k, best.p.all);
+  for (const k of [...SCALES].reverse()) {
+    if (k > need) continue;
+    const p = sheetsAt(house, k, compact);
+    if (k === 1 || p.all.every((d) => d.clean && d.uniform)) return pack(k, p.all);
+  }
+  return pack(1, sheetsAt(house, 1, compact).all);
 }
