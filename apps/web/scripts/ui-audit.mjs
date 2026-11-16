@@ -346,8 +346,9 @@ async function capture(page, cfg, state, extra = {}) {
         // The middle rows of the gap (its edges carry the rim light of either shape).
         const mid = top ? b.y + b.h + gap / 2 : s.y + s.h + gap / 2;
         const band = { x: Math.round(ox + ow * 0.25), y: Math.round(mid - 1), w: Math.max(2, Math.round(ow * 0.5)), h: 2 };
-        const inside = { x: Math.round(s.x + s.w * 0.3), y: Math.round(top ? s.y + 6 : s.y + s.h - 12), w: Math.round(s.w * 0.4), h: 6 };
-        const j = await lab.evaluate(joinFill, { png: bare.toString('base64'), band, inside, tol: 40 });
+        // Below the panel's bevel band: its plain glass.
+        const inside = { x: Math.round(s.x + s.w * 0.3), y: Math.round(top ? s.y + 14 : s.y + s.h - 20), w: Math.round(s.w * 0.4), h: 6 };
+        const j = await lab.evaluate(joinFill, { png: bare.toString('base64'), band, inside, relative: true });
         fill = j.fill;
         ev.fill = j.fill;
       }
@@ -492,7 +493,8 @@ async function motionPass(page, cfg, state, { open, close, find, between, joined
       let worst = null, empty = null;
       for (const fr of seq) {
         const f = fr.f;
-        if (f.gone || f.alpha < 0.05 || f.b.w < 6 || f.b.h < 6) continue;
+        // A sliver (the last frames of a close) is too thin to judge at CSS pixels.
+        if (f.gone || f.alpha < 0.05 || f.b.w < 12 || f.b.h < 12) continue;
         const m = await lab.evaluate(shapeMask, { png: fr.png.toString('base64'), b: f.b, thr, margin: joined ? 0 : 2 });
         fr.m = m;
         if (!m.skip && (m.iou < MOTION_IOU_MIN || (m.cover < 0.6 && f.alpha >= 0.6)) && (!worst || m.iou < worst.m.iou)) worst = fr;

@@ -1240,7 +1240,9 @@ export async function joinFill(job) {
   let n = 0, hit = 0;
   for (let y = job.band.y; y < job.band.y + job.band.h; y += 1) for (let x = job.band.x; x < job.band.x + job.band.w; x += 2) {
     n++;
-    if (Math.abs(at(x, y) - glass) <= (job.tol ?? 28)) hit++;
+    // `relative`: glass is anything nearer the glass's luma than the white drawing's (a merged neck carries rim light).
+    const l = at(x, y);
+    if (job.relative ? l < glass + 0.5 * (245 - glass) : Math.abs(l - glass) <= (job.tol ?? 28)) hit++;
   }
   return { glass: Math.round(glass), fill: n ? Math.round((hit / n) * 100) / 100 : 1 };
 }
