@@ -87,9 +87,10 @@ export function KeyPicker({ variant, phone }: { variant: 'input' | 'header'; pho
       window.removeEventListener('keydown', key, true);
     };
   }, [open]);
-  // In the pinned field (task 023): a pop-up button on a quiet plate, as high as send and inset as
-  // send is (4 px, concentric); its text even inside the plate (pt-px: the glyphs' optical centre).
-  const size = variant === 'input' ? (phone ? 'h-9 bg-wash px-3 pt-px' : 'h-7 bg-wash px-2 pt-px') : 'h-[32px] pr-2 pl-3';
+  // In the pinned field (task 023): as high as send; its text 8 px from the field's edge (4 + 4), so
+  // the field's ends read even with send's concentric 4 px; no resting plate (a lighter plate costs
+  // the label contrast); pt-px: the glyphs' optical centre.
+  const size = variant === 'input' ? (phone ? 'h-9 pt-px pr-2 pl-1' : 'h-7 pt-px pr-2 pl-1') : 'h-[32px] pr-2 pl-3';
   return (
     <>
       <button
