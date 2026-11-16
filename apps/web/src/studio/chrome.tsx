@@ -109,7 +109,7 @@ export function TitleMenu({ derived, onRect, compact }: { derived: Derived | nul
   useDismiss(open, close, [box, menu]);
   const name = projectTitle(t, house);
   return (
-    <div className="pointer-events-auto relative min-w-0" ref={box}>
+    <div className="pointer-events-auto relative min-w-0" ref={box} data-house-name="">
       <button
         ref={trigger}
         type="button"
@@ -137,7 +137,8 @@ export function TitleMenu({ derived, onRect, compact }: { derived: Derived | nul
         <ChevronDownSmallIcon width={16} height={16} className={cx('-ml-0.5 shrink-0 text-ink-2 transition-transform duration-200', open && 'rotate-180')} />
       </button>
       <Facts derived={derived} className={cx('pl-0', compact ? 'mt-0' : 'mt-0.5')} />
-      <ProjectMenu ref={menu} open={open} anchor={() => trigger.current} onClose={close} compact={compact} />
+      {/* The menu stands under the house name's block (its name and facts), not over the facts line. */}
+      <ProjectMenu ref={menu} open={open} anchor={() => box.current} onClose={close} compact={compact} />
     </div>
   );
 }

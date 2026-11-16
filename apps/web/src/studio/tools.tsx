@@ -732,7 +732,7 @@ export function PanelCard({ derived, onRect }: { derived: Derived | null; onRect
             key={p.key}
             ref={on ? ref : undefined}
             open={on}
-            anchor={() => document.querySelector<HTMLElement>(joined ? '[data-testid=toolbar]' : '[data-testid=project-menu]')}
+            anchor={() => document.querySelector<HTMLElement>(joined ? '[data-testid=toolbar]' : '[data-house-name]')}
             placement={joined ? 'below-end' : 'below-start'}
             attach={joined ? 'joined' : 'float'}
             onClosed={() => setPanels((ps) => ps.filter((q) => q.key !== p.key))}

@@ -135,14 +135,14 @@ function UndoButtons({ item }: { item: ChatItem }) {
   const t = useT();
   if (item.undo === 'can-undo') {
     return (
-      <SmallButton onClick={() => undoTurn(item.id)} icon={<UndoIcon width={14} height={14} />} className="h-[28px] px-2.5">
+      <SmallButton onClick={() => undoTurn(item.id)} icon={<UndoIcon width={14} height={14} />} className="h-8 px-2.5">
         {t('chat.undo')}
       </SmallButton>
     );
   }
   if (item.undo === 'can-redo') {
     return (
-      <SmallButton onClick={() => redoTurn(item.id)} icon={<RedoIcon width={14} height={14} />} className="h-[28px] px-2.5">
+      <SmallButton onClick={() => redoTurn(item.id)} icon={<RedoIcon width={14} height={14} />} className="h-8 px-2.5">
         {t('chat.redo')}
       </SmallButton>
     );

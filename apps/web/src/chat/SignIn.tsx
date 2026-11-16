@@ -253,6 +253,7 @@ function SignInBody({ phone }: { phone?: boolean }) {
 }
 
 const MENU_TRIGGER = '[data-testid=project-menu]';
+const HOUSE_NAME = '[data-house-name]';
 const INPUT = '[data-testid=prompt]';
 
 /**
@@ -286,7 +287,7 @@ export function SignInHost({ phone }: { phone?: boolean }) {
     return () => window.removeEventListener('pointerdown', down, true);
   }, [open, phone]);
   // Where it stands: under the house name (from its menu), else above the input, where the draft waits.
-  const anchor = () => document.querySelector<HTMLElement>(origin === 'menu' ? MENU_TRIGGER : INPUT);
+  const anchor = () => document.querySelector<HTMLElement>(origin === 'menu' ? HOUSE_NAME : INPUT);
   // What it grows out of: the opening control's box (a menu row closes with its menu); it flows back into the house name or that control.
   const grow = () => {
     if (open && rect) return { x: rect.left, y: rect.top, width: rect.width, height: rect.height };

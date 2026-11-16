@@ -497,7 +497,8 @@ async function motionPass(page, cfg, state, { open, close, find, between, joined
         if (f.gone || f.alpha < 0.05 || f.b.w < 12 || f.b.h < 12) continue;
         const m = await lab.evaluate(shapeMask, { png: fr.png.toString('base64'), b: f.b, thr, margin: joined ? 0 : 2 });
         fr.m = m;
-        if (!m.skip && (m.iou < MOTION_IOU_MIN || (m.cover < 0.6 && f.alpha >= 0.6)) && (!worst || m.iou < worst.m.iou)) worst = fr;
+        // The outline is judged where the glass is mostly opaque (a fading surface reads lighter than the threshold).
+        if (!m.skip && f.alpha >= 0.75 && (m.iou < MOTION_IOU_MIN || m.cover < 0.6) && (!worst || m.iou < worst.m.iou)) worst = fr;
         if (area && f.alpha >= 0.9 && (f.b.w * f.b.h) / area >= 0.25 && f.content < 0.15 && !empty) empty = fr;
       }
       const id = name ? `[${name}]` : state;

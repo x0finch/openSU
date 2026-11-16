@@ -1206,6 +1206,9 @@ export function anchoredSurfaces() {
   for (const t of document.querySelectorAll('[aria-expanded=true]')) {
     const ids = (t.getAttribute('aria-controls') || '').split(/\s+/).filter(Boolean);
     let s = ids.map((id) => document.getElementById(id)).find(Boolean) ?? null;
+    // A region a control shows (the recent strip above the input) is layout, not an anchored surface:
+    // only menus and the panels of a toolbar count here.
+    if (s && !t.closest('[role=toolbar]') && s.getAttribute('role') !== 'menu') s = null;
     if (!s && t.getAttribute('aria-haspopup')) {
       const menus = [...document.querySelectorAll('[role=menu]')].filter(open);
       s = menus.sort((p, q) => box(q).w * box(q).h - box(p).w * box(p).h)[0] ?? null;
