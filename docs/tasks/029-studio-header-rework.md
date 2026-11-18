@@ -146,3 +146,28 @@ The owner decided, overriding Part 2 item 4 and task 025's two modes:
 
 Order: Part 1, then Parts 2 and 3 together. The full test run once at
 the end.
+
+## Part 4 (owner, same day): a surface opens away from its anchor
+
+Owner on the live site: a popover of the top bar appears from above the
+bar (it starts over the bar and travels down across it) and leaves the
+same way. It must come out from under the bar's lower edge and go back
+there.
+
+One rule in the base popover, for every placement: the open animation
+starts at the edge of the anchor that faces the surface (for a surface
+below its anchor: the anchor's lower edge plus the module gap) and
+grows away from the anchor; the close is the exact reverse. On no frame
+does the surface (its glass, shadow excluded, or its content) overlap
+its anchor or the bar the anchor sits in, and it is never drawn over
+them. Same for surfaces that open above their anchor (the key menu in
+the prompt bar): they grow upward from the anchor's upper edge. Reduced
+motion: a fade in place.
+
+Audit: extend the motion rule (task 025 captures at least 6 frames each
+way): on every frame the surface's box does not intersect the anchor's
+bar, and its edge nearest the anchor stays within the module gap of its
+final position (it grows away, it does not slide across). Self-test:
+show the rule failing on the tree before this change and passing after.
+Add frame strips of the views, levels, sun, share and project-menu
+surfaces to `artifacts/task029/`.
