@@ -83,6 +83,7 @@ export function Facts({ derived, className }: { derived: Derived | null; classNa
  * the 3D view frames the house clear of it.
  */
 export function TitleMenu({ derived, onRect, compact, hideFacts }: { derived: Derived | null; onRect?: (r: { right: number; bottom: number }) => void; compact?: boolean; hideFacts?: boolean }) {
+  // Task 026 phone variant (b): the facts are a header line of their own; the block holding both carries `data-house-name` (what menus stand under).
   const t = useT();
   const house = useStudio((s) => s.house);
   const [open, setOpen] = useState(false);
@@ -109,7 +110,7 @@ export function TitleMenu({ derived, onRect, compact, hideFacts }: { derived: De
   useDismiss(open, close, [box, menu]);
   const name = projectTitle(t, house);
   return (
-    <div className="pointer-events-auto relative min-w-0" ref={box} data-house-name="">
+    <div className="pointer-events-auto relative min-w-0" ref={box} data-house-name={hideFacts ? undefined : ''}>
       <button
         ref={trigger}
         type="button"
@@ -139,7 +140,7 @@ export function TitleMenu({ derived, onRect, compact, hideFacts }: { derived: De
       {/* Task 026 phone variant (b): the facts are a line of the header of their own. */}
       {!hideFacts && <Facts derived={derived} className={cx('pl-0', compact ? 'mt-0' : 'mt-0.5')} />}
       {/* The menu stands under the house name's block (its name and facts), not over the facts line. */}
-      <ProjectMenu ref={menu} open={open} anchor={() => box.current} onClose={close} compact={compact} />
+      <ProjectMenu ref={menu} open={open} anchor={() => (hideFacts ? document.querySelector<HTMLElement>('[data-house-name]') : box.current)} onClose={close} compact={compact} />
     </div>
   );
 }
@@ -297,7 +298,7 @@ function SparkDot() {
   return <svg viewBox="0 0 24 24" width={16} height={16} aria-hidden="true"><path d="M12 3.5c.5 4.3 2.7 6.9 7 8-4.3 1.1-6.5 3.7-7 8-.5-4.3-2.7-6.9-7-8 4.3-1.1 6.5-3.7 7-8Z" fill="none" stroke="currentColor" strokeWidth={1.4} strokeLinejoin="round" /></svg>;
 }
 
-export function ModeSwitch({ size = 'md', className }: { size?: 'md' | 'lg' | 'sm'; className?: string }) {
+export function ModeSwitch({ size = 'md', className, stepAside }: { size?: 'md' | 'lg' | 'sm'; className?: string; stepAside?: boolean }) {
   const t = useT();
   const mode = useStudio((s) => s.mode);
   const setMode = useStudio((s) => s.setMode);
@@ -309,6 +310,7 @@ export function ModeSwitch({ size = 'md', className }: { size?: 'md' | 'lg' | 's
       value={mode}
       onChange={setMode}
       className={className}
+      stepAside={stepAside}
       testId="mode-switch"
       segments={[
         { value: '3d', label: t('mode.3d') },

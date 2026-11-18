@@ -5,7 +5,7 @@
 // account menu. The project menu's first row opens the same surface
 // (`openAccount`): one implementation. Hidden when the server offers no
 // sign-in.
-import { type KeyboardEvent as RKeyboardEvent, type RefObject, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { type KeyboardEvent as RKeyboardEvent, type ReactNode, type RefObject, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { PersonIcon } from '../components/icons';
 import { cx, GlassButton, GlassMenu, GlassMenuItem, GlassSep, GlassTip, GlassToast } from '../glass';
 import { useT } from '../lib/i18n';
@@ -86,21 +86,13 @@ export function AccountButton({ size = 48, round, className }: { size?: number; 
     'data-testid': 'account-button',
     'data-state': user ? 'signed-in' : 'signed-out',
   };
+  // Phones have no hover: no tooltip there (a tap would leave it standing).
+  const tipped = (label: string, el: ReactNode) => (round ? <span className={cx('inline-flex', className)}>{el}</span> : <GlassTip label={label} className={className}>{el}</GlassTip>);
   if (user) {
     const inner = Math.round(size * (40 / 48));
-    return (
-      <GlassTip label={t('account.label')} className={className}>
-        <GlassButton {...common} className="hit" aria-label={`${t('account.label')}: ${accountName(user)}`} icon={<Avatar user={user} size={inner} />} />
-      </GlassTip>
-    );
+    return tipped(t('account.label'), <GlassButton {...common} className="hit" aria-label={`${t('account.label')}: ${accountName(user)}`} icon={<Avatar user={user} size={inner} />} />);
   }
-  if (round) {
-    return (
-      <GlassTip label={t('account.signIn')} className={className}>
-        <GlassButton {...common} className="hit" aria-label={t('account.signIn')} icon={<PersonIcon width={size < 40 ? 18 : 20} height={size < 40 ? 18 : 20} />} />
-      </GlassTip>
-    );
-  }
+  if (round) return tipped(t('account.signIn'), <GlassButton {...common} className="hit" aria-label={t('account.signIn')} icon={<PersonIcon width={size < 40 ? 18 : 20} height={size < 40 ? 18 : 20} />} />);
   return (
     <span className={cx('inline-flex', className)}>
       <GlassButton {...common} className="hit gap-1.5 pr-[18px]! pl-3.5!" icon={<PersonIcon width={19} height={19} className="shrink-0" />}>
