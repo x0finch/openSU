@@ -70,3 +70,37 @@ One implementation, `src/chat/AccountEntry.tsx`:
 ### Out of scope
 
 Cloud projects (027) and share links (028): only the menu slot.
+
+## What was built (status: waiting for the lead's phone choice)
+
+- Part 2: `canonicalRedirect` (`src/server/config.ts`), first in the Worker's
+  fetch handler; `CANONICAL_REDIRECT` in the deploy workflow and README;
+  `scripts/canonical-test.ts` (in `pnpm test`).
+- Part 1: `src/chat/AccountEntry.tsx` (`AccountButton`, `AccountMenuHost`,
+  `AccountToast`, `openAccount`, `useSignInParam`). The project menu's first
+  row is the account (sign in, or the name / email) and calls `openAccount`.
+  `GET /api/chat` `user` has `name` and `image`. Landing: "登录" left of the
+  studio link; signed in that link reads "打开工作台". `GlassSegmented` got
+  `stepAside` (the module's rule): in phone variant (a) the mode switch lies
+  under the menus that open from the top row and steps aside while one is open.
+  `glass.css`: no tooltip on a control whose surface is open.
+- With sign-in off the phone header is the one from before this task.
+- account-e2e `entry` section; ui-audit states `account-signin`,
+  `account-signed-in`, `account-menu` (layout and glass sets, hover pass).
+
+### Phone variants (`?acct=a` default, `?acct=b`), header bottom in CSS px
+
+| | 390 x 844 | 844 x 390 |
+|---|---|---|
+| before (sign-in off) | 60 | 56 |
+| (a) | 112 (+52) | 56 (+0, one row: name, switch centred, button) |
+| (b) | 90 (+30) | 86 (+30) |
+
+Both keep the house still when sign-in or the account menu opens (framing
+insets unchanged, checked in account-e2e). The header is persistent layout,
+so the cost is a permanently smaller framing area. (a): the mode switch moves
+off the top row and steps aside under the account and project menus. (b): the
+name and its facts are split by the switch's height (a gap in landscape); the
+walk-mode paper covers only the name, so the facts line sits on the room.
+
+The flag `?acct=` and the losing variant are removed once the lead picks.

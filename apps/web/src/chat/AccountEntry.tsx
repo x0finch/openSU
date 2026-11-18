@@ -95,7 +95,7 @@ export function AccountButton({ size = 48, round, className }: { size?: number; 
   if (round) return tipped(t('account.signIn'), <GlassButton {...common} className="hit" aria-label={t('account.signIn')} icon={<PersonIcon width={size < 40 ? 18 : 20} height={size < 40 ? 18 : 20} />} />);
   return (
     <span className={cx('inline-flex', className)}>
-      <GlassButton {...common} className="hit gap-1.5 pr-[18px]! pl-3.5!" icon={<PersonIcon width={19} height={19} className="shrink-0" />}>
+      <GlassButton {...common} className="hit gap-1.5" icon={<PersonIcon width={19} height={19} className="shrink-0" />}>
         {t('account.signIn')}
       </GlassButton>
     </span>
