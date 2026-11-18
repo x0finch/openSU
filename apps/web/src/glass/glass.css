@@ -297,11 +297,12 @@
   opacity: 0;
   transition: opacity 150ms;
 }
-.lg-tipped:hover > .lg-tip {
+/* Hover after the pointer moved over it, or focus that came from the keyboard (task 026: primitives.tsx installTipIntent). */
+.lg-tipped[data-tip-hover]:hover > .lg-tip {
   opacity: 1;
   transition-delay: 350ms;
 }
-.lg-tipped:has(:focus-visible) > .lg-tip {
+.lg-tipped[data-tip-focus]:has(:focus-visible) > .lg-tip {
   opacity: 1;
 }
 

@@ -22,7 +22,7 @@ import { useChat } from '../chat/chat-store';
 import { useAutosave } from '../lib/autosave';
 import { restoreLang, useStudio } from '../lib/store';
 import { applyParams, useUrlState } from '../lib/url-state';
-import { Facts, Hints, ModeSwitch, TitleMenu, useSunPlayer } from './chrome';
+import { Hints, ModeSwitch, TitleMenu, useSunPlayer } from './chrome';
 import type { Derived } from './house-data';
 import { Loading } from './Loading';
 import { type DockExtent, PhoneDock, SHEET_MS } from './PhoneDock';
@@ -330,10 +330,8 @@ export function Studio() {
   const canvasLeft = 0;
   const sideRight = column ? PIN_RIGHT : 0;
   const walkLandscape = walk && landscape;
-  // Task 026, temporary: the two phone layouts of the account button (?acct=a | b) until the lead picks one.
   // While the status is unknown the layout expects the button (the public site offers sign-in); a server without sign-in gets the old header.
   const accountShown = useChat((s) => !s.server || !!(s.server.auth?.email || s.server.auth?.google));
-  const [acct] = useState<'a' | 'b'>(() => (typeof location !== 'undefined' && new URLSearchParams(location.search).get('acct') === 'b' ? 'b' : 'a'));
   // Smoky (dark) glass is the studio's material; ?glass=light shows light glass for comparison.
   const [glassTone] = useState<GlassTone>(() => (typeof location !== 'undefined' && new URLSearchParams(location.search).get('glass') === 'light' ? 'light' : 'dark'));
 
@@ -482,9 +480,8 @@ export function Studio() {
                 </div>
                 <ModeSwitch size="sm" className="shrink-0" />
               </>
-            ) : acct === 'a' ? (
-              landscape ? (
-                // (a) sideways: one row has the width: the name, the switch centred, the button at the end.
+            ) : landscape ? (
+                // Sideways: one row has the width: the name, the switch centred, the account button at the end.
                 <>
                   <div ref={phoneTitleRef} className="min-w-0 flex-1 pt-0.5">
                     <TitleMenu derived={derived} compact />
@@ -495,7 +492,7 @@ export function Studio() {
                   </div>
                 </>
               ) : (
-                // (a) the name and the account button on the top row; the switch centred on a row of its own.
+                // Upright (task 026): the name and the account button on the top row; the switch centred on a row of its own.
                 <div className="flex min-w-0 flex-1 flex-col gap-2">
                   <div className="flex items-start justify-between gap-2.5" data-account-row="">
                     <div ref={phoneTitleRef} className="min-w-0 pt-0.5">
@@ -509,20 +506,7 @@ export function Studio() {
                     <ModeSwitch size="sm" className="shrink-0" stepAside />
                   </div>
                 </div>
-              )
-            ) : (
-              // (b) the top row as it was; under it the facts, and the account button at the line's end.
-              <div className="grid min-w-0 flex-1 grid-cols-[minmax(0,1fr)_auto] items-center gap-x-2.5 gap-y-1" data-house-name="">
-                <div ref={phoneTitleRef} className="min-w-0 pt-0.5">
-                  <TitleMenu derived={derived} compact hideFacts />
-                </div>
-                <ModeSwitch size="sm" className="shrink-0" />
-                <Facts derived={derived} className="min-w-0" />
-                <div className="flex justify-end">
-                  <AccountButton size={32} round />
-                </div>
-              </div>
-            )}
+              )}
           </header>
           {walk && <WalkEdge box={phoneTitle} />}
           {walk && <MobileWalkHUD derived={derived} top={`${header?.bottom ?? 58}px`} bottom={extent?.bottom ?? 130} />}

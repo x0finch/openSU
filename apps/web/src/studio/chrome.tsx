@@ -59,7 +59,7 @@ function useDismiss(open: boolean, close: (viaKey: boolean) => void, refs: RefOb
 /* Title and project menu                                              */
 /* ------------------------------------------------------------------ */
 
-export function Facts({ derived, className }: { derived: Derived | null; className?: string }) {
+function Facts({ derived, className }: { derived: Derived | null; className?: string }) {
   const t = useT();
   if (!derived) return <p className={cx('h-4', className)}><span className="inline-block h-2.5 w-36 rounded-sm bg-wash" /></p>;
   const storeys = derived.attic ? t('facts.storeysAttic', { n: derived.storeys }) : t('facts.storeysValue', { n: derived.storeys });
@@ -82,8 +82,7 @@ export function Facts({ derived, className }: { derived: Derived | null; classNa
  * templates, reset, language, AI settings, about). Reports its extent so
  * the 3D view frames the house clear of it.
  */
-export function TitleMenu({ derived, onRect, compact, hideFacts }: { derived: Derived | null; onRect?: (r: { right: number; bottom: number }) => void; compact?: boolean; hideFacts?: boolean }) {
-  // Task 026 phone variant (b): the facts are a header line of their own; the block holding both carries `data-house-name` (what menus stand under).
+export function TitleMenu({ derived, onRect, compact }: { derived: Derived | null; onRect?: (r: { right: number; bottom: number }) => void; compact?: boolean }) {
   const t = useT();
   const house = useStudio((s) => s.house);
   const [open, setOpen] = useState(false);
@@ -110,7 +109,7 @@ export function TitleMenu({ derived, onRect, compact, hideFacts }: { derived: De
   useDismiss(open, close, [box, menu]);
   const name = projectTitle(t, house);
   return (
-    <div className="pointer-events-auto relative min-w-0" ref={box} data-house-name={hideFacts ? undefined : ''}>
+    <div className="pointer-events-auto relative min-w-0" ref={box} data-house-name="">
       <button
         ref={trigger}
         type="button"
@@ -137,10 +136,9 @@ export function TitleMenu({ derived, onRect, compact, hideFacts }: { derived: De
         <span className={cx('truncate font-semibold tracking-[-0.01em]', compact ? 'text-[17px] max-[339px]:text-[15px]' : 'text-[20px]')}>{name}</span>
         <ChevronDownSmallIcon width={16} height={16} className={cx('-ml-0.5 shrink-0 text-ink-2 transition-transform duration-200', open && 'rotate-180')} />
       </button>
-      {/* Task 026 phone variant (b): the facts are a line of the header of their own. */}
-      {!hideFacts && <Facts derived={derived} className={cx('pl-0', compact ? 'mt-0' : 'mt-0.5')} />}
+      <Facts derived={derived} className={cx('pl-0', compact ? 'mt-0' : 'mt-0.5')} />
       {/* The menu stands under the house name's block (its name and facts), not over the facts line. */}
-      <ProjectMenu ref={menu} open={open} anchor={() => (hideFacts ? document.querySelector<HTMLElement>('[data-house-name]') : box.current)} onClose={close} compact={compact} />
+      <ProjectMenu ref={menu} open={open} anchor={() => box.current} onClose={close} compact={compact} />
     </div>
   );
 }

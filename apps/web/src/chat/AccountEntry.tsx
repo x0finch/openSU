@@ -59,10 +59,48 @@ function Avatar({ user, size }: { user: { email: string; name?: string | null; i
  * out a capsule with the person icon and "登录", signed in a circle with the
  * avatar. Phone (`round`): a circle in both states.
  */
-export function AccountButton({ size = 48, round, className }: { size?: number; round?: boolean; className?: string }) {
-  const t = useT();
+export function AccountButton(props: { size?: number; round?: boolean; className?: string }) {
+  const known = useChat((s) => !!s.server);
   const authOn = useAuthOn();
-  const user = useUser();
+  const signedIn = useChat((s) => !!s.server?.user);
+  const [cached] = useState(readCache);
+  useEffect(() => {
+    if (known) writeCache({ on: authOn, in: signedIn });
+  }, [known, authOn, signedIn]);
+  if (known) return <AccountButtonView {...props} />;
+  // Until the status arrives: the place this browser saw last time, kept empty, so the toolbar does not shift when it does.
+  if (!cached?.on) return null;
+  return (
+    <span className="pointer-events-none inline-flex opacity-0" aria-hidden="true" inert data-testid="account-button-reserve">
+      <AccountButtonView {...props} reserve={{ user: cached.in ? { email: ' ' } : null }} />
+    </span>
+  );
+}
+
+const CACHE_KEY = 'opensu.account.v1';
+/** What this browser last learned: sign-in offered, and someone signed in (only to reserve the button's place). */
+function readCache(): { on: boolean; in: boolean } | null {
+  try {
+    const v = JSON.parse(localStorage.getItem(CACHE_KEY) ?? 'null') as { on?: unknown; in?: unknown } | null;
+    return v ? { on: v.on === true, in: v.in === true } : null;
+  } catch {
+    return null;
+  }
+}
+function writeCache(v: { on: boolean; in: boolean }): void {
+  try {
+    localStorage.setItem(CACHE_KEY, JSON.stringify(v));
+  } catch {
+    /* private mode: no reserved place next time */
+  }
+}
+
+function AccountButtonView({ size = 48, round, className, reserve }: { size?: number; round?: boolean; className?: string; reserve?: { user: { email: string } | null } }) {
+  const t = useT();
+  const live = useAuthOn();
+  const liveUser = useUser();
+  const authOn = reserve ? true : live;
+  const user = reserve ? reserve.user : liveUser;
   const menuOpen = useAccount((s) => s.menu && s.menuFrom === 'button');
   const signInOpen = useAccount((s) => s.open && s.origin === 'account');
   const ref = useRef<HTMLButtonElement>(null);
@@ -82,8 +120,8 @@ export function AccountButton({ size = 48, round, className }: { size?: number; 
     onClick,
     'aria-haspopup': user ? ('menu' as const) : ('dialog' as const),
     'aria-expanded': open,
-    'data-account-button': '',
-    'data-testid': 'account-button',
+    'data-account-button': reserve ? undefined : '',
+    'data-testid': reserve ? undefined : 'account-button',
     'data-state': user ? 'signed-in' : 'signed-out',
   };
   // Phones have no hover: no tooltip there (a tap would leave it standing).

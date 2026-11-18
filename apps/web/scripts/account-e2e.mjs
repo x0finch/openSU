@@ -14,8 +14,7 @@
 //
 // And of the account entry (task 026, `entry`): the account button signed
 // out and signed in, the account menu, `?signin=1`, the landing's links,
-// nothing when sign-in is off; screenshots -> artifacts/task026/*.png,
-// including the two phone layouts behind the temporary `?acct=a|b`.
+// nothing when sign-in is off; screenshots -> artifacts/task026/*.png.
 //
 // Requires a build (`pnpm --filter @opensu/web build`).
 import { execFileSync, spawn } from 'node:child_process';
@@ -363,13 +362,30 @@ try {
       check(letter === 'E', `${tag}: no picture: the first letter on a plate (${letter})`);
       const glass2 = await page.getByTestId('account-button').evaluate((e) => { const r = e.closest('.lg').getBoundingClientRect(); return { w: r.width, h: r.height, r: r.right, b: r.bottom, t: r.top }; });
       check(Math.abs(glass2.w - 48) <= 0.5 && Math.abs(glass2.h - 48) <= 0.5, `${tag}: signed in, a 48 px circle (${glass2.w} x ${glass2.h})`);
+      // The avatar appeared under the resting pointer and got focus back from the closing surface: no tooltip (hover or keyboard focus only).
+      const tipOpacity = () => page.getByTestId('account-button').evaluate((e) => Number(getComputedStyle(e.closest('.lg-tipped').querySelector(':scope > .lg-tip')).opacity));
+      await page.waitForTimeout(700);
+      const focusedBack = await page.evaluate(() => document.activeElement?.getAttribute('data-testid') === 'account-button');
+      check(focusedBack && (await tipOpacity()) === 0, `${tag}: after sign-in focus is back on the avatar, and no tooltip shows from that (opacity ${await tipOpacity()})`);
       await shot(page, `${tag}-signed-in-toast`, outDir26);
       await page.waitForSelector('[data-testid=account-toast]', { state: 'detached', timeout: 6000 });
+      await page.mouse.move(Math.round(w / 2), Math.round(h / 2));
+      await page.waitForTimeout(300);
       await shot(page, `${tag}-signed-in`, outDir26);
       // Tooltip on hover (desktop): its own plate.
       await page.getByTestId('account-button').hover();
       await page.waitForTimeout(700);
+      check((await tipOpacity()) === 1, `${tag}: hovering the avatar shows its tooltip`);
       await shot(page, `${tag}-signed-in-tooltip`, outDir26);
+      // Keyboard focus (Tab from the toolbar) shows it too.
+      await page.mouse.move(Math.round(w / 2), Math.round(h / 2));
+      await page.getByTestId('bar-walk').focus();
+      await page.keyboard.press('Tab');
+      await page.waitForTimeout(500);
+      const tabbed = await page.evaluate(() => document.activeElement?.getAttribute('data-testid') === 'account-button');
+      check(tabbed && (await tipOpacity()) === 1, `${tag}: Tab onto the avatar shows its tooltip (${tabbed})`);
+      await page.keyboard.press('Shift+Tab');
+      await page.waitForTimeout(300);
       // The account menu: who, today's allowance, keys, sign out.
       await page.getByTestId('account-button').click();
       await page.waitForSelector('[data-testid=account-menu] [data-testid=account-signout]');
@@ -396,6 +412,19 @@ try {
       await page.waitForTimeout(400);
       check((await page.getByTestId('landing-signin').count()) === 0 && ((await page.getByTestId('landing-studio').textContent()) ?? '').trim() === (lang === 'zh' ? '打开工作台' : 'Open the studio'), `${tag}: landing signed in: "open the studio", no sign-in link`);
       await shot(page, `${tag}-landing-signed-in`, outDir26);
+      // Second visit: until the status arrives the button's place is kept (the toolbar does not shift).
+      await page.route('**/api/chat', async (route) => {
+        if (route.request().method() === 'GET') await new Promise((r) => setTimeout(r, 2500));
+        await route.continue();
+      });
+      await page.goto(`${preview.base}/studio`);
+      await page.waitForSelector('[data-testid=toolbar]', { timeout: 60000 });
+      const early = await page.evaluate(() => ({ status: !!window.__studio?.chat?.getState().server, reserve: !!document.querySelector('[data-testid=account-button-reserve]'), right: document.querySelector('[data-testid=toolbar]').getBoundingClientRect().right }));
+      await waitButton(page);
+      await page.waitForTimeout(300);
+      const late = await box(page, '[data-testid=toolbar]');
+      check(!early.status && early.reserve && Math.abs(early.right - late.r) <= 0.5, `${tag}: before the status arrives the button's place is reserved; the toolbar stays (${early.right} -> ${late.r})`);
+      await page.unroute('**/api/chat');
       // Sign out from the menu: the capsule again.
       await page.goto(`${preview.base}/studio`, { waitUntil: 'networkidle' });
       await page.waitForFunction(() => window.__studio?.ready3d === true, null, { timeout: 180000 });
@@ -427,11 +456,11 @@ try {
       await ctx.close();
     }
 
-    // Phone: the two layouts behind ?acct=a|b (temporary, task 026), upright and sideways.
-    const phones = smoke ? [['a', 390, 844, 'zh']] : ['a', 'b'].flatMap((v) => [[v, 390, 844, 'zh'], [v, 844, 390, 'zh'], [v, 390, 844, 'en']]);
-    for (const [v, w, h, lang] of phones) {
-      const tag = `phone-${v}-${w}x${h}-${lang}`;
-      const { ctx, page } = await open(preview.base, { ...PHONE, viewport: { width: w, height: h } }, `/studio?acct=${v}&lang=${lang}`);
+    // Phone, upright and sideways.
+    const phones = smoke ? [[390, 844, 'zh']] : [[390, 844, 'zh'], [844, 390, 'zh'], [390, 844, 'en']];
+    for (const [w, h, lang] of phones) {
+      const tag = `phone-${w}x${h}-${lang}`;
+      const { ctx, page } = await open(preview.base, { ...PHONE, viewport: { width: w, height: h } }, `/studio?lang=${lang}`);
       await waitButton(page);
       await page.waitForTimeout(800);
       const hb = await box(page, 'header');
@@ -473,7 +502,7 @@ try {
 
     // Sign-in off: nothing of it is shown (studio, menu, landing; ?signin=1 is dropped).
     const off = await startPreview({ AUTH_ENABLED: 'false' });
-    for (const [label, opts, path] of [['desktop', DESKTOP, '/studio?signin=1'], ['phone-a', PHONE, '/studio?acct=a'], ['phone-b', PHONE, '/studio?acct=b'], ['phone-a-sideways', { ...PHONE, viewport: { width: 844, height: 390 } }, '/studio?acct=a']]) {
+    for (const [label, opts, path] of [['desktop', DESKTOP, '/studio?signin=1'], ['phone', PHONE, '/studio'], ['phone-sideways', { ...PHONE, viewport: { width: 844, height: 390 } }, '/studio']]) {
       const { ctx, page } = await open(off.base, opts, path);
       await page.waitForFunction(() => !!window.__studio.chat.getState().server, null, { timeout: 20000 });
       await page.waitForTimeout(1500);
