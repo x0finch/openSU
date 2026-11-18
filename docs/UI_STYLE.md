@@ -164,7 +164,7 @@ is the yellow glow on the input capsule's edge; nothing else moves.
 
 | Component | Rest | Active |
 |---|---|---|
-| House name and area | ink on the drawing, top left | opens the house menu (a glass panel) |
+| House name and area | ink on the drawing, top left; desktop: a 36 px "分享" capsule on the name's line (task 029) | opens the house menu (a glass panel); its first row is the account (phones: "分享", then the account) |
 | View switch (3D / plan / sheets) | capsule, top centre | selected segment as a slightly denser glass lens |
 | Toolbar | one capsule, top right (phone: bottom): 视角, 楼层, 日照, 漫游; icons only, a name tooltip below on hover (no width change); names shown on first visit until the first use | the active tool shows its name or value, e.g. "10:00"; walking shows "漫游 ×" highlighted |
 | Panels (view, level, sun) | hidden | flows out of the whole toolbar group, right edges aligned and joined to it by the glass merge; the toolbar keeps its width (phone: sheet above the toolbar) |
@@ -172,6 +172,7 @@ is the yellow glow on the input capsule's edge; nothing else moves.
 | Chat | hidden | latest exchange above the input as a text surface; a change reads as one line with its area delta and Undo |
 | Menus, location picker | hidden | glass panel; rows separated by inset hairlines |
 | Toasts | none | small capsule above the input, disappears by itself |
+| Sign-in invitation (task 029) | none | signed out, after the first change by the assistant: one capsule above the input with a line, "登录" and close; never with another surface open |
 | Gallery sheets | white paper | unchanged |
 
 ## Do and don't

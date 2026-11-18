@@ -1,5 +1,8 @@
 # Task 028 - notes: share links
 
+> Task 029 moved "分享" beside the house name (desktop) and into the
+> project menu's first row (phones). See `029-notes.md`.
+
 ## Scope (written before the change)
 
 ### What I read

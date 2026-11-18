@@ -119,9 +119,12 @@ and medium weight or heavier (UI_STYLE rule 8).
 
 - Studio: a full-bleed drawing with chrome pinned to the edges (gap from
   the screen edge and safe areas per UI_STYLE "Shape and space"). Desktop:
-  house name top left, view switch top centre, toolbar top right, input
-  bottom centre; panels flow out of the toolbar, right edges aligned.
-  Phone: the toolbar becomes a bottom tab-bar capsule; panels open as a
+  house name top left with "分享" on its line, view switch top centre,
+  the toolbar alone at the top right, input bottom centre; panels flow out
+  of the toolbar, right edges aligned. The account lives in the project
+  menu (task 029); the avatar is on `/projects` only.
+  Phone: the top row is the name and the view switch (share is the
+  project menu's first row); the toolbar becomes a bottom tab-bar capsule; panels open as a
   sheet above it with detents (`GlassSheet`); the input hides while a
   panel is open.
 - The pinned conversation is a left column on desktop and a bottom sheet
@@ -214,6 +217,10 @@ compose these and do not style surfaces themselves.
   conversation, at the denser text tint.
 - **Toast** (`GlassToast`): a small capsule above the input that leaves by
   itself.
+- **Sign-in invitation** (`SignInInvite`, task 029): the toast's place, a
+  48 px capsule with one line (two on phones), "登录" and close; shown
+  once a signed-out visitor's first change has landed, never over another
+  surface.
 
 ### Switch
 - **On / off** (`GlassSwitch`, task 028): a track that fills with the

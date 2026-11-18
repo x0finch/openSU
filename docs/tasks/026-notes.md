@@ -1,5 +1,9 @@
 # Task 026 - notes: a visible account entry; one canonical host
 
+> Task 029 moved the account out of the studio's top right: it lives in the
+> project menu only; the account button, its reserved place and the phone
+> header variant (a) are gone. See `029-notes.md`.
+
 ## Scope (written before the change)
 
 ### Part 2 - one canonical host (its own commit)
