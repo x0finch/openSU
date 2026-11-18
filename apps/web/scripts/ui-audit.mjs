@@ -1056,7 +1056,13 @@ async function runConfig(cfg) {
       await M(page, 'account-share', { open: () => page.getByTestId('share-button').first().click(), close: () => page.keyboard.press('Escape'), find: byTestId(page, 'share-surface') });
       if (token && wants(cfg, 'account-share-viewer')) {
         const { ctx: vc, page: vp } = await newPage(cfg);
-        await vp.goto(`${preview.base}/studio${q(cfg, `&s=${token}`)}`, { waitUntil: 'networkidle' });
+        // The owner's sun study as well (the toolbar shows its time), so the two pages compare like for like.
+        const sun = await page.evaluate(() => {
+          const s = window.__studio.store.getState().sun;
+          const m = Math.round(s.minutes);
+          return s.on ? `&sun=${s.dateId}&time=${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}` : '';
+        });
+        await vp.goto(`${preview.base}/studio${q(cfg, `${sun}&s=${token}`)}`, { waitUntil: 'networkidle' });
         await vp.waitForFunction(() => window.__studio?.ready3d === true && window.__studio.shared?.getState().status === 'ready', null, { timeout: 180000 });
         await settle(vp, 1500);
         await S(vp, 'account-share-viewer');

@@ -136,9 +136,8 @@ function ShareBody({ phone }: { phone?: boolean }) {
     <div className={cx('flex flex-col gap-4', pad)} data-testid="share-surface-body" data-shared={shared ? '' : undefined}>
       {head}
       <div className="flex items-center gap-3">
-        <label htmlFor="share-switch" className="min-w-0 flex-1 cursor-pointer">
-          <span className="block text-[14.5px] leading-5 font-medium">{t('share.anyone')}</span>
-          <span className="mt-0.5 block text-[13px] leading-[18px] text-ink-2">{t('share.viewersCannot')}</span>
+        <label htmlFor="share-switch" className="min-w-0 flex-1 cursor-pointer text-[14.5px] leading-5 font-medium">
+          {t('share.anyone')}
         </label>
         <GlassSwitch
           id="share-switch"
@@ -162,10 +161,10 @@ function ShareBody({ phone }: { phone?: boolean }) {
           <div className={cx('flex gap-2', phone ? 'flex-col' : 'items-center')}>
             {/* Phones: the field over the button (a column: no flex-1, which would take the field's height). */}
             <label className={cx('lg-field flex h-11 min-w-0 items-center px-3.5', !phone && 'flex-1')}>
-              <span className="sr-only">{t('share.link')}</span>
               <input
                 ref={field}
                 readOnly
+                aria-label={t('share.link')}
                 value={url}
                 onFocus={(e) => e.target.select()}
                 className="tnum h-full w-full min-w-0 truncate bg-transparent text-[13px] font-medium text-ink-2 outline-none [&:focus-visible]:outline-none"
@@ -184,6 +183,10 @@ function ShareBody({ phone }: { phone?: boolean }) {
           </div>
         </>
       )}
+      {/* Last, so the surface ends in text (no shape in its corner). */}
+      <p className="text-[13px] leading-[18px] text-ink-2" data-testid="share-note">
+        {t('share.viewersCannot')}
+      </p>
     </div>
   );
 }
@@ -309,24 +312,26 @@ export function ViewOnlyBar({ phone }: { phone?: boolean }) {
   const [busy, setBusy] = useState(false);
   const copy = async () => {
     setBusy(true);
-    const r = await makeCopy(name, t('projects.copyName', { name }), () => new Promise<boolean>((ok) => setAsking(() => ok)));
+    // Kept as this browser's house: the owner's own name for it, if any (else the house's title shows, as for any house).
+    const r = await makeCopy(useShared.getState().name, t('projects.copyName', { name }), () => new Promise<boolean>((ok) => setAsking(() => ok)));
     setAsking(null);
     if (r !== null) setBusy(false);
     if (r === 'full') toast(t('share.copyFull'), 'share-copy-full');
     else if (r === 'failed') toast(t('share.copyFailed'), 'share-copy-failed');
   };
   const answer = (ok: boolean) => asking?.(ok);
-  const btn = 'hit lg-plate h-9 shrink-0 rounded-full px-4 text-[14px] font-semibold whitespace-nowrap';
+  const btn = 'hit lg-plate h-8 shrink-0 rounded-full px-3.5 text-[13.5px] font-semibold whitespace-nowrap';
   return (
     <div className="pointer-events-none flex w-full justify-center">
-      <Glass className={cx('pointer-events-auto flex min-w-0 items-center gap-3 pr-1.5', phone ? 'h-12 w-full pl-4' : 'h-12 max-w-full pl-5')} data-testid="view-only-bar">
+      {/* Text 12 px from the start, the 32 px buttons concentric at the end (8 px): the input capsule's insets. */}
+      <Glass className={cx('pointer-events-auto flex h-12 min-w-0 items-center gap-3 pr-2 pl-3', phone ? 'w-full' : 'max-w-full')} data-testid="view-only-bar">
         {asking ? (
           <>
             <span className="min-w-0 flex-1 truncate text-[14px] font-medium" data-testid="view-only-ask">{t('share.replaceAsk')}</span>
             <button type="button" className={btn} data-filled="" onClick={() => answer(true)} data-testid="view-only-replace">
               {t('share.replace')}
             </button>
-            <button type="button" className={cx(btn, '-ml-2')} onClick={() => answer(false)} data-testid="view-only-cancel">
+            <button type="button" className={cx(btn, '-ml-1.5')} onClick={() => answer(false)} data-testid="view-only-cancel">
               {t('projects.cancel')}
             </button>
           </>

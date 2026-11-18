@@ -735,7 +735,8 @@ export function measureDom(opts) {
   const surfaces = surfacesEls.map((el) => ({ id: desc(el), comp: comp(el), kind: el.getAttribute('data-kind'), backend: el.getAttribute('data-backend'), rect: box(el.getBoundingClientRect()), radius: R(radiusOf(el)) }));
   const disabled = vis.filter((e) => e.matches('button[disabled], [aria-disabled=true]')).map((el) => ({ id: desc(el), comp: comp(el), rect: box(el.getBoundingClientRect()), round: isRound(el) }));
   const enabledKeyed = vis.filter((e) => e.matches('button:not([disabled])') && tid(e)).map((el) => ({ id: desc(el), comp: comp(el), rect: box(el.getBoundingClientRect()) }));
-  const selected = vis.filter((e) => e.matches('[aria-checked=true], [aria-selected=true], [aria-pressed=true], [data-on], [aria-current]:not([aria-current=false])') && !e.matches('.lg-lens')).map((el) => {
+  // A switch that is on (task 028, GlassSwitch) is not a selected item among others: its track is its own treatment (HIG toggles).
+  const selected = vis.filter((e) => e.matches('[aria-checked=true], [aria-selected=true], [aria-pressed=true], [data-on], [aria-current]:not([aria-current=false])') && !e.matches('.lg-lens, [role=switch]')).map((el) => {
     const s = cs(el);
     const r = el.getBoundingClientRect();
     const lens = [...document.querySelectorAll('.lg-lens')].some((l) => {

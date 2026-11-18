@@ -11,7 +11,7 @@ import { create } from 'zustand';
 import { fetchServerStatus, newChat, useChat } from '../chat/chat-store';
 import { quietly } from './autosave';
 import { createProjectFrom, keepAsLocal, localHouseEdited, projectSync } from './projects';
-import { freshView, useStudio } from './store';
+import { useStudio } from './store';
 import { toast } from './toast';
 import { useShared } from './view-only';
 
@@ -111,9 +111,10 @@ async function show(p: Payload): Promise<boolean> {
     return false;
   }
   const first = !useStudio.getState().house;
+  // No `freshView`: the page starts fresh, and the address's view (`&mode=plan`, `&sun=...`) applies to the
+  // shared house too; a newer version keeps what the viewer is looking at.
   quietly(() => {
     newChat();
-    if (first) freshView();
     useStudio.getState().setHouse(p.house, first ? undefined : { fromLevel: 0 });
   });
   useShared.setState({ status: 'ready', name: p.name, updatedAt: p.updatedAt });
@@ -160,8 +161,9 @@ export function useSharedProject(): void {
 
 /**
  * "Make my own copy". Signed in where projects are kept: a new project of
- * the account (named "<name> 副本"), opened. Otherwise the house becomes
- * this browser's own project; when that would replace one with edits,
+ * the account (named `copyName`, "<name> 副本"), opened. Otherwise the
+ * house becomes this browser's own project (named `name`, the owner's
+ * name for it or ''); when that would replace one with edits,
  * `confirm` is asked first (once). Returns why it did not happen, or null
  * (the page is on its way to the copy).
  */

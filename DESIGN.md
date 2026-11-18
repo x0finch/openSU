@@ -215,6 +215,11 @@ compose these and do not style surfaces themselves.
 - **Toast** (`GlassToast`): a small capsule above the input that leaves by
   itself.
 
+### Switch
+- **On / off** (`GlassSwitch`, task 028): a track that fills with the
+  glass ink when on and a knob that slides; no accent colour. Named by the
+  row's label (the share surface's "任何拿到链接的人都可以查看").
+
 ### Slider
 - **Sun time** (`GlassSlider`): a rail with a yellow fill and a glass
   thumb that lifts while dragged.

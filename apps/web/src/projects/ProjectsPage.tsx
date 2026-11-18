@@ -167,9 +167,8 @@ function ProjectCard({ p, onDelete, menuOpen, onMenu, renaming, onRenamed, askin
           // Task 028: shared with a link, Google Drive's mark beside the name.
           mark={
             p.share ? (
-              <span className="inline-flex shrink-0 text-ink-2" data-testid="project-shared">
+              <span role="img" aria-label={t('projects.shared')} className="inline-flex shrink-0 text-ink-2" data-testid="project-shared">
                 <LinkIcon width={15} height={15} />
-                <span className="sr-only">{t('projects.shared')}</span>
               </span>
             ) : undefined
           }

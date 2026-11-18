@@ -107,3 +107,38 @@ used by both; without a house it is the default template's name.
 The old `/s/$id` placeholder route (a "share pages are under construction"
 stub from an earlier task) is left as it is; the share address is
 `/studio?s=`.
+
+## What was built
+
+- Server: `migrations/0006_share.sql`; `shareRoute` in
+  `src/server/projects.ts` (`POST/DELETE /api/projects/:id/share`), the
+  project meta's `share`; `src/server/share.ts` (`sharedRoute` for
+  `GET /api/share/:token` and `/thumb`, `sharePreview` and
+  `sharePreviewHtml` for the link preview); `src/server.ts` rewrites
+  `/studio?s=` only (the page list and `run_worker_first` already cover
+  `/studio`). Routes `src/routes/api/projects.$id.share.ts`,
+  `share.$token.ts`, `share.$token.thumb.ts`.
+- Browser: `src/lib/view-only.ts` (the flag), `src/lib/share.ts` (surface
+  state, copy, the viewer's loader, make a copy), `src/studio/Share.tsx`
+  (`ShareButton`, `ShareHost`, `ViewOnlyBar`), `GlassSwitch`
+  (`src/glass/primitives.tsx`, `glass.css`), `LinkIcon`. The sync gained
+  `share(id, on)` (`project-sync.ts`); `projects.ts` gained
+  `projectTitle`, `createProjectFrom`, `localHouseEdited`, `keepAsLocal`;
+  `autosave.ts` `replaceSaved`. `ProjectMissing` covers a link that is off,
+  unknown or cannot be read.
+- The flag is read in exactly these places: `ChatInput` (the bar),
+  `useAutosave` / `savedHouse` / `restoreChat`, `useDerived`,
+  `useProjectSync`, the project menu (`edit`), `SiteRow`, `useHouseName`
+  (through the shared store) and `ShareButton`.
+- Phone: the share button is a 36 px round button left of the account
+  button in the top row (44 px to touch; 8 px apart); the header's height
+  is unchanged (both buttons on the name's line). While the share sheet is
+  open the dock steps aside, as it does for sign-in.
+
+### Phone alternative (described, not built)
+
+A "分享" row in the project menu (under the house name) and nothing in
+the header: no new control on screen, but sharing is two taps away and
+hidden behind the name, which Canva mobile does and Figma / Google Docs
+do not. Not built, no screenshot (it would have needed a second code
+path).
