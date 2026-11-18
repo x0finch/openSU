@@ -172,7 +172,7 @@ extended.
 | Rename in the studio | "重命名" in the project menu turns the title into a field in place | Figma (double click on the file name), Google Docs (title field) |
 | Way back | "所有项目" in the project menu, "我的项目" in the account menu, both to `/projects` (the pending save is sent first) | Figma "Back to files" |
 | Signed-in landing link | "打开工作台" goes to `/projects` | Figma / Canva open on the file browser |
-| Thumbnail | the default view (`axo-se`), 480 x 360, WebP (JPEG where WebP cannot be encoded), quality 0.82; rendered with its own offscreen WebGL context when the browser is idle, 15 s after the last saved change, at most once a minute; a project without one gets one when opened | Figma / Canva thumbnails update after edits, not live |
+| Thumbnail | the default view (`axo-se`), 480 x 360, WebP (JPEG where WebP cannot be encoded), quality 0.82; drawn by the studio's 3D viewer into an offscreen target when the browser is idle, 15 s after the last saved change, at most once a minute; a project without one gets one when opened | Figma / Canva thumbnails update after edits, not live |
 | Thumbnail storage | its own column (`thumb`, `thumb_type`, `thumb_at`), never read with the JSON; `GET /api/projects/:id/thumb?v=<thumbAt>` with `private, max-age=31536000, immutable`; the list carries `thumbAt` | |
 
 ### What was built (final)
@@ -224,12 +224,8 @@ extended.
 
 ### Not done, not verified
 
-- Thumbnail cost on real hardware: under SwiftShader one render takes about
-  3.6 s of main-thread time (16 KB WebP; it builds the geometry and compiles
-  shaders in a fresh WebGL context). It waits for 15 s of quiet and an idle
-  browser, at most once a minute, but on a slow phone it may still be a
-  visible hitch; not measured on a real GPU. Reusing the studio's own
-  renderer would avoid the shader compile; not done.
+- Thumbnail cost: superseded by the review fix below (the studio's own
+  renderer; a few ms of main thread). Not measured on a real GPU or phone.
 - The flaky account-e2e check "the email field is focused on arrival"
   (phone): the field was focused on a fixed schedule up to 1.2 s while the
   sheet stays hidden until its first spring frame; under load (SwiftShader
