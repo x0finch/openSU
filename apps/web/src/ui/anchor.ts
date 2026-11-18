@@ -8,14 +8,14 @@
 // or shifted along the anchor only to stay on screen, never further from
 // the anchor than the module's gap. Inside a glass surface (the pinned
 // conversation) a menu stays within that surface's width when it fits.
+// One attachment (task 029): every surface floats at the module's gap from
+// its anchor, toolbar panels included.
 import { GLASS } from './material';
 import type { Rect } from './registry';
 
 export type Side = 'below' | 'above' | 'left' | 'right';
 export type Align = 'start' | 'center' | 'end';
 export type Placement = `${Side}-${Align}`;
-/** `joined`: touches the anchor's glass and merges with it (toolbar panels); `float`: the module's gap away (menus). */
-export type Attach = 'joined' | 'float';
 
 export interface Placed {
   x: number;
@@ -32,17 +32,17 @@ const flipOf: Record<Side, Side> = { below: 'above', above: 'below', left: 'righ
  * the glass surface the anchor sits in; the surface stays inside its width
  * (or height, beside it) when it fits.
  */
-export function place(a: Rect, size: { w: number; h: number }, placement: Placement, attach: Attach, view: { w: number; h: number }, within?: Rect | null): Placed {
+export function place(a: Rect, size: { w: number; h: number }, placement: Placement, view: { w: number; h: number }, within?: Rect | null): Placed {
   const [side0, align] = placement.split('-') as [Side, Align];
-  const gap = attach === 'joined' ? 0 : GLASS.anchorGap;
+  const gap = GLASS.anchorGap;
   const m = GLASS.screenInset;
   const room = (s: Side) =>
     s === 'below' ? view.h - m - (a.y + a.height + gap) : s === 'above' ? a.y - gap - m : s === 'right' ? view.w - m - (a.x + a.width + gap) : a.x - gap - m;
   const vertical = (s: Side) => s === 'below' || s === 'above';
   const need = (s: Side) => (vertical(s) ? size.h : size.w);
-  // Flip only when the surface does not fit and the other side has more room (a joined panel stays joined).
+  // Flip only when the surface does not fit and the other side has more room.
   let side = side0;
-  if (attach === 'float' && need(side) > room(side) && room(flipOf[side]) > room(side)) side = flipOf[side];
+  if (need(side) > room(side) && room(flipOf[side]) > room(side)) side = flipOf[side];
   const r = Math.max(0, room(side));
   const extent = Math.min(need(side), r);
   // The cross axis: aligned to the anchor, then shifted into the bounds.
@@ -54,7 +54,7 @@ export function place(a: Rect, size: { w: number; h: number }, placement: Placem
   };
   if (vertical(side)) {
     let lo: number = m, hi = view.w - m;
-    if (within && attach === 'float' && size.w <= within.width) {
+    if (within && size.w <= within.width) {
       lo = Math.max(lo, within.x);
       hi = Math.min(hi, within.x + within.width);
     }
@@ -63,7 +63,7 @@ export function place(a: Rect, size: { w: number; h: number }, placement: Placem
     return { x, y, maxHeight: r, side };
   }
   let lo: number = m, hi = view.h - m;
-  if (within && attach === 'float' && size.h <= within.height) {
+  if (within && size.h <= within.height) {
     lo = Math.max(lo, within.y);
     hi = Math.min(hi, within.y + within.height);
   }
@@ -71,10 +71,6 @@ export function place(a: Rect, size: { w: number; h: number }, placement: Placem
   const x = side === 'right' ? a.x + a.width + gap : a.x - gap - Math.min(size.w, r);
   return { x, y, maxHeight: view.h - 2 * m, side };
 }
-
-/* ------------------------------------------------------------------ */
-/* What lies under an open surface                                     */
-/* ------------------------------------------------------------------ */
 
 interface Floating {
   rect: () => Rect | null;

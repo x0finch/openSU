@@ -1,5 +1,5 @@
 // <Glass>: the base of every glass surface. It registers its element with
-// the registry (shape, role, merge group) and renders the element the
+// the registry (shape, role) and renders the element the
 // active backend needs: transparent over the WebGL canvas, the CSS
 // material elsewhere. Everything else in the module is built on it.
 import { createContext, type CSSProperties, type HTMLAttributes, type ReactNode, type Ref, useCallback, useContext, useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } from 'react';
@@ -146,8 +146,6 @@ export interface GlassProps extends Omit<HTMLAttributes<HTMLElement>, 'role'> {
   kind?: GlassRole;
   /** Corner radius, px, or 'capsule'. */
   radius?: number | 'capsule';
-  /** Merge group (a panel and the control it grows from share one). */
-  group?: number;
   /** Per-frame shape (morphs). */
   shape?: () => ShapeOverride | null;
   /** Lift and light on press. */
@@ -160,7 +158,7 @@ export interface GlassProps extends Omit<HTMLAttributes<HTMLElement>, 'role'> {
 }
 
 /** The base glass surface. */
-export function Glass({ as = 'div', kind = 'control', radius = 'capsule', group, shape, press = false, layer = 0, ariaRole, className, style, children, ref, ...rest }: GlassProps) {
+export function Glass({ as = 'div', kind = 'control', radius = 'capsule', shape, press = false, layer = 0, ariaRole, className, style, children, ref, ...rest }: GlassProps) {
   const { backend, opaque } = useGlass();
   const el = useRef<HTMLElement | null>(null);
   const merged = useMergedRef(el, ref);
@@ -174,7 +172,6 @@ export function Glass({ as = 'div', kind = 'control', radius = 'capsule', group,
       el: node,
       role: kind,
       radius,
-      group,
       layer,
       shape: () => {
         const o = shapeRef.current ? shapeRef.current() : {};
@@ -184,7 +181,7 @@ export function Glass({ as = 'div', kind = 'control', radius = 'capsule', group,
       },
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [kind, radius, group, layer]);
+  }, [kind, radius, layer]);
   const Tag = as as 'div';
   return (
     <Tag

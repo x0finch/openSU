@@ -1,12 +1,12 @@
 // Studio chrome around the drawing: the house name (with a quiet project
 // menu), the mode switch, the first-visit hints and the day player. The
 // toolbar and its panels live in tools.tsx, the conversation in chat/.
-import { Link } from '@tanstack/react-router';
+import { useNavigate } from '@tanstack/react-router';
 import { type KeyboardEvent as RKeyboardEvent, type ReactNode, type RefObject, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { TEMPLATE_META } from '@opensu/agent/templates-meta';
 import { ChevronDownSmallIcon, CloseIcon, CompassIcon, CopyIcon, DownloadIcon, FolderIcon, LayersIcon, Mark, PencilIcon, PersonIcon, PinIcon, PlusIcon, ResetViewIcon, ShareIcon } from '../components/icons';
 import { cx } from '../components/ui';
-import { GlassButton, GlassMenu, GlassMenuItem, GlassSegmented, GlassSep } from '../glass';
+import { Button, Dot, Menu, MenuItem, MenuLabel, MenuSeparator, NameInput, Segmented, Skeleton } from '../ui';
 import { type MessageKey, useT } from '../lib/i18n';
 import { freshView, type Mode, useStudio } from '../lib/store';
 import { resetToTemplate } from '../lib/autosave';
@@ -55,7 +55,7 @@ function useDismiss(open: boolean, close: (viaKey: boolean) => void, refs: RefOb
 
 function Facts({ derived, className }: { derived: Derived | null; className?: string }) {
   const t = useT();
-  if (!derived) return <p className={cx('h-4', className)}><span className="inline-block h-2.5 w-36 rounded-sm bg-wash" /></p>;
+  if (!derived) return <p className={cx('h-4', className)}><Skeleton className="h-2.5 w-36" /></p>;
   const storeys = derived.attic ? t('facts.storeysAttic', { n: derived.storeys }) : t('facts.storeysValue', { n: derived.storeys });
   return (
     <p className={cx('tnum truncate text-xs text-ink-2 max-[339px]:text-[11.5px]', className)}>
@@ -128,7 +128,7 @@ export function TitleMenu({ derived, onRect, compact }: { derived: Derived | nul
       {renaming ? (
         <div className={cx('-ml-1 flex items-center gap-[7px] px-1', compact ? 'h-8' : 'h-9')}>
           <Mark width={18} height={18} className="shrink-0" />
-          <input
+          <NameInput
             ref={field}
             value={draft}
             maxLength={80}
@@ -143,14 +143,14 @@ export function TitleMenu({ derived, onRect, compact }: { derived: Derived | nul
                 commit(false);
               }
             }}
-            className={cx('-mr-1.5 h-[30px] w-[min(320px,calc(100vw-140px))] min-w-0 rounded-[8px] bg-page px-1.5 font-semibold tracking-[-0.01em] text-canvas-ink outline outline-1 outline-ink-3 focus:outline-2 focus:outline-ink', titleText)}
+            className={cx('-mr-1.5 h-[30px] w-[min(320px,calc(100vw-140px))] tracking-[-0.01em] text-canvas-ink', titleText)}
             data-testid="title-rename-input"
           />
         </div>
       ) : (
-      <button
+      <Button
         ref={trigger}
-        type="button"
+        variant="canvas"
         aria-haspopup="menu"
         aria-expanded={open}
         aria-label={`${t('more.open')}: ${name}`}
@@ -165,15 +165,12 @@ export function TitleMenu({ derived, onRect, compact }: { derived: Derived | nul
           setOpen(!open);
         }}
         data-testid="project-menu"
-        className={cx(
-          'hit group -ml-1 flex max-w-[calc(100%+4px)] touch-none items-center gap-[7px] rounded-[10px] px-1 text-left text-canvas-ink transition-opacity hover:opacity-75',
-          compact ? 'h-8' : 'h-9',
-        )}
+        className={cx('group -ml-1 max-w-[calc(100%+4px)] shrink touch-none justify-start gap-[7px] px-1 text-left', compact ? 'h-8' : 'h-9')}
       >
         <Mark width={18} height={18} className="shrink-0" />
         <span className={cx('truncate font-semibold tracking-[-0.01em]', titleText)} data-testid="title-name">{name}</span>
         <ChevronDownSmallIcon width={16} height={16} className={cx('-ml-0.5 shrink-0 text-ink-2 transition-transform duration-200', open && 'rotate-180')} />
-      </button>
+      </Button>
       )}
       <Facts derived={derived} className={cx('pl-0', compact ? 'mt-0' : 'mt-0.5')} />
       {/* The menu stands under the house name's block (its name and facts), not over the facts line. */}
@@ -182,18 +179,19 @@ export function TitleMenu({ derived, onRect, compact }: { derived: Derived | nul
   );
 }
 
-function MenuItem({ children, onSelect, value, icon, danger, testId }: { children: ReactNode; onSelect: () => void; value?: ReactNode; icon?: ReactNode; danger?: boolean; testId?: string }) {
+function Item({ children, onSelect, value, icon, danger, testId }: { children: ReactNode; onSelect: () => void; value?: ReactNode; icon?: ReactNode; danger?: boolean; testId?: string }) {
   return (
-    <GlassMenuItem onClick={onSelect} data-testid={testId} icon={icon} detail={value} danger={danger}>
+    <MenuItem onClick={onSelect} data-testid={testId} icon={icon} detail={value} danger={danger}>
       {children}
-    </GlassMenuItem>
+    </MenuItem>
   );
 }
 
-const Sep = () => <GlassSep />;
+const Sep = () => <MenuSeparator />;
 
 function ProjectMenu({ open, anchor, onClose, compact, onRename, ref }: { open: boolean; anchor: () => HTMLElement | null; onClose: (focus: boolean) => void; compact?: boolean; onRename: () => void; ref: RefObject<HTMLDivElement | null> }) {
   const t = useT();
+  const navigate = useNavigate();
   const lang = useStudio((s) => s.lang);
   const site = useStudio((s) => s.house?.site);
   const setLang = useStudio((s) => s.setLang);
@@ -241,7 +239,7 @@ function ProjectMenu({ open, anchor, onClose, compact, onRename, ref }: { open: 
     setSitePanel({ kind: 'location', intro: true });
   };
   return (
-    <GlassMenu
+    <Menu
       ref={ref as RefObject<HTMLElement | null>}
       open={open}
       anchor={anchor}
@@ -254,15 +252,15 @@ function ProjectMenu({ open, anchor, onClose, compact, onRename, ref }: { open: 
       {/* Phones (task 029): "分享" first. The top row has no room for a button beside the name (measured at 390 and
           360 px wide); the same share surface opens, as a sheet. Desktop has the button beside the name. */}
       {compact && edit && projectsOffered && (
-        <MenuItem icon={<ShareIcon width={16} height={16} />} onSelect={() => { onClose(false); openShare(null, null); }} testId="menu-share">
+        <Item icon={<ShareIcon width={16} height={16} />} onSelect={() => { onClose(false); openShare(null, null); }} testId="menu-share">
           {t('share.button')}
-        </MenuItem>
+        </Item>
       )}
       {/* The account (task 019; task 029: the studio's only account entry, the same surfaces as the account button on
           /projects): hidden when this server offers no sign-in. */}
       {authOn && (
         <>
-          <GlassMenuItem
+          <MenuItem
             icon={<PersonIcon width={17} height={17} />}
             onClick={(e) => {
               openAccount(e.currentTarget, 'menu');
@@ -272,20 +270,20 @@ function ProjectMenu({ open, anchor, onClose, compact, onRename, ref }: { open: 
             data-testid={user ? 'menu-account' : 'menu-signin'}
           >
             {user ? accountName(user) : t('account.signIn')}
-          </GlassMenuItem>
+          </MenuItem>
         </>
       )}
       {/* Task 027: the file browser (Figma's "Back to files"); signed out it shows this browser's project and invites sign-in. */}
       {projectsOffered && (
-        <MenuItem icon={<FolderIcon width={17} height={17} />} onSelect={() => { onClose(false); void goToProjects(); }} testId="menu-all-projects">
+        <Item icon={<FolderIcon width={17} height={17} />} onSelect={() => { onClose(false); void goToProjects(); }} testId="menu-all-projects">
           {t('projects.all')}
-        </MenuItem>
+        </Item>
       )}
       {(authOn || projectsOffered) && <Sep />}
       {/* The open project, as a file menu has it (Figma, Google Docs): new, rename, duplicate. */}
       {cloud && openId && (
         <>
-          <MenuItem
+          <Item
             icon={<PlusIcon width={17} height={17} />}
             testId="menu-new-project"
             onSelect={async () => {
@@ -295,11 +293,11 @@ function ProjectMenu({ open, anchor, onClose, compact, onRename, ref }: { open: 
             }}
           >
             {t('projects.new')}
-          </MenuItem>
-          <MenuItem icon={<PencilIcon width={16} height={16} />} testId="menu-rename" onSelect={() => { onClose(false); onRename(); }}>
+          </Item>
+          <Item icon={<PencilIcon width={16} height={16} />} testId="menu-rename" onSelect={() => { onClose(false); onRename(); }}>
             {t('projects.rename')}
-          </MenuItem>
-          <MenuItem
+          </Item>
+          <Item
             icon={<CopyIcon width={16} height={16} />}
             testId="menu-duplicate"
             onSelect={async () => {
@@ -309,38 +307,38 @@ function ProjectMenu({ open, anchor, onClose, compact, onRename, ref }: { open: 
             }}
           >
             {t('projects.copy')}
-          </MenuItem>
+          </Item>
           <Sep />
         </>
       )}
       {edit && (
         <>
-          <MenuItem icon={<PinIcon width={17} height={17} />} value={site ? placeText(site, lang) : ''} onSelect={() => { onClose(false); setSitePanel({ kind: 'location' }); }} testId="menu-location">
+          <Item icon={<PinIcon width={17} height={17} />} value={site ? placeText(site, lang) : ''} onSelect={() => { onClose(false); setSitePanel({ kind: 'location' }); }} testId="menu-location">
             {t('more.location')}
-          </MenuItem>
-          <MenuItem icon={<CompassIcon width={17} height={17} />} value={site ? bearingText(frontBearing(site.northDeg), lang) : ''} onSelect={() => { onClose(false); setSitePanel({ kind: 'orientation' }); }} testId="menu-orientation">
+          </Item>
+          <Item icon={<CompassIcon width={17} height={17} />} value={site ? bearingText(frontBearing(site.northDeg), lang) : ''} onSelect={() => { onClose(false); setSitePanel({ kind: 'orientation' }); }} testId="menu-orientation">
             {t('more.orientation')}
-          </MenuItem>
+          </Item>
         </>
       )}
       {edit && !cloud && <Sep />}
       {edit && !cloud && (
-      <MenuItem icon={<LayersIcon width={17} height={17} />} onSelect={() => setTemplates(!templates)} value={<ChevronDownSmallIcon width={15} height={15} className={cx('transition-transform', templates && 'rotate-180')} />}>
+      <Item icon={<LayersIcon width={17} height={17} />} onSelect={() => setTemplates(!templates)} value={<ChevronDownSmallIcon width={15} height={15} className={cx('transition-transform', templates && 'rotate-180')} />}>
         {t('more.templates')}
-      </MenuItem>
+      </Item>
       )}
       {edit && !cloud && templates && (
         <div className="mb-1 ml-9">
           {TEMPLATE_META.map((m) => (
-            <MenuItem key={m.id} onSelect={() => void pick(m.id)} value={`${m.plot.width / 1000} × ${m.plot.depth / 1000} m`}>
+            <Item key={m.id} onSelect={() => void pick(m.id)} value={`${m.plot.width / 1000} × ${m.plot.depth / 1000} m`}>
               {m.name}
-            </MenuItem>
+            </Item>
           ))}
-          <p className="px-3 pt-0.5 pb-1.5 text-[12px] leading-4 text-ink-2">{t('tpl.note')}</p>
+          <MenuLabel small={t('tpl.note')} />
         </div>
       )}
       {edit && !cloud && (
-      <MenuItem
+      <Item
         icon={<ResetViewIcon width={16} height={16} />}
         danger={confirm}
         testId="reset-house"
@@ -353,14 +351,14 @@ function ProjectMenu({ open, anchor, onClose, compact, onRename, ref }: { open: 
         }}
       >
         {confirm ? t('house.resetConfirm') : t('house.reset')}
-      </MenuItem>
+      </Item>
       )}
       {edit && <Sep />}
-      <MenuItem value={t('lang.switch')} onSelect={() => setLang(lang === 'zh' ? 'en' : 'zh')} icon={<span className="text-[11px] font-semibold">{lang === 'zh' ? '文' : 'A'}</span>}>
+      <Item value={t('lang.switch')} onSelect={() => setLang(lang === 'zh' ? 'en' : 'zh')} icon={<span className="text-[11px] font-semibold">{lang === 'zh' ? '文' : 'A'}</span>}>
         {t('more.lang')}
-      </MenuItem>
+      </Item>
       {edit && (
-      <MenuItem
+      <Item
         icon={<SparkDot />}
         onSelect={() => {
           onClose(false);
@@ -370,11 +368,11 @@ function ProjectMenu({ open, anchor, onClose, compact, onRename, ref }: { open: 
         }}
       >
         {t('chat.settings')}
-      </MenuItem>
+      </Item>
       )}
       {/* Task 020: the conversation as one JSON file, built here (no server call). */}
       {edit && (
-      <GlassMenuItem
+      <MenuItem
         icon={<DownloadIcon width={16} height={16} />}
         disabled={!hasChat}
         className="disabled:text-ink-3"
@@ -385,19 +383,16 @@ function ProjectMenu({ open, anchor, onClose, compact, onRename, ref }: { open: 
         data-testid="menu-export"
       >
         {t('more.export')}
-      </GlassMenuItem>
+      </MenuItem>
       )}
-      <Link to="/" role="menuitem" tabIndex={-1} className="lg-plate flex h-10 w-full items-center gap-2.5 rounded-[16px] px-3 text-[14px] font-medium focus-visible:outline-none">
-        <span className="grid size-5 place-items-center"><Mark width={15} height={15} /></span>
+      <MenuItem icon={<Mark width={15} height={15} />} onClick={() => void navigate({ to: '/' })}>
         {t('more.about')}
-      </Link>
+      </MenuItem>
       {/* No status while saving works; one quiet line when it does not (task 027). */}
       {edit && (
-      <p className="px-3 pt-1 pb-1.5 text-[12px] leading-4 text-ink-2" data-testid="menu-saved" data-failed={failed ?? undefined}>
-        {failed === 'retry' ? t('projects.notSynced') : failed === 'too-large' ? t('projects.tooLarge') : failed === 'full' ? t('projects.notAdded') : cloud ? t('house.autosavedAccount') : t('house.autosaved')}
-      </p>
+      <MenuLabel testId="menu-saved" flag={failed ?? undefined} small={failed === 'retry' ? t('projects.notSynced') : failed === 'too-large' ? t('projects.tooLarge') : failed === 'full' ? t('projects.notAdded') : cloud ? t('house.autosavedAccount') : t('house.autosaved')} />
       )}
-    </GlassMenu>
+    </Menu>
   );
 }
 
@@ -410,7 +405,7 @@ export function ModeSwitch({ size = 'md', className }: { size?: 'md' | 'lg' | 's
   const mode = useStudio((s) => s.mode);
   const setMode = useStudio((s) => s.setMode);
   return (
-    <GlassSegmented<Mode>
+    <Segmented<Mode>
       label={t('mode.label')}
       height={size === 'sm' ? 44 : 48}
       compact={size === 'sm'}
@@ -526,20 +521,20 @@ export function Hints({ className }: { className?: string }) {
   return (
     <div className={cx('pointer-events-none flex animate-[fade-in_300ms_ease-out] items-center gap-2', className)} data-testid="hints">
       {chips.map(([k, run]) => (
-        <GlassButton
+        <Button variant="glass"
           key={k}
-          size={32}
-          className="hit pr-3.5! pl-2.5! text-[12.5px]"
-          icon={<span className="size-1.5 rounded-full bg-accent" aria-hidden="true" />}
+          height={32}
+          className="pr-3.5! pl-2.5! text-[12.5px]"
+          icon={<Dot />}
           onClick={() => {
             done();
             run();
           }}
         >
           {t(k)}
-        </GlassButton>
+        </Button>
       ))}
-      <GlassButton size={32} className="hit text-ink-2" onClick={done} label={t('hint.dismiss')} tip icon={<CloseIcon width={14} height={14} />} />
+      <Button variant="glass" height={32} className="text-ink-2" onClick={done} label={t('hint.dismiss')} tip icon={<CloseIcon width={14} height={14} />} />
     </div>
   );
 }

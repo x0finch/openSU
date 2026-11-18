@@ -4,6 +4,7 @@
 // signed in), or a share link (`/studio?s=<token>`, task 028) that is
 // turned off, unknown, or cannot be read right now.
 import { Mark } from '../components/icons';
+import { Button, ButtonLink } from '../ui';
 import { openSignIn } from '../chat/account';
 import { useChat } from '../chat/chat-store';
 import { type MessageKey, useT } from '../lib/i18n';
@@ -26,13 +27,13 @@ export function ProjectMissing() {
         <p className="mt-2 text-[14px] leading-6 text-ink-2">{t(why)}</p>
         <div className="mt-6 flex flex-wrap justify-center gap-2">
           {/* A link's visitor may have no projects: the studio is their way in (their own house, as before). */}
-          <a href={shared ? '/studio' : '/projects'} className="inline-flex h-10 items-center rounded-full bg-ink px-5 text-[14px] font-medium text-white" data-testid="project-missing-home">
+          <ButtonLink variant="ink" size="md" href={shared ? '/studio' : '/projects'} className="px-5" data-testid="project-missing-home">
             {shared ? t('share.goneHome') : t('projects.backHome')}
-          </a>
+          </ButtonLink>
           {!shared && !signedIn && authOn && (
-            <button type="button" onClick={(e) => openSignIn(e.currentTarget, 'account')} className="inline-flex h-10 items-center rounded-full bg-wash px-5 text-[14px] font-medium" data-testid="project-missing-signin">
+            <Button variant="paper-tinted" size="md" onClick={(e) => openSignIn(e.currentTarget, 'account')} className="px-5" data-testid="project-missing-signin">
               {t('account.signIn')}
-            </button>
+            </Button>
           )}
         </div>
       </div>

@@ -2,7 +2,7 @@
 //   node --experimental-strip-types --no-warnings --test scripts/spring-test.ts
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { Spring, SPRINGS, step, stiffnessOf } from '../src/glass/spring.ts';
+import { Spring, SPRINGS, step, stiffnessOf } from '../src/ui/spring.ts';
 
 /** Simulates a spring from 0 to 1 at 120 Hz; returns the samples. */
 function run(preset: { response: number; damping: number }, seconds = 2): number[] {

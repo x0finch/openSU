@@ -16,7 +16,7 @@ import type { Lang } from '../lib/i18n';
 import { ChevronDownIcon, ComposeIcon, DockIcon, HistoryIcon, NoteIcon, PlanCheckIcon, RedoIcon, RetryIcon, SlidersIcon, StopIcon, UndockIcon, UndoIcon } from './icons';
 import { accountKeyInUse, openKeySheet, useKeys } from './keys';
 import { KeyPicker } from './KeyPicker';
-import { GlassField, GlassIconButton, GlassInputBar, GlassSep, GlassTextSurface, GlassTurn, type GlassTurnEntry } from '../glass';
+import { Badge, Button, Dot, IconButton, InputBar, InputField, PromptText, Separator, TextSurface, Turn, type TurnEntry } from '../ui';
 import { turnView } from './turn-parts';
 import { SettingsSheet } from './SettingsSheet';
 
@@ -50,7 +50,8 @@ function RichText({ text, caret }: { text: string; caret?: boolean }) {
           return (
             <ul key={i} className="space-y-1">
               {lines.map((l, k) => (
-                <li key={k} className="relative pl-3.5 before:absolute before:top-[0.7em] before:left-0.5 before:size-1 before:rounded-full before:bg-ink-3">
+                <li key={k} className="relative pl-3.5">
+                  <Dot tone="muted" size={4} className="absolute top-[0.7em] left-0.5" />
                   {inline(l.replace(/^\s*([-*•]|\d+\.)\s+/, ''))}
                   {caret && last && k === lines.length - 1 && <Caret />}
                 </li>
@@ -117,10 +118,9 @@ function TechDetails({ item }: { item: ChatItem }) {
   if (!lines.length) return null;
   return (
     <div className="-mt-1 pb-2">
-      <button type="button" onClick={() => setOpen(!open)} aria-expanded={open} className="flex h-7 items-center gap-1 text-2xs text-ink-3 transition-colors hover:text-ink-2">
-        <ChevronRightIcon width={13} height={13} className={cx('transition-transform duration-150', open && 'rotate-90')} />
+      <Button variant="link" size="xs" onClick={() => setOpen(!open)} aria-expanded={open} icon={<ChevronRightIcon width={13} height={13} className={cx('transition-transform duration-150', open && 'rotate-90')} />} className="px-0 text-2xs font-normal text-ink-3">
         {t('chat.details')}
-      </button>
+      </Button>
       {open && (
         <ul className="max-h-40 space-y-1 overflow-auto pb-0.5 pl-1 font-mono text-[11px] leading-4 text-ink-2" lang="en">
           {lines.map((d, i) => (
@@ -155,15 +155,9 @@ function UndoButtons({ item }: { item: ChatItem }) {
 /** A small text action on glass: the module's plate (`filled`: resting on a wash). */
 function SmallButton({ onClick, icon, children, className, filled }: { onClick: () => void; icon?: ReactNode; children: ReactNode; className?: string; filled?: boolean }) {
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      data-filled={filled ? '' : undefined}
-      className={cx('hit lg-plate inline-flex h-7 items-center gap-1 px-2 text-xs font-medium text-ink', className)}
-    >
-      {icon}
+    <Button variant={filled ? 'tinted' : 'plain'} size="xs" onClick={onClick} icon={icon} className={cx('gap-1 px-2', className)}>
       {children}
-    </button>
+    </Button>
   );
 }
 
@@ -264,21 +258,21 @@ function AssistantMessage({ item, latest, density }: { item: ChatItem; latest: b
     final = <RichText text={view.final} />;
   }
 
-  const entries: GlassTurnEntry[] = view.structured
+  const entries: TurnEntry[] = view.structured
     ? view.timeline.map((e) => (e.type === 'text' ? { type: 'text', content: <RichText text={e.text} /> } : { type: 'change', summary: changes[e.change]?.summary ?? '' }))
     : changes.map((c) => ({ type: 'change', summary: c.summary }));
   const label = changes.length ? (changes.length === 1 ? t('chat.steps1') : t('chat.stepsN', { n: changes.length })) : undefined;
 
   return (
     <div className="animate-[fade-in_200ms_ease-out]" data-testid="assistant-message" data-phase={item.phase}>
-      <GlassTurn
+      <Turn
         density={density}
         live={live}
         entries={entries}
         changes={changes.map((c) => c.summary)}
         final={final}
         label={label}
-        badge={undone ? <span className="rounded-[5px] bg-wash px-1.5 py-px text-2xs font-normal text-ink-2">{t('chat.undone')}</span> : undefined}
+        badge={undone ? <Badge>{t('chat.undone')}</Badge> : undefined}
         trailing={<UndoButtons item={item} />}
         defaultOpen={!compact && latest}
         undone={undone}
@@ -298,9 +292,9 @@ function AssistantMessage({ item, latest, density }: { item: ChatItem; latest: b
             <>
               {item.error.kind === 'quota' && !server?.user && server?.quota?.kind === 'anon' && server.quota.reason !== 'site' && !!(server.auth?.email || server.auth?.google) && (
                 // The one primary action for an anonymous visitor: the accent, small (like send).
-                <button type="button" onClick={(e) => openSignIn(e.currentTarget, 'input')} className="hit lg-focus mr-1 inline-flex h-7 items-center rounded-full bg-accent px-3.5 text-xs font-semibold text-on-accent transition-[filter] duration-150 hover:brightness-95" data-testid="quota-signin">
+                <Button variant="accent" size="xs" strong onClick={(e) => openSignIn(e.currentTarget, 'input')} className="mr-1 px-3.5" data-testid="quota-signin">
                   {t('account.signIn')}
-                </button>
+                </Button>
               )}
               {item.error.kind === 'quota' && !ownKey && (
                 <SmallButton
@@ -332,15 +326,9 @@ function Details({ label, lines }: { label: string; lines: string[] }) {
   const [open, setOpen] = useState(false);
   return (
     <span className="mt-1 -ml-1 block">
-      <button
-        type="button"
-        onClick={() => setOpen(!open)}
-        aria-expanded={open}
-        className="inline-flex h-7 items-center gap-1 rounded-[6px] px-1 text-xs text-ink-2 transition-colors hover:text-ink"
-      >
-        <ChevronRightIcon width={13} height={13} className={cx('transition-transform duration-150', open && 'rotate-90')} />
+      <Button variant="link" size="xs" onClick={() => setOpen(!open)} aria-expanded={open} icon={<ChevronRightIcon width={13} height={13} className={cx('transition-transform duration-150', open && 'rotate-90')} />} className="px-1 font-normal">
         {label}
-      </button>
+      </Button>
       {open && (
         <span className="mt-0.5 block space-y-1 pl-1 text-xs leading-[18px] text-ink-2" lang="en">
           {lines.map((l, i) => (
@@ -378,9 +366,9 @@ function UserMessage({ item }: { item: ChatItem }) {
         <span className={cx(long && !open && 'line-clamp-5')}>{item.text}</span>
       </p>
       {long && (
-        <button type="button" onClick={() => setOpen(!open)} aria-expanded={open} className="mt-1 h-7 rounded-[6px] px-1.5 text-xs text-ink-2 transition-colors hover:text-ink">
+        <Button variant="link" size="xs" onClick={() => setOpen(!open)} aria-expanded={open} className="mt-1 px-1.5 font-normal">
           {open ? t('chat.showLess') : t('chat.showMore')}
-        </button>
+        </Button>
       )}
     </div>
   );
@@ -404,15 +392,9 @@ function EmptyState({ compact }: { compact?: boolean }) {
         <p className="mb-2 text-2xs font-medium tracking-[0.08em] text-ink-3 uppercase">{t('chat.try')}</p>
         <div className="flex flex-col items-start gap-1.5" data-testid="suggestions">
           {SUGGESTIONS.map((k) => (
-            <button
-              key={k}
-              type="button"
-              onClick={() => void send(t(k))}
-              className="hit group lg-plate inline-flex max-w-full items-center gap-2 py-1.5 pr-3 pl-2.5 text-left text-[13.5px] leading-5 font-medium text-ink"
-            >
-              <SparkIcon width={14} height={14} className="shrink-0 text-ink-3 transition-colors group-hover:text-ink" />
+            <Button key={k} variant="plain" size="sm" onClick={() => void send(t(k))} icon={<SparkIcon width={14} height={14} className="shrink-0 text-ink-3" />} className="h-auto max-w-full justify-start gap-2 py-1.5 pr-3 pl-2.5 text-left text-[13.5px] leading-5">
               <span className="truncate">{t(k)}</span>
-            </button>
+            </Button>
           ))}
         </div>
       </div>
@@ -682,7 +664,7 @@ function PromptInput({ phone, pinned, className }: { phone?: boolean; pinned?: b
   // corner (desktop: 26 - 8, phone sheet: 34 - 12), one line high; its
   // children (picker, text, send) share one centre line, 4 px from the edge.
   const field = !!pinned;
-  const btn = field ? (phone ? 'size-9' : 'size-7') : phone ? 'size-[36px]' : 'size-[40px]';
+  const dim = field ? (phone ? 36 : 28) : phone ? 36 : 40;
   const placeholder = working || (note.item && !pinned) ? '' : out ? t('quota.placeholder') : pinned ? t('chat.placeholder') : t('prompt.placeholder');
   const form = (
     <form
@@ -699,22 +681,23 @@ function PromptInput({ phone, pinned, className }: { phone?: boolean; pinned?: b
         // Task 022: which key the conversation uses, a pop-up button where the spark stood.
         <KeyPicker variant="input" phone={phone} />
       ) : (
-        <button
-          type="button"
+        <Button
+          variant="quiet"
           onClick={() => setRecent(!recent)}
-          aria-label={recent ? t('chat.historyClose') : t('chat.history')}
+          label={recent ? t('chat.historyClose') : t('chat.history')}
           aria-expanded={recent}
           aria-controls="recent-strip"
-          data-on={recent ? '' : undefined}
-          className={cx('hit lg-plate relative grid shrink-0 place-items-center text-ink-2 hover:text-ink', btn, recent && 'text-ink')}
+          selected={recent}
+          dim={dim}
+          className={cx('relative', recent && 'text-ink')}
           data-testid="chat-history"
         >
           <HistoryIcon width={17} height={17} />
-          {unseen && !recent && !running && <span className="absolute top-[7px] right-[7px] size-[7px] rounded-full bg-accent" aria-hidden="true" />}
-        </button>
+          {unseen && !recent && !running && <Dot size={7} className="absolute top-[7px] right-[7px]" />}
+        </Button>
       )}
       <div className={cx('relative min-w-0 flex-1', field && 'pl-1')}>
-        <textarea
+        <PromptText
           ref={ref}
           rows={1}
           value={text}
@@ -723,8 +706,6 @@ function PromptInput({ phone, pinned, className }: { phone?: boolean; pinned?: b
           placeholder={placeholder}
           aria-label={t('chat.placeholder')}
           className={cx(
-            // The placeholder reads clearly dimmer than what is typed (lighter ink, regular weight).
-            'block max-h-[120px] w-full resize-none bg-transparent leading-5 font-medium outline-none placeholder:font-normal placeholder:text-ink-2/70 [&:focus-visible]:outline-none',
             // In the sidebar, the conversation's text size (UI_STYLE: 14.5); the capsule over the drawing keeps 15.
             field ? 'text-[14.5px]' : 'text-[15px]',
             field ? (phone ? 'min-h-9 py-2' : 'min-h-7 py-1') : phone ? 'min-h-9 py-2' : 'min-h-10 py-2.5',
@@ -744,33 +725,32 @@ function PromptInput({ phone, pinned, className }: { phone?: boolean; pinned?: b
         )}
       </div>
       {running ? (
-        <button type="button" onClick={stop} aria-label={t('chat.stop')} className={cx('hit lg-focus grid shrink-0 place-items-center rounded-full bg-ink text-on-ink transition-opacity hover:opacity-85', btn)}>
-          <StopIcon width={field && !phone ? 14 : 16} height={field && !phone ? 14 : 16} />
-        </button>
+        <Button variant="ink" onClick={stop} label={t('chat.stop')} dim={dim} icon={<StopIcon width={field && !phone ? 14 : 16} height={field && !phone ? 14 : 16} />} />
       ) : (
-        <button
+        <Button
           type="submit"
+          variant={can ? 'accent' : 'tinted'}
           disabled={!can}
-          aria-label={t('chat.send')}
+          label={t('chat.send')}
           // Ready: the accent. Nothing to send: a quiet plate, the arrow dimmed (it cannot act).
-          className={cx('hit lg-focus grid shrink-0 place-items-center rounded-full transition-[filter,background-color,color] duration-150', btn, can ? 'bg-accent text-on-accent hover:brightness-95' : 'bg-wash text-ink-3')}
+          dim={dim}
+          className={cx(!can && 'text-ink-3')}
+          icon={<SendIcon width={field && !phone ? 14 : 16} height={field && !phone ? 14 : 16} />}
           data-testid="chat-send"
-        >
-          <SendIcon width={field && !phone ? 14 : 16} height={field && !phone ? 14 : 16} />
-        </button>
+        />
       )}
     </form>
   );
   return field ? (
     // A hairline field (no lighter well): the picker's label and the text keep the panel's contrast (task 023 review).
-    <GlassField ref={box as React.Ref<HTMLDivElement>} working={!!working} radius={phone ? 22 : 18} plain className={className} data-testid="prompt">
+    <InputField ref={box as React.Ref<HTMLDivElement>} working={!!working} radius={phone ? 22 : 18} plain className={className} data-testid="prompt">
       {form}
-    </GlassField>
+    </InputField>
   ) : (
     // A capsule at one line (phone 48 high, desktop 56); grown, it keeps that radius (a rounded field, as Messages does).
-    <GlassInputBar ref={box} working={!!working} radius={phone ? 24 : 28} className={className} data-testid="prompt">
+    <InputBar ref={box} working={!!working} radius={phone ? 24 : 28} className={className} data-testid="prompt">
       {form}
-    </GlassInputBar>
+    </InputBar>
   );
 }
 
@@ -786,10 +766,9 @@ function lastExchangeStart(items: ChatItem[]): number {
 
 function LinkButton({ onClick, icon, children, testId, className }: { onClick: () => void; icon?: ReactNode; children: ReactNode; testId?: string; className?: string }) {
   return (
-    <button type="button" onClick={onClick} data-testid={testId} className={cx('hit lg-plate inline-flex h-[32px] shrink-0 items-center gap-[5px] px-3 text-[13px] font-medium whitespace-nowrap text-ink', className)}>
-      {icon}
+    <Button variant="plain" size="sm" onClick={onClick} icon={icon} data-testid={testId} className={cx('gap-[5px]', className)}>
       {children}
-    </button>
+    </Button>
   );
 }
 
@@ -808,7 +787,7 @@ export function RecentStrip({ phone, className }: { phone?: boolean; className?:
     void loadAgent();
   }, []);
   return (
-    <GlassTextSurface
+    <TextSurface
       as="section"
       id="recent-strip"
       aria-label={t('chat.recent')}
@@ -822,9 +801,7 @@ export function RecentStrip({ phone, className }: { phone?: boolean; className?:
         <LinkButton onClick={() => setPinned(true)} icon={<DockIcon width={14} height={14} />} testId="chat-pin">
           {phone ? t('chat.pinPhone') : t('chat.pin')}
         </LinkButton>
-        <button type="button" onClick={() => setRecent(false)} aria-label={t('chat.historyClose')} className="hit lg-plate grid size-[32px] place-items-center text-ink-2 hover:text-ink">
-          <ChevronDownIcon width={16} height={16} />
-        </button>
+        <Button variant="quiet" size="sm" onClick={() => setRecent(false)} label={t('chat.historyClose')} icon={<ChevronDownIcon width={16} height={16} />} />
       </header>
       <MessageList density="compact" from={items.length ? lastExchangeStart(items) : 0} spacer={false} className="px-5 pt-0.5 pb-4" />
       {rounds > 1 && (
@@ -835,7 +812,7 @@ export function RecentStrip({ phone, className }: { phone?: boolean; className?:
           </LinkButton>
         </div>
       )}
-    </GlassTextSurface>
+    </TextSurface>
   );
 }
 
@@ -853,9 +830,9 @@ function ConversationHeader({ phone }: { phone?: boolean }) {
       <h2 className="truncate text-[13px] font-medium">{t('chat.title')}</h2>
       <span className="flex-1" />
       {hasItems && (
-        <GlassIconButton label={t('chat.newChat')} onClick={newChat}>
+        <IconButton label={t('chat.newChat')} onClick={newChat}>
           <ComposeIcon width={16} height={16} />
-        </GlassIconButton>
+        </IconButton>
       )}
       <LinkButton onClick={() => setPinned(false)} icon={<UndockIcon width={16} height={16} />} testId="chat-unpin">
         {t('chat.unpin')}
@@ -877,7 +854,7 @@ export function PinnedColumn({ style }: { style: CSSProperties }) {
     void loadAgent();
   }, []);
   return (
-    <GlassTextSurface
+    <TextSurface
       as="aside"
       aria-label={t('chat.title')}
       className="absolute flex animate-[fade-in_200ms_ease-out] flex-col overflow-hidden"
@@ -892,7 +869,7 @@ export function PinnedColumn({ style }: { style: CSSProperties }) {
           <ConversationHeader />
           {/* The module's hairline, inset from both edges (task 023), not a rule across the glass. */}
           <div className="shrink-0 px-3">
-            <GlassSep />
+            <Separator />
           </div>
           <MessageList density="full" className="px-6 pt-4" />
           <div className="shrink-0 p-2">
@@ -900,7 +877,7 @@ export function PinnedColumn({ style }: { style: CSSProperties }) {
           </div>
         </>
       )}
-    </GlassTextSurface>
+    </TextSurface>
   );
 }
 
@@ -930,7 +907,7 @@ export function SettingsHost({ phone }: { phone?: boolean }) {
   return (
     <>
       <div className="pointer-events-auto absolute inset-0 z-40 animate-[fade-in_160ms_ease-out] bg-black/10" onClick={close} aria-hidden="true" />
-      <GlassTextSurface
+      <TextSurface
         radius={phone ? 34 : 30}
         className={cx(
           'absolute z-50 flex flex-col overflow-hidden',
@@ -938,7 +915,7 @@ export function SettingsHost({ phone }: { phone?: boolean }) {
         )}
       >
         <SettingsSheet />
-      </GlassTextSurface>
+      </TextSurface>
     </>
   );
 }

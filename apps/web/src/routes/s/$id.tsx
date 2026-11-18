@@ -4,6 +4,7 @@ import { createIsomorphicFn } from '@tanstack/react-start';
 import { getRequestUrl } from '@tanstack/react-start/server';
 import { useEffect } from 'react';
 import { Mark } from '../../components/icons';
+import { ButtonLink } from '../../ui';
 import { useT } from '../../lib/i18n';
 import { restoreLang } from '../../lib/store';
 
@@ -74,12 +75,9 @@ function SharePage() {
         {t('share.id')} · {id}
       </p>
       {/* A full page load: the studio reads ?sample= once, at start. */}
-      <a
-        href={isTemplateId(id) ? `/studio?sample=${id}` : '/studio'}
-        className="mt-10 inline-flex h-11 w-fit items-center gap-2 rounded-ui bg-ink px-5 text-sm font-medium text-white transition-opacity hover:opacity-90"
-      >
+      <ButtonLink variant="paper-ink" size="md" href={isTemplateId(id) ? `/studio?sample=${id}` : '/studio'} className="mt-10 h-11 w-fit px-5 text-sm">
         {t('share.open')}
-      </a>
+      </ButtonLink>
     </main>
   );
 }
@@ -98,9 +96,9 @@ function NotFound({ id }: { id: string }) {
       <p className="tnum mt-6 text-xs text-ink-3">
         {t('share.id')} · {id}
       </p>
-      <a href="/studio" className="mt-10 inline-flex h-11 w-fit items-center gap-2 rounded-ui bg-ink px-5 text-sm font-medium text-white transition-opacity hover:opacity-90">
+      <ButtonLink variant="paper-ink" size="md" href="/studio" className="mt-10 h-11 w-fit px-5 text-sm">
         {t('share.start')}
-      </a>
+      </ButtonLink>
     </main>
   );
 }

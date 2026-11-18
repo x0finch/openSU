@@ -11,7 +11,7 @@ import { Link } from '@tanstack/react-router';
 import { type MouseEvent as RMouseEvent, type ReactNode, type RefObject, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { CubeIcon, LinkIcon, Mark, MoreIcon, PlusIcon } from '../components/icons';
 import { cx, LangToggle } from '../components/ui';
-import { GlassLayer, GlassMenu, GlassMenuItem, GlassSep, GlassToast } from '../glass';
+import { Button, GlassLayer, Menu, MenuItem, NameInput, Separator, Tile, TileButton, TileLink, TileMark, Toast } from '../ui';
 import { loadSaved } from '../lib/autosave';
 import { type Lang, useT } from '../lib/i18n';
 import { projectTitle, type ProjectMeta, projectName, projectSync, thumbUrl, useProjects, useProjectSync } from '../lib/projects';
@@ -53,7 +53,6 @@ function useEdited(at: number): string {
 /** One grid for the projects and the templates: two columns on phones, else as many cards of 240 px or more as fit (Figma, Canva, Google Docs). */
 const GRID = 'grid grid-cols-2 gap-x-4 gap-y-6 sm:grid-cols-[repeat(auto-fill,minmax(240px,1fr))] sm:gap-x-6 sm:gap-y-8';
 
-const TILE = 'relative block aspect-[4/3] overflow-hidden rounded-[14px] border border-hairline bg-wash transition-colors';
 
 /** The picture of a project, or a quiet placeholder until it has one. */
 function Thumb({ src, alt }: { src: string | null; alt: string }) {
@@ -85,12 +84,12 @@ function CardText({ name, line, more, renaming, wrap, mark }: { name: ReactNode;
   );
 }
 
-/** A plain button on paper (the page has no glass to put a plate on). */
+/** A button on paper (the page has no glass to put a plate on). */
 function PaperButton({ children, onClick, strong, testId }: { children: ReactNode; onClick: () => void; strong?: boolean; testId: string }) {
   return (
-    <button type="button" onClick={onClick} data-testid={testId} className={cx('hit inline-flex h-8 items-center rounded-full px-3 text-[13px] transition-colors', strong ? 'bg-ink font-semibold text-white hover:bg-black' : 'bg-wash font-medium hover:bg-hairline')}>
+    <Button variant={strong ? 'ink' : 'paper-tinted'} size="sm" strong={strong} onClick={onClick} data-testid={testId}>
       {children}
-    </button>
+    </Button>
   );
 }
 
@@ -124,9 +123,9 @@ function ProjectCard({ p, onDelete, menuOpen, onMenu, renaming, onRenamed, askin
         onMenu(more.current);
       }}
     >
-      <a href={`/studio?p=${p.id}`} className={cx(TILE, 'hover:border-ink-3')} aria-label={`${t('projects.open')}: ${name}`} data-testid="project-open">
+      <TileLink href={`/studio?p=${p.id}`} aria-label={`${t('projects.open')}: ${name}`} data-testid="project-open">
         <Thumb src={thumbUrl(p)} alt="" />
-      </a>
+      </TileLink>
       {asking ? (
         <div className="mt-2.5 flex flex-wrap items-center gap-x-2 gap-y-1.5" data-testid="project-delete-ask">
           <p className="w-full text-[14px] leading-5 font-medium sm:text-[15px]">{t('projects.deleteAsk')}</p>
@@ -142,7 +141,7 @@ function ProjectCard({ p, onDelete, menuOpen, onMenu, renaming, onRenamed, askin
           renaming={renaming}
           name={
             renaming ? (
-              <input
+              <NameInput
                 ref={field}
                 value={draft}
                 maxLength={80}
@@ -156,7 +155,7 @@ function ProjectCard({ p, onDelete, menuOpen, onMenu, renaming, onRenamed, askin
                     onRenamed();
                   }
                 }}
-                className="-mx-1.5 -my-0.5 h-6 w-[calc(100%+12px)] rounded-[6px] bg-page px-1.5 text-[14px] leading-5 font-medium sm:h-[26px] sm:text-[15px] outline outline-1 outline-ink-3 focus:outline-2 focus:outline-ink"
+                className="-mx-1.5 -my-0.5 h-6 w-[calc(100%+12px)] text-[14px] leading-5 font-medium! sm:h-[26px] sm:text-[15px]"
                 data-testid="project-name-input"
               />
             ) : (
@@ -173,18 +172,18 @@ function ProjectCard({ p, onDelete, menuOpen, onMenu, renaming, onRenamed, askin
             ) : undefined
           }
           more={
-            <button
+            <Button
               ref={more}
-              type="button"
-              aria-label={t('projects.more')}
+              variant="paper"
+              size="sm"
+              label={t('projects.more')}
+              icon={<MoreIcon width={18} height={18} />}
               aria-haspopup="menu"
               aria-expanded={menuOpen}
               onClick={() => onMenu(more.current)}
-              className="hit -mr-1.5 grid size-8 shrink-0 place-items-center rounded-full text-ink-2 transition-colors hover:bg-wash hover:text-ink"
+              className="-mr-1.5 text-ink-2"
               data-testid="project-more"
-            >
-              <MoreIcon width={18} height={18} />
-            </button>
+            />
           }
         />
       )}
@@ -196,11 +195,11 @@ function NewCard({ full, open, onToggle }: { full: boolean; open: boolean; onTog
   const t = useT();
   return (
     <article className="min-w-0" data-testid="project-new-card">
-      <button type="button" disabled={full} aria-expanded={open} onClick={onToggle} className={cx(TILE, 'grid w-full place-items-center text-ink-2 enabled:hover:border-ink-3 enabled:hover:text-ink disabled:text-ink-3')} data-testid="project-new">
-        <span className="grid size-11 place-items-center rounded-full border border-current">
+      <TileButton disabled={full} aria-expanded={open} onClick={onToggle} data-testid="project-new">
+        <TileMark>
           <PlusIcon width={22} height={22} />
-        </span>
-      </button>
+        </TileMark>
+      </TileButton>
       <CardText name={t('projects.new')} line={full ? t('projects.full') : ''} wrap />
     </article>
   );
@@ -211,7 +210,7 @@ function NewCard({ full, open, onToggle }: { full: boolean; open: boolean; onTog
 /* ------------------------------------------------------------------ */
 
 /** Phones: the studio's phone header sizes (the account button round, 36 px, 44 to touch). */
-function usePhone(): boolean {
+function useNarrow(): boolean {
   const [on, setOn] = useState(false);
   useEffect(() => {
     const mq = matchMedia('(max-width: 639px)');
@@ -225,7 +224,7 @@ function usePhone(): boolean {
 
 export function ProjectsPage() {
   const t = useT();
-  const phone = usePhone();
+  const phone = useNarrow();
   // The sync, as in the studio: a sign-in here adopts this browser's edited house (nothing is opened or made otherwise).
   useProjectSync({ page: true });
   const lang = useStudio((s) => s.lang);
@@ -349,9 +348,9 @@ export function ProjectsPage() {
               <div className={cx('mt-3', GRID)}>
                 {TEMPLATE_META.map((m) => (
                   <a key={m.id} href={`/studio?new=${m.id}`} className="min-w-0" data-testid={`project-template-${m.id}`}>
-                    <span className={cx(TILE, 'hover:border-ink-3')}>
+                    <Tile>
                       <Thumb src={null} alt="" />
-                    </span>
+                    </Tile>
                     <CardText name={m.name} line={`${m.plot.width / 1000} × ${m.plot.depth / 1000} m`} />
                   </a>
                 ))}
@@ -376,16 +375,16 @@ export function ProjectsPage() {
               ))}
             {server && !cloud && (
               <article className="min-w-0" data-testid="project-card" data-local="">
-                <a href="/studio" className={cx(TILE, 'hover:border-ink-3')} aria-label={`${t('projects.open')}: ${localName}`} data-testid="project-open">
+                <TileLink href="/studio" aria-label={`${t('projects.open')}: ${localName}`} data-testid="project-open">
                   <Thumb src={null} alt="" />
-                </a>
+                </TileLink>
                 <CardText name={localName} line={local ? (changedText(lang, local.savedAt) === null ? t('projects.editedNow') : t('projects.edited', { when: changedText(lang, local.savedAt)! })) : ''} />
               </article>
             )}
           </section>
           {cloud && !loaded && !projects.length && <p className="mt-6 text-[14px] text-ink-2" data-testid="projects-loading">{t('projects.loading')}</p>}
         </main>
-        <GlassMenu
+        <Menu
           ref={menuRef as RefObject<HTMLElement | null>}
           open={!!menu && !!menuProject}
           anchor={() => menu?.el ?? null}
@@ -396,9 +395,9 @@ export function ProjectsPage() {
         >
           {menuProject && (
             <>
-              <GlassMenuItem onClick={() => location.assign(`/studio?p=${menuProject.id}`)} data-testid="card-open">{t('projects.open')}</GlassMenuItem>
+              <MenuItem onClick={() => location.assign(`/studio?p=${menuProject.id}`)} data-testid="card-open">{t('projects.open')}</MenuItem>
               {/* Task 028: the studio's share surface, at the card (Google Drive, Figma: right click > Share). */}
-              <GlassMenuItem
+              <MenuItem
                 onClick={() => {
                   const el = menu?.el ?? null;
                   setMenu(null);
@@ -407,9 +406,9 @@ export function ProjectsPage() {
                 data-testid="card-share"
               >
                 {t('share.button')}
-              </GlassMenuItem>
-              <GlassMenuItem onClick={() => { setMenu(null); setRenaming(menuProject.id); }} data-testid="card-rename">{t('projects.rename')}</GlassMenuItem>
-              <GlassMenuItem
+              </MenuItem>
+              <MenuItem onClick={() => { setMenu(null); setRenaming(menuProject.id); }} data-testid="card-rename">{t('projects.rename')}</MenuItem>
+              <MenuItem
                 disabled={full}
                 className="disabled:text-ink-3"
                 onClick={() => {
@@ -419,9 +418,9 @@ export function ProjectsPage() {
                 data-testid="card-duplicate"
               >
                 {t('projects.copy')}
-              </GlassMenuItem>
-              <GlassSep />
-              <GlassMenuItem
+              </MenuItem>
+              <Separator />
+              <MenuItem
                 onClick={() => {
                   setAsking(menuProject.id);
                   setMenu(null);
@@ -429,25 +428,30 @@ export function ProjectsPage() {
                 data-testid="card-delete"
               >
                 {t('projects.delete')}
-              </GlassMenuItem>
+              </MenuItem>
             </>
           )}
-        </GlassMenu>
+        </Menu>
         {/* The account's surfaces, as in the studio: the menu at the button, sign-in (a popover; a sheet on phones). */}
         <div className="pointer-events-none fixed inset-0 z-40">
           <AccountMenuHost />
-          <SignInHost phone={phone} />
-          <ShareHost phone={phone} />
+          <SignInHost />
+          <ShareHost />
         </div>
         {!toast && <StudioToast className="fixed inset-x-0 bottom-[max(24px,env(safe-area-inset-bottom))] z-50 px-4" />}
         {toast && (
           <div className="pointer-events-none fixed inset-x-0 bottom-[max(24px,env(safe-area-inset-bottom))] z-50 flex justify-center px-4">
-            <GlassToast className="gap-3 pr-1.5" data-testid="project-deleted-toast" key={toast.id}>
+            <Toast
+              data-testid="project-deleted-toast"
+              key={toast.id}
+              action={
+                <Button variant="plain" size="xs" strong onClick={undo} data-testid="project-undo">
+                  {t('projects.undo')}
+                </Button>
+              }
+            >
               <span className="max-w-[min(360px,calc(100vw-160px))] truncate">{t('projects.deleted', { name: toast.name })}</span>
-              <button type="button" onClick={undo} className="lg-plate h-7 rounded-full px-3 text-[13px] font-semibold" data-testid="project-undo">
-                {t('projects.undo')}
-              </button>
-            </GlassToast>
+            </Toast>
           </div>
         )}
       </div>

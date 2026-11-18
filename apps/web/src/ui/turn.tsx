@@ -15,18 +15,18 @@
 // line is a button with aria-expanded. Content (rich text, buttons) comes
 // from the caller; this file owns the structure and the motion.
 import { type ReactNode, useId, useLayoutEffect, useRef, useState } from 'react';
-import { cx } from './Glass';
+import { cx } from './surface';
 import { Spring, SPRINGS } from './spring';
 
 /** One line of the timeline: a sentence (rendered by the caller) or a change. */
-export type GlassTurnEntry = { type: 'text'; content: ReactNode } | { type: 'change'; summary: string };
+export type TurnEntry = { type: 'text'; content: ReactNode } | { type: 'change'; summary: string };
 
-export interface GlassTurnProps {
+export interface TurnProps {
   density: 'compact' | 'full';
   /** Compact, while the turn runs: the one live line. Full: shown under the timeline while it runs. */
   live?: ReactNode;
   /** Intermediate sentences and changes, in order (full density). */
-  entries: GlassTurnEntry[];
+  entries: TurnEntry[];
   /** Change summaries, in order (compact density's list; their count names the line). */
   changes: string[];
   /** The final text (or, while a full turn runs, the text streaming in). */
@@ -51,7 +51,7 @@ export interface GlassTurnProps {
  * follows the spring (clipped), its content fades in over the second half.
  * Reduced motion: no height motion, a fade.
  */
-export function GlassDisclosureRegion({ open, id, children, className }: { open: boolean; id?: string; children: ReactNode; className?: string }) {
+export function DisclosureRegion({ open, id, children, className }: { open: boolean; id?: string; children: ReactNode; className?: string }) {
   const outer = useRef<HTMLDivElement>(null);
   const inner = useRef<HTMLDivElement>(null);
   const [mounted, setMounted] = useState(open);
@@ -122,7 +122,7 @@ function ChangeLine({ summary, undone }: { summary: string; undone?: boolean }) 
 }
 
 /** An assistant turn in the compact or the full density (see the file comment). */
-export function GlassTurn({ density, live, entries, changes, final, label, badge, trailing, defaultOpen = false, undone, extra, className }: GlassTurnProps) {
+export function Turn({ density, live, entries, changes, final, label, badge, trailing, defaultOpen = false, undone, extra, className }: TurnProps) {
   const [chosen, setChosen] = useState<boolean | null>(null);
   const open = chosen ?? defaultOpen;
   const id = useId();
@@ -182,10 +182,10 @@ export function GlassTurn({ density, live, entries, changes, final, label, badge
     <div className={className} data-testid="turn" data-density={density} data-open={label ? (open ? 'true' : 'false') : undefined}>
       {line}
       {label && (
-        <GlassDisclosureRegion open={open} id={id}>
+        <DisclosureRegion open={open} id={id}>
           {timeline}
           {extra}
-        </GlassDisclosureRegion>
+        </DisclosureRegion>
       )}
       {bare && timeline}
       {final}

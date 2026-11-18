@@ -3,9 +3,9 @@
 // to the screen together with the glass shapes of the studio chrome: the
 // scene bent at each shape's rim (refraction with a little dispersion),
 // frosted, saturated and lifted, tinted, with rim light, bevel, hairline
-// and a soft shadow. Shapes close together merge with a smooth union so a
-// panel can flow out of its button. A change of the glass alone re-runs
-// only this pass.
+// and a soft shadow. Every shape stands alone (task 029: surfaces float at
+// a gap from their control; nothing merges). A change of the glass alone
+// re-runs only this pass.
 //
 // The look follows the approved prototype (docs/prototypes/liquid-glass.html)
 // and, through it, glasswork's material (MIT, see THIRD_PARTY_NOTICES.md).
@@ -49,8 +49,6 @@ export interface GlassShape {
    * a slider thumb), drawn over the layer below with its own rim.
    */
   layer?: 0 | 1;
-  /** Shapes of the same group (and layer) merge with a smooth union. */
-  group?: number;
   /** Magnification inside the shape (1 = none; a lifted lens > 1). */
   magnify?: number;
   /** Extra rim refraction, multiplies the material's (lifted lens > 1). */
@@ -86,8 +84,6 @@ export interface GlassMaterial {
   falloff: number;
   /** Dispersion: red sampled this share further out, blue this share further in. */
   dispersion: number;
-  /** Smooth-union distance, CSS px. */
-  merge: number;
   /** Strength of the press light. */
   pressLight: number;
   /** Reduced transparency: an opaque surface in the tint colour. */
@@ -118,11 +114,10 @@ uniform sampler2D uScene;
 uniform vec4 uFade;
 uniform vec2 uRes;
 uniform float uDpr;
-uniform float uK;
 uniform int uN;
 uniform vec4 uA[MAXN]; // x, y, w, h (device px, top-left origin)
 uniform vec4 uB[MAXN]; // radius, tint, frost, alpha
-uniform vec4 uC[MAXN]; // magnify, layer, group, bend
+uniform vec4 uC[MAXN]; // magnify, layer, (unused), bend
 uniform vec4 uD[MAXN]; // lightX, lightY, lightStrength, lift
 uniform vec3 uTint;
 uniform float uSat, uBri, uCatch, uBevel, uShadow, uShadowY, uShadowBlur, uHair;
@@ -134,25 +129,22 @@ vec3 bgL(vec2 p, float lod) {
   return mix(textureLod(uScene, uv, lod).rgb, uFade.rgb, uFade.a);
 }
 float sdRR(vec2 p, vec2 b, float r) { vec2 q = abs(p) - b + r; return length(max(q, 0.)) + min(max(q.x, q.y), 0.) - r; }
-float smin(float a, float b, float k) { float h = max(k - abs(a - b), 0.) / k; return min(a, b) - h * h * k * .25; }
 float sdShape(vec2 p, int i) {
   vec4 R = uA[i];
   float r = min(uB[i].x, min(R.z, R.w) * .5);
   return sdRR(p - (R.xy + R.zw * .5), R.zw * .5, r);
 }
-// Union of one layer; groups merge smoothly inside, separate groups do not.
+// Union of one layer (a plain union: shapes do not merge).
 float field(vec2 p, float layer, out int idx) {
-  float d = 1e5, gd = 1e5, best = 1e5, g = -1.;
+  float best = 1e5;
   idx = -1;
   for (int i = 0; i < MAXN; i++) {
     if (i >= uN) break;
     if (uC[i].y != layer) continue;
     float di = sdShape(p, i);
-    if (uC[i].z != g) { d = min(d, gd); gd = 1e5; g = uC[i].z; }
-    gd = smin(gd, di, uK);
     if (di < best) { best = di; idx = i; }
   }
-  return min(d, gd);
+  return best;
 }
 float fieldD(vec2 p, float layer) { int j; return field(p, layer, j); }
 vec3 frost(vec2 q, float r) {
@@ -243,7 +235,7 @@ export class GlassCompositor {
   private readonly material: RawShaderMaterial;
   private readonly mesh: Mesh;
   private readonly copy: Mesh;
-  /** One quad per shape (its box, its shadow and merge reach): only there runs the glass shader. */
+  /** One quad per shape (its box and its shadow's reach): only there runs the glass shader. */
   private readonly quads = new Float32Array(MAX_GLASS_SHAPES * 6 * 3);
   private width = 1;
   private height = 1;
@@ -286,7 +278,6 @@ export class GlassCompositor {
         uFade: { value: this.fade },
         uRes: { value: new Vector2(width, height) },
         uDpr: { value: 1 },
-        uK: { value: 14 },
         uN: { value: 0 },
         uA: { value: arr4() },
         uB: { value: arr4() },
@@ -332,11 +323,11 @@ export class GlassCompositor {
   }
 
   setGlass(shapes: readonly GlassShape[], material: GlassMaterial): void {
-    // Layers bottom-up, groups contiguous (the shader merges runs of a group).
+    // Layers bottom-up.
     this.shapes = shapes
       .slice(0, MAX_GLASS_SHAPES)
       .map((s, i) => ({ s, i }))
-      .sort((a, b) => (a.s.layer ?? 0) - (b.s.layer ?? 0) || (a.s.group ?? 0) - (b.s.group ?? 0) || a.i - b.i)
+      .sort((a, b) => (a.s.layer ?? 0) - (b.s.layer ?? 0) || a.i - b.i)
       .map((x) => x.s);
     this.mat = material;
     this.upload();
@@ -347,13 +338,13 @@ export class GlassCompositor {
     const m = this.mat;
     const pr = this.pixelRatio;
     const A = u.uA!.value as Vector4[], B = u.uB!.value as Vector4[], C = u.uC!.value as Vector4[], D = u.uD!.value as Vector4[];
-    const pad = m ? m.shadowOffset + m.shadowBlur * 2.5 + m.merge + 4 : 0;
+    const pad = m ? m.shadowOffset + m.shadowBlur * 2.5 + 4 : 0;
     const q = this.quads;
     const W = this.width, H = this.height;
     this.shapes.forEach((s, i) => {
       A[i]!.set(s.x * pr, s.y * pr, Math.max(0, s.width) * pr, Math.max(0, s.height) * pr);
       B[i]!.set(s.radius * pr, s.tint, s.frost * pr, s.alpha ?? 1);
-      C[i]!.set(s.magnify ?? 1, s.layer ?? 0, s.group ?? 0, s.bend ?? 1);
+      C[i]!.set(s.magnify ?? 1, s.layer ?? 0, 0, s.bend ?? 1);
       D[i]!.set((s.light?.x ?? 0) * pr, (s.light?.y ?? 0) * pr, s.light?.strength ?? 0, s.lift ?? 1);
       const lp = pad * Math.max(1, s.lift ?? 1);
       const ax = ((s.x - lp) * pr / W) * 2 - 1, bx = ((s.x + s.width + lp) * pr / W) * 2 - 1;
@@ -366,7 +357,6 @@ export class GlassCompositor {
     (geo.getAttribute('position') as BufferAttribute).needsUpdate = true;
     u.uDpr!.value = pr;
     if (!m) return;
-    u.uK!.value = m.merge * pr;
     (u.uTint!.value as Vector3).set(...m.tint);
     u.uSat!.value = m.saturation;
     u.uBri!.value = m.brightness;

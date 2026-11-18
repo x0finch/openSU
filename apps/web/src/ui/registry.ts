@@ -43,8 +43,6 @@ export interface SurfaceSpec {
   role: GlassRole;
   /** Corner radius, px; 'capsule' = half the short side. */
   radius: number | 'capsule';
-  /** Surfaces of the same group merge (smooth union). Default: their own. */
-  group?: number;
   /** 1 = a lens on top of the chrome layer. */
   layer?: 0 | 1;
   /** Per-frame shape (morphs, lenses, press); null hides the surface. */
@@ -52,11 +50,6 @@ export interface SurfaceSpec {
 }
 
 let nextGroup = 1000;
-/** A fresh merge group id (a component and the panel that flows out of it share one). */
-export function newGroup(): number {
-  return nextGroup++;
-}
-
 /**
  * How visible an element is through its own and its ancestors' opacity
  * and visibility (a surface faded or hidden by a parent, e.g. the phone
@@ -83,7 +76,7 @@ const rectOf = (el: Element): Rect => {
 const HOT_MS = 450;
 
 class Registry {
-  private surfaces = new Map<number, SurfaceSpec & { auto: number }>();
+  private surfaces = new Map<number, SurfaceSpec>();
   private nextId = 1;
   private target: GlassTarget | null = null;
   private tone: GlassTone = 'dark';
@@ -144,7 +137,7 @@ class Registry {
   register(spec: SurfaceSpec): () => void {
     this.wire();
     const id = this.nextId++;
-    this.surfaces.set(id, { ...spec, auto: spec.group ?? -id });
+    this.surfaces.set(id, { ...spec });
     this.ro?.observe(spec.el);
     this.kick();
     return () => {
@@ -232,7 +225,6 @@ class Registry {
         frost: o.frost ?? (s.role === 'text' ? GLASS.frostPanel : GLASS.frostControl),
         alpha: (o.alpha ?? 1) * seen,
         layer: s.layer ?? 0,
-        group: s.auto,
         magnify: o.magnify ?? 1,
         bend: o.bend ?? 1,
         lift: o.lift ?? 1,

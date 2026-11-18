@@ -436,3 +436,57 @@
 .lg-tipped:has([aria-expanded="true"]) > .lg-tip {
   opacity: 0 !important;
 }
+
+/* ------------------------------------------------------------------ */
+/* Popover parts (task 029): one inset, one header, one gap, one footer */
+/* ------------------------------------------------------------------ */
+
+.lg-panel {
+  display: flex;
+  min-height: 0;
+  flex-direction: column;
+  gap: 16px;
+  padding: 22px;
+}
+.lg-panel[data-phone] {
+  padding: 4px 20px 24px;
+}
+.lg-panel-head {
+  display: flex;
+  min-height: 32px;
+  align-items: center;
+  gap: 8px;
+}
+.lg-panel-title {
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
+  font-size: 17px;
+  font-weight: 600;
+  line-height: 22px;
+  letter-spacing: -0.01em;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.lg-panel-sub {
+  margin-top: -8px;
+  color: var(--color-ink-2);
+  font-size: 13.5px;
+  line-height: 20px;
+}
+.lg-panel-body {
+  display: flex;
+  min-height: 0;
+  flex-direction: column;
+  gap: 16px;
+}
+.lg-panel-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.lg-panel-foot {
+  color: var(--color-ink-2);
+  font-size: 13px;
+  line-height: 18px;
+}

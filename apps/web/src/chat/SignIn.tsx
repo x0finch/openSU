@@ -1,13 +1,14 @@
 // The sign-in sheet (task 019). One flow for new and returning people:
 // an email, then the 6-digit code; or Google. Desktop: a glass panel that
-// flows out of the control that opened it (the account button, the
-// account row of the project menu, or the "sign in" of a credits note) and back; phone: the
-// inset bottom sheet with detents. One field per step, one primary action,
+// flows out of the control that opened it (the account row of the project
+// menu, the share button, the account button on /projects, or the "sign
+// in" of a credits note or the invitation) and back; phones: the inset
+// bottom sheet (the base Popover's phone form). One field per step, one primary action,
 // a short line of what happens next; errors are calm sentences in the
 // sheet. Nothing navigates away from the drawing; the message draft stays.
 import { type ClipboardEvent, type FormEvent, type KeyboardEvent, useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { ChevronLeftIcon, CloseIcon, GoogleLogo } from '../components/icons';
-import { cx, GlassPopover, GlassSheet } from '../glass';
+import { GoogleLogo } from '../components/icons';
+import { CodeInput, GoogleButton, Input, Popover, PopoverAction, PopoverBody, PopoverDescription, PopoverFooter, PopoverHeader, PopoverTitle, Separator, Spinner, usePhone } from '../ui';
 import { type MessageKey, useT } from '../lib/i18n';
 import { closeSignIn, continueWithGoogle, editEmail, RESEND_SECONDS, sendCode, useAccount, verifyCode } from './account';
 import { useChat } from './chat-store';
@@ -84,7 +85,7 @@ export function CodeBoxes({ onComplete, disabled, wrong, label }: { onComplete: 
   return (
     <div ref={row} className="flex justify-between gap-2" role="group" aria-label={label(0)} onAnimationEnd={() => row.current?.classList.remove('otp-shake')} data-testid="otp-boxes">
       {digits.map((d, i) => (
-        <input
+        <CodeInput
           key={i}
           ref={(el) => {
             refs.current[i] = el;
@@ -108,25 +109,10 @@ export function CodeBoxes({ onComplete, disabled, wrong, label }: { onComplete: 
           autoComplete="one-time-code"
           maxLength={6}
           aria-label={label(i + 1)}
-          className="lg-field lg-code tnum h-14 w-0 min-w-0 flex-1 text-center text-[24px] font-semibold text-ink outline-none disabled:opacity-50 [&:focus-visible]:outline-none"
           data-testid={`otp-${i}`}
         />
       ))}
     </div>
-  );
-}
-
-function Spinner() {
-  return <span className="inline-block size-4 animate-[lg-spin_0.8s_linear_infinite] rounded-full border-2 border-current border-t-transparent" aria-hidden="true" />;
-}
-
-/** The primary action: one per step (ginkgo yellow, like send). */
-function Primary({ children, busy, disabled, testId }: { children: string; busy?: boolean; disabled?: boolean; testId?: string }) {
-  return (
-    <button type="submit" disabled={disabled || busy} className={cx('hit lg-focus flex h-12 w-full items-center justify-center gap-2 rounded-full bg-accent text-[15px] font-semibold text-on-accent transition-[filter,opacity] duration-150', disabled ? 'opacity-50' : 'hover:brightness-95')} data-testid={testId}>
-      {busy && <Spinner />}
-      {children}
-    </button>
   );
 }
 
@@ -140,7 +126,7 @@ function useCountdown(until: number): number {
   return Math.max(0, Math.ceil((until - now) / 1000));
 }
 
-function SignInBody({ phone }: { phone?: boolean }) {
+function SignInBody() {
   const t = useT();
   const step = useAccount((s) => s.step);
   const email = useAccount((s) => s.email);
@@ -177,17 +163,9 @@ function SignInBody({ phone }: { phone?: boolean }) {
     if (!busy) void sendCode(value, tk(t));
   };
   const head = (title: string, back?: () => void) => (
-    <div className="flex items-center gap-1">
-      {back && (
-        <button type="button" onClick={back} aria-label={t('account.change')} className="hit lg-plate -ml-2 grid size-8 shrink-0 place-items-center rounded-full text-ink-2 hover:text-ink">
-          <ChevronLeftIcon width={18} height={18} />
-        </button>
-      )}
-      <h2 className="min-w-0 flex-1 truncate text-[19px] font-semibold tracking-[-0.01em]" id="signin-title">{title}</h2>
-      <button type="button" onClick={closeSignIn} aria-label={t('account.close')} className="hit lg-plate -mr-1.5 grid size-8 shrink-0 place-items-center rounded-full text-ink-2 hover:text-ink" data-testid="signin-close">
-        <CloseIcon width={16} height={16} />
-      </button>
-    </div>
+    <PopoverHeader onClose={closeSignIn} closeLabel={t('account.close')} closeTestId="signin-close" back={back ? { label: t('account.change'), onClick: back } : undefined}>
+      <PopoverTitle id="signin-title">{title}</PopoverTitle>
+    </PopoverHeader>
   );
   const errorLine = error && (
     <p className="text-[13.5px] leading-5 text-ink" role="alert" data-testid="signin-error">
@@ -197,67 +175,76 @@ function SignInBody({ phone }: { phone?: boolean }) {
 
   if (step === 'code') {
     return (
-      <div className={cx('flex flex-col gap-4', phone ? 'px-5 pt-1 pb-6' : 'p-[22px]')} data-testid="signin-code">
+      <div className="contents" data-testid="signin-code">
         {head(t('account.codeTitle'), editEmail)}
-        <p className="-mt-2 truncate text-[13.5px] leading-5 text-ink-2">{t('account.codeSent', { email })}</p>
-        <CodeBoxes key={email} wrong={wrong} disabled={busy} onComplete={(c) => void verifyCode(c, tk(t))} label={(n) => (n ? t('account.digit', { n }) : t('account.code'))} />
-        {errorLine || <p className="text-[13px] leading-5 text-ink-2">{busy ? <Spinner /> : t('account.codeNext')}</p>}
-        <div className="flex items-center justify-between">
-          {left > 0 ? (
-            <span className="tnum text-[13px] text-ink-2" data-testid="signin-countdown">{t('account.resendIn', { s: left })}</span>
-          ) : (
-            <button type="button" onClick={() => void sendCode(email, tk(t))} disabled={busy} className="hit lg-plate -ml-2 h-8 rounded-full px-2 text-[13.5px] font-medium text-ink" data-testid="signin-resend">
+        <PopoverDescription>
+          <span className="block truncate">{t('account.codeSent', { email })}</span>
+        </PopoverDescription>
+        <PopoverBody>
+          <CodeBoxes key={email} wrong={wrong} disabled={busy} onComplete={(c) => void verifyCode(c, tk(t))} label={(n) => (n ? t('account.digit', { n }) : t('account.code'))} />
+          {errorLine || <p className="text-[13px] leading-5 text-ink-2">{busy ? <Spinner /> : t('account.codeNext')}</p>}
+        </PopoverBody>
+        <PopoverFooter
+          note={
+            left > 0 ? (
+              <span className="tnum" data-testid="signin-countdown">{t('account.resendIn', { s: left })}</span>
+            ) : undefined
+          }
+        >
+          {left <= 0 && (
+            <PopoverAction kind="secondary" onClick={() => void sendCode(email, tk(t))} disabled={busy} data-testid="signin-resend">
               {t('account.resend')}
-            </button>
+            </PopoverAction>
           )}
-        </div>
+        </PopoverFooter>
       </div>
     );
   }
 
   return (
-    <div className={cx('flex flex-col gap-4', phone ? 'px-5 pt-1 pb-6' : 'p-[22px]')} data-testid="signin-email">
+    <form onSubmit={submitEmail} noValidate className="contents" data-testid="signin-email">
       {head(t('account.title'))}
-      <p className="-mt-2 text-[13.5px] leading-5 text-ink-2">{t('account.why')}</p>
+      <PopoverDescription>{t('account.why')}</PopoverDescription>
       {emailOn && (
-        <form onSubmit={submitEmail} className="flex flex-col gap-3" noValidate>
-          <label className="lg-field flex h-12 items-center px-4">
-            <span className="sr-only">{t('account.email')}</span>
-            <input
-              ref={field}
-              type="email"
-              name="email"
-              autoComplete="email"
-              autoCapitalize="none"
-              spellCheck={false}
-              enterKeyHint="go"
-              value={value}
-              onChange={(e) => setValue(e.target.value)}
-              placeholder={t('account.email')}
-              className="h-full w-full bg-transparent text-[16px] font-medium text-ink outline-none placeholder:text-ink-2 [&:focus-visible]:outline-none"
-              data-testid="signin-email-input"
-            />
-          </label>
-          {errorLine || <p className="text-[13px] leading-5 text-ink-2">{t('account.emailNext')}</p>}
-          <Primary busy={busy} testId="signin-continue">{t('account.continue')}</Primary>
-        </form>
+        <PopoverBody>
+          <Input
+            ref={field}
+            size="lg"
+            type="email"
+            name="email"
+            autoComplete="email"
+            autoCapitalize="none"
+            spellCheck={false}
+            enterKeyHint="go"
+            value={value}
+            onChange={(e) => setValue(e.target.value)}
+            placeholder={t('account.email')}
+            aria-label={t('account.email')}
+            data-testid="signin-email-input"
+          />
+          {errorLine || <p className="-mt-1 text-[13px] leading-5 text-ink-2">{t('account.emailNext')}</p>}
+        </PopoverBody>
       )}
-      {emailOn && google && (
-        <div className="flex items-center gap-3 text-[12px] text-ink-2" aria-hidden="true">
-          <span className="lg-sep h-px flex-1" />
-          {t('account.or')}
-          <span className="lg-sep h-px flex-1" />
-        </div>
-      )}
-      {google && (
-        // Google's dark theme (glass.css .google-btn): standard "G" unmodified, 12 px before it, 10 px after, 12 px after the text.
-        <button type="button" onClick={() => void continueWithGoogle(tk(t))} disabled={busy} className="hit google-btn flex h-12 w-full items-center justify-center rounded-full pr-3 pl-3 text-[15px] font-medium" data-testid="signin-google">
-          <GoogleLogo width={20} height={20} className="mr-2.5 shrink-0" />
-          <span className="truncate">{t('account.google')}</span>
-        </button>
-      )}
+      <PopoverFooter>
+        {emailOn && (
+          <PopoverAction busy={busy} data-testid="signin-continue">
+            {t('account.continue')}
+          </PopoverAction>
+        )}
+        {emailOn && google && (
+          <div className="flex items-center gap-3 text-[12px] text-ink-2" aria-hidden="true">
+            <Separator className="mx-0 my-0 flex-1" />
+            {t('account.or')}
+            <Separator className="mx-0 my-0 flex-1" />
+          </div>
+        )}
+        {google && (
+          // Google's own button (its brand rules: the standard "G" unmodified, its dark theme).
+          <GoogleButton onClick={() => void continueWithGoogle(tk(t))} disabled={busy} label={t('account.google')} logo={<GoogleLogo width={20} height={20} />} data-testid="signin-google" />
+        )}
+      </PopoverFooter>
       {!emailOn && errorLine}
-    </div>
+    </form>
   );
 }
 
@@ -271,8 +258,9 @@ const ACCOUNT = '[data-account-button]';
  * or above the input, grown out of the opening control's box (a menu row
  * closes with its menu); it flows back into the house name or that control.
  */
-export function SignInHost({ phone }: { phone?: boolean }) {
+export function SignInHost() {
   const t = useT();
+  const phone = usePhone();
   const open = useAccount((s) => s.open);
   const origin = useAccount((s) => s.origin);
   const from = useAccount((s) => s.anchor);
@@ -317,48 +305,21 @@ export function SignInHost({ phone }: { phone?: boolean }) {
     // Desktop: back to the draft (on a phone this would raise the keyboard).
     else if (!phone) document.querySelector<HTMLElement>('[data-testid=prompt-bar]')?.focus({ preventScroll: true });
   };
-
-  if (phone) {
-    const vh = typeof window === 'undefined' ? 800 : window.innerHeight;
-    return (
-      <>
-        <div className={cx('pointer-events-auto absolute inset-0 z-40 bg-black/10 transition-opacity duration-300', open ? 'opacity-100' : 'opacity-0')} onClick={closeSignIn} aria-hidden="true" />
-        <GlassSheet
-          open={open}
-          large={Math.round(vh * 0.92)}
-          onClose={closeSignIn}
-          onClosed={onClosed}
-          ariaLabel={t('account.title')}
-          testId="signin-sheet"
-          className="z-50"
-          style={{ left: 8, right: 8, bottom: 'max(8px, env(safe-area-inset-bottom))' }}
-        >
-          <div role="dialog" aria-modal="true" aria-labelledby="signin-title">
-            <SignInBody phone />
-          </div>
-        </GlassSheet>
-      </>
-    );
-  }
-  const width = 380;
   return (
-    <>
-      <GlassPopover
-        ref={panel}
-        open={open}
-        anchor={anchor}
-        placement={origin === 'menu' ? 'below-start' : origin === 'account' ? 'below-end' : 'above-center'}
-        from={grow}
-        kind="text"
-        onClosed={onClosed}
-        ariaRole="dialog"
-        aria-modal="true"
-        aria-labelledby="signin-title"
-        style={{ width }}
-        data-testid="signin-sheet"
-      >
-        <SignInBody />
-      </GlassPopover>
-    </>
+    <Popover
+      ref={panel}
+      open={open}
+      anchor={anchor}
+      placement={origin === 'menu' ? 'below-start' : origin === 'account' ? 'below-end' : 'above-center'}
+      from={grow}
+      size="dialog"
+      onClose={closeSignIn}
+      onClosed={onClosed}
+      labelledBy="signin-title"
+      label={t('account.title')}
+      testId="signin-sheet"
+    >
+      <SignInBody />
+    </Popover>
   );
 }

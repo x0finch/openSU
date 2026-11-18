@@ -223,7 +223,7 @@ const DISABLED_ACCENT_MAX = 0.25;
 // `GLASS.anchorGap`; 8 px, the menus' old margin, where it is not defined).
 const ANCHOR_GAP = (() => {
   try {
-    const m = /anchorGap:\s*(\d+(?:\.\d+)?)/.exec(readFileSync(resolve(appRoot, 'src/glass/material.ts'), 'utf8'));
+    const m = /anchorGap:\s*(\d+(?:\.\d+)?)/.exec(readFileSync(resolve(appRoot, 'src/ui/material.ts'), 'utf8'));
     return m ? Number(m[1]) : 8;
   } catch {
     return 8;
@@ -1240,11 +1240,11 @@ function crossState() {
   // Radii outside the shape tokens (capsule, material radii, styles.css radii).
   const allowedR = new Set(['capsule']);
   try {
-    const mat = readFileSync(resolve(appRoot, 'src/glass/material.ts'), 'utf8');
+    const mat = readFileSync(resolve(appRoot, 'src/ui/material.ts'), 'utf8');
     for (const m of mat.matchAll(/radius\w*:\s*(\d+(?:\.\d+)?)/gi)) allowedR.add(String(Number(m[1])));
     const css = readFileSync(resolve(appRoot, 'src/styles.css'), 'utf8');
     for (const m of css.matchAll(/--radius[\w-]*:\s*(\d+(?:\.\d+)?)px/g)) allowedR.add(String(Number(m[1])));
-    for (const m of readFileSync(resolve(appRoot, 'src/glass/glass.css'), 'utf8').matchAll(/border-radius:\s*(\d+(?:\.\d+)?)px/g)) allowedR.add(String(Number(m[1])));
+    for (const m of readFileSync(resolve(appRoot, 'src/ui/glass.css'), 'utf8').matchAll(/border-radius:\s*(\d+(?:\.\d+)?)px/g)) allowedR.add(String(Number(m[1])));
   } catch {
     /* sources missing */
   }

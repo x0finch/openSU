@@ -33,7 +33,7 @@ import { ProjectMissing } from './ProjectMissing';
 import { ShareButton, ShareHost } from './Share';
 import { useSharedProject } from '../lib/share';
 import { DesktopTools, PanelCard, TRAY_ID } from './tools';
-import { GlassLayer, type GlassTone } from '../glass';
+import { GlassLayer, type GlassTone } from '../ui';
 import { useDerived } from './useDerived';
 import { Viewer3D } from './Viewer3D';
 import { LandscapeWalkHUD, MobileWalkHUD, useEscapeExitsWalk, WalkHUD } from './WalkHUD';
@@ -498,10 +498,10 @@ export function Studio() {
           {walk && <MobileWalkHUD derived={derived} top={`${header?.bottom ?? 58}px`} bottom={extent?.bottom ?? 130} />}
           {mode !== 'sheet' ? <PhoneDock derived={derived} landscape={landscape} onExtent={onExtent} /> : <SheetInput />}
           <SettingsHost phone />
-          <SignInHost phone />
+          <SignInHost />
           <AccountMenuHost />
-          <ShareHost phone />
-          <KeySheetHost phone />
+          <ShareHost />
+          <KeySheetHost />
         </>
       )}
       {/* An address of a project this account cannot open (task 027). */}

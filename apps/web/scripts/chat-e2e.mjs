@@ -287,7 +287,8 @@ try {
     await page.waitForSelector('[data-testid=key-menu]');
     await page.getByTestId('key-own').click();
     await page.waitForSelector('[data-testid=settings-sheet]');
-    await page.getByTestId('settings-own').check({ force: true });
+    // A switch (role=switch) since task 029: on by a click.
+    if ((await page.getByTestId('settings-own').getAttribute('aria-checked')) !== 'true') await page.getByTestId('settings-own').click();
     await page.waitForTimeout(250);
     await shot(page, 'chat-settings-desktop');
 

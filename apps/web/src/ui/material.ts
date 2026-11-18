@@ -95,7 +95,6 @@ export const GLASS = {
   edgeOffset: 1.1,
   falloff: 2.6,
   dispersion: 0.15,
-  merge: 14,
   shadowOffset: 4,
   /** The press light (a soft glow under the pointer). */
   pressLight: 0.22,
@@ -118,6 +117,8 @@ export const GLASS = {
   screenInset: 12,
   /** Radii, CSS px. */
   radiusPanel: 30,
+  /** The named widths of a popover (task 029): a tool's panel, a dialog (share, sign-in, keys). */
+  panelWidth: { tool: 330, dialog: 380 },
   radiusText: 26,
 } as const;
 
@@ -141,7 +142,6 @@ export function shaderMaterial(tone: GlassTone, opaque: boolean): GlassMaterial 
     edgeOffset: GLASS.edgeOffset,
     falloff: GLASS.falloff,
     dispersion: GLASS.dispersion,
-    merge: GLASS.merge,
     pressLight: GLASS.pressLight,
     opaque,
   };

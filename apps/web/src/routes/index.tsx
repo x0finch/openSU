@@ -3,6 +3,7 @@ import { createFileRoute, Link } from '@tanstack/react-router';
 import { useEffect, useState } from 'react';
 import { ArrowRightIcon, Mark } from '../components/icons';
 import { cx, LangToggle } from '../components/ui';
+import { buttonClass, ButtonArrow } from '../ui';
 import { type MessageKey, translate, useT } from '../lib/i18n';
 import { restoreLang, useStudio } from '../lib/store';
 
@@ -82,12 +83,12 @@ function Landing() {
           <LangToggle />
           {/* Task 026: the way in to an account, left of the studio link; gone once signed in. */}
           {account?.authOn && !signedIn && (
-            <Link to="/studio" search={{ signin: 1 } as never} className="ml-1 inline-flex h-10 items-center rounded-ui px-4 text-sm font-medium whitespace-nowrap hover:bg-wash" data-testid="landing-signin">
+            <Link to="/studio" search={{ signin: 1 } as never} className={buttonClass({ variant: 'paper', size: 'md', className: 'ml-1 text-sm' })} data-testid="landing-signin">
               {t('account.signIn')}
             </Link>
           )}
           {/* Task 027: signed in, the way in is the file browser (as in Figma, Canva, Google Docs). */}
-          <Link to={signedIn ? '/projects' : '/studio'} className="ml-1 hidden h-10 items-center rounded-ui px-4 text-sm font-medium whitespace-nowrap hover:bg-wash sm:inline-flex" data-testid="landing-studio">
+          <Link to={signedIn ? '/projects' : '/studio'} className={buttonClass({ variant: 'paper', size: 'md', className: 'ml-1 hidden! text-sm sm:inline-flex!' })} data-testid="landing-studio">
             {signedIn ? t('landing.openStudio') : t('landing.cta')}
           </Link>
         </nav>
@@ -102,12 +103,12 @@ function Landing() {
             <div className="mt-8 flex flex-wrap items-center gap-x-6 gap-y-4">
               <Link
                 to="/studio"
-                className="group inline-flex h-12 items-center gap-2.5 rounded-ui bg-ink pr-4 pl-5 text-[15px] font-medium text-white transition-[background-color] hover:bg-black"
+                className={buttonClass({ variant: 'paper-ink', size: 'lg', className: 'gap-2.5 pr-4 pl-5' })}
               >
                 {t('landing.cta')}
-                <span className="grid size-6 place-items-center rounded-full bg-accent text-ink transition-transform duration-200 ease-out-soft group-hover:translate-x-0.5">
+                <ButtonArrow>
                   <ArrowRightIcon width={14} height={14} strokeWidth={1.8} />
-                </span>
+                </ButtonArrow>
               </Link>
               <span className="text-sm text-ink-2">{t('landing.secondary')}</span>
             </div>

@@ -6,7 +6,7 @@
 // implementation. Hidden when the server offers no sign-in.
 import { type KeyboardEvent as RKeyboardEvent, type ReactNode, type RefObject, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { PersonIcon } from '../components/icons';
-import { cx, GlassButton, GlassMenu, GlassMenuItem, GlassSep, GlassTip, GlassToast } from '../glass';
+import { Avatar, Button, cx, Menu, MenuItem, MenuLabel, Separator, Toast, Tooltip } from '../ui';
 import { useT } from '../lib/i18n';
 import { closeAccountMenu, openSignIn, signOut, useAccount } from './account';
 import { useChat } from './chat-store';
@@ -40,21 +40,6 @@ export function openAccount(el: HTMLElement | null, from: 'button' | 'menu'): vo
   useAccount.setState({ menu: true, menuFrom: from, menuRect: from === 'menu' && r ? { x: r.left, y: r.top, width: r.width, height: r.height } : null });
 }
 
-/** The picture, or the first letter of the name on a quiet plate. */
-function Avatar({ user, size }: { user: { email: string; name?: string | null; image?: string | null }; size: number }) {
-  const [broken, setBroken] = useState(false);
-  useEffect(() => setBroken(false), [user.image]);
-  if (user.image && !broken) {
-    return <img src={user.image} alt="" width={size} height={size} referrerPolicy="no-referrer" onError={() => setBroken(true)} className="shrink-0 rounded-full object-cover" style={{ width: size, height: size }} data-testid="account-avatar" />;
-  }
-  const letter = Array.from(accountName(user).trim())[0]?.toUpperCase() ?? '';
-  return (
-    <span className="lg-plate grid shrink-0 place-items-center font-semibold text-ink" data-filled="" style={{ width: size, height: size, fontSize: Math.round(size * 0.42) }} data-testid="account-letter" aria-hidden="true">
-      {letter}
-    </span>
-  );
-}
-
 /**
  * The account button of /projects. Desktop (`size` 48): signed out a
  * capsule with the person icon and "登录", signed in a circle with the
@@ -79,7 +64,7 @@ export function AccountButton({ size = 48, round, className }: { size?: number; 
   };
   const common = {
     ref,
-    size,
+    height: size,
     onClick,
     'aria-haspopup': user ? ('menu' as const) : ('dialog' as const),
     'aria-expanded': open,
@@ -88,17 +73,17 @@ export function AccountButton({ size = 48, round, className }: { size?: number; 
     'data-state': user ? 'signed-in' : 'signed-out',
   };
   // Phones have no hover: no tooltip there (a tap would leave it standing).
-  const tipped = (label: string, el: ReactNode) => (round ? <span className={cx('inline-flex', className)}>{el}</span> : <GlassTip label={label} className={className}>{el}</GlassTip>);
+  const tipped = (label: string, el: ReactNode) => (round ? <span className={cx('inline-flex', className)}>{el}</span> : <Tooltip label={label} className={className}>{el}</Tooltip>);
   if (user) {
     const inner = Math.round(size * (40 / 48));
-    return tipped(t('account.label'), <GlassButton {...common} className="hit" aria-label={`${t('account.label')}: ${accountName(user)}`} icon={<Avatar user={user} size={inner} />} />);
+    return tipped(t('account.label'), <Button variant="glass" {...common} label={`${t('account.label')}: ${accountName(user)}`} icon={<Avatar name={accountName(user)} image={user.image} size={inner} />} />);
   }
-  if (round) return tipped(t('account.signIn'), <GlassButton {...common} className="hit" aria-label={t('account.signIn')} icon={<PersonIcon width={size < 40 ? 18 : 20} height={size < 40 ? 18 : 20} />} />);
+  if (round) return tipped(t('account.signIn'), <Button variant="glass" {...common} label={t('account.signIn')} icon={<PersonIcon width={size < 40 ? 18 : 20} height={size < 40 ? 18 : 20} />} />);
   return (
     <span className={cx('inline-flex', className)}>
-      <GlassButton {...common} className="hit gap-1.5" icon={<PersonIcon width={19} height={19} className="shrink-0" />}>
+      <Button variant="glass" {...common} icon={<PersonIcon width={19} height={19} className="shrink-0" />}>
         {t('account.signIn')}
-      </GlassButton>
+      </Button>
     </span>
   );
 }
@@ -160,7 +145,7 @@ export function AccountMenuHost() {
     items[(i + d + items.length) % items.length]?.focus();
   };
   return (
-    <GlassMenu
+    <Menu
       ref={menu as RefObject<HTMLElement | null>}
       open={show}
       anchor={() => document.querySelector<HTMLElement>(from === 'button' ? ACCOUNT_BUTTON : HOUSE_NAME)}
@@ -173,19 +158,13 @@ export function AccountMenuHost() {
     >
       {user && (
         <>
-          <div className="flex min-h-12 flex-col justify-center px-3 py-1.5" data-testid="account-identity">
-            <span className="truncate text-[14px] leading-5 font-semibold">{accountName(user)}</span>
-            {user.name && <span className="truncate text-[12.5px] leading-[18px] text-ink-2" data-testid="account-email">{user.email}</span>}
-          </div>
-          <GlassSep />
+          <MenuLabel title={accountName(user)} sub={user.name ? user.email : undefined} testId="account-identity" subTestId="account-email" />
+          <Separator />
           {quota && (
-            <div className="flex h-10 items-center gap-2.5 px-3 text-[14px] font-medium" data-testid="account-allowance">
-              <span className="min-w-0 flex-1 truncate">{t('keys.free')}</span>
-              <span className="tnum shrink-0 text-[13px] font-normal text-ink-2">{quota.remaining > 0 ? t('quota.left', { n: quota.remaining }) : t('quota.usedUp')}</span>
-            </div>
+            <MenuLabel title={t('keys.free')} detail={quota.remaining > 0 ? t('quota.left', { n: quota.remaining }) : t('quota.usedUp')} testId="account-allowance" />
           )}
           {!onProjectsPage && (
-          <GlassMenuItem
+          <MenuItem
             onClick={() => {
               closeAccountMenu();
               // Keys saved with the account: the key picker's list; else the browser's key settings.
@@ -195,10 +174,10 @@ export function AccountMenuHost() {
             data-testid="account-keys"
           >
             {t('account.myKeys')}
-          </GlassMenuItem>
+          </MenuItem>
           )}
-          {(!onProjectsPage || quota) && <GlassSep />}
-          <GlassMenuItem
+          {(!onProjectsPage || quota) && <Separator />}
+          <MenuItem
             onClick={() => {
               closeAccountMenu();
               void signOut();
@@ -206,10 +185,10 @@ export function AccountMenuHost() {
             data-testid="account-signout"
           >
             {t('account.signOut')}
-          </GlassMenuItem>
+          </MenuItem>
         </>
       )}
-    </GlassMenu>
+    </Menu>
   );
 }
 
@@ -243,9 +222,9 @@ export function StudioToast({ className, invite }: { className?: string; invite?
   if (!shown) return inviting ? <div className={className}><SignInInvite phone={invite === 'phone'} /></div> : null;
   return (
     <div className={cx('pointer-events-none flex animate-[fade-in_200ms_ease-out] justify-center', className)}>
-      <GlassToast data-testid={shown.testId}>
+      <Toast data-testid={shown.testId}>
         <span className="max-w-[min(480px,calc(100vw-56px))] truncate">{shown.text}</span>
-      </GlassToast>
+      </Toast>
     </div>
   );
 }

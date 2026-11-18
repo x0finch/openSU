@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react';
 import { createRootRoute, HeadContent, Outlet, Scripts } from '@tanstack/react-router';
 import appCss from '../styles.css?url';
+import { ButtonLink } from '../ui';
 
 export const Route = createRootRoute({
   head: () => ({
@@ -41,9 +42,9 @@ function NotFound() {
       <div>
         <p className="tnum text-xs tracking-[0.2em] text-ink-2">404</p>
         <p className="mt-2 text-base">页面不存在 · Page not found</p>
-        <a href="/" className="mt-5 inline-block text-sm text-ink underline decoration-hairline underline-offset-4 hover:decoration-ink">
+        <ButtonLink variant="link" size="sm" href="/" className="mt-5 text-sm text-ink underline decoration-hairline underline-offset-4">
           openSU
-        </a>
+        </ButtonLink>
       </div>
     </main>
   );

@@ -10,7 +10,7 @@ import { cutawayPreset, presetById, shownCut } from '../lib/views';
 import type { Engine } from './engine';
 import { Loading } from './Loading';
 import { walkBridge } from './walk-bridge';
-import { glassRegistry, type GlassTarget } from '../glass';
+import { glassRegistry, type GlassTarget } from '../ui';
 
 declare global {
   interface Window {

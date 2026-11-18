@@ -6,8 +6,9 @@
 // called: the city list is a lazy chunk of this app, and geolocation is
 // asked for only on a tap.
 import { type KeyboardEvent as RKeyboardEvent, type PointerEvent as RPointerEvent, type ReactNode, useEffect, useMemo, useRef, useState } from 'react';
-import { ChevronDownSmallIcon, CloseIcon, LocateIcon, PinIcon, SearchIcon } from '../components/icons';
+import { ChevronDownSmallIcon, LocateIcon, PinIcon, SearchIcon } from '../components/icons';
 import { cx } from '../components/ui';
+import { Button, Input, PopoverAction, PopoverBody, PopoverDescription, PopoverFooter, PopoverHeader, PopoverTitle, Separator } from '../ui';
 import { applyEdit } from '../chat/chat-store';
 import { useT } from '../lib/i18n';
 import type { Place } from '../lib/places';
@@ -30,18 +31,18 @@ function usePlaces(): PlacesModule | null {
   return m;
 }
 
-function PanelHead({ title, sub, onClose }: { title: string; sub?: string; onClose: () => void }) {
+type Back = { label: string; onClick: () => void; testId?: string };
+
+/** The panel's header (the base header, one for every surface) and the line under it. */
+function PanelHead({ title, sub, onClose, back }: { title: string; sub?: string; onClose: () => void; back?: Back }) {
   const t = useT();
   return (
-    <header className="flex shrink-0 items-start justify-between gap-2 pt-3.5 pr-2 pl-4">
-      <div className="min-w-0 pt-0.5">
-        <h2 className="text-[15px] font-semibold">{title}</h2>
-        {sub && <p className="mt-0.5 text-xs leading-[18px] text-ink-2">{sub}</p>}
-      </div>
-      <button type="button" onClick={onClose} aria-label={t('panel.done')} className="hit lg-plate grid size-9 shrink-0 place-items-center text-ink-2 hover:text-ink">
-        <CloseIcon width={18} height={18} />
-      </button>
-    </header>
+    <>
+      <PopoverHeader onClose={onClose} closeLabel={t('panel.done')} back={back}>
+        <PopoverTitle>{title}</PopoverTitle>
+      </PopoverHeader>
+      {sub && <PopoverDescription>{sub}</PopoverDescription>}
+    </>
   );
 }
 
@@ -55,7 +56,7 @@ async function setPlace(p: { lat: number; lon: number; tz: string; name: string 
   return applyEdit([{ op: 'update_site', latitude: round2(p.lat), longitude: round2(p.lon), timeZone: p.tz, placeName: p.name }], summary);
 }
 
-export function LocationPanel({ panel, desktop, onClose }: { panel: SitePanel; desktop: boolean; onClose: () => void }) {
+export function LocationPanel({ panel, desktop, onClose, back }: { panel: SitePanel; desktop: boolean; onClose: () => void; back?: Back }) {
   const t = useT();
   const lang = useStudio((s) => s.lang);
   const site = useStudio((s) => s.house?.site);
@@ -108,10 +109,11 @@ export function LocationPanel({ panel, desktop, onClose }: { panel: SitePanel; d
 
   return (
     <>
-      <PanelHead title={panel.intro ? t('loc.newHouse') : t('loc.title')} sub={t('loc.intro')} onClose={onClose} />
-      <div className="min-h-0 flex-1 overflow-y-auto px-4 pt-3 pb-4">
+      <PanelHead title={panel.intro ? t('loc.newHouse') : t('loc.title')} sub={t('loc.intro')} onClose={onClose} back={back} />
+      <PopoverBody>
         {site && (
-          <div className="mb-3 flex items-center gap-2.5 rounded-[10px] bg-wash px-3 py-2" data-testid="loc-current">
+          // Where the house stands now: a line of text with its pin (no box inside the panel).
+          <div className="flex items-center gap-2.5" data-testid="loc-current">
             <PinIcon width={17} height={17} className="shrink-0 text-ink-2" />
             <div className="min-w-0">
               <p className="truncate text-[13px] font-medium">{placeText(site, lang)}</p>
@@ -121,10 +123,10 @@ export function LocationPanel({ panel, desktop, onClose }: { panel: SitePanel; d
             </div>
           </div>
         )}
-        <label className="lg-field flex h-11 items-center gap-2 px-3">
-          <SearchIcon width={17} height={17} className="shrink-0 text-ink-3" />
-          <input
+        <div>
+          <Input
             ref={input}
+            icon={<SearchIcon width={17} height={17} className="shrink-0 text-ink-3" />}
             type="text"
             value={q}
             onChange={(e) => setQ(e.target.value)}
@@ -133,63 +135,53 @@ export function LocationPanel({ panel, desktop, onClose }: { panel: SitePanel; d
             }}
             placeholder={t('loc.search')}
             aria-label={t('loc.search')}
-            className="min-w-0 flex-1 bg-transparent text-[14px] outline-none placeholder:text-ink-3 [&:focus-visible]:outline-none"
             data-testid="loc-search"
             enterKeyHint="search"
           />
-        </label>
-        {q.trim() && (
-          <ul className="mt-1.5 flex flex-col" aria-label={t('loc.search')} data-testid="loc-results">
-            {!places && <li className="px-1 py-2 text-xs text-ink-3">{t('loc.loading')}</li>}
-            {places && !results.length && <li className="px-1 py-2 text-xs leading-5 text-ink-2">{t('loc.none')}</li>}
-            {results.map((p, i) => (
-              <li key={`${p.en}-${p.lat}-${p.lon}-${i}`}>
-                <button type="button" onClick={() => void choose(p)} className="lg-plate flex w-full items-center gap-3 rounded-[14px] px-2 py-2 text-left">
-                  <span className="min-w-0 flex-1">
-                    <span className="block truncate text-[14px] font-medium">
-                      {placeName(p, lang)}
-                      {lang === 'zh' && p.zh && p.cc !== 'CN' && <span className="ml-1.5 font-normal text-ink-3">{p.en}</span>}
+          {q.trim() && (
+            <ul className="mt-1.5 flex flex-col" aria-label={t('loc.search')} data-testid="loc-results">
+              {!places && <li className="px-1 py-2 text-xs text-ink-3">{t('loc.loading')}</li>}
+              {places && !results.length && <li className="px-1 py-2 text-xs leading-5 text-ink-2">{t('loc.none')}</li>}
+              {results.map((p, i) => (
+                <li key={`${p.en}-${p.lat}-${p.lon}-${i}`}>
+                  <Button variant="plain" row onClick={() => void choose(p)} className="h-auto gap-3 px-2 py-2 whitespace-normal">
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate text-[14px] font-medium">
+                        {placeName(p, lang)}
+                        {lang === 'zh' && p.zh && p.cc !== 'CN' && <span className="ml-1.5 font-normal text-ink-3">{p.en}</span>}
+                      </span>
+                      <span className="block truncate text-xs font-normal text-ink-2">{placeRegion(p, lang)}</span>
                     </span>
-                    <span className="block truncate text-xs text-ink-2">{placeRegion(p, lang)}</span>
-                  </span>
-                  <span className="tnum shrink-0 text-2xs text-ink-3">{coordText(p.lat, p.lon)}</span>
-                </button>
-              </li>
-            ))}
-          </ul>
-        )}
-
-        <div className="mt-3 border-t border-hairline pt-3">
-          <button
-            type="button"
-            onClick={locate}
-            disabled={busy === 'locating'}
-            data-filled=""
-            className="lg-plate flex h-10 w-full items-center justify-center gap-2 text-[13px] font-medium text-ink disabled:opacity-70"
-            data-testid="loc-mine"
-          >
-            <LocateIcon width={17} height={17} />
-            {busy === 'locating' ? t('loc.locating') : t('loc.mine')}
-          </button>
-          <p className="mt-1.5 text-2xs leading-4 text-ink-3">{t('loc.mineNote')}</p>
-          {note && <p className="mt-2 rounded-[8px] bg-wash px-2.5 py-2 text-xs leading-5 text-ink-2" role="status">{note}</p>}
+                    <span className="tnum shrink-0 text-2xs font-normal text-ink-3">{coordText(p.lat, p.lon)}</span>
+                  </Button>
+                </li>
+              ))}
+            </ul>
+          )}
         </div>
-
-        <div className="mt-3 border-t border-hairline pt-1">
-          <button type="button" onClick={() => setManual(!manual)} aria-expanded={manual} className="flex h-9 w-full items-center gap-1 text-left text-xs font-medium text-ink-2 transition-colors hover:text-ink">
-            <ChevronDownSmallIcon width={15} height={15} className={cx('transition-transform', !manual && '-rotate-90')} />
+        <Separator className="mx-0 my-0" />
+        <div>
+          <Button variant="tinted" size="md" full onClick={locate} disabled={busy === 'locating'} icon={<LocateIcon width={17} height={17} />} className="text-[13px]" data-testid="loc-mine">
+            {busy === 'locating' ? t('loc.locating') : t('loc.mine')}
+          </Button>
+          <p className="mt-1.5 text-2xs leading-4 text-ink-3">{t('loc.mineNote')}</p>
+          {note && <p className="mt-2 text-xs leading-5 text-ink-2" role="status">{note}</p>}
+        </div>
+        <Separator className="mx-0 my-0" />
+        <div className="-mt-2">
+          <Button variant="link" size="sm" onClick={() => setManual(!manual)} aria-expanded={manual} icon={<ChevronDownSmallIcon width={15} height={15} className={cx('transition-transform', !manual && '-rotate-90')} />} className="-ml-1 gap-1 px-1 text-xs">
             {t('loc.manual')}
-          </button>
+          </Button>
           {manual && site && <ManualCoords places={places} initial={site} />}
         </div>
-
+      </PopoverBody>
+      <PopoverFooter note={<span className="text-[10.5px] leading-4 text-ink-3">{t('loc.source')}</span>}>
         {panel.intro && (
-          <button type="button" onClick={() => setPanel(null)} className="lg-plate mt-3 h-10 w-full border border-hairline text-[13px] text-ink-2 hover:text-ink" data-testid="loc-skip">
+          <PopoverAction kind="secondary" onClick={() => setPanel(null)} data-testid="loc-skip">
             {site && isDefaultPlace(site) ? t('loc.skip') : t('panel.done')}
-          </button>
+          </PopoverAction>
         )}
-        <p className="mt-3 text-[10px] leading-4 text-ink-3">{t('loc.source')}</p>
-      </div>
+      </PopoverFooter>
     </>
   );
 }
@@ -206,14 +198,7 @@ function ManualCoords({ places, initial }: { places: PlacesModule | null; initia
   const field = (label: string, value: string, set: (v: string) => void, testId: string) => (
     <label className="flex flex-1 flex-col gap-1">
       <span className="text-2xs text-ink-2">{label}</span>
-      <input
-        type="text"
-        inputMode="decimal"
-        value={value}
-        onChange={(e) => set(e.target.value.replace(/[^\d.\-]/g, ''))}
-        className="tnum h-10 rounded-[9px] border border-hairline px-2.5 text-[14px] outline-none focus:border-ink-3 [&:focus-visible]:outline-none"
-        data-testid={testId}
-      />
+      <Input size="sm" mono type="text" inputMode="decimal" value={value} onChange={(e) => set(e.target.value.replace(/[^\d.\-]/g, ''))} aria-label={label} data-testid={testId} />
     </label>
   );
   return (
@@ -223,19 +208,21 @@ function ManualCoords({ places, initial }: { places: PlacesModule | null; initia
         {field(t('loc.lon'), lon, setLon, 'loc-lon')}
       </div>
       <p className="mt-1.5 min-h-4 text-2xs leading-4 text-ink-3">{!valid ? t('loc.invalid') : near ? t('loc.tz', { tz: near.tz, name: placeName(near, lang) }) : ''}</p>
-      <button
-        type="button"
+      <Button
+        variant="ink"
+        size="md"
+        full
         disabled={!valid || !near}
         onClick={async () => {
           if (!near) return;
           const name = t('loc.near', { name: placeName(near, lang) });
           if (await setPlace({ lat: la, lon: lo, tz: near.tz, name }, t('loc.edit', { name: coordText(round2(la), round2(lo)) }))) setPanel(null);
         }}
-        className="mt-2 h-10 w-full rounded-[11px] bg-ink text-[13px] font-medium text-on-ink transition-opacity disabled:opacity-40"
+        className="mt-2 text-[13px]"
         data-testid="loc-apply"
       >
         {t('loc.apply')}
-      </button>
+      </Button>
     </div>
   );
 }
@@ -252,7 +239,7 @@ const snap = (deg: number, step = 5) => {
 
 const SUN_DIR: Record<'zh' | 'en', [string, string]> = { zh: ['南', '北'], en: ['south', 'north'] };
 
-export function OrientationPanel({ onClose }: { onClose: () => void }) {
+export function OrientationPanel({ onClose, back }: { onClose: () => void; back?: Back }) {
   const t = useT();
   const lang = useStudio((s) => s.lang);
   const site = useStudio((s) => s.house?.site);
@@ -277,8 +264,8 @@ export function OrientationPanel({ onClose }: { onClose: () => void }) {
   const sun = SUN_DIR[lang][site.latitude >= 0 ? 0 : 1];
   return (
     <>
-      <PanelHead title={t('ori.title')} sub={t('ori.drag')} onClose={onClose} />
-      <div className="min-h-0 flex-1 overflow-y-auto px-4 pt-2 pb-4">
+      <PanelHead title={t('ori.title')} sub={t('ori.drag')} onClose={onClose} back={back} />
+      <PopoverBody className="gap-0!">
         <Dial north={north} onChange={setNorth} onCommit={commit} />
         <p className="mt-1 text-center text-[15px] font-semibold" data-testid="ori-text">
           {t('ori.front', { dir: bearingText(frontBearing(north), lang) })}
@@ -290,23 +277,24 @@ export function OrientationPanel({ onClose }: { onClose: () => void }) {
             const n = northForBearing(b);
             const on = snap(north) === n;
             return (
-              <button
+              <Button
                 key={b}
-                type="button"
+                variant="tinted"
+                size="sm"
+                inverted={on}
                 aria-pressed={on}
                 onClick={() => {
                   setNorth(n);
                   commit(n);
                 }}
-                data-filled={on ? undefined : ''}
-                className={cx('lg-plate h-8 px-3 text-xs font-medium', on ? 'bg-ink text-on-ink' : 'text-ink')}
+                className="text-xs"
               >
                 {bearingText(b, lang)}
-              </button>
+              </Button>
             );
           })}
         </div>
-      </div>
+      </PopoverBody>
     </>
   );
 }

@@ -14,8 +14,7 @@
 // view-only mode. It lies over the drawing and never moves the house.
 import { useEffect, useState } from 'react';
 import { create } from 'zustand';
-import { CloseIcon } from '../components/icons';
-import { cx, floatingOpen, Glass, subscribeFloating } from '../glass';
+import { floatingOpen, Notice, NoticeAction, subscribeFloating } from '../ui';
 import { useT } from '../lib/i18n';
 import { useShareUi } from '../lib/share';
 import { useStudio } from '../lib/store';
@@ -107,25 +106,19 @@ export function useInviteVisible(): boolean {
 export function SignInInvite({ phone }: { phone?: boolean }) {
   const t = useT();
   return (
-    <div className="pointer-events-none flex w-full animate-[fade-in_200ms_ease-out] justify-center">
-      {/* The view-only bar's measure: text 12 px from the start, the 32 px buttons concentric at the end (8 px). */}
-      <Glass ariaRole="status" className={cx('pointer-events-auto flex h-12 min-w-0 items-center gap-3 pr-2 pl-3', phone ? 'w-full' : 'max-w-full')} data-testid="signin-invite">
-        <span className={cx('min-w-0 flex-1 font-medium', phone ? 'line-clamp-2 text-[13px] leading-4' : 'truncate text-[14px]')} data-testid="signin-invite-text">
-          {t('account.invite')}
-        </span>
-        <button
-          type="button"
-          onClick={(e) => openSignIn(e.currentTarget, 'input')}
-          className="hit lg-plate h-8 shrink-0 rounded-full px-3.5 text-[13.5px] font-semibold whitespace-nowrap"
-          data-filled=""
-          data-testid="signin-invite-signin"
-        >
+    <Notice
+      phone={phone}
+      onClose={dismiss}
+      closeLabel={t('account.close')}
+      testId="signin-invite"
+      textTestId="signin-invite-text"
+      actions={
+        <NoticeAction filled onClick={(e) => openSignIn(e.currentTarget, 'input')} data-testid="signin-invite-signin">
           {t('account.signIn')}
-        </button>
-        <button type="button" onClick={dismiss} aria-label={t('account.close')} className="hit lg-plate -ml-2 grid size-8 shrink-0 place-items-center rounded-full text-ink-2 hover:text-ink" data-testid="signin-invite-close">
-          <CloseIcon width={14} height={14} />
-        </button>
-      </Glass>
-    </div>
+        </NoticeAction>
+      }
+    >
+      {t('account.invite')}
+    </Notice>
   );
 }

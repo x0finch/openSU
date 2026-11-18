@@ -14,7 +14,7 @@ import { cx } from '../components/ui';
 import { ChatInput, PinnedChat, RecentStrip } from '../chat/ChatPanel';
 import { useKeys } from '../chat/keys';
 import { useAccount } from '../chat/account';
-import { GlassSheet } from '../glass';
+import { Sheet, SheetContent } from '../ui';
 import { useShareUi } from '../lib/share';
 import { useStudio } from '../lib/store';
 import { Hints } from './chrome';
@@ -143,7 +143,7 @@ export function PhoneDock({ derived, landscape, onExtent }: { derived: Derived |
 
   const hideInput = !!want;
   const sheet = shown && (
-    <GlassSheet
+    <Sheet
       open={!!want}
       large={large}
       fixed={shown === 'chat' ? Math.round(vh * CHAT_SHARE) : undefined}
@@ -165,11 +165,11 @@ export function PhoneDock({ derived, landscape, onExtent }: { derived: Derived |
           <PinnedChat />
         </div>
       ) : (
-        <div ref={content} className="flex flex-col gap-3 px-5 pt-1 pb-5" data-panel="">
+        <SheetContent ref={content} panel>
           <PanelBody derived={derived} phone />
-        </div>
+        </SheetContent>
       )}
-    </GlassSheet>
+    </Sheet>
   );
 
   const above: ReactNode = recent && !want ? <RecentStrip phone className="absolute inset-x-0 bottom-full mb-2" /> : null;

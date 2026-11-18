@@ -12,7 +12,7 @@
  * UI tokens: colours, radii and type of the app (Tailwind exposes each one
  * as a utility, e.g. text-ink, border-hairline, rounded-ui). Chrome
  * surfaces (background, border, shadow, blur) belong to the glass module
- * (src/glass/: material.ts and glass.css), never here. Drawing colours
+ * (src/ui/: material.ts and glass.css), never here. Drawing colours
  * live in packages/render and packages/plan.
  */
 @theme {
@@ -32,6 +32,8 @@
   --color-white: #ffffff;
   /* Text and icons on an ink fill (inverted controls); glass sets it per tone. */
   --color-on-ink: #ffffff;
+  /* A destructive confirmation ("删除？"): text only. */
+  --color-danger: #c0392b;
   /* Only as a low alpha (hairlines, scrims). */
   --color-black: #000000;
 
