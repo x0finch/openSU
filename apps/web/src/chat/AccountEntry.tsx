@@ -160,12 +160,16 @@ export function AccountMenuHost() {
     <GlassMenu
       ref={menu as RefObject<HTMLElement | null>}
       open={show}
-      anchor={() => document.querySelector<HTMLElement>(from === 'button' ? ACCOUNT_BUTTON : HOUSE_NAME)}
+      // A row that marks itself (phone variant a: the button is smaller than the name block) holds the menu under the whole row.
+      anchor={() => {
+        const el = document.querySelector<HTMLElement>(from === 'button' ? ACCOUNT_BUTTON : HOUSE_NAME);
+        return (from === 'button' && el?.closest<HTMLElement>('[data-account-row]')) || el;
+      }}
       placement={from === 'button' ? 'below-end' : 'below-start'}
       from={rect ? () => rect : undefined}
       label={t('account.menu')}
       onKeyDown={onKey}
-      style={{ width: 'min(280px, calc(100vw - 24px))' }}
+      style={{ width: 'min(320px, calc(100vw - 24px))' }}
       data-testid={show ? 'account-menu' : undefined}
     >
       {user && (

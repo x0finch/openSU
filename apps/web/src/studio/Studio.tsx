@@ -497,11 +497,12 @@ export function Studio() {
               ) : (
                 // (a) the name and the account button on the top row; the switch centred on a row of its own.
                 <div className="flex min-w-0 flex-1 flex-col gap-2">
-                  <div className="flex items-start justify-between gap-2.5">
+                  <div className="flex items-start justify-between gap-2.5" data-account-row="">
                     <div ref={phoneTitleRef} className="min-w-0 pt-0.5">
                       <TitleMenu derived={derived} compact />
                     </div>
-                    <AccountButton size={44} round className="shrink-0" />
+                    {/* 36 px (44 px to touch): its centre on the house name's line. */}
+                    <AccountButton size={36} round className="shrink-0" />
                   </div>
                   <div className="flex justify-center">
                     {/* On its own row it lies under the menus that open from the top row: it steps aside while one is open. */}
