@@ -99,8 +99,22 @@ Cloud projects (027) and share links (028): only the menu slot.
 Both keep the house still when sign-in or the account menu opens (framing
 insets unchanged, checked in account-e2e). The header is persistent layout,
 so the cost is a permanently smaller framing area. (a): the mode switch moves
-off the top row and steps aside under the account and project menus. (b): the
+off the top row and steps aside under the account and project menus; the
+button is 36 px (44 px to touch) so its centre is on the house name's line,
+and its menu stands under the whole top row. (b): the
 name and its facts are split by the switch's height (a gap in landscape); the
 walk-mode paper covers only the name, so the facts line sits on the room.
 
 The flag `?acct=` and the losing variant are removed once the lead picks.
+
+### Audit on the new control (d1440 / d1280 zh + en, p390-zh, p844x390-zh, CSS twins; states account-signin, account-signed-in, account-menu)
+
+- No `tip-contrast`, `anchor-gap`, `wrap`, `inset-lr` or desktop `row-align`
+  findings for the button or its surfaces. Fixed on the way: the signed-out
+  capsule's insets (14 / 18 -> 16 / 16), phone (a) row alignment, the
+  account menu touching the facts line in (a), a long email cut at 280 px
+  (menu now 320 px).
+- Open: `hit-target` on the account menu rows on phones (40 px,
+  `GlassMenuItem`'s height, shared with every menu); `row-align` 3.1 px in
+  the p844x390 header (name line vs the mode switch; not checked whether the
+  header before this task had it too).
