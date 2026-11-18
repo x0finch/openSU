@@ -1,6 +1,5 @@
 // Segmented: a radio group in a capsule with a sliding glass lens (the view switch; the phone tab bar).
 import { type KeyboardEvent as RKeyboardEvent, type ReactNode, useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { place } from './anchor';
 import { cx, Glass, GlassLens, useGlass } from './surface';
 import { GLASS, TONES } from './material';
 import { type ShapeOverride } from './registry';

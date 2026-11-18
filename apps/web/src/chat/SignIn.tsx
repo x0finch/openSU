@@ -10,7 +10,7 @@ import { type ClipboardEvent, type FormEvent, type KeyboardEvent, useEffect, use
 import { GoogleLogo } from '../components/icons';
 import { CodeInput, GoogleButton, Input, Popover, PopoverAction, PopoverBody, PopoverDescription, PopoverFooter, PopoverHeader, PopoverTitle, Separator, Spinner, usePhone } from '../ui';
 import { type MessageKey, useT } from '../lib/i18n';
-import { closeSignIn, continueWithGoogle, editEmail, RESEND_SECONDS, sendCode, useAccount, verifyCode } from './account';
+import { closeSignIn, continueWithGoogle, editEmail, sendCode, useAccount, verifyCode } from './account';
 import { useChat } from './chat-store';
 
 type T = ReturnType<typeof useT>;

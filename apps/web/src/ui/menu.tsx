@@ -1,6 +1,5 @@
 // Menu: pop-up menus (rows of one height and inset, touch scrubbing), MenuItem, MenuLabel (an identity header row), MenuSeparator.
 import { type ButtonHTMLAttributes, type ReactNode, useEffect, useRef } from 'react';
-import { place } from './anchor';
 import { cx, useMergedRef } from './surface';
 import { type AnchoredProps, AnchoredSurface } from './anchored';
 

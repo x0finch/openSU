@@ -1,7 +1,7 @@
 // The anchored glass surface (internal): placed by anchor.ts at the module gap from its control, it grows away from the control and flows back. Popover and Menu are built on it.
 import { type CSSProperties, useCallback, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { coveredBy, type Placement, place, registerFloating } from './anchor';
+import { type Placement, place, registerFloating } from './anchor';
 import { cx, Glass, type GlassProps, useGlass, useMergedRef, usePortalHost } from './surface';
 import { GLASS, TONES } from './material';
 import { glassRegistry, type Rect, type ShapeOverride } from './registry';

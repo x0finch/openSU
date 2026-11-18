@@ -1,7 +1,6 @@
 // Row: a full-width tappable row inside a panel.
 import { type ButtonHTMLAttributes } from 'react';
 import { cx } from './surface';
-import { Separator } from './separator';
 
 /** A row inside a panel: label, value, optional action. Rows are separated by Separator. */
 export function Row({ children, className, ...rest }: ButtonHTMLAttributes<HTMLButtonElement>) {

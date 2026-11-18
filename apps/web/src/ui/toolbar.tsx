@@ -1,6 +1,5 @@
 // Toolbar: one glass capsule of tool buttons (an icon in a fixed slot, its name as a tooltip, the value of a tool in use).
 import { type ButtonHTMLAttributes, type ReactNode, type Ref } from 'react';
-import { place } from './anchor';
 import { cx, Glass } from './surface';
 
 /** One capsule holding several icon buttons (a toolbar group). */

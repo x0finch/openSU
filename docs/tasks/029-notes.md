@@ -292,8 +292,8 @@ panel-levels, panel-sun, project-menu, account-share:
 
 - before (6041140, the new audit scripts on the old build): 10
   `motion-anchor` findings (every surface, open and close; e.g. the
-  project menu's first frame overlaps the house name by 43 px, the share
-  surface grows from the share button across the toolbar row), plus 3
+  project menu's first open frame overlaps the house name block by 43 px:
+  it started over its anchor and slid down), plus 3
   `anchor-gap` (the joined toolbar panels at 0 px);
   `artifacts/task029/selftest/before-findings.md`.
 - after: 0 `motion-anchor`, 0 `anchor-gap`;

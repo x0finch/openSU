@@ -1,6 +1,5 @@
 // IconButton: a round icon button inside glass, on the module plate.
 import { type ButtonHTMLAttributes } from 'react';
-import { place } from './anchor';
 import { cx } from './surface';
 import { Tooltip } from './tooltip';
 
