@@ -55,7 +55,7 @@ One implementation, `src/chat/AccountEntry.tsx`:
   linking to `/studio?signin=1`; signed in, the CTA reads "打开工作台" and the
   sign-in link is gone. The landing learns this from `GET /api/chat` after
   load (no server render change).
-- Phone, behind `?acct=a` / `?acct=b` (temporary; default a):
+- Phone, behind `?acct=a` / `?acct=b` (temporary; default a; the lead later chose a):
   (a) top row: house name block left, round account button right; the mode
   switch centred on a row of its own below. Landscape: one row (name, the
   switch centred, the button right), since the row has the width.
@@ -71,7 +71,7 @@ One implementation, `src/chat/AccountEntry.tsx`:
 
 Cloud projects (027) and share links (028): only the menu slot.
 
-## What was built (status: waiting for the lead's phone choice)
+## What was built
 
 - Part 2: `canonicalRedirect` (`src/server/config.ts`), first in the Worker's
   fetch handler; `CANONICAL_REDIRECT` in the deploy workflow and README;
@@ -80,32 +80,33 @@ Cloud projects (027) and share links (028): only the menu slot.
   `AccountToast`, `openAccount`, `useSignInParam`). The project menu's first
   row is the account (sign in, or the name / email) and calls `openAccount`.
   `GET /api/chat` `user` has `name` and `image`. Landing: "登录" left of the
-  studio link; signed in that link reads "打开工作台". `GlassSegmented` got
-  `stepAside` (the module's rule): in phone variant (a) the mode switch lies
-  under the menus that open from the top row and steps aside while one is open.
-  `glass.css`: no tooltip on a control whose surface is open.
-- With sign-in off the phone header is the one from before this task.
+  studio link; signed in that link reads "打开工作台" (the hero button keeps
+  its text, lead's decision). With sign-in off the phone header is the one
+  from before this task.
+- Phone: the lead chose variant (a) (2026-11-18); (b) and the temporary
+  `?acct=` flag are gone. Upright: the house name and a 36 px round account
+  button (44 px to touch, its centre on the name's line) on the top row, the
+  mode switch centred on a row of its own; the account menu stands under the
+  whole top row (`data-account-row`), and the mode switch steps aside under
+  any menu that opens over it (`GlassSegmented stepAside`, the module's rule).
+  Sideways: one row (name, switch centred, button at the end).
+- Header bottom, CSS px: 390 x 844 60 -> 112 (+52); 844 x 390 56 -> 56.
+  The house stays still when sign-in or the account menu opens and after
+  sign-in (framing insets unchanged, account-e2e).
+- Tooltips (`src/glass/primitives.tsx` `installTipIntent`, `glass.css`): a
+  tooltip shows on hover once the pointer has moved over its control, or on
+  focus that came from Tab or an arrow key; never from focus the code moved
+  there (a closing surface returning focus to its button) or for a control
+  that appears under a resting pointer. Before, the avatar showed "账户" next
+  to the "已登录" toast. account-e2e checks all three cases.
+- The toolbar no longer shifts when the status arrives: the browser keeps
+  what it last learned (`opensu.account.v1` in localStorage: sign-in offered,
+  signed in) and, until `GET /api/chat` answers, an invisible, inert copy of
+  the button holds its place. No extra request, nothing waits for it. A
+  browser's first visit (nothing stored) still shifts once; so does a stale
+  value (sign-in turned off, or signed in elsewhere).
 - account-e2e `entry` section; ui-audit states `account-signin`,
   `account-signed-in`, `account-menu` (layout and glass sets, hover pass).
-
-### Phone variants (`?acct=a` default, `?acct=b`), header bottom in CSS px
-
-| | 390 x 844 | 844 x 390 |
-|---|---|---|
-| before (sign-in off) | 60 | 56 |
-| (a) | 112 (+52) | 56 (+0, one row: name, switch centred, button) |
-| (b) | 90 (+30) | 86 (+30) |
-
-Both keep the house still when sign-in or the account menu opens (framing
-insets unchanged, checked in account-e2e). The header is persistent layout,
-so the cost is a permanently smaller framing area. (a): the mode switch moves
-off the top row and steps aside under the account and project menus; the
-button is 36 px (44 px to touch) so its centre is on the house name's line,
-and its menu stands under the whole top row. (b): the
-name and its facts are split by the switch's height (a gap in landscape); the
-walk-mode paper covers only the name, so the facts line sits on the room.
-
-The flag `?acct=` and the losing variant are removed once the lead picks.
 
 ### Audit on the new control (d1440 / d1280 zh + en, p390-zh, p844x390-zh, CSS twins; states account-signin, account-signed-in, account-menu)
 
@@ -115,6 +116,6 @@ The flag `?acct=` and the losing variant are removed once the lead picks.
   account menu touching the facts line in (a), a long email cut at 280 px
   (menu now 320 px).
 - Open: `hit-target` on the account menu rows on phones (40 px,
-  `GlassMenuItem`'s height, shared with every menu); `row-align` 3.1 px in
+  `GlassMenuItem`'s height, shared with every menu; left for a separate batch); `row-align` 3.1 px in
   the p844x390 header (name line vs the mode switch; not checked whether the
   header before this task had it too).
