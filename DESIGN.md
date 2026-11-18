@@ -4,7 +4,7 @@ description: Smoky liquid-glass chrome floating over a white architectural illus
 ---
 
 <!--
-Written from the shipped code (apps/web/src/glass/, apps/web/src/styles.css,
+Written from the shipped code (apps/web/src/ui/, apps/web/src/styles.css,
 packages/render/src/style/tokens.ts, packages/plan) and the owner's specs.
 Deliberately carries no token values: the values live in the files named
 below and would drift if copied here. When this file and those sources
@@ -16,7 +16,7 @@ Sources of truth:
 - docs/VISUAL_SPEC.md: the drawing (3D illustration, floor plans, sheets).
 - packages/render/src/style/tokens.ts: every colour, line width, light and
   shadow value of the drawing (3D renderer).
-- apps/web/src/glass/material.ts: every number of the glass material (tint,
+- apps/web/src/ui/material.ts: every number of the glass material (tint,
   saturation, brightness, rim, ink per tone, radii, motion).
 - apps/web/src/styles.css (@theme): the app's UI tokens (ink levels, accent,
   hairline, type sizes, radii, font stack).
@@ -125,7 +125,7 @@ and medium weight or heavier (UI_STYLE rule 8).
   menu (task 029); the avatar is on `/projects` only.
   Phone: the top row is the name and the view switch (share is the
   project menu's first row); the toolbar becomes a bottom tab-bar capsule; panels open as a
-  sheet above it with detents (`GlassSheet`); the input hides while a
+  sheet above it with detents (`Sheet`); the input hides while a
   panel is open.
 - The pinned conversation is a left column on desktop and a bottom sheet
   on phone; the drawing re-frames into the remaining area (task 021:
@@ -139,8 +139,8 @@ and medium weight or heavier (UI_STYLE rule 8).
 Depth comes from the glass itself, not from shadows on content: the rim
 bends and disperses the drawing behind it, a thin catch light and bevel
 mark the edge, and one soft shadow lifts the whole surface. There is only
-one level. Two glass shapes closer than the merge distance join with a
-smooth union, so a panel reads as part of its capsule.
+one level. Every surface floats at the module's gap from the control that
+opened it (task 029: no surface merges with its control).
 
 Two backends draw the same material: the WebGL composite in the 3D canvas
 (refraction) and a CSS fallback (`backdrop-filter` with tint, rim light and
@@ -165,12 +165,14 @@ surface's tint, never by making the glass milky.
 
 ## Components
 
-All chrome comes from `apps/web/src/glass/` (`index.ts` exports); screens
-compose these and do not style surfaces themselves.
+Every control and surface comes from `apps/web/src/ui/` (the base
+components, organised like shadcn/ui; see its README.md); screens and
+paper pages compose these and do not style them (`scripts/ui-check.mjs`).
 
 ### Buttons
-- **Glass button / button group** (`GlassButton`, `GlassButtonGroup`,
-  `GlassGroupButton`): icon capsules; names beside icons only on the first
+- **Button** (`Button`, variants glass, plain, tinted, quiet, accent, ink,
+  paper, paper-tinted, paper-ink, link, canvas; `ButtonLink` for links).
+- **Toolbar** (`ToolbarGroup`, `ToolbarButton`): icon capsules; names beside icons only on the first
   visit; the active tool shows its value (for example the sun time).
 - **Accent button**: the send and play buttons are solid ginkgo circles
   with dark icons.
@@ -179,56 +181,59 @@ compose these and do not style surfaces themselves.
   corners), a wash on hover and a stronger wash when pressed or selected,
   one transition; buttons resting on a wash (`data-filled`) take the
   stronger wash on hover. Icon buttons in a row with text buttons share
-  their height (`GlassIconButton`). Focus is a 2 px ink outline.
-- **Tooltip** (`GlassTip`, the only tooltip): below the control, one delay,
+  their height (`IconButton`). Focus is a 2 px ink outline.
+- **Tooltip** (`Tooltip`, the only tooltip): below the control, one delay,
   one offset, its own plate and ink (never the panel's ink).
 
 ### Segmented control
-- **View switch and phone tab bar** (`GlassSegmented`): a capsule with a
+- **View switch and phone tab bar** (`Segmented`): a capsule with a
   glass lens over the selected segment that lifts, magnifies and slides
   when dragged.
 
 ### Inputs / Fields
-- **Input capsule** (`GlassInputBar`): the compose field, the most
+- **Input capsule** (`InputBar`): the compose field, the most
   prominent control; a yellow light travels round its rim while the
   assistant works.
-- **Field inside glass** (`.lg-field`): a quiet well with a hairline; it
+- **Field inside glass** (`Input`, `Field`): a quiet well with a hairline; it
   brightens on focus; the caret is yellow. Sign-in code boxes use a thin
   ring instead.
 
 ### Panels, menus, sheets
-- **Anchored surface** (`GlassPopover`, task 025): the one primitive for
-  every menu, toolbar panel and popover. It takes an anchor, a placement
-  (`below-start`, `above-center`, ...) and an attachment: `joined` (touches
-  the anchor's glass and merges with it: the toolbar panels, in 3D and plan
-  alike) or `float` (the module's gap away: menus, sign-in). The module
-  places it (`anchor.ts`: at the anchor, flipped or shifted only to stay on
-  screen, inside the glass surface it was opened from when it fits), grows
-  it out of its control with the spring (a rounded rectangle on every
-  frame, content fading in with it) and flows it back.
+- **Popover** (`Popover`, `PopoverHeader`, `PopoverTitle`,
+  `PopoverDescription`, `PopoverBody`, `PopoverFooter`, `PopoverAction`;
+  task 029): every surface that opens from a control and is not a menu
+  (tool panels, site panels, share, sign-in, keys). One header (17 px
+  title, a 32 px close button), one inset (22, phones 20), one gap (16),
+  one action row (one full-width ginkgo primary action at the bottom,
+  plain secondary ones), two widths (tool 330, dialog 380). It takes an
+  anchor and a placement; it floats at the module's gap (8) from the
+  anchor's edge (a control in a bar: the bar's edge), grows away from the
+  anchor and flows back the same way. On phones it is a Sheet.
 - **What lies under an open surface**: a floating surface over the pinned
   conversation makes it step aside (fades out, inert), unless it is a menu
-  opened from inside it (`GlassTextSurface stepAside`). Nothing else is
+  opened from inside it (`TextSurface stepAside`). Nothing else is
   restyled.
-- **Menu** (`GlassMenu`, `GlassMenuItem`): rows separated by inset
-  hairlines, touch scrubbing.
-- **Sheet** (`GlassSheet`): phone panels with a grabber and detents.
-- **Text surface** (`GlassTextSurface`): the recent exchange and the
+- **Menu** (`Menu`, `MenuItem`, `MenuLabel`, `MenuSeparator`): rows of
+  one height separated by inset hairlines, touch scrubbing; `MenuLabel`
+  is a row that is not a choice (who is signed in, an allowance).
+- **Sheet** (`Sheet`): phone panels with a grabber and detents.
+- **Text surface** (`TextSurface`): the recent exchange and the
   conversation, at the denser text tint.
-- **Toast** (`GlassToast`): a small capsule above the input that leaves by
+- **Toast** (`Toast`): a small capsule above the input that leaves by
   itself.
+- **Notice** (`Notice`): the sign-in invitation and the view-only bar.
 - **Sign-in invitation** (`SignInInvite`, task 029): the toast's place, a
   48 px capsule with one line (two on phones), "登录" and close; shown
   once a signed-out visitor's first change has landed, never over another
   surface.
 
 ### Switch
-- **On / off** (`GlassSwitch`, task 028): a track that fills with the
+- **On / off** (`Switch`, task 028): a track that fills with the
   glass ink when on and a knob that slides; no accent colour. Named by the
   row's label (the share surface's "任何拿到链接的人都可以查看").
 
 ### Slider
-- **Sun time** (`GlassSlider`): a rail with a yellow fill and a glass
+- **Sun time** (`Slider`): a rail with a yellow fill and a glass
   thumb that lifts while dragged.
 
 ### Signature: the conversation in the input

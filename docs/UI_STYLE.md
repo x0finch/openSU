@@ -48,8 +48,8 @@ it for Safari and iOS:
    again, bent at the rim, blurred, saturated and lifted.
 2. The DOM element on top holds the text and icons. It has a transparent
    background and no `backdrop-filter`.
-3. Shapes are rounded rectangles; two shapes close together merge with a
-   smooth union, so a panel can flow out of its capsule.
+3. Shapes are rounded rectangles. Each stands alone: surfaces float at a
+   gap from their control (task 029), so nothing merges.
 
 No CSS `backdrop-filter: url()` (Chromium only) and no SVG displacement
 maps. If WebGL2 is missing, fall back to a plain CSS frosted surface with
@@ -59,9 +59,9 @@ the same tint, blur and rim (no refraction).
 
 1. **The drawing is the subject.** Chrome takes the least room and the
    least attention that still works (HIG, Live Activities).
-2. **Capsule, then panel.** Every control lives in a capsule. A capsule
-   expands into a panel in place (the sun capsule becomes the sun panel)
-   and flows back when closed. When idle, only the input capsule and the
+2. **Capsule, then panel.** Every control lives in a capsule. A control's
+   panel grows out from under it, a gap away (see "Attachment"), and goes
+   back there when closed. When idle, only the input capsule and the
    toolbar capsule remain.
 3. **One level of glass.** Glass never sits on glass. Nothing inside a
    panel gets its own box, border or shadow (Geist; HIG: Liquid Glass is
@@ -113,7 +113,6 @@ Rim refraction (same for both):
 | edge offset | 1.1 rim widths, sampled inward |
 | falloff | (1 - depth / rim) ^ 2.6 |
 | dispersion | red +15%, blue -15% |
-| merge distance | 14 px smooth union |
 
 Rim light and shadow (light glass; dark glass in brackets):
 
@@ -167,13 +166,24 @@ is the yellow glow on the input capsule's edge; nothing else moves.
 | House name and area | ink on the drawing, top left; desktop: a 36 px "分享" capsule on the name's line (task 029) | opens the house menu (a glass panel); its first row is the account (phones: "分享", then the account) |
 | View switch (3D / plan / sheets) | capsule, top centre | selected segment as a slightly denser glass lens |
 | Toolbar | one capsule, top right (phone: bottom): 视角, 楼层, 日照, 漫游; icons only, a name tooltip below on hover (no width change); names shown on first visit until the first use | the active tool shows its name or value, e.g. "10:00"; walking shows "漫游 ×" highlighted |
-| Panels (view, level, sun) | hidden | flows out of the whole toolbar group, right edges aligned and joined to it by the glass merge; the toolbar keeps its width (phone: sheet above the toolbar) |
+| Panels (view, level, sun) | hidden | a popover below its own tool, at the module gap (8 px), centred on the tool and shifted to stay on screen; it grows down from the toolbar's lower edge and goes back there (phone: sheet above the toolbar) |
 | Input | capsule, bottom centre | yellow edge glow while the assistant works; hidden on phone while a panel is open |
 | Chat | hidden | latest exchange above the input as a text surface; a change reads as one line with its area delta and Undo |
 | Menus, location picker | hidden | glass panel; rows separated by inset hairlines |
 | Toasts | none | small capsule above the input, disappears by itself |
 | Sign-in invitation (task 029) | none | signed out, after the first change by the assistant: one capsule above the input with a line, "登录" and close; never with another surface open |
 | Gallery sheets | white paper | unchanged |
+
+## Attachment (task 029)
+
+One rule: every surface floats at the module gap (8 px) from its anchor.
+A control inside a glass bar (a tool of the toolbar, the key picker in the
+input) is measured from the bar's edge, aligned with the control; a
+standalone anchor (the house name and the share button beside it) from
+its own edge. A surface opens away from its anchor: it starts as a line at
+its edge facing the anchor and grows away, and closes the same way; it is
+never drawn over its anchor or the anchor's bar. No surface merges with
+its control and none opens beside the toolbar.
 
 ## Do and don't
 

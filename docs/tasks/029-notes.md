@@ -153,3 +153,174 @@ Rules (`src/chat/SignInInvite.tsx`):
   run reach the allow list: the unseen-reply dot (`accent-use`, the yellow
   DESIGN.md allows for it) and the 2.3 px `row-align` of the change note in
   the input (task 027 notes list the same rule at 1.3 px).
+
+# Parts 2, 3 and 4 (owner, same day): one shell, one base folder, one attachment, open away from the anchor
+
+## What changed
+
+### The base folder (part 3)
+
+`apps/web/src/glass/` is now `apps/web/src/ui/` (renamed: from this task it
+also holds the paper-page controls, so "glass" no longer names it; the
+rename was a path change in 13 imports and three scripts). Organised like
+shadcn/ui (structure and API shape only; no shadcn or Radix installed):
+one file per component, composable parts, variants as props, no feature
+knowledge inside. The old `primitives.tsx` (1 100 lines) is split into
+`button`, `icon-button`, `toolbar`, `segmented`, `anchored` (internal),
+`popover`, `menu`, `sheet`, `switch`, `slider`, `choice`, `row`, `tooltip`,
+`toast`, `separator`, `text-surface`, `input-bar`; new: `field`, `notice`,
+`bar`, `hud`, `card` (paper tiles and gallery sheets), `spinner`, `dot`,
+`badge`, `skeleton`, `avatar`, `glyphs`, `use-phone`. Names follow shadcn
+(`Button`, `Popover`, `MenuItem`, `Sheet`, `Switch`, `Tooltip`, ...);
+`src/ui/README.md` lists every component, its parts and variants, and the
+rule.
+
+Everything outside the folder only applies components. Removed from
+feature files on the way: three copies of the sign-in / key-sheet
+`Primary` button and `Spinner`, two `Field`s, the share and sign-in and
+key-sheet headers, the site panels' own header, the tool panels'
+`CloseButton`, the projects page's tile class and paper buttons, the
+landing's hand-built links, the settings sheet's own switch (now
+`Switch`), the walk HUD's raw glass, the gallery's paper sheets, a box
+inside the location panel (the current place sat on a wash box: now a
+line), the dashed "N ↑" box in the views panel (now plain text).
+`StudioToast` keeps its place; the invitation and the view-only bar are
+one `Notice`.
+
+`scripts/glass-check.mjs` is now `scripts/ui-check.mjs`: outside `src/ui/`
+it fails on a radius, a hover or focus state, a focus ring, a shadow, a
+backdrop, the base's own classes, a surface title size (h1-h3 at 15 px or
+more), a tooltip, a portal, padding on a base surface (`Popover`, `Menu`,
+`Sheet`, `Notice`, `Bar`, `HudPanel`, `Toast`, ...) and a positioned
+`Popover` / `Menu`. Exceptions (each in the script with its reason):
+
+| File | Rule | Why |
+|---|---|---|
+| `routes/index.tsx` | title size | the landing headline is the page's display type (DESIGN.md "Landing display") |
+| `projects/ProjectsPage.tsx` | title size | the page title of `/projects` (paper page) |
+| `routes/s/$id.tsx` | title size | the old share placeholder page, left as it is (task 028 notes) |
+| `routes/__root.tsx` | title size | the 404 page title |
+| `studio/ProjectMissing.tsx` | title size | the full-screen "not found" page of a project or link |
+| `studio/SheetGallery.tsx` (the viewer) | focus ring | the full-screen sheet viewer takes focus itself to receive arrow keys; it is not a control |
+
+Not in the check: `styles.css` (the tokens and global CSS) and the
+`WalkHUD` / `Studio` layout positions (screen-edge layout, not anchored
+surfaces; the old rule allowed them too).
+
+### One panel shell (part 2)
+
+`Popover` with `PopoverHeader`, `PopoverTitle`, `PopoverDescription`,
+`PopoverBody`, `PopoverFooter`, `PopoverAction` (`src/ui/popover.tsx`,
+`glass.css` `.lg-panel*`). Used by the views, levels and sun panels, the
+location and orientation panels, share, sign-in (both steps) and the key
+sheet (add, edit, offer). The sun panel is the explicit untitled variant
+(`PopoverTitle hidden`: its clock is the heading). The invitation is a
+`Notice` (a capsule in the toast's place), not a surface. The settings
+sheet (the centred browser-key dialog) is not a popover and was converted
+to base components but not to the shell (see "Not done").
+
+Measured by `getComputedStyle` on the live build (scratch script, numbers
+in CSS px; "before" is the tree at 6041140, task 029 part 1):
+
+| Surface | Title before | Title after | Close before | Close after | Inset before | Inset after | Radius | Width |
+|---|---|---|---|---|---|---|---|---|
+| Views | 14 px / 500 | 17 px / 600 | 30 | 32 | 22 | 22 | 30 | 330 (tool) |
+| Levels | 14 px / 500 | 17 px / 600 | 30 | 32 | 22 | 22 | 30 | 330 |
+| Sun | none | none (untitled variant, named for screen readers) | none | none | 22 | 22 | 30 | 330 |
+| Location | 15 px / 600 | 17 px / 600 | 36 | 32 | 16 / 14 | 22 | 30 | 330 |
+| Orientation | 15 px / 600 | 17 px / 600 | 36 | 32 | 16 / 14 | 22 | 30 | 330 |
+| Share | 19 px / 600 | 17 px / 600 | 32 (16 from the edge) | 32 (22) | 22 | 22 | 30 | 380 (dialog) |
+| Sign-in | 19 px / 600 | 17 px / 600 | 32 (16) | 32 (22) | 22 | 22 | 30 | 380 |
+| Key sheet | 19 px / 600 | 17 px / 600 | 32 (16) | 32 (22) | 22 | 22 | 30 | 380 |
+| Phones (all) | as above | 17 px / 600 | 30-36 | 32 | 20 sides | 20 sides, 4 top, 24 bottom | 34 (sheet) | screen - 16 |
+
+Section gap: 16 everywhere (the phone tool sheets had 12). Title size:
+17 px semibold, Apple's navigation-bar and sheet title size. Close: a
+32 px round plate at the header's end, flush with the inset.
+
+Primary action: one component, `PopoverAction` (primary: full width,
+48 px, ginkgo yellow, at the bottom; secondary: plain, full width).
+Apple's reading, as the lead put it: a single primary action of a sheet
+is a full-width prominent button at the bottom; other actions are plain.
+Now: sign-in "继续", share "复制链接" (was an inline grey button beside the
+link), share signed out "登录" (was a grey plate), key sheet "保存", the key
+offer; secondary: "以后再说", "删除", "重新发送", the location panel's
+"跳过". Small print goes under the actions (`PopoverFooter note`), so a
+surface ends in text (the concentric rule of task 028).
+
+Menus stay menus: `Menu`, one row height (40), one inset; the account
+menu's identity and allowance rows are `MenuLabel` (a menu primitive),
+not custom markup.
+
+Evidence: `artifacts/task029/compare-surfaces-1440x900.png` and
+`compare-surfaces-390x844.png` (every surface open, cropped at the same
+scale, before on top, after below).
+
+### One attachment (part 3, overriding part 2 item 4)
+
+Every surface floats at the module gap. Removed: `attach` /
+`joined` (`anchor.ts`, the popover, `data-attach`), merge groups
+(`Glass group`, `newGroup`, the registry's group, `TOOLS_GROUP`), the
+shader's smooth union and its `merge` parameter
+(`packages/render/src/glass.ts`, `material.ts`), the audit rules
+`anchor-joined` and `panel-attach`, the layout and shots checks that
+asserted a joined panel. Toolbar panels open below their own tool
+(`below-center`, shifted by `place()` to stay on screen). One base rule
+for an anchor inside a glass bar: the gap is measured from the bar's
+edge, the alignment from the control (otherwise a panel 8 px under a
+40 px tool would overlap the 48 px toolbar). The CSS fallback had no
+notch code of its own (the "notch" was the CSS backend drawing two
+separate shapes); nothing to remove there. Written in
+`docs/UI_STYLE.md` ("Attachment").
+
+### Open away from the anchor (part 4)
+
+`anchored.tsx` `morphRect`: the shape starts as a line on its own edge
+that faces the anchor (below: the anchor's lower edge plus the gap), as
+wide as the part of the opening control it faces, and grows away; the
+close is the reverse (the same springs run back). Reduced motion: a fade
+in place (unchanged). Same for surfaces above their anchor (the key menu
+and key sheet above the input) and beside it.
+
+Audit: `motion-anchor` in the motion pass (12 frames each way, the
+spring stepped 55 ms): on every frame with glass the surface's box must
+not intersect its anchor or the bar the anchor sits in, and its edge
+nearest the anchor must stay within the gap of where it rests. The
+motion pass now films all three desktop tool panels (it filmed views
+only). Self-test, d1440-zh and its CSS twin, states panel-views,
+panel-levels, panel-sun, project-menu, account-share:
+
+- before (6041140, the new audit scripts on the old build): 10
+  `motion-anchor` findings (every surface, open and close; e.g. the
+  project menu's first frame overlaps the house name by 43 px, the share
+  surface grows from the share button across the toolbar row), plus 3
+  `anchor-gap` (the joined toolbar panels at 0 px);
+  `artifacts/task029/selftest/before-findings.md`.
+- after: 0 `motion-anchor`, 0 `anchor-gap`;
+  `artifacts/task029/selftest/after-findings.md`.
+
+Frame strips (6 of the 12 frames each way, text hidden as the motion
+pass does): `artifacts/task029/motion/motion-{before,after}-{panel-views,panel-levels,panel-sun,project-menu,account-share}-{open,close}.png`.
+The "before" share strips crop the top left, where the share button no
+longer was in that tree: they show the drawing, not the surface.
+
+`panel-shell` (new audit rule): every open surface that is not a menu
+must be built on the Popover parts, and across one configuration's
+states the title size, close box, inset and gap must have one value
+each. The motion pass also hides the filled controls inside a surface
+(the yellow action, fields, switches) like it hides text: they are
+content, and the yellow made the glass mask read as holes (two false
+`motion-shape` findings on the share surface).
+
+### Item 6: the dark smudge in task 028's share screenshot
+
+It is the house's roof behind the surface, bent by the rim: the rim
+samples the drawing 1.1 rim widths inward, so at the lower left corner of
+`artifacts/task028/d-zh-on.png` the dark roof edge just outside the
+surface is pulled into the corner, frosted, with the red / blue
+dispersion fringe. The glass shader does that by design (UI_STYLE:
+"Let the rim bend the drawing"). The share surface now opens at the top
+left over the paper, so at 1440 x 900 nothing dark lies behind it
+(checked in the new screenshots); over a dark part of the drawing the
+same bend would show. Damping the bend over dark areas is the "adaptive
+density" open question in UI_STYLE, not changed here.
