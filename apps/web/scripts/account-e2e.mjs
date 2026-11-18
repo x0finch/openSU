@@ -10,7 +10,7 @@
 //
 //   node scripts/account-e2e.mjs            checks + screenshots -> artifacts/task019/*.png, artifacts/task020/*.png, artifacts/task022/*.png, artifacts/task026/*.png
 //   node scripts/account-e2e.mjs --smoke    checks only
-//   node scripts/account-e2e.mjs --only desktop,phone,limits,turns,keys,entry,canonical,projects
+//   node scripts/account-e2e.mjs --only desktop,phone,limits,turns,keys,entry,canonical,projects,share
 //
 // `canonical` (task 026): the built app as production serves it (static
 // pages first, `assets.run_worker_first` for the page routes) answers a
@@ -26,6 +26,15 @@
 // /projects page (cards, menu, right click, rename, duplicate, delete with
 // Undo, templates), a second browser, a conflict between two, the
 // not-synced line, the limit, sign-out; screenshots -> artifacts/task027/*.png.
+//
+// And of share links (task 028, `share`): signed out the share button explains
+// and offers sign-in (the house is adopted, the surface opens again); the
+// switch, the link, "Copy link"; a signed-out viewer in another browser
+// opens the link and uses every mode, finds nothing to edit, sees the
+// owner's next version, keeps their own browser copy, makes a copy (asked
+// once); a signed-in viewer's copy is a project of theirs; the projects
+// page's mark and card menu; the link preview; turning sharing off kills the
+// link and on again makes a new one; screenshots -> artifacts/task028/*.png.
 //
 // Requires a build (`pnpm --filter @opensu/web build`).
 import { execFileSync, spawn } from 'node:child_process';
@@ -45,6 +54,7 @@ const outDir20 = resolve(appRoot, '../../artifacts/task020');
 const outDir22 = resolve(appRoot, '../../artifacts/task022');
 const outDir26 = resolve(appRoot, '../../artifacts/task026');
 const outDir27 = resolve(appRoot, '../../artifacts/task027');
+const outDir28 = resolve(appRoot, '../../artifacts/task028');
 const devVars = resolve(appRoot, 'dist/server/.dev.vars');
 const smoke = process.argv.includes('--smoke');
 const onlyArg = process.argv.indexOf('--only');
@@ -55,6 +65,7 @@ mkdirSync(outDir20, { recursive: true });
 mkdirSync(outDir22, { recursive: true });
 mkdirSync(outDir26, { recursive: true });
 mkdirSync(outDir27, { recursive: true });
+mkdirSync(outDir28, { recursive: true });
 
 if (!existsSync(resolve(appRoot, 'dist/client/studio.html'))) {
   console.error('No build found: run `pnpm --filter @opensu/web build` first.');
@@ -671,6 +682,320 @@ try {
       await page.waitForSelector('[data-testid=project-missing]', { timeout: 20000 });
       await snap('studio-not-found');
       await ctx.close();
+    }
+    preview.stop();
+  }
+
+  if (wanted('share')) {
+    const preview = await startPreview();
+    console.log(`share: preview on ${preview.base}`);
+    const base = preview.base;
+    const edit = (page, name) => page.evaluate((n) => { const s = window.__studio.store.getState(); s.setHouse({ ...s.house, name: n }); }, name);
+    const openId = (page) => page.evaluate(() => window.__studio.projects.store.getState().openId);
+    const waitOpen = (page) => page.waitForFunction(() => !!window.__studio.projects?.store.getState().openId && !window.__studio.projects.store.getState().busy, null, { timeout: 30000 });
+    const studio = async (page, path) => {
+      await page.goto(`${base}${path}`, { waitUntil: 'load', timeout: 120000 });
+      await page.waitForFunction(() => window.__studio?.ready3d === true, null, { timeout: 180000 });
+    };
+    const settle = (page, ms = 900) => page.waitForTimeout(ms);
+    const surfaceOpen = (page) => page.waitForSelector('[data-testid=share-surface] [data-testid=share-close]', { timeout: 20000 }).then(() => settle(page, 1500));
+    const closeSurface = async (page) => {
+      await page.keyboard.press('Escape');
+      await page.waitForSelector('[data-testid=share-surface]', { state: 'detached', timeout: 10000 });
+    };
+    const signInDirect = async (page, email) => {
+      await page.evaluate(async (e) => {
+        const post = (p, b) => fetch(`/api/auth${p}`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(b) });
+        await post('/email-otp/send-verification-otp', { email: e, type: 'sign-in' });
+        const { code: c } = await (await fetch(`/api/auth-test/code?email=${encodeURIComponent(e)}`)).json();
+        await post('/sign-in/email-otp', { email: e, otp: c });
+      }, email);
+    };
+    const savedHouse = (page) => page.evaluate(() => localStorage.getItem('opensu.autosave.v1'));
+    const OWNER = { ...DESKTOP, permissions: ['clipboard-read', 'clipboard-write'] };
+
+    // ---- Owner, desktop zh: signed out, the button explains and offers sign-in ----
+    const A = await open(base, OWNER);
+    const a = A.page;
+    check((await a.getByTestId('share-button').count()) === 1, 'signed out: "分享" is at the top right (projects are kept with accounts here)');
+    const row = await a.evaluate(() => ['toolbar', 'share-button', 'account-button'].map((id) => document.querySelector(`[data-testid=${id}]`).getBoundingClientRect()).map((r) => ({ l: r.left, r: r.right, t: r.top, h: r.height })));
+    check(row[0].r < row[1].l && row[1].r < row[2].l && row.every((x) => Math.abs(x.t - row[0].t) < 0.5 && Math.abs(x.h - 48) < 0.5), `desktop: toolbar, share, account in one row, 48 px high (${row.map((x) => `${x.l.toFixed(0)}-${x.r.toFixed(0)}`).join(', ')})`);
+    await edit(a, '东边的小院');
+    await settle(a);
+    await a.getByTestId('share-button').click();
+    await surfaceOpen(a);
+    check((await a.getByTestId('share-need-account').count()) === 1 && (await a.getByTestId('share-switch').count()) === 0, 'signed out: one line that sharing needs the account, and "登录"; no switch');
+    await shot(a, 'd-zh-signed-out', outDir28);
+    await a.getByTestId('share-signin').click();
+    await a.waitForSelector('[data-testid=signin-email-input]');
+    await a.getByTestId('signin-email-input').fill('owner@example.com');
+    await a.getByTestId('signin-email-input').press('Enter');
+    await a.waitForSelector('[data-testid=otp-0]');
+    await a.waitForTimeout(300);
+    await a.getByTestId('otp-0').focus();
+    await a.keyboard.type(await code(base, 'owner@example.com'));
+    await a.waitForFunction(() => !!window.__studio.chat.getState().server?.user, null, { timeout: 20000 });
+    await waitOpen(a);
+    await a.waitForSelector('[data-testid=share-surface-body]', { timeout: 20000 });
+    await settle(a);
+    const pid = await openId(a);
+    check(!!pid && (await a.getByTestId('title-name').textContent()) === '东边的小院', 'after sign-in the local house is the account\'s project and the share surface opens again by itself');
+    check((await a.getByTestId('share-switch').getAttribute('aria-checked')) === 'false' && (await a.getByTestId('share-link').count()) === 0, 'off by default: no link');
+    await shot(a, 'd-zh-off', outDir28);
+    await a.getByTestId('share-switch').click();
+    await a.waitForSelector('[data-testid=share-link]', { timeout: 15000 });
+    await settle(a);
+    const link = await a.getByTestId('share-link').inputValue();
+    const token = new URL(link).searchParams.get('s');
+    check(link === `${base}/studio?s=${token}` && /^[A-Za-z0-9_-]{22}$/.test(token ?? '') && token !== pid, `on: the link /studio?s=<token> (not the project id): ${link}`);
+    await shot(a, 'd-zh-on', outDir28);
+    await a.getByTestId('share-copy').click();
+    await a.waitForSelector('[data-testid=share-copied]', { timeout: 5000 });
+    check((await a.evaluate(() => navigator.clipboard.readText())) === link, '"复制链接" puts the link on the clipboard; the toast says "已复制链接"');
+    await shot(a, 'd-zh-copied', outDir28);
+    await closeSurface(a);
+    await a.getByTestId('share-button').click();
+    await surfaceOpen(a);
+    check((await a.getByTestId('share-link').inputValue()) === link, 'the address is stable while sharing is on');
+    await closeSurface(a);
+
+    // ---- The link preview (one indexed read on the Worker) ----
+    const html = await (await fetch(link)).text();
+    check(html.includes('<title>东边的小院 · openSU</title>') && html.includes('property="og:title" content="东边的小院 · openSU"') && html.includes('property="og:image"') && /og:description" content="[^"]*m²/.test(html), 'the shared page carries the title, description and og:image');
+    const plain = await (await fetch(`${base}/studio`)).text();
+    check(!plain.includes('og:title') && plain.includes('<title>工作室 · openSU</title>'), 'the plain studio page is unchanged');
+
+    // ---- A signed-out viewer with their own edited house in another browser ----
+    const V = await open(base, DESKTOP);
+    const v = V.page;
+    await edit(v, '我自己的房子');
+    await settle(v, 1200);
+    const mine = await savedHouse(v);
+    const myLink = await v.evaluate(() => localStorage.getItem('opensu.project.v1'));
+    check(!!mine && JSON.parse(mine).house.name === '我自己的房子', 'the viewer has a house of their own in this browser');
+    await studio(v, `/studio?s=${token}`);
+    await v.waitForFunction(() => window.__studio.shared?.getState().status === 'ready', null, { timeout: 30000 });
+    await settle(v, 1200);
+    check((await v.getByTestId('title-name').textContent()) === '东边的小院' && (await v.getByTestId('view-only-name').textContent()) === '东边的小院', 'the viewer sees the owner\'s project, its name in the title and the view-only bar');
+    check((await v.getByTestId('prompt-bar').count()) === 0 && (await v.getByTestId('chat-history').count()) === 0 && (await v.getByTestId('share-button').count()) === 0, 'view only: no prompt, no conversation, no share button');
+    check((await v.evaluate(() => window.__studio.chat.getState().items.length)) === 0, 'no conversation was sent to the viewer');
+    await shot(v, 'd-zh-viewer', outDir28);
+    await v.getByTestId('project-menu').click();
+    await v.waitForSelector('[data-testid=project-menu-list]');
+    await settle(v, 500);
+    const rows = await v.evaluate(() => [...document.querySelectorAll('[data-testid=project-menu-list] [role=menuitem]')].map((e) => e.getAttribute('data-testid') ?? e.textContent.trim()));
+    check(!rows.some((r) => ['menu-location', 'menu-orientation', 'reset-house', 'menu-export', 'menu-rename', 'menu-new-project', 'menu-duplicate'].includes(r)) && (await v.getByTestId('menu-saved').count()) === 0, `the project menu has nothing that edits (${rows.join(', ')})`);
+    await shot(v, 'd-zh-viewer-menu', outDir28);
+    await v.keyboard.press('Escape');
+    await settle(v, 500);
+    // Every viewing tool works.
+    await v.getByTestId('bar-views').click();
+    await v.waitForSelector('#tray-views, [data-testid=panel-views], [id^=tray]', { timeout: 10000 }).catch(() => {});
+    await settle(v, 700);
+    await v.getByTestId('bar-views').click();
+    await settle(v, 400);
+    await v.getByTestId('bar-sun').click();
+    await v.waitForSelector('[data-testid=sun-clock]', { timeout: 10000 });
+    await settle(v, 900);
+    const placeTag = await v.getByTestId('sun-place').evaluate((e) => e.tagName);
+    check(placeTag !== 'BUTTON', `the sun study works; its place row is a fact, not a button (${placeTag})`);
+    await shot(v, 'd-zh-viewer-sun', outDir28);
+    await v.getByTestId('bar-sun').click();
+    await settle(v, 500);
+    await v.getByTestId('bar-levels').click();
+    await settle(v, 700);
+    await v.getByTestId('bar-levels').click();
+    await v.getByTestId('bar-walk').click();
+    await v.waitForFunction(() => window.__studio.store.getState().walk === true, null, { timeout: 10000 });
+    await settle(v, 1500);
+    await shot(v, 'd-zh-viewer-walk', outDir28);
+    await v.keyboard.press('Escape');
+    await v.waitForFunction(() => window.__studio.store.getState().walk === false, null, { timeout: 10000 });
+    await v.getByTestId('mode-switch').getByRole('radio', { name: '平面' }).click();
+    await v.waitForFunction(() => window.__studio.planReady === true, null, { timeout: 30000 });
+    await settle(v, 900);
+    check((await v.getByTestId('view-only-bar').count()) === 1, 'plan: the view-only bar stays');
+    await shot(v, 'd-zh-viewer-plan', outDir28);
+    await v.getByTestId('mode-switch').getByRole('radio', { name: '图册' }).click();
+    await v.waitForSelector('[data-testid=sheets]', { timeout: 60000 });
+    await settle(v, 2500);
+    await shot(v, 'd-zh-viewer-sheets', outDir28);
+    await v.getByTestId('mode-switch').getByRole('radio', { name: '3D' }).click();
+    await settle(v, 900);
+    check((await savedHouse(v)) === mine && (await v.evaluate(() => localStorage.getItem('opensu.project.v1'))) === myLink, 'the viewer\'s own browser copy is untouched by viewing');
+    check(!(await v.evaluate(() => location.search)).includes('p='), 'no project address was written');
+
+    // ---- The owner's next version reaches the viewer ----
+    await edit(a, '东边的小院 改');
+    await a.waitForFunction(() => window.__studio.projects.store.getState().projects[0]?.revision >= 2 && !window.__studio.projects.debug().dirty, null, { timeout: 20000 });
+    await v.evaluate(() => window.__studio.reloadShared());
+    await v.waitForFunction(() => window.__studio.store.getState().house?.name === '东边的小院 改', null, { timeout: 15000 });
+    check(true, 'the viewer sees the owner\'s current version (a link is to the file, not a snapshot)');
+
+    // ---- Make my own copy, signed out: asked once, then it is this browser's house ----
+    await v.getByTestId('view-only-copy').click();
+    await v.waitForSelector('[data-testid=view-only-ask]', { timeout: 10000 });
+    await settle(v, 400);
+    await shot(v, 'd-zh-viewer-ask', outDir28);
+    await v.getByTestId('view-only-cancel').click();
+    await settle(v, 400);
+    check((await savedHouse(v)) === mine && (await v.getByTestId('view-only-copy').count()) === 1, 'cancel: nothing replaced');
+    await v.getByTestId('view-only-copy').click();
+    await v.waitForSelector('[data-testid=view-only-ask]');
+    await Promise.all([v.waitForURL((u) => u.pathname === '/studio' && !u.searchParams.has('s'), { timeout: 30000 }), v.getByTestId('view-only-replace').click()]);
+    await v.waitForFunction(() => window.__studio?.ready3d === true, null, { timeout: 180000 });
+    await settle(v, 1200);
+    check((await v.getByTestId('title-name').textContent()) === '东边的小院 改' && (await v.getByTestId('prompt-bar').count()) === 1, 'the copy opens as this browser\'s project, editable');
+    await V.ctx.close();
+
+    // ---- A signed-in viewer: the copy is a project of their account ----
+    const W = await open(base, DESKTOP);
+    const w = W.page;
+    await signInDirect(w, 'viewer@example.com');
+    await studio(w, `/studio?s=${token}`);
+    await w.waitForFunction(() => window.__studio.shared?.getState().status === 'ready' && !!window.__studio.chat.getState().server?.user, null, { timeout: 30000 });
+    check((await w.evaluate(() => window.__studio.projects.store.getState().on)) === false, 'signed in, viewing: the viewer\'s project sync does not start (nothing adopted)');
+    await Promise.all([w.waitForURL((u) => u.searchParams.has('p'), { timeout: 30000 }), w.getByTestId('view-only-copy').click()]);
+    await w.waitForFunction(() => window.__studio?.ready3d === true, null, { timeout: 180000 });
+    await waitOpen(w);
+    const theirs = await w.evaluate(async () => (await (await fetch('/api/projects')).json()).projects.map((p) => p.name));
+    check(theirs.includes('东边的小院 改 副本') && (await w.getByTestId('title-name').textContent()) === '东边的小院 改 副本', `signed in: "创建我的副本" makes a project of the viewer's account and opens it (${theirs.join(', ')})`);
+    await W.ctx.close();
+
+    // ---- The projects page: the mark and the card menu ----
+    await a.goto(`${base}/projects`, { waitUntil: 'load' });
+    await a.waitForFunction(() => (window.__studio?.projects?.store.getState().projects.length ?? 0) >= 1, null, { timeout: 30000 });
+    await settle(a, 1200);
+    const cardEl = a.locator(`[data-testid=project-card][data-id="${pid}"]`);
+    check((await cardEl.getByTestId('project-shared').count()) === 1, '/projects: the shared card shows the mark');
+    await shot(a, 'd-zh-projects', outDir28);
+    await cardEl.getByTestId('project-more').click();
+    await a.waitForSelector('[data-testid=card-share]');
+    await settle(a, 500);
+    await shot(a, 'd-zh-projects-menu', outDir28);
+    await a.getByTestId('card-share').click();
+    await surfaceOpen(a);
+    check((await a.getByTestId('share-link').inputValue()) === link, 'the card menu\'s "分享" opens the same surface for that project');
+    await shot(a, 'd-zh-projects-share', outDir28);
+    // ---- Off from the browser page: the link dies at once; on again: a new one ----
+    await a.getByTestId('share-switch').click();
+    await a.waitForFunction(() => !document.querySelector('[data-testid=share-link]') && document.querySelector('[data-testid=share-switch]')?.getAttribute('aria-checked') === 'false', null, { timeout: 15000 });
+    await closeSurface(a);
+    await settle(a, 400);
+    check((await cardEl.getByTestId('project-shared').count()) === 0, 'off: the mark goes');
+    const G = await open(base, DESKTOP, `/studio?s=${token}`).catch(async () => null);
+    let gonePage = G?.page;
+    if (!gonePage) {
+      const ctx = await browser.newContext(DESKTOP);
+      gonePage = await ctx.newPage();
+      await gonePage.goto(`${base}/studio?s=${token}`, { waitUntil: 'load' });
+    }
+    await gonePage.waitForSelector('[data-testid=project-missing][data-share=gone]', { timeout: 30000 });
+    check((await gonePage.getByTestId('project-missing').textContent()).includes('这个链接已不再分享'), 'off: the link shows "这个链接已不再分享"');
+    await shot(gonePage, 'd-zh-gone', outDir28);
+    await gonePage.context().close();
+    const goneHtml = await (await fetch(link)).text();
+    check(goneHtml.includes('<title>这个链接已不再分享 · openSU</title>'), 'off: the preview says so too');
+    await studio(a, `/studio?p=${pid}`);
+    await waitOpen(a);
+    await a.getByTestId('share-button').click();
+    await surfaceOpen(a);
+    await a.getByTestId('share-switch').click();
+    await a.waitForSelector('[data-testid=share-link]', { timeout: 15000 });
+    const link2 = await a.getByTestId('share-link').inputValue();
+    check(link2 !== link, 'on again: a new address');
+    await closeSurface(a);
+    await A.ctx.close();
+
+    // ---- Screenshots: desktop en, phones zh and en ----
+    if (!smoke) {
+      for (const [tag, opts, lang] of [['d-en', OWNER, 'en'], ['p-zh', { ...PHONE, permissions: ['clipboard-read', 'clipboard-write'] }, 'zh'], ['p-en', { ...PHONE, permissions: ['clipboard-read', 'clipboard-write'] }, 'en']]) {
+        const phone = tag.startsWith('p');
+        const O = await open(base, opts, `/studio?lang=${lang}`);
+        const o = O.page;
+        await o.getByTestId('share-button').click();
+        await surfaceOpen(o);
+        await shot(o, `${tag}-signed-out`, outDir28);
+        await o.getByTestId('share-signin').click();
+        await o.waitForSelector('[data-testid=signin-email-input]');
+        const email = `owner-${tag}@example.com`;
+        await o.getByTestId('signin-email-input').fill(email);
+        await o.getByTestId('signin-email-input').press('Enter');
+        await o.waitForSelector('[data-testid=otp-0]');
+        await o.waitForTimeout(300);
+        await o.getByTestId('otp-0').focus();
+        await o.keyboard.type(await code(base, email));
+        await o.waitForSelector('[data-testid=share-surface-body]', { timeout: 30000 });
+        await settle(o, 1000);
+        await shot(o, `${tag}-off`, outDir28);
+        await o.getByTestId('share-switch').click();
+        await o.waitForSelector('[data-testid=share-link]', { timeout: 15000 });
+        await settle(o, 900);
+        await shot(o, `${tag}-on`, outDir28);
+        const tk = new URL(await o.getByTestId('share-link').inputValue()).searchParams.get('s');
+        await o.getByTestId('share-copy').click();
+        await settle(o, 600);
+        if (!phone) await shot(o, `${tag}-copied`, outDir28);
+        await closeSurface(o);
+        await settle(o, 600);
+        if (phone) {
+          await shot(o, `${tag}-header`, outDir28);
+          const hdr = await o.evaluate(() => ['share-button', 'account-button'].map((id) => document.querySelector(`[data-testid=${id}]`).getBoundingClientRect()).map((r) => ({ t: r.top, h: r.height, l: r.left, r: r.right })));
+          check(Math.abs(hdr[0].t - hdr[1].t) < 0.5 && hdr[0].h === 36 && hdr[0].r < hdr[1].l, `${tag}: share and account side by side in the top row, 36 px (${JSON.stringify(hdr)})`);
+        }
+        const VV = await open(base, opts, `/studio?s=${tk}&lang=${lang}`);
+        const vv = VV.page;
+        await vv.waitForFunction(() => window.__studio.shared?.getState().status === 'ready', null, { timeout: 30000 });
+        await settle(vv, 1200);
+        await shot(vv, `${tag}-viewer`, outDir28);
+        await vv.getByTestId('bar-sun').click();
+        await settle(vv, 1200);
+        await shot(vv, `${tag}-viewer-sun`, outDir28);
+        await vv.getByTestId('bar-sun').click();
+        await settle(vv, 600);
+        await vv.evaluate(() => window.__studio.store.getState().setMode('plan'));
+        await vv.waitForFunction(() => window.__studio.planReady === true, null, { timeout: 30000 });
+        await settle(vv, 900);
+        await shot(vv, `${tag}-viewer-plan`, outDir28);
+        await vv.evaluate(() => window.__studio.store.getState().setMode('3d'));
+        await settle(vv, 600);
+        await vv.evaluate(() => { const s = window.__studio.store.getState(); localStorage.setItem('opensu.autosave.v1', JSON.stringify({ v: 1, savedAt: Date.now(), house: { ...s.house, name: 'x' }, chat: [] })); });
+        await vv.getByTestId('view-only-copy').click();
+        await vv.waitForSelector('[data-testid=view-only-ask]');
+        await settle(vv, 400);
+        await shot(vv, `${tag}-viewer-ask`, outDir28);
+        await vv.getByTestId('view-only-cancel').click();
+        const w2 = await vv.evaluate(() => [document.documentElement.scrollWidth, window.innerWidth]);
+        check(w2[0] <= w2[1], `${tag}: no horizontal scroll while viewing (${w2[0]} <= ${w2[1]})`);
+        await VV.ctx.close();
+        // Off: the link's page.
+        await o.getByTestId('share-button').click();
+        await surfaceOpen(o);
+        await o.getByTestId('share-switch').click();
+        await o.waitForFunction(() => !document.querySelector('[data-testid=share-link]'), null, { timeout: 15000 });
+        const gctx = await browser.newContext(opts);
+        const gp = await gctx.newPage();
+        await gp.goto(`${base}/studio?s=${tk}&lang=${lang}`, { waitUntil: 'load' });
+        await gp.waitForSelector('[data-testid=project-missing][data-share=gone]', { timeout: 30000 });
+        await settle(gp, 500);
+        await shot(gp, `${tag}-gone`, outDir28);
+        await gctx.close();
+        // The projects page with a shared card and its menu.
+        await o.getByTestId('share-switch').click();
+        await o.waitForSelector('[data-testid=share-link]', { timeout: 15000 });
+        await closeSurface(o);
+        await o.goto(`${base}/projects?lang=${lang}`, { waitUntil: 'load' });
+        await o.waitForFunction(() => (window.__studio?.projects?.store.getState().projects.length ?? 0) >= 1, null, { timeout: 30000 });
+        await settle(o, 1200);
+        await shot(o, `${tag}-projects`, outDir28);
+        await o.getByTestId('project-more').first().click();
+        await o.waitForSelector('[data-testid=card-share]');
+        await settle(o, 500);
+        await o.getByTestId('card-share').click();
+        await surfaceOpen(o);
+        await shot(o, `${tag}-projects-share`, outDir28);
+        await O.ctx.close();
+      }
     }
     preview.stop();
   }

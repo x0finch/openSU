@@ -141,7 +141,7 @@ const CONFIGS = [
 const SETS = {
   [LAYOUT]: ['landing', '3d-idle', 'panel-', 'project-menu', 'site-location', 'plan-', 'sheets', 'chat-text', 'chat-long-text', 'chat-done', 'chat-recent', 'pinned-', 'signin-email', 'account-'],
   [GLASS]: ['3d-idle', 'panel-', 'project-menu', 'chat-text', 'chat-done', 'chat-recent', 'pinned-', 'plan-pinned', 'signin-email', 'key-own-sheet', 'account-'],
-  [SMOKE]: ['3d-idle', 'project-menu', 'pinned-idle', 'plan-pinned', 'account-project', 'account-projects'],
+  [SMOKE]: ['3d-idle', 'project-menu', 'pinned-idle', 'plan-pinned', 'account-project', 'account-projects', 'account-share'],
 };
 const configs = smoke ? [{ ...CONFIGS[0], set: SMOKE }] : CONFIGS.filter((c) => !onlyConfigs || onlyConfigs.some((o) => c.name.startsWith(o)));
 
@@ -381,7 +381,7 @@ async function capture(page, cfg, state, extra = {}) {
 /* ------------------------------------------------------------------ */
 
 // States whose controls are hovered one by one (desktop: phones do not hover).
-const HOVER_STATES = ['3d-idle', 'account-signed-in', 'account-menu', 'account-project-menu', 'account-projects-page', 'panel-views', 'panel-levels', 'panel-sun', 'project-menu', 'plan-L2', 'plan-levels-panel', 'pinned-turn', 'pinned-menu', 'pinned-picker', 'chat-recent', 'site-location', 'signin-email', 'sheets'];
+const HOVER_STATES = ['3d-idle', 'account-signed-in', 'account-menu', 'account-share', 'account-share-viewer', 'account-project-menu', 'account-projects-page', 'panel-views', 'panel-levels', 'panel-sun', 'project-menu', 'plan-L2', 'plan-levels-panel', 'pinned-turn', 'pinned-menu', 'pinned-picker', 'chat-recent', 'site-location', 'signin-email', 'sheets'];
 
 /** Hovers every control: tooltip contrast on rendered pixels, one hover plate shape and height per row. */
 async function hoverPass(page, cfg, state) {
@@ -1020,7 +1020,7 @@ async function runConfig(cfg) {
     } else await esc(page);
   }
   // Task 026: signed in, the account button (an avatar) and its menu.
-  if (wants(cfg, 'account-signed-in') || wants(cfg, 'account-menu') || wants(cfg, 'account-project')) {
+  if (wants(cfg, 'account-signed-in') || wants(cfg, 'account-menu') || wants(cfg, 'account-project') || wants(cfg, 'account-share')) {
     if (!(await page.evaluate(() => !!window.__studio.chat.getState().server?.user))) {
       const email = `account-${cfg.name}@example.com`;
       await page.getByTestId('account-button').first().click();
@@ -1044,6 +1044,24 @@ async function runConfig(cfg) {
         await settle(page, 1000);
       });
       await esc(page);
+    }
+    // Task 028: the share surface (on, with its link) and the studio as a signed-out viewer of that link sees it.
+    if (wants(cfg, 'account-share')) {
+      await page.waitForFunction(() => !!window.__studio.projects?.store.getState().openId && !window.__studio.projects.store.getState().busy, null, { timeout: 30000 });
+      const token = await page.evaluate(async () => {
+        const p = window.__studio.projects;
+        const m = await p.share(p.store.getState().openId, true);
+        return m?.share ?? null;
+      });
+      await M(page, 'account-share', { open: () => page.getByTestId('share-button').first().click(), close: () => page.keyboard.press('Escape'), find: byTestId(page, 'share-surface') });
+      if (token && wants(cfg, 'account-share-viewer')) {
+        const { ctx: vc, page: vp } = await newPage(cfg);
+        await vp.goto(`${preview.base}/studio${q(cfg, `&s=${token}`)}`, { waitUntil: 'networkidle' });
+        await vp.waitForFunction(() => window.__studio?.ready3d === true && window.__studio.shared?.getState().status === 'ready', null, { timeout: 180000 });
+        await settle(vp, 1500);
+        await S(vp, 'account-share-viewer');
+        await vc.close();
+      }
     }
     // Task 027: the projects page (signed in, a few projects), its card menu and the template cards; the studio's project menu signed in.
     if (wants(cfg, 'account-project-menu')) {
