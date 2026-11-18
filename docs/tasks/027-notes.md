@@ -245,3 +245,51 @@ extended.
 - The projects page has no pagination (20 projects by default).
 - Opening `/studio?p=<id>` shows the browser's cached house for a moment
   before the named project arrives.
+
+## Review fixes (lead, 2026-11-18)
+
+1. **The page uses the window.** Content up to 1280 px, centred, the same
+   container as the header; cards in `repeat(auto-fill, minmax(240px, 1fr))`
+   (two columns under 640 px), the template cards in the same grid; card
+   name 15 px, the "edited" line 13 px at that scale. Measured by the e2e:
+   4 columns of 282 px over 1200 px at 1280, 1440 and 2000 wide (the content
+   stops at 1280; Google Docs and Figma also cap the grid's width).
+2. **One account entry.** `/projects` uses the studio's `AccountButton`,
+   `AccountMenuHost` and `SignInHost` (the separate dark "登录" button is
+   gone; the one-line invitation stays). On the page the account menu shows
+   neither "我的项目" (the page you are on: Figma's account menu has no link
+   to the file browser, and the file browser does not show "Back to files")
+   nor "我的密钥" (the key picker lives in the studio; there is nothing to
+   open it into on the page). Signing in on the page runs the same sync as
+   the studio (`useProjectSync({ page: true })`): an edited house of this
+   browser becomes a project; an untouched one opens or makes nothing.
+   No rule of `docs/UI_STYLE.md` is broken by a glass capsule on paper:
+   rules 1-3 (drawing first, capsule then panel, one level of glass) hold;
+   rule 11 and DESIGN.md keep the *landing page* and the gallery sheets
+   free of glass, and the projects page is an app page, not the landing.
+   The page already used the glass menu and toast.
+3. **Thumbnails from the studio's renderer.** `IllustrationViewer.renderView`
+   (packages/render) draws one frame of the default view at 480 x 360 into
+   an offscreen multisampled target with the scene and programs as they
+   are (encoded like the canvas, as the glass target is: no shader compile,
+   no second context), restores the user's camera, line widths and
+   billboards at once, and reads the pixels back on a GPU fence
+   (`readRenderTargetPixelsAsync`). When the default view needs another
+   presentation sun, the shadow map is drawn for the capture and again for
+   the next visible frame, which looks the same. It returns nothing while
+   walking, in a cutaway, in the sun study or during the grow transition;
+   the sync asks again a minute later.
+   - Before (a second renderer, `OffscreenView`): about 3.6 s of main thread
+     per thumbnail under SwiftShader (1440 x 900 page, idle).
+   - After, main-thread time of the synchronous parts (issuing the frame,
+     copying the pixels back), under SwiftShader: 5 ms in the e2e run, 16 ms
+     (desktop, from another view, so with the sun switch) and 7 ms (phone
+     390 x 844) in an idle page; the image is ready 0.4-2 s later (the fence,
+     then the WebP encoding, both off the main thread in Chromium).
+   - The visible frame: a screenshot before and after a capture from
+     another view (axo-nw) is pixel-identical, desktop and phone.
+   - Plan- or sheets-only sessions (the 3D view never shown): no thumbnail;
+     it is drawn the next time the 3D view exists. I chose that over any
+     second renderer, which is the cost the review rules out. The template
+     cards on `/projects` have no pictures for the same reason (the spec:
+     "if cheap").
