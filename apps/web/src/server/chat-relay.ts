@@ -15,7 +15,7 @@
 // The owner's key is metered by the daily quota (task 019, quota.ts); a
 // visitor's own key never is, nor is a key saved with the account.
 import { DEFAULT_MODELS as PROVIDER_DEFAULTS, PROVIDER_BASE_URLS } from '../lib/providers.ts';
-import { authConfig, quotaConfig } from './config.ts';
+import { authConfig, projectsConfig, quotaConfig } from './config.ts';
 import { ACCOUNT_KEY_HEADER, accountUpstream, keysConfig, type KeysEnv } from './keys.ts';
 import { consume, type QuotaStatus, type Subject, status as quotaStatus, TURN_ID } from './quota.ts';
 import { clientIp, newVisitor, verifyVisitor } from './visitor.ts';
@@ -207,6 +207,11 @@ async function checkCredits(req: Request, upstream: Upstream, env: RelayEnv, log
  * and model, the sign-in methods, who is signed in, and the caller's
  * credits with their reset time.
  */
+function projectsStatus(env: RelayEnv): { max: number; maxKb: number } | null {
+  const p = projectsConfig(env);
+  return p.enabled ? { max: p.max, maxKb: p.maxKb } : null;
+}
+
 export async function relayStatus(req: Request, env: RelayEnv): Promise<Response> {
   const s = serverUpstream(env);
   const auth = authConfig(env);
@@ -241,6 +246,8 @@ export async function relayStatus(req: Request, env: RelayEnv): Promise<Response
       user: email ? { email, ...profile } : null,
       // Keys can be saved with the account (task 022).
       keys: keysConfig(env).enabled,
+      // Projects are kept with the account (task 027): the limits; null: one local house, as before.
+      projects: projectsStatus(env),
       quota,
       limits: s && cfg.enabled ? { user: cfg.userDaily, anon: cfg.anonTrial } : null,
       quotaError,

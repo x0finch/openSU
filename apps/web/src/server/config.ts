@@ -54,6 +54,12 @@ export interface AccountEnv {
   TURN_RECORDS_DAYS?: string;
   /** Site-wide budget of saved records per quota day, MB (default 15). */
   TURN_RECORDS_DAILY_MB?: string;
+  /** "false" turns projects kept with the account off (task 027); they are also off without sign-in. */
+  PROJECTS_ENABLED?: string;
+  /** Projects per account (default 20). */
+  PROJECTS_MAX?: string;
+  /** Largest project, KB: the house and the conversation as sent (default 512). */
+  PROJECT_MAX_KB?: string;
 }
 
 export const QUOTA_DEFAULTS = { userDaily: 10, anonTrial: 3, ipDaily: 60, siteDaily: 500, callsPerTurn: 8, tz: 'Asia/Shanghai' } as const;
@@ -132,6 +138,22 @@ export function turnsConfig(env: AccountEnv): { enabled: boolean; days: number; 
     enabled: !off(env.TURN_RECORDS) && !!env.DB,
     days: Math.max(1, intVar(env.TURN_RECORDS_DAYS, TURN_RECORDS_DEFAULT_DAYS)),
     dailyKb: intVar(env.TURN_RECORDS_DAILY_MB, TURN_RECORDS_DEFAULT_DAILY_MB) * 1024,
+  };
+}
+
+export const PROJECTS_DEFAULT_MAX = 20;
+export const PROJECT_DEFAULT_MAX_KB = 512;
+
+/**
+ * Projects kept with the account (task 027): on whenever sign-in works
+ * (which needs the database), unless PROJECTS_ENABLED is "false". The size
+ * stays under D1's 2 MB row limit.
+ */
+export function projectsConfig(env: AccountEnv): { enabled: boolean; max: number; maxKb: number } {
+  return {
+    enabled: !off(env.PROJECTS_ENABLED) && authConfig(env).enabled,
+    max: Math.max(1, intVar(env.PROJECTS_MAX, PROJECTS_DEFAULT_MAX)),
+    maxKb: Math.min(1800, Math.max(16, intVar(env.PROJECT_MAX_KB, PROJECT_DEFAULT_MAX_KB))),
   };
 }
 

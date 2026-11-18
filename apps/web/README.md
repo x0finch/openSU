@@ -686,6 +686,46 @@ CPU of `POST /api/turns`, measured like the table above by
 | signed in, 256 KB record (the cap) | 3.2 ms | 3.4-3.9 ms |
 | undo flag (`PATCH`) | 1.4-1.5 ms | 1.8-3.8 ms |
 
+## Projects kept with the account (task 027)
+
+Signed out, the studio keeps one house in this browser (localStorage), as
+before. Signed in on a server with sign-in and D1, the house is a project
+kept with the account: it saves itself 3 s after the last change and when
+the page is hidden, the browser copy stays as the cache and the offline
+fallback, and "我的项目" / "My projects" (the project menu and the account
+menu) lists, opens, creates, renames, duplicates and deletes projects.
+
+- **Table** `project` (`migrations/0005_projects.sql`): id (128 random
+  bits), user (cascade delete), the user's name ('' = the house's own
+  title), a small summary for the list, revision, times, and the house and
+  conversation as JSON text. The list never reads the two large columns.
+- **Routes** (`src/server/projects.ts`): `GET/POST /api/projects`,
+  `GET/PUT/PATCH/DELETE /api/projects/:id`; a session is required, writes
+  only from `SITE_URL`, every statement scoped by the user. The house and
+  the conversation travel as lines of a framed body
+  (`application/x-opensu-project`) and are stored as sent: the server
+  checks size, ownership and the revision, never parses a house. A save
+  names the revision it was based on; a newer one on the server answers
+  409, and the browser keeps both (the local version becomes a copy).
+  Writes are limited to 600 per user per hour.
+- **Browser** (`src/lib/project-sync.ts`, `src/studio/Projects.tsx`): the
+  conversation is uploaded bounded (the newest items up to 160 KB, without
+  the tool-call records used only by the export); undo history stays in
+  this browser.
+
+| Name | Kind | Default | Meaning |
+|---|---|---|---|
+| `PROJECTS_ENABLED` | variable | on | `false`: one local house as before, even when signed in (also off without sign-in or D1) |
+| `PROJECTS_MAX` | variable | 20 | projects per account |
+| `PROJECT_MAX_KB` | variable | 512 | largest project (house and conversation as sent), 16 to 1800 |
+
+CPU, measured like the tables above by `scripts/auth-check.ts` at 414 KB
+(a padded house plus a long conversation; real houses are 10-70 KB):
+create and save about 5.2-5.7 ms median (p90 8-9.5 ms), of which about
+1.5 ms is Node reading the request body through JavaScript streams, which
+workerd does natively; read one 4.8-5 ms; the list 2.2 ms (most of it the
+session lookup).
+
 ## Deployment
 
 Deployment follows the Cloudflare guide for TanStack Start

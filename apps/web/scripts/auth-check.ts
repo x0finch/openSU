@@ -10,6 +10,7 @@ import { accountRoute, startAuth } from '../src/server/accounts.ts';
 import { authTesting, lastTestCode, loadAuth, sessionUser, warmUp } from '../src/server/auth.ts';
 import { relayChat, relayStatus } from '../src/server/chat-relay.ts';
 import { keysRoute } from '../src/server/keys.ts';
+import { PROJECT_TYPE, projectsRoute } from '../src/server/projects.ts';
 import { flagTurn, MAX_RECORD, saveTurn } from '../src/server/turns.ts';
 import { migratedD1 } from './d1-shim.ts';
 import { fixtureRecords } from './turn-fixtures.ts';
@@ -200,6 +201,57 @@ console.log('keys saved with the account (/api/keys, /api/chat with x-opensu-acc
   for (const [k, v] of Object.entries(ms)) console.log(`  ${names[k]}: median ${median(v.slice(5)).toFixed(2)} ms, p90 ${pct(v.slice(5), 0.9).toFixed(2)} ms, max ${Math.max(...v.slice(5)).toFixed(2)} ms; first call ${firsts[k]!.toFixed(2)} ms`);
   const worst = Math.max(...Object.values(ms).map((v) => median(v.slice(5))));
   check(worst < 5, `keys paths well under 10 ms in this approximation (worst median ${worst.toFixed(2)} ms)`);
+}
+
+// Projects kept with the account (task 027): the house and the conversation
+// travel as strings and are stored as sent; measured at the size limit
+// (512 KB per project, a house of the real shape padded with level copies).
+console.log('projects (/api/projects)');
+{
+  const penv = { ...env };
+  const { starterHouse } = await import('@opensu/agent/starter');
+  const h = starterHouse();
+  const houseBig = { ...h, levels: Array.from({ length: 60 }, (_, i) => ({ ...h.levels[i % h.levels.length]!, id: `L${i}` })) };
+  let house = JSON.stringify(houseBig);
+  house = house.slice(0, 400 * 1024);
+  const chat = JSON.stringify({ conversation: 'conv-cpu-0001', items: Array.from({ length: 200 }, (_, i) => ({ id: `m${i}`, role: i % 2 ? 'assistant' : 'user', text: '把客厅改大一点，朝南，"带阳台"'.repeat(20) })) }).slice(0, 100 * 1024);
+  const summary = JSON.stringify({ title: h.name, style: h.style, w: 12000, d: 14000, area: 186.4, storeys: 2, attic: false });
+  // The browser's framing: the small fields, the house and the conversation on three lines.
+  const preq = (method: string, id?: string, fields?: unknown) =>
+    new Request(`${SITE}/api/projects${id ? `/${id}` : ''}`, { method, headers: { 'content-type': PROJECT_TYPE, origin: SITE, cookie, 'cf-connecting-ip': '198.18.4.1' }, body: fields === undefined ? undefined : `${JSON.stringify(fields)}\n${house}\n${chat}` });
+  const bodyKb = Buffer.byteLength(`${JSON.stringify({ base: 1, summary })}\n${house}\n${chat}`) / 1024;
+  const ms = { create: [] as number[], save: [] as number[], read: [] as number[], list: [] as number[] };
+  const now = Date.now;
+  const ids: string[] = [];
+  for (let i = 0; i < 40; i++) {
+    Date.now = () => now() + Math.floor(i / 8) * 3_600_000;
+    if (ids.length >= 15) {
+      for (const id of ids.splice(0)) await projectsRoute(preq('DELETE', id), penv, id);
+    }
+    const c = await cpu(async () => (await projectsRoute(preq('POST', undefined, { summary }), penv)).json() as Promise<{ project: { id: string } }>);
+    const id = c.value.project.id;
+    ids.push(id);
+    const sv = await cpu(async () => (await projectsRoute(preq('PUT', id, { base: 1, summary }), penv, id)).text());
+    const rd = await cpu(async () => (await projectsRoute(preq('GET', id), penv, id)).text());
+    const ls = await cpu(async () => (await projectsRoute(preq('GET'), penv)).text());
+    if (i === 0) check(JSON.parse(sv.value).project?.revision === 2 && rd.value.split('\n')[1] === house, `save and read at ${bodyKb.toFixed(0)} KB round-trip the house unchanged`);
+    ms.create.push(c.ms);
+    ms.save.push(sv.ms);
+    ms.read.push(rd.ms);
+    ms.list.push(ls.ms);
+  }
+  Date.now = now;
+  const names: Record<string, string> = { create: `POST (create, ${bodyKb.toFixed(0)} KB)`, save: `PUT (save, ${bodyKb.toFixed(0)} KB)`, read: 'GET one (the same project)', list: 'GET the list (up to 15)' };
+  for (const [k, v] of Object.entries(ms)) console.log(`  ${names[k]}: median ${median(v.slice(5)).toFixed(2)} ms, p90 ${pct(v.slice(5), 0.9).toFixed(2)} ms, max ${Math.max(...v.slice(5)).toFixed(2)} ms`);
+  const worst = Math.max(...Object.values(ms).map((v) => median(v.slice(5))));
+  // Node reads a request body through undici's JavaScript streams (workerd does it natively): measured alone, it is
+  // part of every write above and not of the Worker's CPU.
+  const body = `${JSON.stringify({ base: 1, summary })}\n${house}\n${chat}`;
+  const plumbing: number[] = [];
+  for (let i = 0; i < 30; i++) plumbing.push((await cpu(async () => new Request(SITE, { method: 'POST', body }).arrayBuffer())).ms);
+  const node = median(plumbing.slice(5));
+  console.log(`  Node's own request body read (${bodyKb.toFixed(0)} KB, not the Worker's): median ${node.toFixed(2)} ms`);
+  check(worst < 8 && worst - node < 5, `projects paths under 10 ms in this approximation (worst median ${worst.toFixed(2)} ms, ${(worst - node).toFixed(2)} ms without Node's body read)`);
 }
 
 // The relay's log line (task 020): one per POST, no content, keys or email.
