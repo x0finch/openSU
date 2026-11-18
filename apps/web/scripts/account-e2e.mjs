@@ -1073,7 +1073,9 @@ try {
       const bar = await box(page, '[data-testid=toolbar]');
       check((await state(page)) === 'signed-out' && ((await page.getByTestId('account-button').textContent()) ?? '').trim() === signInWord, `${tag}: signed out, the account button reads "${signInWord}"`);
       check(Math.abs(glass.h - bar.h) <= 0.5 && Math.abs((glass.t + glass.b) / 2 - (bar.t + bar.b) / 2) <= 1, `${tag}: the button and the toolbar share one height and one centre line (${glass.h} / ${bar.h})`);
-      check(Math.abs(glass.l - bar.r - 8) <= 1 && Math.abs(w - 18 - glass.r) <= 1, `${tag}: the module's gap between toolbar and button (${(glass.l - bar.r).toFixed(1)} px), 18 from the edge`);
+      // Task 028: the share button stands between them where projects are kept; the gap is to whatever is left of the button.
+      const prev = (await page.getByTestId('share-button').count()) ? await page.getByTestId('share-button').evaluate((e) => e.closest('.lg').getBoundingClientRect().right) : bar.r;
+      check(Math.abs(glass.l - prev - 8) <= 1 && Math.abs(w - 18 - glass.r) <= 1, `${tag}: the module's gap between the control before it and the button (${(glass.l - prev).toFixed(1)} px), 18 from the edge`);
       check(btn.h >= 28 && btn.w >= 28, `${tag}: hit target ${btn.w.toFixed(0)} x ${btn.h.toFixed(0)}`);
       const oneLine = await page.getByTestId('account-button').evaluate((e) => e.scrollWidth <= e.clientWidth + 0.5 && e.getBoundingClientRect().height <= 48.5);
       check(oneLine, `${tag}: the label does not wrap or clip`);
@@ -1110,9 +1112,9 @@ try {
       await page.waitForTimeout(700);
       check((await tipOpacity()) === 1, `${tag}: hovering the avatar shows its tooltip`);
       await shot(page, `${tag}-signed-in-tooltip`, outDir26);
-      // Keyboard focus (Tab from the toolbar) shows it too.
+      // Keyboard focus (Tab from the control before it: the share button since task 028, else the toolbar) shows it too.
       await page.mouse.move(Math.round(w / 2), Math.round(h / 2));
-      await page.getByTestId('bar-walk').focus();
+      await ((await page.getByTestId('share-button').count()) ? page.getByTestId('share-button') : page.getByTestId('bar-walk')).focus();
       await page.keyboard.press('Tab');
       await page.waitForTimeout(500);
       const tabbed = await page.evaluate(() => document.activeElement?.getAttribute('data-testid') === 'account-button');

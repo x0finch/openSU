@@ -142,3 +142,74 @@ the header: no new control on screen, but sharing is two taps away and
 hidden behind the name, which Canva mobile does and Figma / Google Docs
 do not. Not built, no screenshot (it would have needed a second code
 path).
+
+### Tests
+
+- `scripts/projects-test.ts`: 5 new server tests (12 in the file): a
+  random token, not the id, stable while on; the token reads only its
+  house, no conversation, owner or project id; 304 when unchanged, 200
+  after a save or a rename; a duplicate is not shared; off kills the
+  address and its thumbnail at once, on again makes a new one, deleting the
+  project ends it; another user can neither turn it on nor off; signed out,
+  other origins and projects off are refused; the thumbnail by token; the
+  per-IP limit; the preview's title, description, image and escaping.
+- `scripts/project-sync-test.ts`: 1 new (19): on / off update the list, a
+  failure changes nothing.
+- account-e2e `share` (in `--smoke`; 35 checks): see the header of the
+  script. The signed-out viewer uses 3D, the views, levels and sun panels,
+  walk, plan and sheets; finds no prompt, no conversation, nothing that
+  edits in the project menu, the sun panel's place as text; keeps their own
+  browser copy byte for byte; sees the owner's next version; makes a copy
+  (asked once, cancel keeps everything). A signed-in viewer's copy is a
+  project of their account ("… 副本"). Off from the projects page kills
+  the link (page and preview), on again gives a new one.
+- ui-audit states `account-share` (with its open / close motion frames)
+  and `account-share-viewer`, both in `--smoke`: smoke passes with the 5
+  known findings. One rule changed: an on switch (`role=switch`) is not a
+  "selected" item, so `selected-treatment` no longer counts it.
+
+### CPU (scripts/auth-check.ts, Node approximation, medians)
+
+| Path | median | p90 |
+|---|---|---|
+| POST share (on) | 1.46 ms | 2.1 ms |
+| DELETE share (off) | 1.52 ms | 2.2 ms |
+| GET /api/share/:token, 483 KB house | 3.09 ms | 5.8 ms |
+| the same, 304 | 0.14 ms | 0.17 ms |
+| GET /api/share/:token/thumb (24 KB) | 0.15 ms | 0.23 ms |
+| /studio?s= preview (read and rewrite of the page) | 0.07 ms | 0.15 ms |
+
+The preview image fits, so it stays. Not measured: `ASSETS.fetch` and
+reading the asset body on workerd (local workerd has no CPU readout); the
+string work itself is under 0.1 ms.
+
+### Audit of the new states
+
+- Fixed on the way: the link field collapsed to its text's height in the
+  phone column (flex-basis 0 in a column); the replace question cut on
+  phones (shorter copy); the share surface ended in a shaped field and
+  button in its corner (`concentric`: the note line is now last); the
+  view-only bar's insets (text 12 px, the 32 px button concentric at 8);
+  hidden labels measured as cut text (now `aria-label`); a "View only"
+  chip I tried was a box inside glass with low contrast (removed); the
+  shared house reset the address's view (`freshView` on load, removed:
+  `/studio?s=…&mode=plan&sun=winter` now opens as asked).
+
+## Not done, not verified
+
+- The owner opening their own link sees it view-only (as any viewer);
+  Figma would open the editor. Not handled.
+- The public read counts one D1 write per read (the per-IP counter): at
+  D1 Free's 100,000 writes a day that is the ceiling for link views,
+  shared with sign-in and quota counters.
+- The preview's language follows `Accept-Language` (zh unless it starts
+  with `en`); chat apps' crawlers mostly send none, so previews are in
+  Chinese.
+- `navigator.share` (the phone's system sheet) was not exercised: headless
+  Chromium on Linux has none, so the e2e takes the clipboard path on
+  phones too.
+- Edge behaviour of `run_worker_first` with a query string, and the real
+  link previews in WeChat / Slack / iMessage: not tried (local workerd
+  only, page HTML checked).
+- No real GPU or phone; WebGL under SwiftShader only.
+- The old `/s/$id` placeholder route is untouched.
