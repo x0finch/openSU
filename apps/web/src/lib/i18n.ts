@@ -378,7 +378,7 @@ const en: Record<MessageKey, string> = {
   'share.notKept': 'This project is not kept with your account yet, so it cannot be shared.',
   'share.viewOnly': 'View only',
   'share.makeCopy': 'Make my own copy',
-  'share.replaceAsk': 'Replace your edited house?',
+  'share.replaceAsk': 'Replace the house you edited on this device?',
   'share.replace': 'Replace',
   'share.copyFull': 'Your projects are full. Delete one you no longer need and try again.',
   'share.copyFailed': 'The copy could not be made. Please try again.',

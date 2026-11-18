@@ -327,7 +327,8 @@ export function ViewOnlyBar({ phone }: { phone?: boolean }) {
       <Glass className={cx('pointer-events-auto flex h-12 min-w-0 items-center gap-3 pr-2 pl-3', phone ? 'w-full' : 'max-w-full')} data-testid="view-only-bar">
         {asking ? (
           <>
-            <span className="min-w-0 flex-1 truncate text-[14px] font-medium" data-testid="view-only-ask">{t('share.replaceAsk')}</span>
+            {/* Phones: up to two lines (the question must be read whole); desktop has the width for one. */}
+            <span className={cx('min-w-0 flex-1 font-medium', phone ? 'line-clamp-2 text-[13px] leading-4' : 'truncate text-[14px]')} data-testid="view-only-ask">{t('share.replaceAsk')}</span>
             <button type="button" className={btn} data-filled="" onClick={() => answer(true)} data-testid="view-only-replace">
               {t('share.replace')}
             </button>
