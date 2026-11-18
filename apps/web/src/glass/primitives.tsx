@@ -702,7 +702,7 @@ export function GlassMenu({ label, children, ref, ...rest }: PopoverProps & { la
 
 export function GlassMenuItem({ children, icon, detail, danger, className, ...rest }: ButtonHTMLAttributes<HTMLButtonElement> & { icon?: ReactNode; detail?: ReactNode; danger?: boolean }) {
   return (
-    <button type="button" role="menuitem" tabIndex={-1} className={cx('lg-plate flex h-10 w-full items-center gap-2.5 rounded-[16px] px-3 text-left text-[14px] font-medium focus-visible:bg-[var(--lg-row-active)] focus-visible:outline-none', danger && 'text-[#c0392b]', className)} {...rest}>
+    <button type="button" role="menuitem" tabIndex={-1} className={cx('lg-plate flex h-10 w-full items-center gap-2.5 rounded-[16px] px-3 text-left text-[14px] font-medium focus-visible:bg-[var(--lg-row-active)] focus-visible:outline-none', danger && 'text-[var(--lg-danger)]', className)} {...rest}>
       {icon && <span className="grid size-5 shrink-0 place-items-center text-ink-2">{icon}</span>}
       <span className="min-w-0 flex-1 truncate">{children}</span>
       {detail !== undefined && <span className="max-w-[52%] shrink-0 truncate text-[13px] font-normal text-ink-2">{detail}</span>}

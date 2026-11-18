@@ -13,6 +13,8 @@ import { closeAccountMenu, openSignIn, signOut, useAccount } from './account';
 import { useChat } from './chat-store';
 import { useKeys } from './keys';
 import { showKeyChoices } from './KeyPicker';
+import { openProjects, useProjectsOffered } from '../studio/Projects';
+import { useToast } from '../lib/toast';
 
 export const ACCOUNT_BUTTON = '[data-account-button]';
 const HOUSE_NAME = '[data-house-name]';
@@ -152,6 +154,7 @@ export function AccountMenuHost() {
   const rect = useAccount((s) => s.menuRect);
   const user = useUser();
   const server = useChat((s) => s.server);
+  const projectsOffered = useProjectsOffered();
   const menu = useRef<HTMLElement | null>(null);
   const show = open && !!user;
   // Signed out elsewhere (or the status changed): nothing to show.
@@ -216,8 +219,20 @@ export function AccountMenuHost() {
             <span className="truncate text-[14px] leading-5 font-semibold">{accountName(user)}</span>
             {user.name && <span className="truncate text-[12.5px] leading-[18px] text-ink-2" data-testid="account-email">{user.email}</span>}
           </div>
-          {/* Task 027: "我的项目" (the account's projects) goes here, the first row under who is signed in. */}
           <GlassSep />
+          {/* Task 027: the account's projects, the first row under who is signed in. */}
+          {projectsOffered && (
+            <GlassMenuItem
+              onClick={(e) => {
+                closeAccountMenu();
+                openProjects(e.currentTarget, 'account');
+              }}
+              aria-haspopup="dialog"
+              data-testid="account-projects"
+            >
+              {t('projects.title')}
+            </GlassMenuItem>
+          )}
           {quota && (
             <div className="flex h-10 items-center gap-2.5 px-3 text-[14px] font-medium" data-testid="account-allowance">
               <span className="min-w-0 flex-1 truncate">{t('keys.free')}</span>
@@ -251,23 +266,35 @@ export function AccountMenuHost() {
   );
 }
 
-/** The short confirmation after a sign-in ("已登录 · name"), above the input; it leaves by itself. */
-export function AccountToast({ className }: { className?: string }) {
+/**
+ * The short message above the input that leaves by itself: the
+ * confirmation after a sign-in ("已登录 · name"), or a message of the
+ * studio (`toast`, src/lib/toast.ts; task 027). The latest wins.
+ */
+export function StudioToast({ className }: { className?: string }) {
   const t = useT();
   const welcome = useAccount((s) => s.welcome);
+  const note = useToast();
   const user = useUser();
-  const [shown, setShown] = useState(false);
+  const [shown, setShown] = useState<{ text: string; testId: string } | null>(null);
   useEffect(() => {
-    if (!welcome) return;
-    setShown(true);
-    const id = window.setTimeout(() => setShown(false), 3200);
+    if (!welcome || !user) return;
+    setShown({ text: t('account.signedInAs', { name: accountName(user) }), testId: 'account-toast' });
+    const id = window.setTimeout(() => setShown(null), 3200);
     return () => clearTimeout(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [welcome]);
-  if (!shown || !user) return null;
+  useEffect(() => {
+    if (!note.seq) return;
+    setShown({ text: note.text, testId: note.testId });
+    const id = window.setTimeout(() => setShown(null), 5200);
+    return () => clearTimeout(id);
+  }, [note.seq, note.text, note.testId]);
+  if (!shown) return null;
   return (
     <div className={cx('pointer-events-none flex animate-[fade-in_200ms_ease-out] justify-center', className)}>
-      <GlassToast data-testid="account-toast">
-        <span className="max-w-[260px] truncate">{t('account.signedInAs', { name: accountName(user) })}</span>
+      <GlassToast data-testid={shown.testId}>
+        <span className="max-w-[min(480px,calc(100vw-56px))] truncate">{shown.text}</span>
       </GlassToast>
     </div>
   );

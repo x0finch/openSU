@@ -4,29 +4,22 @@
 import { Link } from '@tanstack/react-router';
 import { type KeyboardEvent as RKeyboardEvent, type ReactNode, type RefObject, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { TEMPLATE_META } from '@opensu/agent/templates-meta';
-import { ChevronDownSmallIcon, CloseIcon, CompassIcon, DownloadIcon, LayersIcon, Mark, PersonIcon, PinIcon, ResetViewIcon } from '../components/icons';
+import { ChevronDownSmallIcon, CloseIcon, CompassIcon, DownloadIcon, FolderIcon, LayersIcon, Mark, PersonIcon, PinIcon, ResetViewIcon } from '../components/icons';
 import { cx } from '../components/ui';
 import { GlassButton, GlassMenu, GlassMenuItem, GlassSegmented, GlassSep } from '../glass';
 import { type MessageKey, useT } from '../lib/i18n';
 import { freshView, type Mode, useStudio } from '../lib/store';
 import { resetToTemplate } from '../lib/autosave';
+import { fmtArea, fmtLen, useHouseName, useProjects } from '../lib/projects';
 import { bearingText, frontBearing, placeText } from '../lib/site';
 import { exportConversation, replaceHouse, useChat } from '../chat/chat-store';
 import { accountName, openAccount } from '../chat/AccountEntry';
 import { useKeys } from '../chat/keys';
 import { showKeyChoices } from '../chat/KeyPicker';
 import type { Derived } from './house-data';
+import { openProjects, useProjectsOffered } from './Projects';
 import { loadHouseData } from './useDerived';
 
-const fmtArea = (a: number) => (Math.round(a * 10) / 10).toFixed(1);
-const fmtLen = (m: number) => String(Math.round(m * 10) / 10);
-
-/** The house's own name; the internal golden benchmark shows its style title instead. */
-export function projectTitle(t: ReturnType<typeof useT>, house: { name: string; style: string } | null | undefined): string {
-  if (house?.name && !house.name.startsWith('Golden sample')) return house.name;
-  const key = `project.title.${house?.style ?? 'modern-pitched'}` as MessageKey;
-  return t(key) || house?.style || '';
-}
 
 /** Closes the menu / tray on Escape and on a press outside `ref` (and outside `except`). */
 function useDismiss(open: boolean, close: (viaKey: boolean) => void, refs: RefObject<HTMLElement | null>[], ignore?: string): void {
@@ -84,7 +77,6 @@ function Facts({ derived, className }: { derived: Derived | null; className?: st
  */
 export function TitleMenu({ derived, onRect, compact }: { derived: Derived | null; onRect?: (r: { right: number; bottom: number }) => void; compact?: boolean }) {
   const t = useT();
-  const house = useStudio((s) => s.house);
   const [open, setOpen] = useState(false);
   const box = useRef<HTMLDivElement>(null);
   const trigger = useRef<HTMLButtonElement>(null);
@@ -107,7 +99,8 @@ export function TitleMenu({ derived, onRect, compact }: { derived: Derived | nul
   };
   const menu = useRef<HTMLDivElement>(null);
   useDismiss(open, close, [box, menu]);
-  const name = projectTitle(t, house);
+  // The name the user gave the project (task 027), else the house's own title.
+  const name = useHouseName();
   return (
     <div className="pointer-events-auto relative min-w-0" ref={box} data-house-name="">
       <button
@@ -163,6 +156,11 @@ function ProjectMenu({ open, anchor, onClose, compact, ref }: { open: boolean; a
   const authOn = useChat((s) => !!(s.server?.auth?.email || s.server?.auth?.google));
   const user = useChat((s) => s.server?.user ?? null);
   const hasChat = useChat((s) => s.items.length > 0);
+  // Task 027: signed in where projects are kept with the account, a template is a new project ("My projects"),
+  // so the rows that replace the open house go; the line at the bottom says where edits are kept.
+  const projectsOffered = useProjectsOffered();
+  const cloud = useProjects((s) => s.on);
+  const failed = useProjects((s) => s.failed);
   const [templates, setTemplates] = useState(false);
   const [confirm, setConfirm] = useState(false);
   // Arrow keys move between items; focus starts on the first.
@@ -218,20 +216,36 @@ function ProjectMenu({ open, anchor, onClose, compact, ref }: { open: boolean; a
           >
             {user ? accountName(user) : t('account.signIn')}
           </GlassMenuItem>
-          <Sep />
         </>
       )}
+      {/* Task 027: the account's projects; signed out it leads to sign-in (which says why). */}
+      {projectsOffered && (
+        <GlassMenuItem
+          icon={<FolderIcon width={17} height={17} />}
+          onClick={(e) => {
+            openProjects(e.currentTarget, 'menu');
+            onClose(false);
+          }}
+          aria-haspopup="dialog"
+          data-testid="menu-projects"
+        >
+          {t('projects.title')}
+        </GlassMenuItem>
+      )}
+      {(authOn || projectsOffered) && <Sep />}
       <MenuItem icon={<PinIcon width={17} height={17} />} value={site ? placeText(site, lang) : ''} onSelect={() => { onClose(false); setSitePanel({ kind: 'location' }); }} testId="menu-location">
         {t('more.location')}
       </MenuItem>
       <MenuItem icon={<CompassIcon width={17} height={17} />} value={site ? bearingText(frontBearing(site.northDeg), lang) : ''} onSelect={() => { onClose(false); setSitePanel({ kind: 'orientation' }); }} testId="menu-orientation">
         {t('more.orientation')}
       </MenuItem>
-      <Sep />
+      {!cloud && <Sep />}
+      {!cloud && (
       <MenuItem icon={<LayersIcon width={17} height={17} />} onSelect={() => setTemplates(!templates)} value={<ChevronDownSmallIcon width={15} height={15} className={cx('transition-transform', templates && 'rotate-180')} />}>
         {t('more.templates')}
       </MenuItem>
-      {templates && (
+      )}
+      {!cloud && templates && (
         <div className="mb-1 ml-9">
           {TEMPLATE_META.map((m) => (
             <MenuItem key={m.id} onSelect={() => void pick(m.id)} value={`${m.plot.width / 1000} × ${m.plot.depth / 1000} m`}>
@@ -241,6 +255,7 @@ function ProjectMenu({ open, anchor, onClose, compact, ref }: { open: boolean; a
           <p className="px-3 pt-0.5 pb-1.5 text-[12px] leading-4 text-ink-2">{t('tpl.note')}</p>
         </div>
       )}
+      {!cloud && (
       <MenuItem
         icon={<ResetViewIcon width={16} height={16} />}
         danger={confirm}
@@ -255,6 +270,7 @@ function ProjectMenu({ open, anchor, onClose, compact, ref }: { open: boolean; a
       >
         {confirm ? t('house.resetConfirm') : t('house.reset')}
       </MenuItem>
+      )}
       <Sep />
       <MenuItem value={t('lang.switch')} onSelect={() => setLang(lang === 'zh' ? 'en' : 'zh')} icon={<span className="text-[11px] font-semibold">{lang === 'zh' ? '文' : 'A'}</span>}>
         {t('more.lang')}
@@ -287,7 +303,10 @@ function ProjectMenu({ open, anchor, onClose, compact, ref }: { open: boolean; a
         <span className="grid size-5 place-items-center"><Mark width={15} height={15} /></span>
         {t('more.about')}
       </Link>
-      <p className="px-3 pt-1 pb-1.5 text-[12px] leading-4 text-ink-2">{t('house.autosaved')}</p>
+      {/* No status while saving works; one quiet line when it does not (task 027). */}
+      <p className="px-3 pt-1 pb-1.5 text-[12px] leading-4 text-ink-2" data-testid="menu-saved" data-failed={failed ?? undefined}>
+        {failed === 'retry' ? t('projects.notSynced') : failed === 'too-large' ? t('projects.tooLarge') : failed === 'full' ? t('projects.notAdded') : cloud ? t('house.autosavedAccount') : t('house.autosaved')}
+      </p>
     </GlassMenu>
   );
 }

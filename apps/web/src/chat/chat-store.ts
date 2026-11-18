@@ -82,6 +82,8 @@ export interface ServerStatus {
   quota?: QuotaInfo | null;
   /** Keys can be saved with the account here (task 022). */
   keys?: boolean;
+  /** Projects are kept with the account here (task 027): the limits; null: one house in this browser. */
+  projects?: { max: number; maxKb: number } | null;
 }
 
 interface ChatState {

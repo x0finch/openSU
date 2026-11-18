@@ -3,6 +3,11 @@
 // browser (localStorage, one versioned key), so a reload continues where the
 // user left off. Quota and private-mode errors are ignored (nothing is lost
 // but the save). "Reset to template" clears it.
+//
+// This is the one place that tells an edit from a load (task 027): every
+// edit is passed on to `autosaveHooks.edit` (projects kept with the account
+// save it there too); a house put on screen by the code (`quietly`: a
+// template reset, a project opened) is saved here but is not an edit.
 import type { House } from '@opensu/model';
 import { useEffect } from 'react';
 import { type ChatItem, newChat, restoreItems, type SavedHistory, undoHistory, useChat } from '../chat/chat-store';
@@ -42,6 +47,32 @@ export function clearSaved(): void {
   } catch {
     /* nothing stored */
   }
+}
+
+/** Where edits go besides this browser (src/lib/projects.ts sets them; nothing by default). */
+export const autosaveHooks = {
+  /** The house or the conversation changed by an edit. */
+  edit: () => {},
+  /** The browser's house is a new one, not the project it was linked to. */
+  detach: () => {},
+};
+
+let quiet = 0;
+/** Runs `fn` (which replaces the house and conversation) without it counting as an edit. */
+export function quietly(fn: () => void): void {
+  quiet++;
+  try {
+    fn();
+  } finally {
+    quiet--;
+  }
+}
+
+/** Writes the browser copy now (after a project was opened). */
+export function saveNow(): void {
+  const house = useStudio.getState().house;
+  const chat = useChat.getState();
+  if (house) save(house, chat.items, chat.conversation);
 }
 
 function save(house: House, chat: ChatItem[], conversation: string): void {
@@ -84,6 +115,7 @@ export function restoreChat(): void {
  * address (a reload then restores the edits instead of the template).
  */
 function adoptSample(): void {
+  autosaveHooks.detach();
   try {
     const u = new URL(location.href);
     u.searchParams.delete('sample');
@@ -115,12 +147,15 @@ export function useAutosave(): void {
     const offHouse = useStudio.subscribe((s, p) => {
       if (s.house === p.house) return;
       // The template arriving (or a reset to it) is not an edit.
-      if (sampleRequested() && (!p.house || resetting)) return;
+      if (sampleRequested() && (!p.house || quiet)) return;
       if (sampleRequested()) adoptSample();
       schedule();
+      // The first house of the page (the saved one or the template) and a house the code put there are not edits.
+      if (p.house && !quiet) autosaveHooks.edit();
     });
     const offChat = useChat.subscribe((s, p) => {
       if (s.items !== p.items || s.running !== p.running) schedule();
+      if (s.items !== p.items && !quiet && !sampleRequested()) autosaveHooks.edit();
     });
     return () => {
       clearTimeout(timer);
@@ -130,19 +165,15 @@ export function useAutosave(): void {
   }, []);
 }
 
-/** Starts over: the template house, an empty conversation, nothing saved. */
-let resetting = false;
-
+/** Starts over (signed out): the template house, an empty conversation, nothing saved, no longer a project's. */
 export async function resetToTemplate(): Promise<void> {
   // Never on the server: keeps the model chunk out of the Worker bundle.
   const m = await (import.meta.env.SSR ? new Promise<never>(() => {}) : import('../studio/house-data'));
-  newChat();
-  clearSaved();
-  freshView();
-  resetting = true;
-  try {
+  quietly(() => {
+    newChat();
+    clearSaved();
+    autosaveHooks.detach();
+    freshView();
     useStudio.getState().setHouse(m.loadSample(), { fromLevel: 0 });
-  } finally {
-    resetting = false;
-  }
+  });
 }

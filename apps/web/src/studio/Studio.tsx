@@ -15,11 +15,12 @@ import { useT } from '../lib/i18n';
 import { ChatInput, PinnedColumn, RecentStrip, SettingsHost } from '../chat/ChatPanel';
 import { closeSignIn, restoreDraftAfterRedirect, useAccount } from '../chat/account';
 import { SignInHost } from '../chat/SignIn';
-import { AccountButton, AccountMenuHost, AccountToast, useSignInParam } from '../chat/AccountEntry';
+import { AccountButton, AccountMenuHost, StudioToast, useSignInParam } from '../chat/AccountEntry';
 import { KeySheetHost } from '../chat/KeyPicker';
 import { closeKeySheet, useKeys } from '../chat/keys';
 import { useChat } from '../chat/chat-store';
 import { useAutosave } from '../lib/autosave';
+import { useProjectSync } from '../lib/projects';
 import { restoreLang, useStudio } from '../lib/store';
 import { applyParams, useUrlState } from '../lib/url-state';
 import { Hints, ModeSwitch, TitleMenu, useSunPlayer } from './chrome';
@@ -27,6 +28,7 @@ import type { Derived } from './house-data';
 import { Loading } from './Loading';
 import { type DockExtent, PhoneDock, SHEET_MS } from './PhoneDock';
 import { PlanView } from './PlanView';
+import { ProjectsHost } from './Projects';
 import { DesktopTools, PanelCard, TRAY_ID } from './tools';
 import { GLASS, GlassLayer, type GlassTone } from '../glass';
 import { useDerived } from './useDerived';
@@ -224,7 +226,7 @@ function DesktopDock({ onBox, onInput }: { onBox: (b: Box | null) => void; onInp
   useBox(input, onInput);
   return (
     <div ref={ref} className="pointer-events-none absolute bottom-[22px] left-1/2 flex w-[min(580px,calc(100%-48px))] -translate-x-1/2 flex-col items-center gap-3" data-testid="dock">
-      <AccountToast />
+      <StudioToast />
       <Hints />
       <div ref={input} className="relative w-full">
         {recent && <RecentStrip className="absolute inset-x-0 bottom-full mb-3" />}
@@ -240,7 +242,7 @@ function SheetInput() {
   return (
     <div className="pointer-events-none absolute inset-x-3 bottom-[max(12px,env(safe-area-inset-bottom))] z-20" data-testid="dock">
       <div className="relative">
-        {recent ? <RecentStrip phone className="absolute inset-x-0 bottom-full mb-2" /> : <AccountToast className="absolute inset-x-0 bottom-full mb-2" />}
+        {recent ? <RecentStrip phone className="absolute inset-x-0 bottom-full mb-2" /> : <StudioToast className="absolute inset-x-0 bottom-full mb-2" />}
         <ChatInput phone />
       </div>
     </div>
@@ -309,6 +311,7 @@ export function Studio() {
   useEffect(restoreDraftAfterRedirect, []);
   useUrlState();
   useAutosave();
+  useProjectSync();
   useSunPlayer();
   useEscapeCloses();
   useEscapeExitsWalk();
@@ -455,12 +458,13 @@ export function Studio() {
           {!column && <DesktopDock onBox={setDockBox} onInput={setInputBox} />}
           {column && (
             <div className="absolute right-0 bottom-[22px]" style={{ left: sideRight }}>
-              <AccountToast />
+              <StudioToast />
             </div>
           )}
           <SettingsHost />
           <SignInHost />
           <AccountMenuHost />
+          <ProjectsHost />
           <KeySheetHost />
         </div>
       ) : walkLandscape ? (
@@ -514,6 +518,7 @@ export function Studio() {
           <SettingsHost phone />
           <SignInHost phone />
           <AccountMenuHost />
+          <ProjectsHost phone />
           <KeySheetHost phone />
         </>
       )}

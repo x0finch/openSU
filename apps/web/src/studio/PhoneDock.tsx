@@ -17,7 +17,7 @@ import { useAccount } from '../chat/account';
 import { GlassSheet } from '../glass';
 import { useStudio } from '../lib/store';
 import { Hints } from './chrome';
-import { AccountToast } from '../chat/AccountEntry';
+import { StudioToast } from '../chat/AccountEntry';
 import type { Derived } from './house-data';
 import { PanelBody, PhoneTools, useFocusOnOpen, useOpenPanel } from './tools';
 
@@ -192,7 +192,7 @@ export function PhoneDock({ derived, landscape, onExtent }: { derived: Derived |
             </div>
             <div className={cx('relative flex min-w-0 flex-1 flex-col gap-2 transition-opacity duration-200', hideInput && 'pointer-events-none opacity-0')} inert={hideInput || undefined}>
               {!want && !shown && !walk && <Hints className="max-w-full" />}
-              {above ?? <AccountToast className="absolute inset-x-0 bottom-full mb-2" />}
+              {above ?? <StudioToast className="absolute inset-x-0 bottom-full mb-2" />}
               {!(pinned && want === 'chat') && (
                 <div ref={inputWrap}>
                   <ChatInput phone pinned={pinned} />
@@ -208,7 +208,7 @@ export function PhoneDock({ derived, landscape, onExtent }: { derived: Derived |
               </div>
             )}
             <div ref={inputWrap} className={cx('relative transition-opacity duration-200', hideInput && 'pointer-events-none opacity-0')} inert={hideInput || undefined} data-testid="input-wrap">
-              {above ?? <AccountToast className="absolute inset-x-0 bottom-full mb-2" />}
+              {above ?? <StudioToast className="absolute inset-x-0 bottom-full mb-2" />}
               {!pinned || walk ? <ChatInput phone pinned={pinned} /> : <div className="h-12" aria-hidden="true" />}
             </div>
             <div ref={toolbar}>
