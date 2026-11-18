@@ -1,6 +1,6 @@
 import { DEFAULT_TEMPLATE, TEMPLATE_META } from '@opensu/agent/templates-meta';
 import { createFileRoute, Link } from '@tanstack/react-router';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { ArrowRightIcon, Mark } from '../components/icons';
 import { cx, LangToggle } from '../components/ui';
 import { type MessageKey, translate, useT } from '../lib/i18n';
@@ -44,10 +44,33 @@ const FEATURES: { n: string; title: MessageKey; body: MessageKey }[] = [
   { n: '03', title: 'landing.f3.title', body: 'landing.f3.body' },
 ];
 
+/**
+ * Who is here (task 026): sign-in offered, and whether someone is signed in
+ * (GET /api/chat, after the page has rendered; null until it answers).
+ */
+function useAccountStatus(): { authOn: boolean; signedIn: boolean } | null {
+  const [st, setSt] = useState<{ authOn: boolean; signedIn: boolean } | null>(null);
+  useEffect(() => {
+    let live = true;
+    fetch('/api/chat', { headers: { accept: 'application/json' }, credentials: 'same-origin' })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((s: { auth?: { email?: boolean; google?: boolean }; user?: unknown } | null) => {
+        if (live && s) setSt({ authOn: !!(s.auth?.email || s.auth?.google), signedIn: !!s.user });
+      })
+      .catch(() => {});
+    return () => {
+      live = false;
+    };
+  }, []);
+  return st;
+}
+
 function Landing() {
   const t = useT();
   const lang = useStudio((st) => st.lang);
   useEffect(restoreLang, []);
+  const account = useAccountStatus();
+  const signedIn = !!account?.signedIn;
   return (
     <div className="flex min-h-dvh flex-col bg-page text-ink">
       <header className="mx-auto flex h-16 w-full max-w-[1200px] items-center justify-between px-5 md:h-20 md:px-10">
@@ -57,8 +80,14 @@ function Landing() {
         </Link>
         <nav className="flex items-center gap-1">
           <LangToggle />
-          <Link to="/studio" className="ml-1 hidden h-10 items-center rounded-ui px-4 text-sm font-medium hover:bg-wash sm:inline-flex">
-            {t('landing.cta')}
+          {/* Task 026: the way in to an account, left of the studio link; gone once signed in. */}
+          {account?.authOn && !signedIn && (
+            <Link to="/studio" search={{ signin: 1 } as never} className="ml-1 inline-flex h-10 items-center rounded-ui px-4 text-sm font-medium whitespace-nowrap hover:bg-wash" data-testid="landing-signin">
+              {t('account.signIn')}
+            </Link>
+          )}
+          <Link to="/studio" className="ml-1 hidden h-10 items-center rounded-ui px-4 text-sm font-medium whitespace-nowrap hover:bg-wash sm:inline-flex" data-testid="landing-studio">
+            {signedIn ? t('landing.openStudio') : t('landing.cta')}
           </Link>
         </nav>
       </header>

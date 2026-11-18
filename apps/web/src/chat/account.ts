@@ -14,8 +14,8 @@ interface AccountState {
   open: boolean;
   /** Where the sheet grows from (and flows back into). */
   anchor: HTMLElement | null;
-  /** Desktop: under the title (the project menu) or above the input (a quota note). */
-  origin: 'menu' | 'input';
+  /** Desktop: under the title (the project menu), at the account button (task 026) or above the input (a quota note). */
+  origin: 'menu' | 'account' | 'input';
   step: SignInStep;
   email: string;
   /** When a new code may be asked for (ms epoch). */
@@ -25,21 +25,32 @@ interface AccountState {
   error: string | null;
   /** Bumped on a wrong code: the boxes shake and clear. */
   wrong: number;
+  /** The account menu (signed in, task 026) is open, opened from the account button or the project menu. */
+  menu: boolean;
+  menuFrom: 'button' | 'menu';
+  /** The project menu row it grows out of (that row closes with its menu). */
+  menuRect: { x: number; y: number; width: number; height: number } | null;
+  /** Set on a successful sign-in here: the short confirmation shows. */
+  welcome: number;
 }
 
-export const useAccount = create<AccountState>(() => ({ open: false, anchor: null, origin: 'menu', step: 'email', email: '', resendAt: 0, busy: false, error: null, wrong: 0 }));
+export const useAccount = create<AccountState>(() => ({ open: false, anchor: null, origin: 'menu', step: 'email', email: '', resendAt: 0, busy: false, error: null, wrong: 0, menu: false, menuFrom: 'button', menuRect: null, welcome: 0 }));
 
 /** Seconds between two codes for one address (the server also limits per hour). */
 export const RESEND_SECONDS = 45;
 
-export function openSignIn(anchor: HTMLElement | null, origin: 'menu' | 'input' = 'menu'): void {
-  useAccount.setState({ open: true, anchor, origin, error: null, busy: false });
+export function openSignIn(anchor: HTMLElement | null, origin: 'menu' | 'account' | 'input' = 'menu'): void {
+  useAccount.setState({ open: true, anchor, origin, error: null, busy: false, menu: false });
   // From a credits note in the recent strip: the strip makes way (one glass surface at a time).
   if (origin === 'input' && !useStudio.getState().pinned) useStudio.getState().setRecent(false);
 }
 
 export function closeSignIn(): void {
   useAccount.setState({ open: false, busy: false });
+}
+
+export function closeAccountMenu(): void {
+  useAccount.setState({ menu: false });
 }
 
 /** Back to the email step (to change the address). */
@@ -105,7 +116,7 @@ export async function verifyCode(code: string, t: (k: MessageKey) => string): Pr
 
 async function signedIn(): Promise<void> {
   await fetchServerStatus();
-  useAccount.setState({ busy: false, open: false, step: 'email', error: null });
+  useAccount.setState({ busy: false, open: false, step: 'email', error: null, welcome: Date.now() });
 }
 
 const DRAFT_KEY = 'opensu.signin.draft';

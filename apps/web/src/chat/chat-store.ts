@@ -77,7 +77,7 @@ export interface ServerStatus {
   /** Sign-in methods this server offers (none: sign-in is hidden). */
   auth?: { email: boolean; google: boolean };
   /** The signed-in account. */
-  user?: { email: string } | null;
+  user?: { email: string; name?: string | null; image?: string | null } | null;
   /** Credits on the site's key; null when not metered. */
   quota?: QuotaInfo | null;
   /** Keys can be saved with the account here (task 022). */

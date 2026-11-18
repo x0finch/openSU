@@ -389,3 +389,8 @@
   outline: 2px solid var(--lg-ink);
   outline-offset: 2px;
 }
+
+/* A control whose menu or surface is open (the account button, task 026): no tooltip over its own surface. */
+.lg-tipped:has([aria-expanded="true"]) > .lg-tip {
+  opacity: 0 !important;
+}

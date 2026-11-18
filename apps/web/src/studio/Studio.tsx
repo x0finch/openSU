@@ -15,19 +15,20 @@ import { useT } from '../lib/i18n';
 import { ChatInput, PinnedColumn, RecentStrip, SettingsHost } from '../chat/ChatPanel';
 import { closeSignIn, restoreDraftAfterRedirect, useAccount } from '../chat/account';
 import { SignInHost } from '../chat/SignIn';
+import { AccountButton, AccountMenuHost, AccountToast, useSignInParam } from '../chat/AccountEntry';
 import { KeySheetHost } from '../chat/KeyPicker';
 import { closeKeySheet, useKeys } from '../chat/keys';
 import { useChat } from '../chat/chat-store';
 import { useAutosave } from '../lib/autosave';
 import { restoreLang, useStudio } from '../lib/store';
 import { applyParams, useUrlState } from '../lib/url-state';
-import { Hints, ModeSwitch, TitleMenu, useSunPlayer } from './chrome';
+import { Facts, Hints, ModeSwitch, TitleMenu, useSunPlayer } from './chrome';
 import type { Derived } from './house-data';
 import { Loading } from './Loading';
 import { type DockExtent, PhoneDock, SHEET_MS } from './PhoneDock';
 import { PlanView } from './PlanView';
 import { DesktopTools, PanelCard, TRAY_ID } from './tools';
-import { GlassLayer, type GlassTone } from '../glass';
+import { GLASS, GlassLayer, type GlassTone } from '../glass';
 import { useDerived } from './useDerived';
 import { Viewer3D } from './Viewer3D';
 import { LandscapeWalkHUD, MobileWalkHUD, useEscapeExitsWalk, WalkHUD } from './WalkHUD';
@@ -223,6 +224,7 @@ function DesktopDock({ onBox, onInput }: { onBox: (b: Box | null) => void; onInp
   useBox(input, onInput);
   return (
     <div ref={ref} className="pointer-events-none absolute bottom-[22px] left-1/2 flex w-[min(580px,calc(100%-48px))] -translate-x-1/2 flex-col items-center gap-3" data-testid="dock">
+      <AccountToast />
       <Hints />
       <div ref={input} className="relative w-full">
         {recent && <RecentStrip className="absolute inset-x-0 bottom-full mb-3" />}
@@ -238,7 +240,7 @@ function SheetInput() {
   return (
     <div className="pointer-events-none absolute inset-x-3 bottom-[max(12px,env(safe-area-inset-bottom))] z-20" data-testid="dock">
       <div className="relative">
-        {recent && <RecentStrip phone className="absolute inset-x-0 bottom-full mb-2" />}
+        {recent ? <RecentStrip phone className="absolute inset-x-0 bottom-full mb-2" /> : <AccountToast className="absolute inset-x-0 bottom-full mb-2" />}
         <ChatInput phone />
       </div>
     </div>
@@ -303,6 +305,7 @@ function QuietLoading({ label }: { label: string }) {
 
 export function Studio() {
   useInitialParams();
+  useSignInParam();
   useEffect(restoreDraftAfterRedirect, []);
   useUrlState();
   useAutosave();
@@ -327,6 +330,8 @@ export function Studio() {
   const canvasLeft = 0;
   const sideRight = column ? PIN_RIGHT : 0;
   const walkLandscape = walk && landscape;
+  // Task 026, temporary: the two phone layouts of the account button (?acct=a | b) until the lead picks one.
+  const [acct] = useState<'a' | 'b'>(() => (typeof location !== 'undefined' && new URLSearchParams(location.search).get('acct') === 'b' ? 'b' : 'a'));
   // Smoky (dark) glass is the studio's material; ?glass=light shows light glass for comparison.
   const [glassTone] = useState<GlassTone>(() => (typeof location !== 'undefined' && new URLSearchParams(location.search).get('glass') === 'light' ? 'light' : 'dark'));
 
@@ -439,13 +444,23 @@ export function Studio() {
           >
             <ModeSwitch />
           </div>
-          {mode !== 'sheet' && <DesktopTools derived={derived} className="absolute top-[18px] right-[18px]" />}
+          {/* The toolbar and, right of it, the account button (task 026): one row, one height, the module's gap. */}
+          <div className="absolute top-[18px] right-[18px] flex items-center" style={{ gap: GLASS.anchorGap }} data-testid="top-trailing">
+            {mode !== 'sheet' && <DesktopTools derived={derived} />}
+            <AccountButton />
+          </div>
           {mode !== 'sheet' && <PanelCard derived={derived} onRect={onPanel} />}
           {walk && <WalkHUD derived={derived} left={sideRight} />}
           {/* The input stays in the sheets view too (the column is not shown there). */}
           {!column && <DesktopDock onBox={setDockBox} onInput={setInputBox} />}
+          {column && (
+            <div className="absolute right-0 bottom-[22px]" style={{ left: sideRight }}>
+              <AccountToast />
+            </div>
+          )}
           <SettingsHost />
           <SignInHost />
+          <AccountMenuHost />
           <KeySheetHost />
         </div>
       ) : walkLandscape ? (
@@ -457,16 +472,52 @@ export function Studio() {
             className="pointer-events-none absolute inset-x-0 top-0 z-10 flex items-start justify-between gap-2.5 pt-[max(10px,env(safe-area-inset-top))] pr-3 pl-4 land:items-center land:pt-[max(6px,env(safe-area-inset-top))]"
             style={landscape ? { paddingLeft: 'max(16px, env(safe-area-inset-left))', paddingRight: 'max(12px, env(safe-area-inset-right))' } : undefined}
           >
-            <div ref={phoneTitleRef} className="min-w-0 pt-0.5">
-              <TitleMenu derived={derived} compact />
-            </div>
-            <ModeSwitch size="sm" className="shrink-0" />
+            {acct === 'a' ? (
+              landscape ? (
+                // (a) sideways: one row has the width: the name, the switch centred, the button at the end.
+                <>
+                  <div ref={phoneTitleRef} className="min-w-0 flex-1 pt-0.5">
+                    <TitleMenu derived={derived} compact />
+                  </div>
+                  <ModeSwitch size="sm" className="shrink-0" />
+                  <div className="flex flex-1 justify-end">
+                    <AccountButton size={44} round />
+                  </div>
+                </>
+              ) : (
+                // (a) the name and the account button on the top row; the switch centred on a row of its own.
+                <div className="flex min-w-0 flex-1 flex-col gap-2">
+                  <div className="flex items-start justify-between gap-2.5">
+                    <div ref={phoneTitleRef} className="min-w-0 pt-0.5">
+                      <TitleMenu derived={derived} compact />
+                    </div>
+                    <AccountButton size={44} round className="shrink-0" />
+                  </div>
+                  <div className="flex justify-center">
+                    <ModeSwitch size="sm" className="shrink-0" />
+                  </div>
+                </div>
+              )
+            ) : (
+              // (b) the top row as it was; under it the facts, and the account button at the line's end.
+              <div className="grid min-w-0 flex-1 grid-cols-[minmax(0,1fr)_auto] items-center gap-x-2.5 gap-y-1">
+                <div ref={phoneTitleRef} className="min-w-0 pt-0.5">
+                  <TitleMenu derived={derived} compact hideFacts />
+                </div>
+                <ModeSwitch size="sm" className="shrink-0" />
+                <Facts derived={derived} className="min-w-0" />
+                <div className="flex justify-end">
+                  <AccountButton size={32} round />
+                </div>
+              </div>
+            )}
           </header>
           {walk && <WalkEdge box={phoneTitle} />}
           {walk && <MobileWalkHUD derived={derived} top={`${header?.bottom ?? 58}px`} bottom={extent?.bottom ?? 130} />}
           {mode !== 'sheet' ? <PhoneDock derived={derived} landscape={landscape} onExtent={onExtent} /> : <SheetInput />}
           <SettingsHost phone />
           <SignInHost phone />
+          <AccountMenuHost />
           <KeySheetHost phone />
         </>
       )}

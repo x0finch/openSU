@@ -109,6 +109,8 @@ async function pickUpstream(req: Request, env: RelayEnv): Promise<Upstream | Res
 interface Caller {
   subject: Subject;
   email: string | null;
+  /** The signed-in account's name and picture (task 026), when it has them. */
+  profile?: { name: string | null; image: string | null };
   /** Set-Cookie for a new visitor cookie. */
   setCookie: string | null;
 }
@@ -118,7 +120,7 @@ export async function identify(req: Request, env: RelayEnv): Promise<Caller> {
   if (auth.enabled) {
     // Better Auth loads only when sign-in is configured; if it cannot, the caller is anonymous.
     const user = await import('./auth.ts').then((m) => m.sessionUser(req, env), () => null);
-    if (user) return { subject: { kind: 'user', id: user.id }, email: user.email, setCookie: null };
+    if (user) return { subject: { kind: 'user', id: user.id }, email: user.email, profile: { name: user.name, image: user.image }, setCookie: null };
   }
   if (auth.secret) {
     const id = await verifyVisitor(req, auth.secret);
@@ -212,15 +214,19 @@ export async function relayStatus(req: Request, env: RelayEnv): Promise<Response
   const headers: Record<string, string> = { 'cache-control': 'no-store' };
   let quota: QuotaStatus | null = null;
   let email: string | null = null;
+  let profile: { name: string | null; image: string | null } = { name: null, image: null };
   let quotaError: string | null = null;
   try {
     if (s && cfg.enabled && env.DB) {
       const caller = await identify(req, env);
       email = caller.email;
+      if (caller.profile) profile = caller.profile;
       if (caller.setCookie) headers['set-cookie'] = caller.setCookie;
       quota = await quotaStatus(env.DB, cfg, caller.subject, clientIp(req));
     } else if (auth.enabled) {
-      email = (await import('./auth.ts').then((m) => m.sessionUser(req, env), () => null))?.email ?? null;
+      const user = await import('./auth.ts').then((m) => m.sessionUser(req, env), () => null);
+      email = user?.email ?? null;
+      if (user) profile = { name: user.name, image: user.image };
     }
   } catch (e) {
     console.error('status: database error', e instanceof Error ? e.message : e);
@@ -232,7 +238,7 @@ export async function relayStatus(req: Request, env: RelayEnv): Promise<Response
       provider: s?.provider ?? null,
       model: s?.model ?? null,
       auth: { email: auth.email, google: auth.google },
-      user: email ? { email } : null,
+      user: email ? { email, ...profile } : null,
       // Keys can be saved with the account (task 022).
       keys: keysConfig(env).enabled,
       quota,

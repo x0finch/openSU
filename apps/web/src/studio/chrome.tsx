@@ -12,7 +12,7 @@ import { freshView, type Mode, useStudio } from '../lib/store';
 import { resetToTemplate } from '../lib/autosave';
 import { bearingText, frontBearing, placeText } from '../lib/site';
 import { exportConversation, replaceHouse, useChat } from '../chat/chat-store';
-import { openSignIn, signOut } from '../chat/account';
+import { accountName, openAccount } from '../chat/AccountEntry';
 import { useKeys } from '../chat/keys';
 import { showKeyChoices } from '../chat/KeyPicker';
 import type { Derived } from './house-data';
@@ -59,7 +59,7 @@ function useDismiss(open: boolean, close: (viaKey: boolean) => void, refs: RefOb
 /* Title and project menu                                              */
 /* ------------------------------------------------------------------ */
 
-function Facts({ derived, className }: { derived: Derived | null; className?: string }) {
+export function Facts({ derived, className }: { derived: Derived | null; className?: string }) {
   const t = useT();
   if (!derived) return <p className={cx('h-4', className)}><span className="inline-block h-2.5 w-36 rounded-sm bg-wash" /></p>;
   const storeys = derived.attic ? t('facts.storeysAttic', { n: derived.storeys }) : t('facts.storeysValue', { n: derived.storeys });
@@ -82,7 +82,7 @@ function Facts({ derived, className }: { derived: Derived | null; className?: st
  * templates, reset, language, AI settings, about). Reports its extent so
  * the 3D view frames the house clear of it.
  */
-export function TitleMenu({ derived, onRect, compact }: { derived: Derived | null; onRect?: (r: { right: number; bottom: number }) => void; compact?: boolean }) {
+export function TitleMenu({ derived, onRect, compact, hideFacts }: { derived: Derived | null; onRect?: (r: { right: number; bottom: number }) => void; compact?: boolean; hideFacts?: boolean }) {
   const t = useT();
   const house = useStudio((s) => s.house);
   const [open, setOpen] = useState(false);
@@ -136,7 +136,8 @@ export function TitleMenu({ derived, onRect, compact }: { derived: Derived | nul
         <span className={cx('truncate font-semibold tracking-[-0.01em]', compact ? 'text-[17px] max-[339px]:text-[15px]' : 'text-[20px]')}>{name}</span>
         <ChevronDownSmallIcon width={16} height={16} className={cx('-ml-0.5 shrink-0 text-ink-2 transition-transform duration-200', open && 'rotate-180')} />
       </button>
-      <Facts derived={derived} className={cx('pl-0', compact ? 'mt-0' : 'mt-0.5')} />
+      {/* Task 026 phone variant (b): the facts are a line of the header of their own. */}
+      {!hideFacts && <Facts derived={derived} className={cx('pl-0', compact ? 'mt-0' : 'mt-0.5')} />}
       {/* The menu stands under the house name's block (its name and facts), not over the facts line. */}
       <ProjectMenu ref={menu} open={open} anchor={() => box.current} onClose={close} compact={compact} />
     </div>
@@ -204,33 +205,23 @@ function ProjectMenu({ open, anchor, onClose, compact, ref }: { open: boolean; a
       style={{ width: compact ? 'min(300px, calc(100vw - 24px))' : 300 }}
       data-testid={open ? 'project-menu-list' : undefined}
     >
-      {/* The account (task 019): hidden when this server offers no sign-in. */}
-      {user ? (
-        <>
-          <div className="flex h-10 items-center gap-2.5 px-3 text-[14px] font-medium" data-testid="menu-account">
-            <span className="grid size-5 shrink-0 place-items-center text-ink-2"><PersonIcon width={17} height={17} /></span>
-            <span className="min-w-0 flex-1 truncate">{user.email}</span>
-          </div>
-          <MenuItem icon={<span className="size-5" />} onSelect={() => { onClose(false); void signOut(); }} testId="menu-signout">
-            {t('account.signOut')}
-          </MenuItem>
-          <Sep />
-        </>
-      ) : authOn ? (
+      {/* The account (task 019; task 026: the same surface as the account button): hidden when this server offers no sign-in. */}
+      {authOn && (
         <>
           <GlassMenuItem
             icon={<PersonIcon width={17} height={17} />}
             onClick={(e) => {
-              openSignIn(e.currentTarget, 'menu');
+              openAccount(e.currentTarget, 'menu');
               onClose(false);
             }}
-            data-testid="menu-signin"
+            aria-haspopup={user ? 'menu' : 'dialog'}
+            data-testid={user ? 'menu-account' : 'menu-signin'}
           >
-            {t('account.signIn')}
+            {user ? accountName(user) : t('account.signIn')}
           </GlassMenuItem>
           <Sep />
         </>
-      ) : null}
+      )}
       <MenuItem icon={<PinIcon width={17} height={17} />} value={site ? placeText(site, lang) : ''} onSelect={() => { onClose(false); setSitePanel({ kind: 'location' }); }} testId="menu-location">
         {t('more.location')}
       </MenuItem>

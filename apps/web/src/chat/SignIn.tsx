@@ -1,7 +1,7 @@
 // The sign-in sheet (task 019). One flow for new and returning people:
 // an email, then the 6-digit code; or Google. Desktop: a glass panel that
-// flows out of the control that opened it (the account entry of the
-// project menu, or the "sign in" of a credits note) and back; phone: the
+// flows out of the control that opened it (the account button, the
+// account row of the project menu, or the "sign in" of a credits note) and back; phone: the
 // inset bottom sheet with detents. One field per step, one primary action,
 // a short line of what happens next; errors are calm sentences in the
 // sheet. Nothing navigates away from the drawing; the message draft stays.
@@ -255,6 +255,7 @@ function SignInBody({ phone }: { phone?: boolean }) {
 const MENU_TRIGGER = '[data-testid=project-menu]';
 const HOUSE_NAME = '[data-house-name]';
 const INPUT = '[data-testid=prompt]';
+const ACCOUNT = '[data-account-button]';
 
 /**
  * Hosts the sheet. Desktop: a popover at the house name (from its menu)
@@ -280,24 +281,29 @@ export function SignInHost({ phone }: { phone?: boolean }) {
     if (!open || phone) return;
     const down = (e: PointerEvent) => {
       if (panel.current?.contains(e.target as Node)) return;
+      // The account button toggles it itself (task 026).
+      if ((e.target as Element | null)?.closest?.('[data-account-button]')) return;
       if (useAccount.getState().busy) return;
       closeSignIn();
     };
     window.addEventListener('pointerdown', down, true);
     return () => window.removeEventListener('pointerdown', down, true);
   }, [open, phone]);
-  // Where it stands: under the house name (from its menu), else above the input, where the draft waits.
-  const anchor = () => document.querySelector<HTMLElement>(origin === 'menu' ? HOUSE_NAME : INPUT);
+  // Where it stands: under the house name (from its menu), at the account button (task 026), else above the input, where the draft waits.
+  const anchor = () => (origin === 'account' && from?.isConnected ? from : document.querySelector<HTMLElement>(origin === 'menu' ? HOUSE_NAME : origin === 'account' ? ACCOUNT : INPUT));
   // What it grows out of: the opening control's box (a menu row closes with its menu); it flows back into the house name or that control.
   const grow = () => {
     if (open && rect) return { x: rect.left, y: rect.top, width: rect.width, height: rect.height };
     if (origin === 'menu') return document.querySelector<HTMLElement>(MENU_TRIGGER);
+    // Back into the account button (after a sign-in it is the avatar, a new element).
+    if (origin === 'account') return document.querySelector<HTMLElement>(ACCOUNT) ?? (from?.isConnected ? from : null);
     return from?.isConnected ? from : document.querySelector<HTMLElement>(INPUT);
   };
   if (!shown) return null;
   const onClosed = () => {
     setShown(false);
     if (origin === 'menu') document.querySelector<HTMLElement>(MENU_TRIGGER)?.focus({ preventScroll: true });
+    else if (origin === 'account') document.querySelector<HTMLElement>(ACCOUNT)?.focus({ preventScroll: true });
     // Desktop: back to the draft (on a phone this would raise the keyboard).
     else if (!phone) document.querySelector<HTMLElement>('[data-testid=prompt-bar]')?.focus({ preventScroll: true });
   };
@@ -331,7 +337,7 @@ export function SignInHost({ phone }: { phone?: boolean }) {
         ref={panel}
         open={open}
         anchor={anchor}
-        placement={origin === 'menu' ? 'below-start' : 'above-center'}
+        placement={origin === 'menu' ? 'below-start' : origin === 'account' ? 'below-end' : 'above-center'}
         from={grow}
         kind="text"
         onClosed={onClosed}

@@ -218,13 +218,26 @@ export async function warmUp(auth: Auth, siteUrl: string): Promise<void> {
  * when sign-in is broken the caller counts as anonymous (the quota still
  * applies).
  */
-export async function sessionUser(req: Request, env: AccountEnv): Promise<{ id: string; email: string } | null> {
+/** The signed-in account: id, email, and the name and picture when the account has them (Google). */
+export interface SessionUser {
+  id: string;
+  email: string;
+  name: string | null;
+  image: string | null;
+}
+
+export async function sessionUser(req: Request, env: AccountEnv): Promise<SessionUser | null> {
   if (!/opensu\.session_token=/.test(req.headers.get('cookie') ?? '')) return null;
   try {
     const auth = await loadAuth(env);
     if (!auth) return null;
     const s = await auth.api.getSession({ headers: req.headers });
-    return s?.user ? { id: s.user.id, email: s.user.email } : null;
+    if (!s?.user) return null;
+    const u = s.user as { id: string; email: string; name?: string | null; image?: string | null };
+    // Email sign-in leaves the name empty (or the address); only https pictures are passed on.
+    const name = u.name?.trim() && u.name.trim() !== u.email ? u.name.trim() : null;
+    const image = u.image && /^https:\/\//.test(u.image) ? u.image : null;
+    return { id: u.id, email: u.email, name, image };
   } catch (e) {
     console.error(`auth: session not readable (${reason(e)})`);
     return null;
