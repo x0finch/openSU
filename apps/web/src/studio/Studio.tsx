@@ -269,7 +269,8 @@ function WalkEdge({ box }: { box: Box | null }) {
       for (const el of document.querySelectorAll<HTMLElement>('.lg')) {
         const g = el.getBoundingClientRect();
         if (!g.width || g.right <= a.l || g.left >= a.r || g.bottom <= a.t || g.top >= a.b) continue;
-        if (g.left >= box.right - 1) a.r = Math.min(a.r, g.left - 2);
+        // Glass beside the name (the share capsule, task 029) bounds the paper on the right, as glass right of the block does.
+        if (g.left >= box.right - 1 || (g.left > box.left + 40 && g.top < box.top + 40)) a.r = Math.min(a.r, g.left - 2);
         else if (g.top >= box.bottom - 1) a.b = Math.min(a.b, g.top - 2);
       }
       setArea((c) => (c && c.l === a.l && c.t === a.t && c.r === a.r && c.b === a.b ? c : a));
@@ -358,10 +359,6 @@ export function Studio() {
   const modeRef = useRef<HTMLDivElement>(null);
   const headerRef = useRef<HTMLElement>(null);
   useBox(titleRef, setTitle, [desktop]);
-  // The name block alone (without the share button beside it): what the paper fades in under while walking.
-  const nameRef = useRef<HTMLDivElement>(null);
-  const [nameBox, setNameBox] = useBoxState();
-  useBox(nameRef, setNameBox, [desktop]);
   useBox(modeRef, setModeBox, [column, desktop]);
   useBox(headerRef, setHeader, [desktop, landscape, walkLandscape]);
   const phoneTitleRef = useRef<HTMLDivElement>(null);
@@ -437,16 +434,13 @@ export function Studio() {
           {/* A zoomed plan fades out under the top row instead of sliding beneath it. */}
           {mode === 'plan' && <div className="absolute top-0 right-0 h-24 bg-gradient-to-b from-white via-white/90 to-transparent" style={{ left: canvasLeft }} aria-hidden="true" />}
           {/* Walking, the scene behind the name is a room, not the white drawing: the paper fades in under the top row (a scroll-edge effect) so the name stays plain ink on paper. */}
-          {walk && <WalkEdge box={nameBox} />}
+          {walk && <WalkEdge box={title} />}
           {/* A menu or panel opened over it makes it step aside (the glass module's rule, `stepAside`). */}
           {column && <PinnedColumn style={{ top: (title?.bottom ?? 72) + PIN_HANG, left: PIN_LEFT, bottom: PIN_BOTTOM, width: PIN_COLUMN }} />}
           {/* The name stays put, plain ink on the drawing, pinned or not; the sidebar hangs under it. Task 029: "分享"
               on the name's line, with the document it shares (Apple's document title menu, Notion's title row). */}
-          <div ref={titleRef} className="absolute top-[18px] left-6 flex w-max max-w-[min(360px,calc(50vw-200px))] items-start gap-3" data-testid="title-block" data-title-row="">
-            <div ref={nameRef} className="min-w-0">
-              <TitleMenu derived={derived} />
-            </div>
-            <ShareButton className="shrink-0" />
+          <div ref={titleRef} className="absolute top-[18px] left-6 w-max max-w-[min(360px,calc(50vw-200px))]" data-testid="title-block" data-title-row="">
+            <TitleMenu derived={derived} trailing={<ShareButton className="shrink-0" />} />
           </div>
           <div
             ref={modeRef}

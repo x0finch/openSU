@@ -165,7 +165,8 @@ const cropHashes = new Map();
 const errors = [];
 
 const settle = (page, ms = 700) => page.evaluate((m) => new Promise((r) => setTimeout(() => requestAnimationFrame(() => requestAnimationFrame(r)), m)), ms);
-const HIDE_TEXT = '*,*::placeholder,*::before,*::after{color:transparent!important;-webkit-text-fill-color:transparent!important;caret-color:transparent!important;text-shadow:none!important}.lg svg,button svg,[role=menuitem] svg,[role=menuitemradio] svg{visibility:hidden!important}';
+const HIDE_TEXT = '*,*::placeholder,*::before,*::after{color:transparent!important;-webkit-text-fill-color:transparent!important;caret-color:transparent!important;text-shadow:none!important}.lg svg,button svg,[role=menuitem] svg,[role=menuitemradio] svg{visibility:hidden!important}[data-primary-action],.lg-field,.lg-switch{visibility:hidden!important}';
+// (Task 029: a surface's filled controls, the yellow primary action, a field and a switch, are content, not its glass: hidden too.)
 
 const SEVERITY = {
   wrap: () => 'P1',
@@ -201,9 +202,9 @@ const SEVERITY = {
   'tip-contrast': (f) => (f.evidence.ratio < 3 ? 'P0' : 'P1'),
   'hover-plate': () => 'P1',
   'anchor-gap': () => 'P1',
-  'anchor-joined': () => 'P1',
-  'panel-attach': () => 'P1',
+  'panel-shell': () => 'P1',
   'motion-shape': () => 'P1',
+  'motion-anchor': () => 'P1',
   'motion-empty': () => 'P1',
 };
 
@@ -233,7 +234,7 @@ const ANCHOR_GAP = (() => {
 const TIP_MIN = 4.5;
 // Motion: a frame's glass outline against the rounded rectangle of its bounding box.
 const MOTION_IOU_MIN = 0.9;
-const attachments = []; // toolbar panels: how each one attaches, per state and mode
+const shells = []; // task 029: the inside of every open non-menu surface (title size, close box, inset)
 
 async function capture(page, cfg, state, extra = {}) {
   // No hover: the pointer rests on the page's right edge (tooltips closed).
@@ -327,7 +328,7 @@ async function capture(page, cfg, state, extra = {}) {
       errors.push(`${cfg.name} ${state}: placeholder test ${f.id}: ${e.message.split('\n')[0]}`);
     }
   }
-  // Anchored surfaces (task 025): at their anchor, within the module's gap; joined panels touch their toolbar.
+  // Anchored surfaces (task 025; task 029: one attachment): every open surface stands at the module's gap from its anchor.
   const anchored = await page.evaluate(anchoredSurfaces).catch(() => []);
   for (const a of anchored) {
     const s = a.s, b = a.a;
@@ -337,27 +338,38 @@ async function capture(page, cfg, state, extra = {}) {
     const vertical = xOver > 0 || yOver <= 0;
     const gap = vertical ? Math.max(s.y - (b.y + b.h), b.y - (s.y + s.h)) : Math.max(s.x - (b.x + b.w), b.x - (s.x + s.w));
     const cross = vertical ? xOver : yOver;
-    const ev = { gap: Math.round(gap * 10) / 10, crossOverlap: Math.round(cross * 10) / 10, surface: s, anchor: b, joined: a.joined };
-    if (a.joined) {
-      let fill = gap <= 1 ? 1 : 0;
-      if (gap > 1 && cross > 8) {
-        const ox = Math.max(s.x, b.x), ow = cross;
-        const top = s.y >= b.y + b.h - 1;
-        // The middle rows of the gap (its edges carry the rim light of either shape).
-        const mid = top ? b.y + b.h + gap / 2 : s.y + s.h + gap / 2;
-        const band = { x: Math.round(ox + ow * 0.25), y: Math.round(mid - 1), w: Math.max(2, Math.round(ow * 0.5)), h: 2 };
-        // Below the panel's bevel band: its plain glass.
-        const inside = { x: Math.round(s.x + s.w * 0.3), y: Math.round(top ? s.y + 14 : s.y + s.h - 20), w: Math.round(s.w * 0.4), h: 6 };
-        const j = await lab.evaluate(joinFill, { png: bare.toString('base64'), band, inside, relative: true });
-        fill = j.fill;
-        ev.fill = j.fill;
-      }
-      const attach = fill >= 0.8 ? 'joined' : `floats ${Math.round(gap)} px`;
-      attachments.push({ config: cfg.name, state, toolbar: a.anchor, mode: a.mode, attach, backend: cfg.css ? 'css' : (a.mode === '3d' ? 'webgl' : 'css') });
-      if (fill < 0.8) at('anchor-joined', { el: a.surface, comp: a.surface.replace(/[[\]]/g, ''), msg: `a toolbar panel does not touch its toolbar ${a.anchor}: ${Math.round(gap)} px apart, ${Math.round((ev.fill ?? 0) * 100)}% of the gap is glass`, evidence: ev, rect: { x: Math.min(s.x, b.x), y: Math.min(s.y, b.y), w: Math.max(s.x + s.w, b.x + b.w) - Math.min(s.x, b.x), h: Math.max(s.y + s.h, b.y + b.h) - Math.min(s.y, b.y) } });
-    } else if (cross <= 0 || gap > ANCHOR_GAP + 1.5 || gap < -1) {
+    const ev = { gap: Math.round(gap * 10) / 10, crossOverlap: Math.round(cross * 10) / 10, surface: s, anchor: b, bar: a.bar };
+    if (cross <= 0 || gap > ANCHOR_GAP + 1.5 || gap < ANCHOR_GAP - 1.5) {
       at('anchor-gap', { el: a.surface, comp: a.surface.replace(/[[\]]/g, ''), msg: cross <= 0 ? `an open surface does not overlap its anchor ${a.anchor} on the cross axis (${Math.round(gap)} px away)` : `an open surface is ${Math.round(gap)} px from its anchor ${a.anchor} (the module's gap is ${ANCHOR_GAP} px)`, evidence: ev, rect: { x: Math.min(s.x, b.x), y: Math.min(s.y, b.y), w: Math.max(s.x + s.w, b.x + b.w) - Math.min(s.x, b.x), h: Math.max(s.y + s.h, b.y + b.h) - Math.min(s.y, b.y) } });
     }
+  }
+  // Task 029: the inside of every open surface that is not a menu (desktop popovers, phone sheets).
+  const sh = await page.evaluate(() => {
+    const vis = (e) => {
+      const r = e.getBoundingClientRect();
+      if (r.width < 40 || r.height < 40) return false;
+      for (let x = e; x && x.nodeType === 1; x = x.parentElement) if (getComputedStyle(x).visibility === 'hidden' || Number(getComputedStyle(x).opacity) < 0.5) return false;
+      return true;
+    };
+    const tid = (e) => e.getAttribute('data-testid');
+    const out = [];
+    const surfaces = [...document.querySelectorAll('[data-anchored]:not([role=menu]), [data-testid=phone-sheet][data-kind=tool], [role=dialog]')].filter(vis);
+    for (const sEl of surfaces) {
+      const surf = sEl.closest('.lg') ?? sEl;
+      if (out.some((o) => o.el === surf)) continue;
+      const shell = surf.querySelector('.lg-panel');
+      const title = shell?.querySelector('[data-panel-title]');
+      const close = shell?.querySelector('[data-panel-close]');
+      const cs = shell ? getComputedStyle(shell) : null;
+      const t = title ? getComputedStyle(title) : null;
+      const cr = close?.getBoundingClientRect();
+      out.push({ el: surf, id: tid(surf) || tid(sEl) || surf.getAttribute('aria-label') || 'surface', shell: !!shell, phone: shell?.hasAttribute('data-phone') ?? false, title: t ? `${t.fontSize} ${t.fontWeight}` : null, close: cr ? `${Math.round(cr.width)}x${Math.round(cr.height)}` : null, inset: cs ? `${cs.paddingTop} ${cs.paddingRight} ${cs.paddingBottom} ${cs.paddingLeft}` : null, gap: cs?.rowGap ?? null });
+    }
+    return out.map(({ el, ...o }) => o);
+  }).catch(() => []);
+  for (const x of sh) {
+    shells.push({ config: cfg.name, state, phone: !!cfg.phone, ...x });
+    if (!x.shell) found.push({ rule: 'panel-shell', el: `[${x.id}]`, comp: x.id, msg: 'an open surface that is not a menu is not built on the Popover parts (its header, inset and footer are its own)', evidence: x });
   }
   if (crops) await cropState(page, cfg, state, dom, found);
   // record
@@ -437,7 +449,7 @@ const tipsSeen = [];
  */
 const MOTION_FRAMES = 12;
 const MOTION_STEP_MS = 55;
-async function motionPass(page, cfg, state, { open, close, find, between, joined }) {
+async function motionPass(page, cfg, state, { open, close, find, between }) {
   const found = [];
   const cdp = await page.context().newCDPSession(page);
   await cdp.send('Animation.enable');
@@ -484,6 +496,16 @@ async function motionPass(page, cfg, state, { open, close, find, between, joined
       const j = await lab.evaluate(joinFill, { png: finPng.toString('base64'), band: inside, inside });
       thr = Math.min(205, j.glass + 0.45 * (250 - j.glass));
     }
+    // Task 029, part 4: where the surface's anchor stands (the bar's edge for a control in a bar), at rest.
+    const anc = el ? await el.evaluate((e) => {
+      const a = e.__anchor?.();
+      if (!a) return null;
+      const r = a.getBoundingClientRect();
+      const bar = a.closest('.lg[data-kind=control]');
+      const b = bar && bar !== a ? bar.getBoundingClientRect() : null;
+      const box = b && b.height <= 64 ? { x: r.left, y: b.top, w: r.width, h: b.height } : { x: r.left, y: r.top, w: r.width, h: r.height };
+      return { a: box, bar: b ? { x: b.left, y: b.top, w: b.width, h: b.height } : null };
+    }).catch(() => null) : null;
     await unhide();
     if (between) await between();
     const c = close ? await run('close', close, el) : { frames: [] };
@@ -495,13 +517,30 @@ async function motionPass(page, cfg, state, { open, close, find, between, joined
         const f = fr.f;
         // A sliver (the last frames of a close) is too thin to judge at CSS pixels.
         if (f.gone || f.alpha < 0.05 || f.b.w < 12 || f.b.h < 12) continue;
-        const m = await lab.evaluate(shapeMask, { png: fr.png.toString('base64'), b: f.b, thr, margin: joined ? 0 : 2 });
+        const m = await lab.evaluate(shapeMask, { png: fr.png.toString('base64'), b: f.b, thr, margin: 2 });
         fr.m = m;
         // The outline is judged where the glass is mostly opaque (a fading surface reads lighter than the threshold).
         if (!m.skip && f.alpha >= 0.75 && (m.iou < MOTION_IOU_MIN || m.cover < 0.6) && (!worst || m.iou < worst.m.iou)) worst = fr;
         if (area && f.alpha >= 0.9 && (f.b.w * f.b.h) / area >= 0.25 && f.content < 0.15 && !empty) empty = fr;
       }
       const id = name ? `[${name}]` : state;
+      // Task 029, part 4: it opens away from its anchor. On no frame does its glass cross the anchor or the bar the
+      // anchor sits in, and its edge nearest the anchor stays within the module's gap of where it rests (it grows
+      // away from the anchor; it does not slide across it).
+      if (anc && fin && !fin.gone) {
+        const fb = fin.b;
+        const below = fb.y >= anc.a.y + anc.a.h - 2, above = fb.y + fb.h <= anc.a.y + 2;
+        const keep = [anc.a, anc.bar].filter(Boolean);
+        let bad = null;
+        for (const fr of seq) {
+          const f = fr.f;
+          if (f.gone || f.alpha < 0.05 || f.b.w < 1 || f.b.h < 1) continue;
+          const hits = keep.some((k) => f.b.x < k.x + k.w - 0.5 && f.b.x + f.b.w > k.x + 0.5 && f.b.y < k.y + k.h - 0.5 && f.b.y + f.b.h > k.y + 0.5);
+          const drift = below ? Math.abs(f.b.y - fb.y) : above ? Math.abs(f.b.y + f.b.h - (fb.y + fb.h)) : 0;
+          if ((hits || drift > ANCHOR_GAP + 1.5) && !bad) bad = { fr, hits, drift };
+        }
+        if (bad) found.push({ rule: 'motion-anchor', el: id, comp: id.replace(/[[\]]/g, ''), msg: `while it ${label}s, the surface ${bad.hits ? 'crosses its anchor or the bar it sits in' : `slides ${Math.round(bad.drift)} px along its anchor's side instead of growing away from it`} (frame ${bad.fr.k})`, evidence: { frame: `motion/${cfg.name}/${bad.fr.file}`, box: bad.fr.f.b, anchor: anc.a, bar: anc.bar, drift: Math.round(bad.drift * 10) / 10 }, rect: { x: bad.fr.f.b.x, y: bad.fr.f.b.y, w: bad.fr.f.b.w, h: bad.fr.f.b.h } });
+      }
       motionSeen.push({ config: cfg.name, state, dir: label, frames: seq.map((fr) => ({ file: fr.file, ...fr.f, iou: fr.m?.iou, cover: fr.m?.cover })) });
       if (worst) found.push({ rule: 'motion-shape', el: id, comp: id.replace(/[[\]]/g, ''), msg: `while it ${label}s, the glass is not a rounded rectangle (frame ${worst.k}: ${Math.round(worst.m.iou * 100)}% of its outline matches its box's rounded rectangle, ${Math.round(worst.m.cover * 100)}% of its box is glass)`, evidence: { frame: `motion/${cfg.name}/${worst.file}`, iou: worst.m.iou, cover: worst.m.cover, box: worst.f.b, mask: worst.m.bbox, thr: Math.round(thr) }, rect: { x: worst.f.b.x, y: worst.f.b.y, w: worst.f.b.w, h: worst.f.b.h } });
       if (empty) found.push({ rule: 'motion-empty', el: id, comp: id.replace(/[[\]]/g, ''), msg: `while it ${label}s, the surface is an empty shape at full opacity (frame ${empty.k}: glass ${Math.round(empty.f.alpha * 100)}%, ${Math.round(((empty.f.b.w * empty.f.b.h) / area) * 100)}% of its size, content ${Math.round(empty.f.content * 100)}%)`, evidence: { frame: `motion/${cfg.name}/${empty.file}`, ...empty.f }, rect: { x: empty.f.b.x, y: empty.f.b.y, w: empty.f.b.w, h: empty.f.b.h } });
@@ -734,7 +773,7 @@ async function runConfig(cfg) {
   };
   const tl = T[cfg.lang];
   // A surface that opens: its frames (open and close) around the state's capture.
-  const M = async (page, name, { open, close, find, extra, joined }) => {
+  const M = async (page, name, { open, close, find, extra }) => {
     if (!wants(cfg, name)) return false;
     if (noMotion) {
       await open();
@@ -744,7 +783,7 @@ async function runConfig(cfg) {
       await settle(page, 600);
       return true;
     }
-    await motionPass(page, cfg, name, { open, close, find, joined, between: () => S(page, name, null, extra) });
+    await motionPass(page, cfg, name, { open, close, find, between: () => S(page, name, null, extra) });
     return true;
   };
   const byTestId = (page, id) => () => page.$(`[data-testid="${id}"]`);
@@ -768,9 +807,9 @@ async function runConfig(cfg) {
   await S(page, '3d-idle');
   for (const tool of ['views', 'levels', 'sun']) {
     if (!wants(cfg, `panel-${tool}`)) continue;
-    // Desktop panels are anchored surfaces: one of them is filmed opening and closing.
-    if (!cfg.phone && tool === 'views') {
-      await M(page, 'panel-views', { open: () => page.getByTestId('bar-views').first().click(), close: () => page.keyboard.press('Escape'), find: byTestId(page, 'tray-views'), joined: true });
+    // Desktop panels are anchored surfaces: each is filmed opening and closing (task 029: away from its tool).
+    if (!cfg.phone) {
+      await M(page, `panel-${tool}`, { open: () => page.getByTestId(`bar-${tool}`).first().click(), close: () => page.keyboard.press('Escape'), find: byTestId(page, `tray-${tool}`) });
       await settle(page, 600);
       continue;
     }
@@ -835,7 +874,7 @@ async function runConfig(cfg) {
           await settle(page, 1200);
         });
         await page.getByTestId('bar-levels').first().click().catch(() => {});
-      } else await M(page, 'plan-levels-panel', { open: () => page.getByTestId('bar-levels').first().click(), close: () => page.keyboard.press('Escape'), find: byTestId(page, 'tray-levels'), joined: true });
+      } else await M(page, 'plan-levels-panel', { open: () => page.getByTestId('bar-levels').first().click(), close: () => page.keyboard.press('Escape'), find: byTestId(page, 'tray-levels') });
       await store(page, (id) => window.__studio.store.getState().setLevel(id), levels[0]);
     }
     await store(page, () => window.__studio.store.getState().setMode('3d'));
@@ -1172,13 +1211,12 @@ function crossState() {
     const ws = [...new Set(ts.map((t) => Math.round(t.w)))];
     if (ws.length > 1) out.push({ rule: 'stable-width', config: cfg.name, state: 'all 3D states', phone: !!cfg.phone, el: '[toolbar]', comp: 'toolbar', msg: `the toolbar changes width between states: ${ws.join(', ')} px`, evidence: Object.fromEntries(ws.map((w) => [w, ts.filter((t) => Math.round(t.w) === w).map((t) => t.state).slice(0, 6)])) });
   }
-  // Panels of one toolbar attach one way, in every mode (task 025).
+  // Task 029: one header, one close button and one inset for every surface (per configuration).
   for (const cfg of configs) {
-    const as = attachments.filter((a) => a.config === cfg.name);
-    for (const tb of new Set(as.map((a) => a.toolbar))) {
-      const list = as.filter((a) => a.toolbar === tb);
-      const kinds = [...new Set(list.map((a) => (a.attach === 'joined' ? 'joined' : 'floats')))];
-      if (kinds.length > 1) out.push({ rule: 'panel-attach', config: cfg.name, state: 'all panel states', phone: !!cfg.phone, el: tb, comp: tb.replace(/[[\]]/g, ''), msg: `panels of one toolbar attach two ways: ${[...new Set(list.map((a) => `${a.mode} ${a.attach}`))].join('; ')}`, evidence: list.map((a) => ({ state: a.state, mode: a.mode, attach: a.attach })) });
+    const list = shells.filter((x) => x.config === cfg.name && x.shell);
+    for (const key of ['title', 'close', 'inset', 'gap']) {
+      const vals = [...new Set(list.map((x) => x[key]).filter((v) => v !== null))];
+      if (vals.length > 1) out.push({ rule: 'panel-shell', config: cfg.name, state: 'all surfaces', phone: !!cfg.phone, el: `[${key}]`, comp: 'surfaces', msg: `open surfaces differ in their ${key}: ${vals.join(' / ')}`, evidence: Object.fromEntries(vals.map((v) => [v, [...new Set(list.filter((x) => x[key] === v).map((x) => `${x.state} ${x.id}`))].slice(0, 6)])) });
     }
   }
   // Disabled controls that look like their enabled selves.
@@ -1309,7 +1347,7 @@ const KNOWN = [
   ['12a tooltip unreadable in the pinned header', (g) => g.rule === 'tip-contrast' && g.where.some((w) => /pinned/.test(w))],
   ['12b hover plates of one row differ (pinned header)', (g) => g.rule === 'hover-plate' && g.where.some((w) => /pinned/.test(w))],
   ['13 key menu opens away from its button', (g) => g.rule === 'anchor-gap' && /key-menu|menu/.test(g.el) && g.where.some((w) => /picker/.test(w))],
-  ['14a plan levels panel attaches unlike the 3D panels', (g) => g.rule === 'panel-attach' || (g.rule === 'anchor-joined' && g.where.some((w) => /plan/.test(w)))],
+  ['14a plan levels panel attaches unlike the 3D panels', (g) => (g.rule === 'anchor-gap' && /levels/.test(g.el)) || (g.rule === 'anchor-gap' && g.where.some((w) => /plan/.test(w)))],
   ['14b a panel is an empty shape mid-animation', (g) => g.rule === 'motion-empty'],
 ];
 const selfTest = KNOWN.map(([name, test]) => {
@@ -1319,7 +1357,7 @@ const selfTest = KNOWN.map(([name, test]) => {
 
 const perRule = {};
 for (const g of list) perRule[g.rule] = (perRule[g.rule] ?? 0) + 1;
-writeFileSync(resolve(outDir, smoke ? 'smoke.json' : 'findings.json'), JSON.stringify({ when: new Date().toISOString(), configs: configs.map((c) => c.name), states, findings: list, raw, selfTest, perRule, errors, attachments, tips: tipsSeen, motion: motionSeen }, null, 1));
+writeFileSync(resolve(outDir, smoke ? 'smoke.json' : 'findings.json'), JSON.stringify({ when: new Date().toISOString(), configs: configs.map((c) => c.name), states, findings: list, raw, selfTest, perRule, errors, shells, tips: tipsSeen, motion: motionSeen }, null, 1));
 
 if (!smoke) {
   writeFileSync(resolve(outDir, 'findings.md'), findingsMd());

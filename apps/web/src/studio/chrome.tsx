@@ -76,7 +76,7 @@ function Facts({ derived, className }: { derived: Derived | null; className?: st
  * templates, reset, language, AI settings, about). Reports its extent so
  * the 3D view frames the house clear of it.
  */
-export function TitleMenu({ derived, onRect, compact }: { derived: Derived | null; onRect?: (r: { right: number; bottom: number }) => void; compact?: boolean }) {
+export function TitleMenu({ derived, onRect, compact, trailing }: { derived: Derived | null; onRect?: (r: { right: number; bottom: number }) => void; compact?: boolean; trailing?: ReactNode }) {
   const t = useT();
   const [open, setOpen] = useState(false);
   const box = useRef<HTMLDivElement>(null);
@@ -99,7 +99,8 @@ export function TitleMenu({ derived, onRect, compact }: { derived: Derived | nul
     if (focus) trigger.current?.focus();
   };
   const menu = useRef<HTMLDivElement>(null);
-  useDismiss(open, close, [box, menu]);
+  // The name toggles the menu itself; a press anywhere else (the share button beside it included) closes it.
+  useDismiss(open, close, [trigger, menu]);
   // The name the user gave the project (task 027), else the house's own title.
   const name = useHouseName();
   // Rename in place (task 027: the file name in the top bar, as in Figma and Google Docs): Enter saves, Escape cancels.
@@ -125,6 +126,8 @@ export function TitleMenu({ derived, onRect, compact }: { derived: Derived | nul
   const titleText = compact ? 'text-[17px] max-[339px]:text-[15px]' : 'text-[20px]';
   return (
     <div className="pointer-events-auto relative min-w-0" ref={box} data-house-name="">
+      {/* The name's line: the name and (task 029) what acts on the document, on its centre line. */}
+      <div className="flex min-w-0 items-center gap-3">
       {renaming ? (
         <div className={cx('-ml-1 flex items-center gap-[7px] px-1', compact ? 'h-8' : 'h-9')}>
           <Mark width={18} height={18} className="shrink-0" />
@@ -172,6 +175,8 @@ export function TitleMenu({ derived, onRect, compact }: { derived: Derived | nul
         <ChevronDownSmallIcon width={16} height={16} className={cx('-ml-0.5 shrink-0 text-ink-2 transition-transform duration-200', open && 'rotate-180')} />
       </Button>
       )}
+      {trailing}
+      </div>
       <Facts derived={derived} className={cx('pl-0', compact ? 'mt-0' : 'mt-0.5')} />
       {/* The menu stands under the house name's block (its name and facts), not over the facts line. */}
       <ProjectMenu ref={menu} open={open} anchor={() => box.current} onClose={close} compact={compact} onRename={() => setRenaming(true)} />

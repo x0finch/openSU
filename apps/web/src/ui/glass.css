@@ -441,6 +441,7 @@
 /* Popover parts (task 029): one inset, one header, one gap, one footer */
 /* ------------------------------------------------------------------ */
 
+@layer components {
 .lg-panel {
   display: flex;
   min-height: 0;
@@ -489,4 +490,5 @@
   color: var(--color-ink-2);
   font-size: 13px;
   line-height: 18px;
+}
 }

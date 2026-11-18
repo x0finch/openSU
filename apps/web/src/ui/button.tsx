@@ -87,15 +87,24 @@ type Common = {
   dim?: number;
 };
 
+/** Utility groups a caller may override for layout (its own height, padding, gap, type size or weight): the base's class of that group gives way. */
+const GROUPS: RegExp[] = [/^shrink/, /^(h|min-h)-/, /^(px|pl|pr)-/, /^(py|pt|pb)-/, /^gap-/, /^text-(\[\d|xs|sm|base|lg|2xs)/, /^font-(normal|medium|semibold|bold)/, /^(size|w)-/];
+function merge(base: string, extra?: string): string {
+  if (!extra) return base;
+  const mine = extra.split(/\s+/).filter(Boolean).map((c) => c.replace(/!$/, ''));
+  const keep = base.split(/\s+/).filter((c) => !GROUPS.some((g) => g.test(c) && mine.some((m) => g.test(m) || (g.source.startsWith('^(h|') && /^size-/.test(m)))));
+  return cx(keep.join(' '), extra);
+}
+
 function classes({ variant = 'plain', size = 'md', icon, children, full, strong, danger, row, tile, inverted }: Common & { children?: ReactNode }): string {
   const round = !!icon && !children;
   return cx(
-    'hit inline-flex shrink-0 items-center justify-center font-medium whitespace-nowrap disabled:opacity-50',
+    'hit inline-flex shrink-0 items-center justify-center whitespace-nowrap disabled:opacity-50',
+    strong ? 'font-semibold' : 'font-medium',
     VARIANT[variant as Exclude<ButtonVariant, 'glass'>],
     round ? cx(ICON[size], 'rounded-full px-0') : SIZE[size],
     variant === 'tinted' && 'lg-plate',
     full && 'w-full',
-    strong && 'font-semibold',
     danger && 'text-danger',
     row && 'w-full justify-start rounded-[14px] text-left',
     tile && 'rounded-[8px]',
@@ -115,7 +124,7 @@ export function Button({ variant = 'plain', size = 'md', height, icon, label, ti
       data-filled={variant === 'tinted' ? '' : undefined}
       data-on={selected ? '' : undefined}
       style={dim ? { width: dim, height: dim, ...rest.style } : rest.style}
-      className={cx(classes({ variant, size, icon, children, full, strong, danger, row, tile, inverted }), className)}
+      className={merge(classes({ variant, size, icon, children, full, strong, danger, row, tile, inverted }), className)}
     >
       {busy ? <Spinner /> : icon}
       {children}
@@ -127,7 +136,7 @@ export function Button({ variant = 'plain', size = 'md', height, icon, label, ti
 /** A link that looks like a button (paper pages, not-found pages): the same variants. */
 export function ButtonLink({ variant = 'paper', size = 'md', icon, full, strong, className, children, ...rest }: Common & AnchorHTMLAttributes<HTMLAnchorElement>) {
   return (
-    <a {...rest} className={cx(classes({ variant, size, icon, children, full, strong }), className)}>
+    <a {...rest} className={merge(classes({ variant, size, icon, children, full, strong }), className)}>
       {icon}
       {children}
     </a>
@@ -135,7 +144,7 @@ export function ButtonLink({ variant = 'paper', size = 'md', icon, full, strong,
 }
 
 /** The class of a button of `variant` and `size`, for a router link that must render its own element. */
-export const buttonClass = (o: Common & { children?: ReactNode; className?: string }) => cx(classes(o), o.className);
+export const buttonClass = (o: Common & { children?: ReactNode; className?: string }) => merge(classes(o), o.className);
 
 /**
  * "Continue with Google": Google's own button (its brand rules: the

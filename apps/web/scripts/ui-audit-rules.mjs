@@ -806,7 +806,7 @@ export function measureDom(opts) {
     p.remove();
     return c;
   })();
-  const ALLOWED_ACCENT = '[data-testid=chat-send], [data-testid^=tray-sun], [data-testid^=sun-], [data-testid=bar-sun], .lg-slider, .lg-glow, .lg-halo, [data-testid=signin-continue], [data-testid=keys-save], [data-testid=settings-save], [data-testid=keys-offer-save]';
+  const ALLOWED_ACCENT = '[data-testid=chat-send], [data-testid^=tray-sun], [data-testid^=sun-], [data-testid=bar-sun], .lg-slider, .lg-glow, .lg-halo, [data-testid=signin-continue], [data-testid=keys-save], [data-testid=settings-save], [data-testid=keys-offer-save], [data-primary-action]';
   if (accentRgb) {
     const isAcc = (c) => {
       const v = parseColor(c);
@@ -1167,9 +1167,10 @@ export async function tipContrast(job) {
 /**
  * In the page: every open anchored surface and its anchor. A surface is
  * found from its trigger (`aria-expanded=true`: `aria-controls`, else the
- * visible menu) or from the glass module (`data-anchored` surfaces expose
- * their anchor). A trigger inside a toolbar anchors its panel to the whole
- * toolbar, joined (UI_STYLE: panels flow out of the toolbar group).
+ * visible menu) or from the base (`data-anchored` surfaces expose their
+ * anchor). Task 029: every surface floats at the module's gap. An anchor
+ * inside a glass bar (a tool of the toolbar) is measured from the bar's
+ * edge, aligned with the control (the base's rule).
  */
 export function anchoredSurfaces() {
   const box = (e) => {
@@ -1190,19 +1191,23 @@ export function anchoredSurfaces() {
   };
   const out = [];
   const seen = new Set();
-  const add = (surface, trigger, anchorEl, joinedHint) => {
+  const add = (surface, trigger, anchorEl) => {
     if (!surface || seen.has(surface) || !open(surface)) return;
     seen.add(surface);
-    const toolbar = trigger?.closest('[role=toolbar]');
-    const joined = joinedHint ?? !!toolbar;
-    const a = joined && toolbar ? toolbar : anchorEl ?? trigger;
+    const a = anchorEl ?? trigger;
     if (!a) return;
+    let ab = box(a);
+    const bar = a.closest('.lg[data-kind=control]');
+    if (bar && bar !== a) {
+      const bb = box(bar);
+      if (bb.h <= 64) ab = { ...ab, y: bb.y, h: bb.h };
+    }
     const mode = window.__studio?.store?.getState?.().mode ?? null;
-    out.push({ surface: desc(surface), anchor: desc(a), s: box(surface), a: box(a), joined, mode, toolbar: toolbar ? desc(toolbar) : null });
+    out.push({ surface: desc(surface), anchor: desc(a), s: box(surface), a: ab, mode, bar: bar && bar !== a ? desc(bar) : null });
   };
   for (const s of document.querySelectorAll('[data-anchored]')) {
     const a = s.__anchor?.();
-    add(s, a, a, s.getAttribute('data-attach') === 'joined');
+    add(s, a, a);
   }
   for (const t of document.querySelectorAll('[aria-expanded=true]')) {
     const ids = (t.getAttribute('aria-controls') || '').split(/\s+/).filter(Boolean);
@@ -1214,42 +1219,11 @@ export function anchoredSurfaces() {
       const menus = [...document.querySelectorAll('[role=menu]')].filter(open);
       s = menus.sort((p, q) => box(q).w * box(q).h - box(p).w * box(p).h)[0] ?? null;
     }
-    add(s, t, null, undefined);
+    add(s, t, null);
   }
   return out;
 }
 
-/**
- * In the analysis page: how much of the gap between a toolbar and its
- * joined panel is glass. `job`: { png (bare, CSS scale), band: rect of the
- * gap, inside: a rect inside the panel near the gap }.
- */
-export async function joinFill(job) {
-  const img = new Image();
-  img.src = `data:image/png;base64,${job.png}`;
-  await img.decode();
-  const c = document.createElement('canvas');
-  c.width = img.width;
-  c.height = img.height;
-  const g = c.getContext('2d', { willReadFrequently: true });
-  g.drawImage(img, 0, 0);
-  const at = (x, y) => {
-    const d = g.getImageData(Math.max(0, Math.min(img.width - 1, Math.round(x))), Math.max(0, Math.min(img.height - 1, Math.round(y))), 1, 1).data;
-    return 0.299 * d[0] + 0.587 * d[1] + 0.114 * d[2];
-  };
-  const vals = [];
-  for (let y = job.inside.y; y < job.inside.y + job.inside.h; y += 2) for (let x = job.inside.x; x < job.inside.x + job.inside.w; x += 3) vals.push(at(x, y));
-  vals.sort((a, b) => a - b);
-  const glass = vals[Math.floor(vals.length / 2)] ?? 0;
-  let n = 0, hit = 0;
-  for (let y = job.band.y; y < job.band.y + job.band.h; y += 1) for (let x = job.band.x; x < job.band.x + job.band.w; x += 2) {
-    n++;
-    // `relative`: glass is anything nearer the glass's luma than the white drawing's (a merged neck carries rim light).
-    const l = at(x, y);
-    if (job.relative ? l < glass + 0.5 * (245 - glass) : Math.abs(l - glass) <= (job.tol ?? 28)) hit++;
-  }
-  return { glass: Math.round(glass), fill: n ? Math.round((hit / n) * 100) / 100 : 1 };
-}
 
 /**
  * In the page, one frame of a surface opening or closing: the glass shape's
@@ -1311,7 +1285,7 @@ export async function shapeMask(job) {
   c.height = img.height;
   const g = c.getContext('2d', { willReadFrequently: true });
   g.drawImage(img, 0, 0);
-  // A joined surface merges with its anchor by design: its mask stops at its own box.
+  // The mask stops just outside the surface's own box.
   const mg = job.margin ?? 2;
   const x0 = Math.max(0, Math.floor(job.b.x - mg)), y0 = Math.max(0, Math.floor(job.b.y - mg));
   const x1 = Math.min(img.width, Math.ceil(job.b.x + job.b.w + mg)), y1 = Math.min(img.height, Math.ceil(job.b.y + job.b.h + mg));
@@ -1351,4 +1325,35 @@ export async function shapeMask(job) {
     if (iou > best.iou) best = { iou, r };
   }
   return { iou: Math.round(best.iou * 1000) / 1000, r: best.r, n, cover: Math.round((n / boxArea) * 1000) / 1000, bbox: { x: bx0 + x0, y: by0 + y0, w: bw, h: bh } };
+}
+/**
+ * In the analysis page: the luma of a surface's glass (the median inside
+ * `inside`) and how much of `band` reads as that glass. `job`: { png
+ * (bare, CSS scale), band, inside }.
+ */
+export async function joinFill(job) {
+  const img = new Image();
+  img.src = `data:image/png;base64,${job.png}`;
+  await img.decode();
+  const c = document.createElement('canvas');
+  c.width = img.width;
+  c.height = img.height;
+  const g = c.getContext('2d', { willReadFrequently: true });
+  g.drawImage(img, 0, 0);
+  const at = (x, y) => {
+    const d = g.getImageData(Math.max(0, Math.min(img.width - 1, Math.round(x))), Math.max(0, Math.min(img.height - 1, Math.round(y))), 1, 1).data;
+    return 0.299 * d[0] + 0.587 * d[1] + 0.114 * d[2];
+  };
+  const vals = [];
+  for (let y = job.inside.y; y < job.inside.y + job.inside.h; y += 2) for (let x = job.inside.x; x < job.inside.x + job.inside.w; x += 3) vals.push(at(x, y));
+  vals.sort((a, b) => a - b);
+  const glass = vals[Math.floor(vals.length / 2)] ?? 0;
+  let n = 0, hit = 0;
+  for (let y = job.band.y; y < job.band.y + job.band.h; y += 1) for (let x = job.band.x; x < job.band.x + job.band.w; x += 2) {
+    n++;
+    // `relative`: glass is anything nearer the glass's luma than the white drawing's (a merged neck carries rim light).
+    const l = at(x, y);
+    if (job.relative ? l < glass + 0.5 * (245 - glass) : Math.abs(l - glass) <= (job.tol ?? 28)) hit++;
+  }
+  return { glass: Math.round(glass), fill: n ? Math.round((hit / n) * 100) / 100 : 1 };
 }

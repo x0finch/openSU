@@ -279,8 +279,8 @@ writeFileSync(resolve(outDir, 'measurements.json'), JSON.stringify(table, null, 
 if (wanted('checks')) {
   const D = vp(1440, 900), P = vp(390, 844);
   // Desktop (task 017): icons only; hover shows the name as a tooltip
-  // below after a delay; nothing changes width; a panel flows out of the
-  // whole group, right edges aligned, joined to it.
+  // below after a delay; nothing changes width; a panel floats below its
+  // own tool at the module's gap (task 029: one attachment).
   {
     const { ctx, page } = await open(D, '/studio');
     const box = () => page.getByTestId('toolbar').boundingBox();
@@ -309,7 +309,8 @@ if (wanted('checks')) {
     const c = await box();
     const pan = await page.getByTestId('tray-views').boundingBox();
     check(await page.getByTestId('tray-views').count() === 1, 'the view panel opens');
-    check(Math.abs(pan.x + pan.width - (c.x + c.width)) < 1 && pan.y - (c.y + c.height) >= 0 && pan.y - (c.y + c.height) < 14, `the panel hangs from the group, right edges aligned, within the merge distance (${(pan.y - c.y - c.height).toFixed(1)} px gap)`);
+    const tool = await page.getByTestId('bar-views').boundingBox();
+    check(Math.abs(pan.y - (c.y + c.height) - 8) < 1 && pan.x <= tool.x + tool.width && pan.x + pan.width >= tool.x, `the panel floats below its tool at the module's gap (${(pan.y - c.y - c.height).toFixed(1)} px)`);
     check(Math.abs(c.width - a.width) < 0.5, 'the group keeps its width while a panel is open');
     check(JSON.stringify(before) === JSON.stringify(after), `opening a panel moves neither the input nor the canvas (${JSON.stringify(after.canvas)})`);
     check(await page.getByTestId('bar-views').getAttribute('data-on') === '', 'the active tool is selected');
