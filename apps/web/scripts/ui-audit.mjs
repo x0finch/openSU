@@ -141,7 +141,7 @@ const CONFIGS = [
 const SETS = {
   [LAYOUT]: ['landing', '3d-idle', 'panel-', 'project-menu', 'site-location', 'plan-', 'sheets', 'chat-text', 'chat-long-text', 'chat-done', 'chat-recent', 'pinned-', 'signin-email', 'account-'],
   [GLASS]: ['3d-idle', 'panel-', 'project-menu', 'chat-text', 'chat-done', 'chat-recent', 'pinned-', 'plan-pinned', 'signin-email', 'key-own-sheet', 'account-'],
-  [SMOKE]: ['3d-idle', 'project-menu', 'pinned-idle', 'plan-pinned', 'account-project', 'account-projects', 'account-share'],
+  [SMOKE]: ['3d-idle', 'project-menu', 'pinned-idle', 'plan-pinned', 'account-invite', 'account-project', 'account-projects', 'account-share'],
 };
 const configs = smoke ? [{ ...CONFIGS[0], set: SMOKE }] : CONFIGS.filter((c) => !onlyConfigs || onlyConfigs.some((o) => c.name.startsWith(o)));
 
@@ -381,7 +381,7 @@ async function capture(page, cfg, state, extra = {}) {
 /* ------------------------------------------------------------------ */
 
 // States whose controls are hovered one by one (desktop: phones do not hover).
-const HOVER_STATES = ['3d-idle', 'account-signed-in', 'account-menu', 'account-share', 'account-share-viewer', 'account-project-menu', 'account-projects-page', 'panel-views', 'panel-levels', 'panel-sun', 'project-menu', 'plan-L2', 'plan-levels-panel', 'pinned-turn', 'pinned-menu', 'pinned-picker', 'chat-recent', 'site-location', 'signin-email', 'sheets'];
+const HOVER_STATES = ['3d-idle', 'account-invite', 'account-signed-in', 'account-menu', 'account-share', 'account-share-viewer', 'account-project-menu', 'account-projects-page', 'panel-views', 'panel-levels', 'panel-sun', 'project-menu', 'plan-L2', 'plan-levels-panel', 'pinned-turn', 'pinned-menu', 'pinned-picker', 'chat-recent', 'site-location', 'signin-email', 'sheets'];
 
 /** Hovers every control: tooltip contrast on rendered pixels, one hover plate shape and height per row. */
 async function hoverPass(page, cfg, state) {
@@ -876,6 +876,13 @@ async function runConfig(cfg) {
   }
   // Turn 1: working, finished (the change in the input), recent strip, pinned.
   await turn(page, tl.north, { hold: wants(cfg, 'chat-working') ? 1 : 0, onWorking: () => S(page, 'chat-working', () => settle(page, 1200)) });
+  // Task 029: signed out, the first change raises the sign-in invitation above the input; closed before the
+  // next states (they are measured as before).
+  if (await page.getByTestId('signin-invite').count()) {
+    if (wants(cfg, 'account-invite')) await S(page, 'account-invite', () => settle(page, 300));
+    await page.getByTestId('signin-invite-close').first().click();
+    await settle(page, 400);
+  }
   await S(page, 'chat-done', () => settle(page, 300));
   await S(page, 'chat-recent', async () => {
     await store(page, () => window.__studio.store.getState().setRecent(true));
@@ -940,15 +947,6 @@ async function runConfig(cfg) {
     await pin(false);
   }
   // Sign-in, each step and its errors.
-  // Task 026: the account button signed out, the sign-in surface at it.
-  if (wants(cfg, 'account-signin')) {
-    await S(page, 'account-signin', async () => {
-      await page.getByTestId('account-button').first().click();
-      await page.waitForSelector('[data-testid=signin-email-input]');
-      await settle(page, 1200);
-    });
-    await esc(page);
-  }
   if (wants(cfg, 'signin-')) {
     const email = `audit-${cfg.name}@example.com`;
     await S(page, 'signin-email', async () => {
@@ -1023,7 +1021,10 @@ async function runConfig(cfg) {
   if (wants(cfg, 'account-signed-in') || wants(cfg, 'account-menu') || wants(cfg, 'account-project') || wants(cfg, 'account-share')) {
     if (!(await page.evaluate(() => !!window.__studio.chat.getState().server?.user))) {
       const email = `account-${cfg.name}@example.com`;
-      await page.getByTestId('account-button').first().click();
+      // Task 029: the studio's account entry is the project menu's account row.
+      await page.getByTestId('project-menu').first().click();
+      await settle(page, 700);
+      await page.getByTestId('menu-signin').first().click();
       await page.getByTestId('signin-email-input').fill(email);
       await page.getByTestId('signin-email-input').press('Enter');
       await page.waitForSelector('[data-testid=otp-0]', { timeout: 15000 });
@@ -1039,7 +1040,9 @@ async function runConfig(cfg) {
     if (wants(cfg, 'account-signed-in')) await S(page, 'account-signed-in', () => settle(page, 300));
     if (wants(cfg, 'account-menu')) {
       await S(page, 'account-menu', async () => {
-        await page.getByTestId('account-button').first().click();
+        await page.getByTestId('project-menu').first().click();
+        await settle(page, 700);
+        await page.getByTestId('menu-account').first().click();
         await page.waitForSelector('[data-testid=account-menu]');
         await settle(page, 1000);
       });
@@ -1053,7 +1056,15 @@ async function runConfig(cfg) {
         const m = await p.share(p.store.getState().openId, true);
         return m?.share ?? null;
       });
-      await M(page, 'account-share', { open: () => page.getByTestId('share-button').first().click(), close: () => page.keyboard.press('Escape'), find: byTestId(page, 'share-surface') });
+      // Task 029: desktop, the button beside the house name; phones, the project menu's first row.
+      const openShareUi = cfg.phone
+        ? async () => {
+            await page.getByTestId('project-menu').first().click();
+            await settle(page, 700);
+            await page.getByTestId('menu-share').first().click();
+          }
+        : () => page.getByTestId('share-button').first().click();
+      await M(page, 'account-share', { open: openShareUi, close: () => page.keyboard.press('Escape'), find: byTestId(page, 'share-surface') });
       if (token && wants(cfg, 'account-share-viewer')) {
         const { ctx: vc, page: vp } = await newPage(cfg);
         // The owner's sun study as well (the toolbar shows its time), so the two pages compare like for like.
