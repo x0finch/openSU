@@ -96,8 +96,9 @@ function merge(base: string, extra?: string): string {
   return cx(keep.join(' '), extra);
 }
 
-function classes({ variant = 'plain', size = 'md', icon, children, full, strong, danger, row, tile, inverted }: Common & { children?: ReactNode }): string {
-  const round = !!icon && !children;
+function classes({ variant = 'plain', size = 'md', icon, children, full, strong, danger, row, tile, inverted, dim }: Common & { children?: ReactNode }): string {
+  // A circle: an icon alone, or any button given a diameter (its children are marks on it, like an unseen dot).
+  const round = (!!icon && !children) || !!dim;
   return cx(
     'hit inline-flex shrink-0 items-center justify-center whitespace-nowrap disabled:opacity-50',
     strong ? 'font-semibold' : 'font-medium',
@@ -124,7 +125,7 @@ export function Button({ variant = 'plain', size = 'md', height, icon, label, ti
       data-filled={variant === 'tinted' ? '' : undefined}
       data-on={selected ? '' : undefined}
       style={dim ? { width: dim, height: dim, ...rest.style } : rest.style}
-      className={merge(classes({ variant, size, icon, children, full, strong, danger, row, tile, inverted }), className)}
+      className={merge(classes({ variant, size, icon, children, full, strong, danger, row, tile, inverted, dim }), className)}
     >
       {busy ? <Spinner /> : icon}
       {children}

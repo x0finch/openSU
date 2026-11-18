@@ -1182,7 +1182,7 @@ try {
       const inv = await box(page, '[data-testid=signin-invite]');
       const prompt = await box(page, '[data-testid=prompt]');
       const clipped = await page.getByTestId('signin-invite-text').evaluate((e) => e.scrollHeight > e.clientHeight + 0.5 || e.scrollWidth > e.clientWidth + 0.5);
-      check(inv.b <= prompt.t - 6 && !clipped && Math.abs(inv.h - 48) <= 0.5, `${tag}: above the prompt, 48 px, its line whole (${(prompt.t - inv.b).toFixed(1)} px above)`);
+      check(inv.b <= prompt.t - 6 && !clipped && (phone ? inv.h >= 47.5 && inv.h <= 64.5 : Math.abs(inv.h - 48) <= 0.5), `${tag}: above the prompt, ${phone ? '48 px or more (up to three lines)' : '48 px'}, its text whole (${inv.h.toFixed(1)} px high, ${(prompt.t - inv.b).toFixed(1)} px above)`);
       await shot(page, `${tag}-invite`, outDir29);
       await page.getByTestId('signin-invite-close').click();
       await settle(page, 400);

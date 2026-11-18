@@ -690,9 +690,9 @@ function PromptInput({ phone, pinned, className }: { phone?: boolean; pinned?: b
           selected={recent}
           dim={dim}
           className={cx('relative', recent && 'text-ink')}
+          icon={<HistoryIcon width={17} height={17} />}
           data-testid="chat-history"
         >
-          <HistoryIcon width={17} height={17} />
           {unseen && !recent && !running && <Dot size={7} className="absolute top-[7px] right-[7px]" />}
         </Button>
       )}

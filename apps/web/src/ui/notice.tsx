@@ -1,6 +1,7 @@
 // Notice: one capsule above the input holding a line and its actions (the
 // sign-in invitation, the view-only bar). Text 12 px from the start, the
-// 32 px actions concentric at the end (8 px); phones allow two lines.
+// 32 px actions concentric at the end (8 px); on phones the line may take
+// up to three lines (the capsule grows; the narrowest phones in English).
 import type { ReactNode } from 'react';
 import { CloseGlyph } from './glyphs';
 import { Button } from './button';
@@ -9,8 +10,9 @@ import { cx, Glass } from './surface';
 export function Notice({ children, actions, onClose, closeLabel, phone, wide, testId, textTestId, role = 'status' }: { children: ReactNode; actions?: ReactNode; onClose?: () => void; closeLabel?: string; phone?: boolean; wide?: boolean; testId?: string; textTestId?: string; role?: string }) {
   return (
     <div className="pointer-events-none flex w-full animate-[fade-in_200ms_ease-out] justify-center">
-      <Glass ariaRole={role} className={cx('pointer-events-auto flex h-12 min-w-0 items-center gap-3 pr-2 pl-3', phone || wide ? 'w-full' : 'max-w-full')} data-testid={testId}>
-        <span className={cx('min-w-0 flex-1 font-medium', phone ? 'line-clamp-2 text-[13px] leading-4' : 'truncate text-[14px]')} data-testid={textTestId}>
+      {/* Phones: a sentence on up to three lines, so the text surface's tint, and the 48 px capsule's radius when it grows (as the input bar keeps its radius, after Messages). */}
+      <Glass ariaRole={role} kind={phone ? 'text' : 'control'} radius={phone ? 24 : 'capsule'} className={cx('pointer-events-auto flex min-h-12 min-w-0 items-center gap-3 pr-2 pl-3', phone ? 'py-1.5' : 'h-12', phone || wide ? 'w-full' : 'max-w-full')} data-testid={testId}>
+        <span className={cx('min-w-0 flex-1 font-medium', phone ? 'line-clamp-3 text-[13px] leading-4' : 'truncate text-[14px]')} data-testid={textTestId}>
           {children}
         </span>
         {actions}

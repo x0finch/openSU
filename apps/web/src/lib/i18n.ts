@@ -463,7 +463,7 @@ const en: Record<MessageKey, string> = {
   'bar.walk': 'Walk',
   'bar.zoom': 'Zoom',
   'views.hint': 'Drag to orbit · double-click to reset',
-  'prompt.placeholder': 'Say a sentence to change the house',
+  'prompt.placeholder': 'Change the house in a sentence',
   'prompt.collapse': 'Hide the conversation',
   'prompt.last': 'Last change',
   'hint.sun': 'See the sunlight',
