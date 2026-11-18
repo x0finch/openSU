@@ -141,7 +141,7 @@ const CONFIGS = [
 const SETS = {
   [LAYOUT]: ['landing', '3d-idle', 'panel-', 'project-menu', 'site-location', 'plan-', 'sheets', 'chat-text', 'chat-long-text', 'chat-done', 'chat-recent', 'pinned-', 'signin-email', 'account-'],
   [GLASS]: ['3d-idle', 'panel-', 'project-menu', 'chat-text', 'chat-done', 'chat-recent', 'pinned-', 'plan-pinned', 'signin-email', 'key-own-sheet', 'account-'],
-  [SMOKE]: ['3d-idle', 'project-menu', 'pinned-idle', 'plan-pinned', 'account-projects'],
+  [SMOKE]: ['3d-idle', 'project-menu', 'pinned-idle', 'plan-pinned', 'account-project', 'account-projects'],
 };
 const configs = smoke ? [{ ...CONFIGS[0], set: SMOKE }] : CONFIGS.filter((c) => !onlyConfigs || onlyConfigs.some((o) => c.name.startsWith(o)));
 
@@ -381,7 +381,7 @@ async function capture(page, cfg, state, extra = {}) {
 /* ------------------------------------------------------------------ */
 
 // States whose controls are hovered one by one (desktop: phones do not hover).
-const HOVER_STATES = ['3d-idle', 'account-signed-in', 'account-menu', 'account-projects', 'panel-views', 'panel-levels', 'panel-sun', 'project-menu', 'plan-L2', 'plan-levels-panel', 'pinned-turn', 'pinned-menu', 'pinned-picker', 'chat-recent', 'site-location', 'signin-email', 'sheets'];
+const HOVER_STATES = ['3d-idle', 'account-signed-in', 'account-menu', 'account-project-menu', 'account-projects-page', 'panel-views', 'panel-levels', 'panel-sun', 'project-menu', 'plan-L2', 'plan-levels-panel', 'pinned-turn', 'pinned-menu', 'pinned-picker', 'chat-recent', 'site-location', 'signin-email', 'sheets'];
 
 /** Hovers every control: tooltip contrast on rendered pixels, one hover plate shape and height per row. */
 async function hoverPass(page, cfg, state) {
@@ -1020,7 +1020,7 @@ async function runConfig(cfg) {
     } else await esc(page);
   }
   // Task 026: signed in, the account button (an avatar) and its menu.
-  if (wants(cfg, 'account-signed-in') || wants(cfg, 'account-menu') || wants(cfg, 'account-projects')) {
+  if (wants(cfg, 'account-signed-in') || wants(cfg, 'account-menu') || wants(cfg, 'account-project')) {
     if (!(await page.evaluate(() => !!window.__studio.chat.getState().server?.user))) {
       const email = `account-${cfg.name}@example.com`;
       await page.getByTestId('account-button').first().click();
@@ -1045,7 +1045,11 @@ async function runConfig(cfg) {
       });
       await esc(page);
     }
-    // Task 027: "My projects" (opened from the project menu), a few projects, then one row's actions.
+    // Task 027: the projects page (signed in, a few projects), its card menu and the template cards; the studio's project menu signed in.
+    if (wants(cfg, 'account-project-menu')) {
+      await page.waitForFunction(() => !!window.__studio.projects?.store.getState().openId && !window.__studio.projects.store.getState().busy, null, { timeout: 30000 });
+      await M(page, 'account-project-menu', { open: () => page.getByTestId('project-menu').first().click(), close: () => page.keyboard.press('Escape'), find: () => page.$('[role=menu]') });
+    }
     if (wants(cfg, 'account-projects')) {
       await page.waitForFunction(() => !!window.__studio.projects?.store.getState().openId && !window.__studio.projects.store.getState().busy, null, { timeout: 30000 });
       await page.evaluate(async (names) => {
@@ -1055,29 +1059,26 @@ async function runConfig(cfg) {
           const summary = JSON.stringify({ title: n, style: h.style, w: h.site.width, d: h.site.depth, area: 142.6, storeys: 2, attic: false });
           await fetch('/api/projects', { method: 'POST', headers: { 'content-type': 'application/x-opensu-project' }, body: `${JSON.stringify({ summary })}\n${house}\n{"conversation":"c-audit","items":[]}` });
         }
-        await window.__studio.projects.refresh();
       }, cfg.lang === 'zh' ? ['王家老宅翻建', '河边的小院'] : ['Riverside cottage', 'Grandparents’ house']);
-      const surfaceSel = cfg.phone ? '[data-testid=projects-sheet] [data-testid=projects-body]' : '[data-testid=projects-surface]';
-      await S(page, 'account-projects', async () => {
-        await page.getByTestId('project-menu').first().click();
-        await settle(page, 700);
-        await page.getByTestId('menu-projects').first().click();
-        await page.waitForSelector(surfaceSel);
-        await settle(page, 1000);
-      });
-      if (wants(cfg, 'account-projects-actions')) {
-        if (!(await page.$(surfaceSel))) {
-          await page.getByTestId('project-menu').first().click();
-          await settle(page, 700);
-          await page.getByTestId('menu-projects').first().click();
-          await page.waitForSelector(surfaceSel);
-        }
-        await S(page, 'account-projects-actions', async () => {
-          await page.getByTestId('project-row').nth(1).getByTestId('project-more').click();
-          await settle(page, 600);
+      await page.goto(`${preview.base}/projects${q(cfg)}`, { waitUntil: 'load' });
+      await page.waitForFunction(() => window.__studio?.projects?.store.getState().projects.length >= 3, null, { timeout: 30000 });
+      await settle(page, 1500);
+      await S(page, 'account-projects-page');
+      if (wants(cfg, 'account-projects-menu')) {
+        await S(page, 'account-projects-menu', async () => {
+          await page.getByTestId('project-card').nth(1).getByTestId('project-more').click();
+          await page.waitForSelector('[data-testid=project-menu-card]');
+          await settle(page, 900);
+        });
+        await esc(page);
+      }
+      if (wants(cfg, 'account-projects-new')) {
+        await S(page, 'account-projects-new', async () => {
+          await page.getByTestId('project-new').click();
+          await page.waitForSelector('[data-testid=project-templates]');
+          await settle(page, 1500);
         });
       }
-      await esc(page);
     }
   }
   await ctx.close();

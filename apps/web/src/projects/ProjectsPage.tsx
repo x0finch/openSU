@@ -9,7 +9,7 @@
 import { TEMPLATE_META } from '@opensu/agent/templates-meta';
 import { Link } from '@tanstack/react-router';
 import { type MouseEvent as RMouseEvent, type ReactNode, type RefObject, useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { Mark, MoreIcon, PlusIcon } from '../components/icons';
+import { CubeIcon, Mark, MoreIcon, PlusIcon } from '../components/icons';
 import { cx, LangToggle } from '../components/ui';
 import { GlassLayer, GlassMenu, GlassMenuItem, GlassSep, GlassToast } from '../glass';
 import { loadSaved } from '../lib/autosave';
@@ -77,17 +77,17 @@ function Thumb({ src, alt }: { src: string | null; alt: string }) {
   if (src && !broken) return <img src={src} alt={alt} loading="lazy" onError={() => setBroken(true)} className="size-full object-cover" data-testid="project-thumb" />;
   return (
     <span className="grid size-full place-items-center text-ink-3" data-testid="project-thumb-empty">
-      <Mark width={30} height={30} />
+      <CubeIcon width={30} height={30} />
     </span>
   );
 }
 
-function CardText({ name, line, more, renaming }: { name: ReactNode; line: string; more?: ReactNode; renaming?: boolean }) {
+function CardText({ name, line, more, renaming, wrap }: { name: ReactNode; line: string; more?: ReactNode; renaming?: boolean; wrap?: boolean }) {
   return (
     <div className="mt-2.5 flex items-start gap-1">
       <div className="min-w-0 flex-1">
         {renaming ? name : <p className="truncate text-[14px] leading-5 font-medium" data-testid="project-name">{name}</p>}
-        {line && <p className="tnum truncate text-[12.5px] leading-[18px] text-ink-2" data-testid="project-when">{line}</p>}
+        {line && <p className={cx('tnum text-[12.5px] leading-[18px] text-ink-2', !wrap && 'truncate')} data-testid="project-when">{line}</p>}
       </div>
       {more}
     </div>
@@ -137,8 +137,8 @@ function ProjectCard({ p, onDelete, menuOpen, onMenu, renaming, onRenamed, askin
         <Thumb src={thumbUrl(p)} alt="" />
       </a>
       {asking ? (
-        <div className="mt-2.5 flex min-h-[38px] items-center gap-2" data-testid="project-delete-ask">
-          <p className="min-w-0 flex-1 truncate text-[14px] font-medium">{t('projects.deleteAsk')}</p>
+        <div className="mt-2.5 flex flex-wrap items-center gap-x-2 gap-y-1.5" data-testid="project-delete-ask">
+          <p className="w-full text-[14px] leading-5 font-medium">{t('projects.deleteAsk')}</p>
           <PaperButton strong testId="project-delete-confirm" onClick={() => { setAsking(false); onDelete(); }}>
             {t('projects.delete')}
           </PaperButton>
@@ -202,7 +202,7 @@ function NewCard({ full, open, onToggle }: { full: boolean; open: boolean; onTog
           <PlusIcon width={22} height={22} />
         </span>
       </button>
-      <CardText name={t('projects.new')} line={full ? t('projects.full') : ''} />
+      <CardText name={t('projects.new')} line={full ? t('projects.full') : ''} wrap />
     </article>
   );
 }
@@ -312,7 +312,7 @@ export function ProjectsPage() {
     <GlassLayer>
       <div className="min-h-dvh bg-page text-ink">
         <header className="mx-auto flex h-16 w-full max-w-[1200px] items-center justify-between px-4 md:h-20 md:px-10">
-          <Link to="/" className="flex items-center gap-2" aria-label="openSU">
+          <Link to="/" className="hit flex items-center gap-2" aria-label="openSU">
             <Mark />
             <span className="text-[15px] font-semibold tracking-tight">openSU</span>
           </Link>
@@ -369,7 +369,7 @@ export function ProjectsPage() {
                 <a href="/studio" className={cx(TILE, 'hover:border-ink-3')} aria-label={`${t('projects.open')}: ${localName}`} data-testid="project-open">
                   <Thumb src={null} alt="" />
                 </a>
-                <CardText name={localName} line={local ? `${changedText(lang, local.savedAt) === null ? t('projects.editedNow') : t('projects.edited', { when: changedText(lang, local.savedAt)! })} · ${t('projects.local')}` : t('projects.local')} />
+                <CardText name={localName} line={local ? (changedText(lang, local.savedAt) === null ? t('projects.editedNow') : t('projects.edited', { when: changedText(lang, local.savedAt)! })) : ''} />
               </article>
             )}
           </section>
