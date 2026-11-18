@@ -1,10 +1,9 @@
-// The account entry (task 026): always in sight at the top right, one tap,
-// a small account surface (Apple's account avatar in App Store and Maps).
-// Signed out the button reads "登录" and opens the sign-in surface; signed
-// in it shows the picture (or the first letter of the name) and opens the
-// account menu. The project menu's first row opens the same surface
-// (`openAccount`): one implementation. Hidden when the server offers no
-// sign-in.
+// The account entry (task 026, moved by task 029). In the studio the
+// account lives in the project menu only (its first row: "登录", or the
+// name opening the account menu); on /projects it is a button at the top
+// right (signed out "登录", signed in the picture or the first letter of
+// the name). Both open the same surfaces (`openAccount`): one
+// implementation. Hidden when the server offers no sign-in.
 import { type KeyboardEvent as RKeyboardEvent, type ReactNode, type RefObject, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { PersonIcon } from '../components/icons';
 import { cx, GlassButton, GlassMenu, GlassMenuItem, GlassSep, GlassTip, GlassToast } from '../glass';
@@ -13,8 +12,8 @@ import { closeAccountMenu, openSignIn, signOut, useAccount } from './account';
 import { useChat } from './chat-store';
 import { useKeys } from './keys';
 import { showKeyChoices } from './KeyPicker';
-import { goToProjects, useProjectsOffered } from '../lib/projects';
 import { useToast } from '../lib/toast';
+import { SignInInvite, useInviteVisible } from './SignInInvite';
 
 export const ACCOUNT_BUTTON = '[data-account-button]';
 const HOUSE_NAME = '[data-house-name]';
@@ -57,52 +56,14 @@ function Avatar({ user, size }: { user: { email: string; name?: string | null; i
 }
 
 /**
- * The account button. Desktop (`size` 48, the toolbar's height): signed
- * out a capsule with the person icon and "登录", signed in a circle with the
+ * The account button of /projects. Desktop (`size` 48): signed out a
+ * capsule with the person icon and "登录", signed in a circle with the
  * avatar. Phone (`round`): a circle in both states.
  */
-export function AccountButton(props: { size?: number; round?: boolean; className?: string }) {
-  const known = useChat((s) => !!s.server);
-  const authOn = useAuthOn();
-  const signedIn = useChat((s) => !!s.server?.user);
-  const [cached] = useState(readCache);
-  useEffect(() => {
-    if (known) writeCache({ on: authOn, in: signedIn });
-  }, [known, authOn, signedIn]);
-  if (known) return <AccountButtonView {...props} />;
-  // Until the status arrives: the place this browser saw last time, kept empty, so the toolbar does not shift when it does.
-  if (!cached?.on) return null;
-  return (
-    <span className="pointer-events-none inline-flex opacity-0" aria-hidden="true" inert data-testid="account-button-reserve">
-      <AccountButtonView {...props} reserve={{ user: cached.in ? { email: ' ' } : null }} />
-    </span>
-  );
-}
-
-const CACHE_KEY = 'opensu.account.v1';
-/** What this browser last learned: sign-in offered, and someone signed in (only to reserve the button's place). */
-export function readCache(): { on: boolean; in: boolean } | null {
-  try {
-    const v = JSON.parse(localStorage.getItem(CACHE_KEY) ?? 'null') as { on?: unknown; in?: unknown } | null;
-    return v ? { on: v.on === true, in: v.in === true } : null;
-  } catch {
-    return null;
-  }
-}
-function writeCache(v: { on: boolean; in: boolean }): void {
-  try {
-    localStorage.setItem(CACHE_KEY, JSON.stringify(v));
-  } catch {
-    /* private mode: no reserved place next time */
-  }
-}
-
-function AccountButtonView({ size = 48, round, className, reserve }: { size?: number; round?: boolean; className?: string; reserve?: { user: { email: string } | null } }) {
+export function AccountButton({ size = 48, round, className }: { size?: number; round?: boolean; className?: string }) {
   const t = useT();
-  const live = useAuthOn();
-  const liveUser = useUser();
-  const authOn = reserve ? true : live;
-  const user = reserve ? reserve.user : liveUser;
+  const authOn = useAuthOn();
+  const user = useUser();
   const menuOpen = useAccount((s) => s.menu && s.menuFrom === 'button');
   const signInOpen = useAccount((s) => s.open && s.origin === 'account');
   const ref = useRef<HTMLButtonElement>(null);
@@ -122,8 +83,8 @@ function AccountButtonView({ size = 48, round, className, reserve }: { size?: nu
     onClick,
     'aria-haspopup': user ? ('menu' as const) : ('dialog' as const),
     'aria-expanded': open,
-    'data-account-button': reserve ? undefined : '',
-    'data-testid': reserve ? undefined : 'account-button',
+    'data-account-button': '',
+    'data-testid': 'account-button',
     'data-state': user ? 'signed-in' : 'signed-out',
   };
   // Phones have no hover: no tooltip there (a tap would leave it standing).
@@ -143,9 +104,9 @@ function AccountButtonView({ size = 48, round, className, reserve }: { size?: nu
 }
 
 /**
- * The account menu (signed in): who, today's allowance, the keys, sign
- * out. At the account button, or under the house name when the project
- * menu opened it.
+ * The account menu (signed in): who, today's allowance, the keys (studio
+ * only), sign out. Under the house name when the project menu opened it
+ * (the studio), at the account button on /projects.
  */
 export function AccountMenuHost() {
   const t = useT();
@@ -154,8 +115,7 @@ export function AccountMenuHost() {
   const rect = useAccount((s) => s.menuRect);
   const user = useUser();
   const server = useChat((s) => s.server);
-  const projectsOffered = useProjectsOffered();
-  // On the projects page (task 027): no row to the page you are on, and no keys row (the key picker lives in the studio).
+  // On the projects page (task 027): no keys row (the key picker lives in the studio).
   const onProjectsPage = typeof location !== 'undefined' && location.pathname.startsWith('/projects');
   const menu = useRef<HTMLElement | null>(null);
   const show = open && !!user;
@@ -203,11 +163,7 @@ export function AccountMenuHost() {
     <GlassMenu
       ref={menu as RefObject<HTMLElement | null>}
       open={show}
-      // A row that marks itself (phone variant a: the button is smaller than the name block) holds the menu under the whole row.
-      anchor={() => {
-        const el = document.querySelector<HTMLElement>(from === 'button' ? ACCOUNT_BUTTON : HOUSE_NAME);
-        return (from === 'button' && el?.closest<HTMLElement>('[data-account-row]')) || el;
-      }}
+      anchor={() => document.querySelector<HTMLElement>(from === 'button' ? ACCOUNT_BUTTON : HOUSE_NAME)}
       placement={from === 'button' ? 'below-end' : 'below-start'}
       from={rect ? () => rect : undefined}
       label={t('account.menu')}
@@ -222,18 +178,6 @@ export function AccountMenuHost() {
             {user.name && <span className="truncate text-[12.5px] leading-[18px] text-ink-2" data-testid="account-email">{user.email}</span>}
           </div>
           <GlassSep />
-          {/* Task 027: the account's projects, the first row under who is signed in. */}
-          {projectsOffered && !onProjectsPage && (
-            <GlassMenuItem
-              onClick={() => {
-                closeAccountMenu();
-                void goToProjects();
-              }}
-              data-testid="account-projects"
-            >
-              {t('projects.title')}
-            </GlassMenuItem>
-          )}
           {quota && (
             <div className="flex h-10 items-center gap-2.5 px-3 text-[14px] font-medium" data-testid="account-allowance">
               <span className="min-w-0 flex-1 truncate">{t('keys.free')}</span>
@@ -272,9 +216,11 @@ export function AccountMenuHost() {
 /**
  * The short message above the input that leaves by itself: the
  * confirmation after a sign-in ("已登录 · name"), or a message of the
- * studio (`toast`, src/lib/toast.ts; task 027). The latest wins.
+ * studio (`toast`, src/lib/toast.ts; task 027). The latest wins. In the
+ * studio (`invite`) the same place holds the sign-in invitation (task 029)
+ * while no message is showing.
  */
-export function StudioToast({ className }: { className?: string }) {
+export function StudioToast({ className, invite }: { className?: string; invite?: 'desktop' | 'phone' }) {
   const t = useT();
   const welcome = useAccount((s) => s.welcome);
   const note = useToast();
@@ -293,7 +239,8 @@ export function StudioToast({ className }: { className?: string }) {
     const id = window.setTimeout(() => setShown(null), 5200);
     return () => clearTimeout(id);
   }, [note.seq, note.text, note.testId]);
-  if (!shown) return null;
+  const inviting = useInviteVisible() && !!invite;
+  if (!shown) return inviting ? <div className={className}><SignInInvite phone={invite === 'phone'} /></div> : null;
   return (
     <div className={cx('pointer-events-none flex animate-[fade-in_200ms_ease-out] justify-center', className)}>
       <GlassToast data-testid={shown.testId}>
@@ -305,7 +252,7 @@ export function StudioToast({ className }: { className?: string }) {
 
 /**
  * `/studio?signin=1` (the landing's "登录"): the sign-in surface opens once,
- * at the account button, as soon as the server says sign-in is on and
+ * under the house name (where the project menu's account row is), as soon as the server says sign-in is on and
  * nobody is signed in; the parameter leaves the address at once.
  */
 export function useSignInParam(): void {
@@ -323,8 +270,8 @@ export function useSignInParam(): void {
       done = true;
       unsub();
       if (!(s.auth?.email || s.auth?.google) || s.user) return;
-      // The button renders with the status: open once it is there.
-      timer = window.setTimeout(() => openSignIn(document.querySelector<HTMLElement>(ACCOUNT_BUTTON), 'account'), 60);
+      // After the first frame with the status (the house name is in place).
+      timer = window.setTimeout(() => openSignIn(null, 'menu'), 60);
     };
     const unsub = useChat.subscribe(tryOpen);
     tryOpen();

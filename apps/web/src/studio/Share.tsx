@@ -1,6 +1,7 @@
-// Share links (task 028). The owner's side: the "分享" button right of the
-// toolbar, left of the account (Figma, Google Docs, Canva), and the one
-// share surface it opens (a glass popover under the button on desktop, a
+// Share links (task 028; placed by task 029). The owner's side: the
+// "分享" button right of the house name, with the document it shares
+// (Apple's document title menu, Notion's title row), and the one share
+// surface it opens (a glass popover under the name's row on desktop, a
 // sheet on phones; the projects page's card menu opens the same surface).
 // The viewer's side: the quiet bar that takes the prompt's place, with
 // "make my own copy" (Figma's "View only" and "Duplicate to your drafts").
@@ -14,40 +15,29 @@ import { useStudio } from '../lib/store';
 import { toast } from '../lib/toast';
 import { useShared, useViewOnly } from '../lib/view-only';
 import { openSignIn, useAccount } from '../chat/account';
-import { readCache } from '../chat/AccountEntry';
 import { useChat } from '../chat/chat-store';
 
 const SHARE_BUTTON = '[data-share-button]';
+/** The row of the house name and the share button: the share surface (and the sign-in it offers) stands under it. */
+export const TITLE_ROW = '[data-title-row]';
 
 /* ------------------------------------------------------------------ */
 /* The button                                                          */
 /* ------------------------------------------------------------------ */
 
 /**
- * "分享": desktop a 48 px capsule (the account button's height and plate),
- * phones a round icon button beside the account button. There whenever
- * projects are kept with accounts here (signed out it explains and offers
- * sign-in); absent while viewing a shared project.
+ * "分享": a capsule on the name's line, as high as the name (desktop), or a
+ * round icon button (`round`). There whenever projects are kept with
+ * accounts here (signed out it explains and offers sign-in); absent while
+ * viewing a shared project.
  */
-export function ShareButton({ size = 48, round, className }: { size?: number; round?: boolean; className?: string }) {
+export function ShareButton({ size = 36, round, className }: { size?: number; round?: boolean; className?: string }) {
   const t = useT();
-  const known = useChat((s) => !!s.server);
   const offered = useProjectsOffered();
   const viewOnly = useViewOnly();
   const open = useShareUi((s) => s.open && !s.project);
   const ref = useRef<HTMLButtonElement>(null);
-  const [cached] = useState(readCache);
-  if (viewOnly) return null;
-  // Until the status arrives: its place, kept empty when this browser last saw sign-in offered (the toolbar does not shift).
-  if (!known) {
-    if (!cached?.on) return null;
-    return (
-      <span className={cx('pointer-events-none inline-flex opacity-0', className)} aria-hidden="true" inert data-testid="share-button-reserve">
-        {round ? <GlassButton size={size} icon={<ShareIcon width={18} height={18} />} label="" /> : <GlassButton size={size} className="px-5">{t('share.button')}</GlassButton>}
-      </span>
-    );
-  }
-  if (!offered) return null;
+  if (viewOnly || !offered) return null;
   const common = {
     ref,
     size,
@@ -60,9 +50,9 @@ export function ShareButton({ size = 48, round, className }: { size?: number; ro
   return (
     <span className={cx('inline-flex', className)}>
       {round ? (
-        <GlassButton {...common} className="hit" label={t('share.button')} icon={<ShareIcon width={size < 40 ? 18 : 20} height={size < 40 ? 18 : 20} />} />
+        <GlassButton {...common} className="hit" label={t('share.button')} icon={<ShareIcon width={18} height={18} />} />
       ) : (
-        <GlassButton {...common} className="hit px-5">
+        <GlassButton {...common} className="hit px-4">
           {t('share.button')}
         </GlassButton>
       )}
@@ -117,9 +107,9 @@ function ShareBody({ phone }: { phone?: boolean }) {
           <button
             type="button"
             onClick={() => {
-              const el = document.querySelector<HTMLElement>(SHARE_BUTTON);
+              // Under the name's row, as the share surface was (it grows out of and back into the share button).
               useShareUi.setState({ open: false, afterSignIn: true });
-              openSignIn(el, 'account');
+              openSignIn(document.querySelector<HTMLElement>(SHARE_BUTTON), 'menu');
             }}
             className="hit lg-plate flex h-11 w-full items-center justify-center rounded-full text-[15px] font-semibold"
             data-filled=""
@@ -192,8 +182,10 @@ function ShareBody({ phone }: { phone?: boolean }) {
 }
 
 /**
- * The one share surface: under its opener on desktop (the share button,
- * or a card's "more" button on the projects page), a sheet on phones.
+ * The one share surface: on desktop under the house name's row (the
+ * share button beside the name) or a card's "more" button on the projects
+ * page; a sheet on phones (opened by the share button or the project
+ * menu's "分享" row).
  * Signed out it says sharing needs the account and offers sign-in; once
  * signed in (the browser's house kept with the account, task 027) it
  * opens again by itself.
@@ -253,7 +245,11 @@ export function ShareHost({ phone }: { phone?: boolean }) {
     };
   }, [open, phone]);
   if (!shown) return null;
-  const anchor = () => (anchorEl?.isConnected ? anchorEl : document.querySelector<HTMLElement>(SHARE_BUTTON));
+  // The studio: under the row of the house name it shares (as the project menu stands under the name), grown out of the
+  // share button. The projects page: under the card's "more" button.
+  const opener = () => (anchorEl?.isConnected ? anchorEl : document.querySelector<HTMLElement>(SHARE_BUTTON));
+  const row = () => opener()?.closest<HTMLElement>(TITLE_ROW) ?? null;
+  const anchor = () => row() ?? opener();
   if (phone) {
     const vh = typeof window === 'undefined' ? 800 : window.innerHeight;
     return (
@@ -281,7 +277,8 @@ export function ShareHost({ phone }: { phone?: boolean }) {
       ref={panel}
       open={open}
       anchor={anchor}
-      placement="below-end"
+      placement={row() ? 'below-start' : 'below-end'}
+      from={opener}
       kind="text"
       onClosed={() => setShown(false)}
       ariaRole="dialog"

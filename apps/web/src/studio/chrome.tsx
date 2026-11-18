@@ -4,7 +4,7 @@
 import { Link } from '@tanstack/react-router';
 import { type KeyboardEvent as RKeyboardEvent, type ReactNode, type RefObject, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { TEMPLATE_META } from '@opensu/agent/templates-meta';
-import { ChevronDownSmallIcon, CloseIcon, CompassIcon, CopyIcon, DownloadIcon, FolderIcon, LayersIcon, Mark, PencilIcon, PersonIcon, PinIcon, PlusIcon, ResetViewIcon } from '../components/icons';
+import { ChevronDownSmallIcon, CloseIcon, CompassIcon, CopyIcon, DownloadIcon, FolderIcon, LayersIcon, Mark, PencilIcon, PersonIcon, PinIcon, PlusIcon, ResetViewIcon, ShareIcon } from '../components/icons';
 import { cx } from '../components/ui';
 import { GlassButton, GlassMenu, GlassMenuItem, GlassSegmented, GlassSep } from '../glass';
 import { type MessageKey, useT } from '../lib/i18n';
@@ -13,6 +13,7 @@ import { resetToTemplate } from '../lib/autosave';
 import { fmtArea, fmtLen, goToProjects, projectSync, useHouseName, useProjects, useProjectsOffered } from '../lib/projects';
 import { bearingText, frontBearing, placeText } from '../lib/site';
 import { useViewOnly } from '../lib/view-only';
+import { openShare } from '../lib/share';
 import { exportConversation, replaceHouse, useChat } from '../chat/chat-store';
 import { accountName, openAccount } from '../chat/AccountEntry';
 import { useKeys } from '../chat/keys';
@@ -250,7 +251,15 @@ function ProjectMenu({ open, anchor, onClose, compact, onRename, ref }: { open: 
       style={{ width: compact ? 'min(300px, calc(100vw - 24px))' : 300 }}
       data-testid={open ? 'project-menu-list' : undefined}
     >
-      {/* The account (task 019; task 026: the same surface as the account button): hidden when this server offers no sign-in. */}
+      {/* Phones (task 029): "分享" first. The top row has no room for a button beside the name (measured at 390 and
+          360 px wide); the same share surface opens, as a sheet. Desktop has the button beside the name. */}
+      {compact && edit && projectsOffered && (
+        <MenuItem icon={<ShareIcon width={16} height={16} />} onSelect={() => { onClose(false); openShare(null, null); }} testId="menu-share">
+          {t('share.button')}
+        </MenuItem>
+      )}
+      {/* The account (task 019; task 029: the studio's only account entry, the same surfaces as the account button on
+          /projects): hidden when this server offers no sign-in. */}
       {authOn && (
         <>
           <GlassMenuItem
@@ -396,7 +405,7 @@ function SparkDot() {
   return <svg viewBox="0 0 24 24" width={16} height={16} aria-hidden="true"><path d="M12 3.5c.5 4.3 2.7 6.9 7 8-4.3 1.1-6.5 3.7-7 8-.5-4.3-2.7-6.9-7-8 4.3-1.1 6.5-3.7 7-8Z" fill="none" stroke="currentColor" strokeWidth={1.4} strokeLinejoin="round" /></svg>;
 }
 
-export function ModeSwitch({ size = 'md', className, stepAside }: { size?: 'md' | 'lg' | 'sm'; className?: string; stepAside?: boolean }) {
+export function ModeSwitch({ size = 'md', className }: { size?: 'md' | 'lg' | 'sm'; className?: string }) {
   const t = useT();
   const mode = useStudio((s) => s.mode);
   const setMode = useStudio((s) => s.setMode);
@@ -408,7 +417,6 @@ export function ModeSwitch({ size = 'md', className, stepAside }: { size?: 'md' 
       value={mode}
       onChange={setMode}
       className={className}
-      stepAside={stepAside}
       testId="mode-switch"
       segments={[
         { value: '3d', label: t('mode.3d') },

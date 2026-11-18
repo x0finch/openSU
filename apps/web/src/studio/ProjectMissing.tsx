@@ -30,7 +30,7 @@ export function ProjectMissing() {
             {shared ? t('share.goneHome') : t('projects.backHome')}
           </a>
           {!shared && !signedIn && authOn && (
-            <button type="button" onClick={() => openSignIn(document.querySelector<HTMLElement>('[data-account-button]'), 'account')} className="inline-flex h-10 items-center rounded-full bg-wash px-5 text-[14px] font-medium" data-testid="project-missing-signin">
+            <button type="button" onClick={(e) => openSignIn(e.currentTarget, 'account')} className="inline-flex h-10 items-center rounded-full bg-wash px-5 text-[14px] font-medium" data-testid="project-missing-signin">
               {t('account.signIn')}
             </button>
           )}

@@ -15,7 +15,8 @@ import { useT } from '../lib/i18n';
 import { ChatInput, PinnedColumn, RecentStrip, SettingsHost } from '../chat/ChatPanel';
 import { closeSignIn, restoreDraftAfterRedirect, useAccount } from '../chat/account';
 import { SignInHost } from '../chat/SignIn';
-import { AccountButton, AccountMenuHost, StudioToast, useSignInParam } from '../chat/AccountEntry';
+import { AccountMenuHost, StudioToast, useSignInParam } from '../chat/AccountEntry';
+import { useSignInInvite } from '../chat/SignInInvite';
 import { KeySheetHost } from '../chat/KeyPicker';
 import { closeKeySheet, useKeys } from '../chat/keys';
 import { useChat } from '../chat/chat-store';
@@ -32,7 +33,7 @@ import { ProjectMissing } from './ProjectMissing';
 import { ShareButton, ShareHost } from './Share';
 import { useSharedProject } from '../lib/share';
 import { DesktopTools, PanelCard, TRAY_ID } from './tools';
-import { GLASS, GlassLayer, type GlassTone } from '../glass';
+import { GlassLayer, type GlassTone } from '../glass';
 import { useDerived } from './useDerived';
 import { Viewer3D } from './Viewer3D';
 import { LandscapeWalkHUD, MobileWalkHUD, useEscapeExitsWalk, WalkHUD } from './WalkHUD';
@@ -228,7 +229,7 @@ function DesktopDock({ onBox, onInput }: { onBox: (b: Box | null) => void; onInp
   useBox(input, onInput);
   return (
     <div ref={ref} className="pointer-events-none absolute bottom-[22px] left-1/2 flex w-[min(580px,calc(100%-48px))] -translate-x-1/2 flex-col items-center gap-3" data-testid="dock">
-      <StudioToast />
+      <StudioToast invite="desktop" />
       <Hints />
       <div ref={input} className="relative w-full">
         {recent && <RecentStrip className="absolute inset-x-0 bottom-full mb-3" />}
@@ -244,7 +245,7 @@ function SheetInput() {
   return (
     <div className="pointer-events-none absolute inset-x-3 bottom-[max(12px,env(safe-area-inset-bottom))] z-20" data-testid="dock">
       <div className="relative">
-        {recent ? <RecentStrip phone className="absolute inset-x-0 bottom-full mb-2" /> : <StudioToast className="absolute inset-x-0 bottom-full mb-2" />}
+        {recent ? <RecentStrip phone className="absolute inset-x-0 bottom-full mb-2" /> : <StudioToast invite="phone" className="absolute inset-x-0 bottom-full mb-2" />}
         <ChatInput phone />
       </div>
     </div>
@@ -310,6 +311,7 @@ function QuietLoading({ label }: { label: string }) {
 export function Studio() {
   useInitialParams();
   useSignInParam();
+  useSignInInvite();
   useEffect(restoreDraftAfterRedirect, []);
   useUrlState();
   useAutosave();
@@ -336,8 +338,6 @@ export function Studio() {
   const canvasLeft = 0;
   const sideRight = column ? PIN_RIGHT : 0;
   const walkLandscape = walk && landscape;
-  // While the status is unknown the layout expects the button (the public site offers sign-in); a server without sign-in gets the old header.
-  const accountShown = useChat((s) => !s.server || !!(s.server.auth?.email || s.server.auth?.google));
   // Smoky (dark) glass is the studio's material; ?glass=light shows light glass for comparison.
   const [glassTone] = useState<GlassTone>(() => (typeof location !== 'undefined' && new URLSearchParams(location.search).get('glass') === 'light' ? 'light' : 'dark'));
 
@@ -358,6 +358,10 @@ export function Studio() {
   const modeRef = useRef<HTMLDivElement>(null);
   const headerRef = useRef<HTMLElement>(null);
   useBox(titleRef, setTitle, [desktop]);
+  // The name block alone (without the share button beside it): what the paper fades in under while walking.
+  const nameRef = useRef<HTMLDivElement>(null);
+  const [nameBox, setNameBox] = useBoxState();
+  useBox(nameRef, setNameBox, [desktop]);
   useBox(modeRef, setModeBox, [column, desktop]);
   useBox(headerRef, setHeader, [desktop, landscape, walkLandscape]);
   const phoneTitleRef = useRef<HTMLDivElement>(null);
@@ -433,12 +437,16 @@ export function Studio() {
           {/* A zoomed plan fades out under the top row instead of sliding beneath it. */}
           {mode === 'plan' && <div className="absolute top-0 right-0 h-24 bg-gradient-to-b from-white via-white/90 to-transparent" style={{ left: canvasLeft }} aria-hidden="true" />}
           {/* Walking, the scene behind the name is a room, not the white drawing: the paper fades in under the top row (a scroll-edge effect) so the name stays plain ink on paper. */}
-          {walk && <WalkEdge box={title} />}
+          {walk && <WalkEdge box={nameBox} />}
           {/* A menu or panel opened over it makes it step aside (the glass module's rule, `stepAside`). */}
           {column && <PinnedColumn style={{ top: (title?.bottom ?? 72) + PIN_HANG, left: PIN_LEFT, bottom: PIN_BOTTOM, width: PIN_COLUMN }} />}
-          {/* The name stays put, plain ink on the drawing, pinned or not; the sidebar hangs under it. */}
-          <div ref={titleRef} className="absolute top-[18px] left-6 w-max max-w-[min(360px,calc(50vw-200px))]" data-testid="title-block">
-            <TitleMenu derived={derived} />
+          {/* The name stays put, plain ink on the drawing, pinned or not; the sidebar hangs under it. Task 029: "分享"
+              on the name's line, with the document it shares (Apple's document title menu, Notion's title row). */}
+          <div ref={titleRef} className="absolute top-[18px] left-6 flex w-max max-w-[min(360px,calc(50vw-200px))] items-start gap-3" data-testid="title-block" data-title-row="">
+            <div ref={nameRef} className="min-w-0">
+              <TitleMenu derived={derived} />
+            </div>
+            <ShareButton className="shrink-0" />
           </div>
           <div
             ref={modeRef}
@@ -450,13 +458,12 @@ export function Studio() {
           >
             <ModeSwitch />
           </div>
-          {/* The toolbar and, right of it, the account button (task 026): one row, one height, the module's gap. */}
-          <div className="absolute top-[18px] right-[18px] flex items-center" style={{ gap: GLASS.anchorGap }} data-testid="top-trailing">
-            {mode !== 'sheet' && <DesktopTools derived={derived} />}
-            {/* Task 028: "分享" between the toolbar and the account (Figma, Google Docs, Canva). */}
-            <ShareButton />
-            <AccountButton />
-          </div>
+          {/* The top right holds the toolbar only (task 029: sign-in and share live with the document, top left). */}
+          {mode !== 'sheet' && (
+            <div className="absolute top-[18px] right-[18px]" data-testid="top-trailing">
+              <DesktopTools derived={derived} />
+            </div>
+          )}
           {mode !== 'sheet' && <PanelCard derived={derived} onRect={onPanel} />}
           {walk && <WalkHUD derived={derived} left={sideRight} />}
           {/* The input stays in the sheets view too (the column is not shown there). */}
@@ -481,45 +488,11 @@ export function Studio() {
             className="pointer-events-none absolute inset-x-0 top-0 z-10 flex items-start justify-between gap-2.5 pt-[max(10px,env(safe-area-inset-top))] pr-3 pl-4 land:items-center land:pt-[max(6px,env(safe-area-inset-top))]"
             style={landscape ? { paddingLeft: 'max(16px, env(safe-area-inset-left))', paddingRight: 'max(12px, env(safe-area-inset-right))' } : undefined}
           >
-            {!accountShown ? (
-              // No sign-in on this server: the header as before task 026.
-              <>
-                <div ref={phoneTitleRef} className="min-w-0 pt-0.5">
-                  <TitleMenu derived={derived} compact />
-                </div>
-                <ModeSwitch size="sm" className="shrink-0" />
-              </>
-            ) : landscape ? (
-                // Sideways: one row has the width: the name, the switch centred, the account button at the end.
-                <>
-                  <div ref={phoneTitleRef} className="min-w-0 flex-1 pt-0.5">
-                    <TitleMenu derived={derived} compact />
-                  </div>
-                  <ModeSwitch size="sm" className="shrink-0" />
-                  <div className="flex flex-1 justify-end gap-2">
-                    <ShareButton size={44} round />
-                    <AccountButton size={44} round />
-                  </div>
-                </>
-              ) : (
-                // Upright (task 026): the name and the account button on the top row; the switch centred on a row of its own.
-                <div className="flex min-w-0 flex-1 flex-col gap-2">
-                  <div className="flex items-start justify-between gap-2.5" data-account-row="">
-                    <div ref={phoneTitleRef} className="min-w-0 pt-0.5">
-                      <TitleMenu derived={derived} compact />
-                    </div>
-                    {/* 36 px (44 px to touch): their centres on the house name's line. Task 028: share left of the account (Google Docs, Figma iOS). */}
-                    <div className="flex shrink-0 gap-2">
-                      <ShareButton size={36} round />
-                      <AccountButton size={36} round />
-                    </div>
-                  </div>
-                  <div className="flex justify-center">
-                    {/* On its own row it lies under the menus that open from the top row: it steps aside while one is open. */}
-                    <ModeSwitch size="sm" className="shrink-0" stepAside />
-                  </div>
-                </div>
-              )}
+            {/* Name left, the mode switch right (the header before task 026, back with task 029). */}
+            <div ref={phoneTitleRef} className="min-w-0 pt-0.5">
+              <TitleMenu derived={derived} compact />
+            </div>
+            <ModeSwitch size="sm" className="shrink-0" />
           </header>
           {walk && <WalkEdge box={phoneTitle} />}
           {walk && <MobileWalkHUD derived={derived} top={`${header?.bottom ?? 58}px`} bottom={extent?.bottom ?? 130} />}

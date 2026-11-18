@@ -98,10 +98,9 @@ export interface GlassSegment<T extends string> {
  * width, buttons rather than radios); `value` may be null (no lens at
  * rest) and `reselect` reports a tap on the selected item too.
  */
-export function GlassSegmented<T extends string>({ value, onChange, segments, label, className, height = 48, compact, testId, variant = 'segments', reselect, stepAside }: { value: T | null; onChange: (v: T) => void; segments: GlassSegment<T>[]; label: string; className?: string; height?: number; compact?: boolean; testId?: string; variant?: 'segments' | 'tabs'; reselect?: boolean; stepAside?: boolean }) {
+export function GlassSegmented<T extends string>({ value, onChange, segments, label, className, height = 48, compact, testId, variant = 'segments', reselect }: { value: T | null; onChange: (v: T) => void; segments: GlassSegment<T>[]; label: string; className?: string; height?: number; compact?: boolean; testId?: string; variant?: 'segments' | 'tabs'; reselect?: boolean }) {
   const tabs = variant === 'tabs';
   const box = useRef<HTMLElement | null>(null);
-  const aside = useStepAside(box, !!stepAside);
   const row = useRef<HTMLDivElement>(null);
   const lens = useRef<HTMLDivElement>(null);
   const copy = useRef<HTMLDivElement>(null);
@@ -319,10 +318,8 @@ export function GlassSegmented<T extends string>({ value, onChange, segments, la
       onPointerMove={onPointerMove}
       onPointerUp={onPointerUp}
       onPointerCancel={onPointerUp}
-      className={cx('pointer-events-auto relative touch-pan-y items-stretch select-none', tabs ? 'flex' : 'inline-flex', stepAside && 'lg-step-aside', className)}
+      className={cx('pointer-events-auto relative touch-pan-y items-stretch select-none', tabs ? 'flex' : 'inline-flex', className)}
       style={{ height, padding: pad }}
-      inert={aside || undefined}
-      data-aside={aside ? '' : undefined}
       data-testid={testId}
     >
       <div ref={row} className={cx('relative flex', tabs && 'flex-1')}>
@@ -725,22 +722,16 @@ export function GlassSep({ className }: { className?: string }) {
  * inert while a floating surface lies over it (the module's one rule for
  * what is under an open surface, anchor.ts `coveredBy`).
  */
-/** True while a floating surface lies over `el` (the module's step-aside rule, anchor.ts `coveredBy`). */
-function useStepAside(el: { current: HTMLElement | null }, on: boolean): boolean {
-  const [aside, setAside] = useState(false);
-  useEffect(() => {
-    if (!on) return setAside(false);
-    const check = () => setAside(!!el.current && coveredBy(el.current));
-    check();
-    return subscribeFloating(check);
-  }, [on, el]);
-  return aside;
-}
-
 export function GlassTextSurface({ className, children, stepAside, ref, ...rest }: Omit<GlassProps, 'kind'> & { stepAside?: boolean }) {
   const el = useRef<HTMLElement | null>(null);
   const merged = useMergedRef(el, ref);
-  const aside = useStepAside(el, !!stepAside);
+  const [aside, setAside] = useState(false);
+  useEffect(() => {
+    if (!stepAside) return setAside(false);
+    const check = () => setAside(!!el.current && coveredBy(el.current));
+    check();
+    return subscribeFloating(check);
+  }, [stepAside]);
   return (
     <Glass ref={merged} kind="text" radius={GLASS.radiusText} className={cx('pointer-events-auto', stepAside && 'lg-step-aside', className)} inert={aside || undefined} data-aside={aside ? '' : undefined} {...rest}>
       {children}

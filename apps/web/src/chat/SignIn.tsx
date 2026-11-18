@@ -290,7 +290,7 @@ export function SignInHost({ phone }: { phone?: boolean }) {
     if (!open || phone) return;
     const down = (e: PointerEvent) => {
       if (panel.current?.contains(e.target as Node)) return;
-      // The account button toggles it itself (task 026).
+      // The account button (/projects) toggles it itself.
       if ((e.target as Element | null)?.closest?.('[data-account-button]')) return;
       if (useAccount.getState().busy) return;
       closeSignIn();
@@ -298,12 +298,13 @@ export function SignInHost({ phone }: { phone?: boolean }) {
     window.addEventListener('pointerdown', down, true);
     return () => window.removeEventListener('pointerdown', down, true);
   }, [open, phone]);
-  // Where it stands: under the house name (from its menu), at the account button (task 026), else above the input, where the draft waits.
+  // Where it stands: under the house name (from its menu or the share button beside it), at the account button (/projects), else above the input, where the draft waits.
   const anchor = () => (origin === 'account' && from?.isConnected ? from : document.querySelector<HTMLElement>(origin === 'menu' ? HOUSE_NAME : origin === 'account' ? ACCOUNT : INPUT));
   // What it grows out of: the opening control's box (a menu row closes with its menu); it flows back into the house name or that control.
   const grow = () => {
     if (open && rect) return { x: rect.left, y: rect.top, width: rect.width, height: rect.height };
-    if (origin === 'menu') return document.querySelector<HTMLElement>(MENU_TRIGGER);
+    // Back into the house name, or the control beside it that opened it (the share button).
+    if (origin === 'menu') return from?.isConnected ? from : document.querySelector<HTMLElement>(MENU_TRIGGER);
     // Back into the account button (after a sign-in it is the avatar, a new element).
     if (origin === 'account') return document.querySelector<HTMLElement>(ACCOUNT) ?? (from?.isConnected ? from : null);
     return from?.isConnected ? from : document.querySelector<HTMLElement>(INPUT);
@@ -311,8 +312,8 @@ export function SignInHost({ phone }: { phone?: boolean }) {
   if (!shown) return null;
   const onClosed = () => {
     setShown(false);
-    if (origin === 'menu') document.querySelector<HTMLElement>(MENU_TRIGGER)?.focus({ preventScroll: true });
-    else if (origin === 'account') document.querySelector<HTMLElement>(ACCOUNT)?.focus({ preventScroll: true });
+    if (origin === 'menu') (from?.isConnected ? from : document.querySelector<HTMLElement>(MENU_TRIGGER))?.focus({ preventScroll: true });
+    else if (origin === 'account') (document.querySelector<HTMLElement>(ACCOUNT) ?? (from?.isConnected ? from : null))?.focus({ preventScroll: true });
     // Desktop: back to the draft (on a phone this would raise the keyboard).
     else if (!phone) document.querySelector<HTMLElement>('[data-testid=prompt-bar]')?.focus({ preventScroll: true });
   };

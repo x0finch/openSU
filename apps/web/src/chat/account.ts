@@ -15,7 +15,7 @@ interface AccountState {
   open: boolean;
   /** Where the sheet grows from (and flows back into). */
   anchor: HTMLElement | null;
-  /** Desktop: under the title (the project menu), at the account button (task 026) or above the input (a quota note). */
+  /** Desktop: under the title (the project menu, the share button), at the opener (the account button on /projects) or above the input (a quota note, the sign-in invitation). */
   origin: 'menu' | 'account' | 'input';
   step: SignInStep;
   email: string;
@@ -26,7 +26,7 @@ interface AccountState {
   error: string | null;
   /** Bumped on a wrong code: the boxes shake and clear. */
   wrong: number;
-  /** The account menu (signed in, task 026) is open, opened from the account button or the project menu. */
+  /** The account menu (signed in, task 026) is open, opened from the project menu (studio) or the account button (/projects). */
   menu: boolean;
   menuFrom: 'button' | 'menu';
   /** The project menu row it grows out of (that row closes with its menu). */

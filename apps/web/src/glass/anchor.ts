@@ -100,6 +100,9 @@ export function registerFloating(f: Floating): { update: () => void; remove: () 
   };
 }
 
+/** Some floating surface (a menu, a popover) is open. */
+export const floatingOpen = (): boolean => floating.size > 0;
+
 export function subscribeFloating(fn: () => void): () => void {
   listeners.add(fn);
   return () => listeners.delete(fn);

@@ -5,7 +5,7 @@ export {
   GlassButton, GlassButtonGroup, GlassChoice, GlassField, GlassGroupButton, GlassIconButton, GlassInputBar, GlassMenu, GlassMenuItem, GlassPopover, GlassRow, GlassSegmented, GlassSep,
   GlassSheet, GlassSlider, GlassSwitch, GlassTextSurface, GlassTip, GlassToast, type GlassSegment, type PopoverProps,
 } from './primitives';
-export { type Attach, coveredBy, type Placement } from './anchor';
+export { type Attach, coveredBy, floatingOpen, type Placement, subscribeFloating } from './anchor';
 export { glassRegistry, newGroup, type GlassBackend, type GlassTarget } from './registry';
 export { GLASS, TONES, type GlassRole, type GlassTone } from './material';
 export { Spring, SPRINGS, prefersReducedMotion } from './spring';
