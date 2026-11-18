@@ -18,6 +18,7 @@ import { Route as ApiProjectsRouteImport } from './routes/api/projects'
 import { Route as ApiTurnsRouteImport } from './routes/api/turns'
 import { Route as SIdRouteImport } from './routes/s/$id'
 import { Route as ApiProjectsIdRouteImport } from './routes/api/projects.$id'
+import { Route as ApiProjectsIdThumbRouteImport } from './routes/api/projects.$id.thumb'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -64,6 +65,11 @@ const ApiProjectsIdRoute = ApiProjectsIdRouteImport.update({
   path: '/$id',
   getParentRoute: () => ApiProjectsRoute,
 } as any)
+const ApiProjectsIdThumbRoute = ApiProjectsIdThumbRouteImport.update({
+  id: '/thumb',
+  path: '/thumb',
+  getParentRoute: () => ApiProjectsIdRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -74,7 +80,8 @@ export interface FileRoutesByFullPath {
   '/api/projects': typeof ApiProjectsRouteWithChildren
   '/api/turns': typeof ApiTurnsRoute
   '/s/$id': typeof SIdRoute
-  '/api/projects/$id': typeof ApiProjectsIdRoute
+  '/api/projects/$id': typeof ApiProjectsIdRouteWithChildren
+  '/api/projects/$id/thumb': typeof ApiProjectsIdThumbRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -85,7 +92,8 @@ export interface FileRoutesByTo {
   '/api/projects': typeof ApiProjectsRouteWithChildren
   '/api/turns': typeof ApiTurnsRoute
   '/s/$id': typeof SIdRoute
-  '/api/projects/$id': typeof ApiProjectsIdRoute
+  '/api/projects/$id': typeof ApiProjectsIdRouteWithChildren
+  '/api/projects/$id/thumb': typeof ApiProjectsIdThumbRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -97,7 +105,8 @@ export interface FileRoutesById {
   '/api/projects': typeof ApiProjectsRouteWithChildren
   '/api/turns': typeof ApiTurnsRoute
   '/s/$id': typeof SIdRoute
-  '/api/projects/$id': typeof ApiProjectsIdRoute
+  '/api/projects/$id': typeof ApiProjectsIdRouteWithChildren
+  '/api/projects/$id/thumb': typeof ApiProjectsIdThumbRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -111,6 +120,7 @@ export interface FileRouteTypes {
     | '/api/turns'
     | '/s/$id'
     | '/api/projects/$id'
+    | '/api/projects/$id/thumb'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -122,6 +132,7 @@ export interface FileRouteTypes {
     | '/api/turns'
     | '/s/$id'
     | '/api/projects/$id'
+    | '/api/projects/$id/thumb'
   id:
     | '__root__'
     | '/'
@@ -133,6 +144,7 @@ export interface FileRouteTypes {
     | '/api/turns'
     | '/s/$id'
     | '/api/projects/$id'
+    | '/api/projects/$id/thumb'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -211,15 +223,34 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiProjectsIdRouteImport
       parentRoute: typeof ApiProjectsRoute
     }
+    '/api/projects/$id/thumb': {
+      id: '/api/projects/$id/thumb'
+      path: '/thumb'
+      fullPath: '/api/projects/$id/thumb'
+      preLoaderRoute: typeof ApiProjectsIdThumbRouteImport
+      parentRoute: typeof ApiProjectsIdRoute
+    }
   }
 }
 
+interface ApiProjectsIdRouteChildren {
+  ApiProjectsIdThumbRoute: typeof ApiProjectsIdThumbRoute
+}
+
+const ApiProjectsIdRouteChildren: ApiProjectsIdRouteChildren = {
+  ApiProjectsIdThumbRoute: ApiProjectsIdThumbRoute,
+}
+
+const ApiProjectsIdRouteWithChildren = ApiProjectsIdRoute._addFileChildren(
+  ApiProjectsIdRouteChildren,
+)
+
 interface ApiProjectsRouteChildren {
-  ApiProjectsIdRoute: typeof ApiProjectsIdRoute
+  ApiProjectsIdRoute: typeof ApiProjectsIdRouteWithChildren
 }
 
 const ApiProjectsRouteChildren: ApiProjectsRouteChildren = {
-  ApiProjectsIdRoute: ApiProjectsIdRoute,
+  ApiProjectsIdRoute: ApiProjectsIdRouteWithChildren,
 }
 
 const ApiProjectsRouteWithChildren = ApiProjectsRoute._addFileChildren(

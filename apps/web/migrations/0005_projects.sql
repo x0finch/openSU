@@ -7,7 +7,10 @@
 -- `revision` starts at 1 and grows by one with every save of the house; a
 -- save names the revision it was based on. `house` and `chat` (the
 -- conversation) are JSON text as the browser sent them; the server does not
--- parse them. Times in ms. Rows go with their user.
+-- parse them. `thumb` is a small image of the house's default view (WebP or
+-- JPEG, about 480 px wide, rendered in the browser), `thumb_type` its media
+-- type and `thumb_at` when it was stored (0 = none yet; also its cache key).
+-- Times in ms. Rows go with their user.
 create table project (
   id text not null primary key,
   user_id text not null references "user" ("id") on delete cascade,
@@ -17,7 +20,10 @@ create table project (
   created_at integer not null,
   updated_at integer not null,
   house text not null,
-  chat text not null default ''
+  chat text not null default '',
+  thumb blob,
+  thumb_type text not null default '',
+  thumb_at integer not null default 0
 );
 
 create index project_user on project (user_id, updated_at);

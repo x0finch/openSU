@@ -5,9 +5,9 @@
 //   node --experimental-strip-types --no-warnings --test scripts/project-sync-test.ts
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { createProjectSync, type Current, type LocalLink, type ProjectMeta, type ProjectsApi, RETRY_MIN, SAVE_DELAY, type SyncDeps } from '../src/lib/project-sync.ts';
+import { createProjectSync, type Current, type LocalLink, type ProjectMeta, type ProjectsApi, RETRY_MIN, SAVE_DELAY, type SyncDeps, THUMB_EVERY } from '../src/lib/project-sync.ts';
 
-type Row = ProjectMeta & { house: string; chat: string };
+type Row = ProjectMeta & { house: string; chat: string; thumb?: string };
 
 /** An account on a server: what src/server/projects.ts keeps, in memory. */
 class Account {
@@ -17,9 +17,9 @@ class Account {
   down = false;
   calls: string[] = [];
   seq = 0;
-  meta = (r: Row): ProjectMeta => ({ id: r.id, name: r.name, summary: r.summary, revision: r.revision, createdAt: r.createdAt, updatedAt: r.updatedAt });
+  meta = (r: Row): ProjectMeta => ({ id: r.id, name: r.name, summary: r.summary, revision: r.revision, createdAt: r.createdAt, updatedAt: r.updatedAt, thumbAt: r.thumbAt });
   add(house: unknown, name = '', chat = ''): Row {
-    const r: Row = { id: `p${String(++this.seq).padStart(21, '0')}`, name, summary: JSON.stringify({ title: (house as { name: string }).name, style: 's', w: 1, d: 1, area: 1, storeys: 1, attic: false }), revision: 1, createdAt: ++this.clock, updatedAt: this.clock, house: JSON.stringify(house), chat };
+    const r: Row = { id: `p${String(++this.seq).padStart(21, '0')}`, name, summary: JSON.stringify({ title: (house as { name: string }).name, style: 's', w: 1, d: 1, area: 1, storeys: 1, attic: false }), revision: 1, createdAt: ++this.clock, updatedAt: this.clock, thumbAt: 0, house: JSON.stringify(house), chat };
     this.rows.set(r.id, r);
     return r;
   }
@@ -62,6 +62,13 @@ class Account {
         return { ok: true as const, value: { project: this.meta(r) } };
       }),
       remove: (id) => wrap('remove', () => (this.rows.delete(id) ? { ok: true as const, value: {} } : fail(404, 'not_found'))),
+      putThumb: (id, image) => wrap(`thumb ${id}`, () => {
+        const r = this.rows.get(id);
+        if (!r) return fail(404, 'not_found');
+        r.thumb = (image as unknown as { house: string }).house;
+        r.thumbAt = ++this.clock;
+        return { ok: true as const, value: { project: this.meta(r) } };
+      }),
     };
   }
 }
@@ -81,6 +88,7 @@ function studio(account: Account, start: Partial<Current> = {}, link: LocalLink 
     notes: [] as string[],
     last: new Map<string, string>(),
     running: false,
+    forgot: 0,
     /** Advances the fake clock, running due timers. */
     async tick(ms: number) {
       const end = now + ms;
@@ -121,6 +129,10 @@ function studio(account: Account, start: Partial<Current> = {}, link: LocalLink 
       return tid;
     },
     clearTimer: (t) => void timers.delete(t as number),
+    // The picture of a house is its name here (what was on screen when it was taken).
+    thumb: async (h) => ({ house: (h as { name: string }).name }) as unknown as Blob,
+    now: () => now,
+    forgetLocal: () => void s.forgot++,
   };
   const sync = createProjectSync(deps);
   /** The studio edits its house (as autosave reports it). */
@@ -203,7 +215,8 @@ test('debounce: edits save once, SAVE_DELAY after the last one; flush sends at o
   edit('甲 4');
   await sync.flush();
   assert.deepEqual(saves(a), [`save ${id} @1`, `save ${id} @2`]);
-  assert.equal(s.pending(), 0, 'the debounce timer is gone');
+  await s.tick(SAVE_DELAY);
+  assert.equal(saves(a).length, 2, 'the debounce timer is gone');
   await sync.flush();
   assert.equal(saves(a).length, 2, 'nothing to send');
   // While the assistant works, saves wait (unless flushed).
@@ -332,7 +345,9 @@ test('a failed save: "not synced", retried with back-off, nothing lost; online r
   await settle();
   assert.equal(state().failed, null);
   assert.equal(JSON.parse(a.rows.get(state().openId!)!.house).name, '辛 1');
-  assert.equal(s.pending(), 0, 'no retry left over');
+  const n = saves(a).length;
+  await s.tick(60_000);
+  assert.equal(saves(a).length, n, 'no retry left over');
 });
 
 test('switch, create, rename, duplicate, delete (the open one: the next most recent opens)', async () => {
@@ -401,4 +416,67 @@ test('the open project deleted on another device: when visible again the next op
   assert.equal(a.rows.size, 1);
   assert.equal(JSON.parse([...a.rows.values()][0]!.house).name, '留下 改过');
   assert.equal(state().openId, [...a.rows.keys()][0]);
+});
+
+const thumbs = (a: Account) => a.calls.filter((c) => c.startsWith('thumb'));
+
+test('thumbnails: one after a save, then at most one per THUMB_EVERY, of the house as saved; a project without one gets one when opened', async () => {
+  const a = new Account();
+  const old = a.add(house('旧的，没有图'));
+  const { sync, edit, s, state } = studio(a, { house: house('图') });
+  await sync.start('me@example.com');
+  const id = state().openId!;
+  await settle();
+  assert.equal(thumbs(a).length, 1, 'the adopted project gets its picture');
+  assert.equal(a.rows.get(id)!.thumb, '图');
+  edit('图 1');
+  await s.tick(SAVE_DELAY);
+  assert.equal(thumbs(a).length, 1, 'not again within THUMB_EVERY');
+  edit('图 2');
+  await s.tick(SAVE_DELAY);
+  await s.tick(THUMB_EVERY);
+  assert.equal(thumbs(a).length, 2, 'once the interval has passed');
+  assert.equal(a.rows.get(id)!.thumb, '图 2');
+  assert.ok(state().projects.find((p) => p.id === id)!.thumbAt > 0, 'the list knows the new version');
+  await s.tick(THUMB_EVERY * 3);
+  assert.equal(thumbs(a).length, 2, 'nothing changed: no new picture');
+  await sync.open(old.id);
+  await s.tick(THUMB_EVERY);
+  assert.equal(a.rows.get(old.id)!.thumb, '旧的，没有图');
+});
+
+test('the address: ?p= opens that project; an unknown one is "not found" and nothing else opens; ?new= makes one from a template', async () => {
+  const a = new Account();
+  const one = a.add(house('一'));
+  a.add(house('二'));
+  const x = studio(a);
+  await x.sync.start('me@example.com', { id: one.id });
+  assert.equal(x.state().openId, one.id);
+  assert.equal(x.s.current.house.name, '一');
+  assert.equal(x.s.applied.length, 1, 'only the asked-for project was put on screen');
+
+  const y = studio(a);
+  await y.sync.start('me@example.com', { id: 'p-not-mine-000000000000' });
+  assert.equal(y.state().missing, 'p-not-mine-000000000000');
+  assert.equal(y.state().openId, null);
+  assert.equal(y.s.applied.length, 0);
+  assert.equal(a.rows.size, 2, 'nothing created');
+
+  const z = studio(a);
+  await z.sync.start('me@example.com', { template: 't2' });
+  assert.equal(a.rows.size, 3, 'one new project, no default one besides');
+  assert.equal(z.state().openId, z.state().projects[0]!.id);
+});
+
+test('deleting from the projects page the project this browser holds: the browser copy goes too', async () => {
+  const a = new Account();
+  const { sync, s, state } = studio(a, { house: house('页') });
+  await sync.start('me@example.com');
+  const id = state().openId!;
+  sync.stop();
+  // The projects page: the sync is not started there.
+  await sync.remove(id);
+  assert.equal(a.rows.size, 0);
+  assert.equal(s.link, null);
+  assert.equal(s.forgot, 1);
 });

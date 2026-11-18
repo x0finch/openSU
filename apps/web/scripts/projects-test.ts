@@ -6,7 +6,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { lastTestCode, loadAuth } from '../src/server/auth.ts';
 import { relayStatus } from '../src/server/chat-relay.ts';
-import { PROJECT_TYPE, PROJECT_WRITES_PER_HOUR, projectsRoute } from '../src/server/projects.ts';
+import { PROJECT_TYPE, PROJECT_WRITES_PER_HOUR, projectsRoute, THUMB_MAX, thumbRoute } from '../src/server/projects.ts';
 import { migratedD1, type ShimD1 } from './d1-shim.ts';
 
 const SITE = 'http://localhost:8787';
@@ -97,7 +97,7 @@ test('create, list (no large columns), read, save with the revision, rename, dup
 
   // The list query never reads the house or the conversation.
   const list = await call(env, 'GET', cookie);
-  assert.deepEqual(Object.keys(list.data.projects[0]).sort(), ['createdAt', 'id', 'name', 'revision', 'summary', 'updatedAt']);
+  assert.deepEqual(Object.keys(list.data.projects[0]).sort(), ['createdAt', 'id', 'name', 'revision', 'summary', 'thumbAt', 'updatedAt']);
 
   const read = await call(env, 'GET', cookie, p.id);
   assert.equal(read.data.house, HOUSE);
@@ -205,4 +205,35 @@ test('a deleted user takes their projects along', async () => {
   shared.sqlite.exec('PRAGMA foreign_keys = ON');
   shared.sqlite.exec(`DELETE FROM "user" WHERE email = 'gone@example.com'`);
   assert.equal(all(), n0 - 1);
+});
+
+test('thumbnails: stored as sent, own column, versioned in the list, cached privately, copied with a duplicate, owner only', async () => {
+  const env = envOf(shared);
+  const a = await signIn(env, 'thumbs@example.com');
+  const b = await signIn(env, 'thumbs-other@example.com');
+  const p = (await call(env, 'POST', a, undefined, framed({ summary: SUMMARY }, HOUSE, ''))).data.project;
+  assert.equal(p.thumbAt, 0, 'none yet');
+  const img = new Uint8Array(2000).map((_, i) => i % 251);
+  const put = (cookie: string, body: Uint8Array, type = 'image/webp', id = p.id) =>
+    thumbRoute(new Request(`${SITE}/api/projects/${id}/thumb`, { method: 'PUT', headers: { 'content-type': type, origin: SITE, cookie }, body }), env, id);
+  const get = (cookie: string, id = p.id) => thumbRoute(new Request(`${SITE}/api/projects/${id}/thumb?v=1`, { headers: { cookie } }), env, id);
+  assert.equal((await get(a)).status, 404);
+  const r = await put(a, img);
+  assert.equal(r.status, 200);
+  const meta = ((await r.json()) as { project: { thumbAt: number; revision: number } }).project;
+  assert.ok(meta.thumbAt > 0);
+  assert.equal(meta.revision, 1, 'a thumbnail is not a save');
+  const g = await get(a);
+  assert.equal(g.headers.get('content-type'), 'image/webp');
+  assert.match(g.headers.get('cache-control') ?? '', /private, max-age=31536000, immutable/);
+  assert.deepEqual(new Uint8Array(await g.arrayBuffer()), img);
+  assert.equal((await call(env, 'GET', a)).data.projects.find((x: { id: string }) => x.id === p.id).thumbAt, meta.thumbAt);
+  // Not someone else's; not other types; not too large.
+  assert.equal((await get(b)).status, 404);
+  assert.equal((await put(b, img)).status, 404);
+  assert.equal((await put(a, img, 'image/png')).status, 415);
+  assert.equal((await put(a, new Uint8Array(THUMB_MAX + 1))).status, 413);
+  const dup = (await call(env, 'POST', a, undefined, { from: p.id, name: 'copy' })).data.project;
+  assert.ok(dup.thumbAt > 0);
+  assert.deepEqual(new Uint8Array(await (await get(a, dup.id)).arrayBuffer()), img);
 });

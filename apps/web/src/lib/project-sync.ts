@@ -19,6 +19,8 @@ export const SAVE_DELAY = 3000;
 /** Retry after a failed save: doubles from the first, up to the last. */
 export const RETRY_MIN = 2000;
 export const RETRY_MAX = 60_000;
+/** At most one thumbnail per this many ms of editing (it is rendered in the browser). */
+export const THUMB_EVERY = 20_000;
 
 export interface ProjectMeta {
   id: string;
@@ -29,6 +31,8 @@ export interface ProjectMeta {
   revision: number;
   createdAt: number;
   updatedAt: number;
+  /** When its thumbnail was stored (0: none yet); also the version in the image's address. */
+  thumbAt: number;
 }
 
 /** What a row shows besides the name (stored as text next to the project). */
@@ -84,6 +88,7 @@ export interface ProjectsApi {
   save(id: string, p: { base: number; house: string; chat: string; summary: string }): Promise<Result<{ project: ProjectMeta }>>;
   rename(id: string, name: string): Promise<Result<{ project: ProjectMeta }>>;
   remove(id: string): Promise<Result<unknown>>;
+  putThumb(id: string, image: Blob): Promise<Result<{ project: ProjectMeta }>>;
 }
 
 export interface SyncDeps {
@@ -114,6 +119,17 @@ export interface SyncDeps {
   lastOpened: { get(user: string): string | null; set(user: string, id: string): void };
   setTimer(fn: () => void, ms: number): unknown;
   clearTimer(t: unknown): void;
+  /** A small image of the house's default view (null: could not be rendered here). */
+  thumb(house: House): Promise<Blob | null>;
+  now(): number;
+  /** The browser's copy of the house is dropped (its project was deleted while it was not open). */
+  forgetLocal(): void;
+}
+
+/** What the address asks for: a project (`?p=`), or a new one from a template (`?new=`). */
+export interface Wanted {
+  id?: string | null;
+  template?: string | null;
 }
 
 /** What the UI shows. */
@@ -134,9 +150,11 @@ export interface ProjectsState {
   failed: 'retry' | 'too-large' | 'full' | null;
   /** Opening, creating or deleting (the list waits). */
   busy: boolean;
+  /** The address names a project this account does not have (or it is gone). */
+  missing: string | null;
 }
 
-const initial: ProjectsState = { on: false, user: null, projects: [], loaded: false, max: 20, maxKb: 512, openId: null, name: '', failed: null, busy: false };
+const initial: ProjectsState = { on: false, user: null, projects: [], loaded: false, max: 20, maxKb: 512, openId: null, name: '', failed: null, busy: false, missing: null };
 
 /** Newest first. */
 const sorted = (list: ProjectMeta[]) => [...list].sort((a, b) => b.updatedAt - a.updatedAt);
@@ -161,6 +179,11 @@ export function createProjectSync(deps: SyncDeps) {
   /** Operations (start, open, create, delete) run one at a time. */
   let chain: Promise<unknown> = Promise.resolve();
   let generation = 0;
+  /** The open project's thumbnail is older than its house. */
+  let thumbWanted = false;
+  let thumbTimer: unknown = null;
+  let lastThumb = -Infinity;
+  let thumbing = false;
 
   const link = (): LocalLink => ({ user: get().user, id: get().openId, revision, dirty, name: get().name });
   const persist = () => deps.writeLink(link());
@@ -173,7 +196,39 @@ export function createProjectSync(deps: SyncDeps) {
   function clearTimers(): void {
     if (timer !== null) deps.clearTimer(timer);
     if (retryTimer !== null) deps.clearTimer(retryTimer);
-    timer = retryTimer = null;
+    if (thumbTimer !== null) deps.clearTimer(thumbTimer);
+    timer = retryTimer = thumbTimer = null;
+  }
+
+  /** Renders and stores the open project's thumbnail, at most once per THUMB_EVERY. */
+  function maybeThumb(): void {
+    const id = get().openId;
+    if (!thumbWanted || !id || !get().on || thumbing || thumbTimer !== null) return;
+    const wait = lastThumb + THUMB_EVERY - deps.now();
+    if (wait > 0) {
+      thumbTimer = deps.setTimer(() => {
+        thumbTimer = null;
+        maybeThumb();
+      }, wait);
+      return;
+    }
+    const c = deps.current();
+    if (!c) return;
+    thumbWanted = false;
+    thumbing = true;
+    lastThumb = deps.now();
+    void (async () => {
+      try {
+        const img = await deps.thumb(c.house);
+        if (!img || get().openId !== id) return;
+        const r = await deps.api.putThumb(id, img);
+        if (r.ok) upsert(r.value.project);
+      } catch {
+        /* a picture is never worth an error */
+      } finally {
+        thumbing = false;
+      }
+    })();
   }
 
   function schedule(ms = SAVE_DELAY): void {
@@ -200,7 +255,13 @@ export function createProjectSync(deps: SyncDeps) {
     revision = meta.revision;
     dirty = false;
     editSeq++;
-    set({ openId: meta.id, name: meta.name, failed: null });
+    if (meta.id !== get().openId && thumbTimer !== null) {
+      deps.clearTimer(thumbTimer);
+      thumbTimer = null;
+    }
+    // A project without a picture yet (made elsewhere, or before pictures) gets one now.
+    thumbWanted = !meta.thumbAt;
+    set({ openId: meta.id, name: meta.name, failed: null, missing: null });
     persist();
     if (get().user) deps.lastOpened.set(get().user!, meta.id);
   }
@@ -229,6 +290,7 @@ export function createProjectSync(deps: SyncDeps) {
     if (!c) return false;
     upsert(r.value.project);
     show(r.value.project, c);
+    maybeThumb();
     return true;
   }
 
@@ -242,6 +304,7 @@ export function createProjectSync(deps: SyncDeps) {
     }
     upsert(r.value.project);
     show(r.value.project, null);
+    maybeThumb();
     return null;
   }
 
@@ -282,6 +345,8 @@ export function createProjectSync(deps: SyncDeps) {
         set({ failed: null });
         upsert(r.value.project);
         persist();
+        thumbWanted = true;
+        maybeThumb();
         return;
       }
       if (r.status === 409 && r.code === 'conflict') return keepBoth();
@@ -326,6 +391,59 @@ export function createProjectSync(deps: SyncDeps) {
     await adopt('', fresh);
   }
 
+  /**
+   * The browser's house and the account, at sign-in: the linked project
+   * resumes (its pending edits sent, or the other device's version loaded,
+   * or both kept); an edited house of this browser becomes a project; else
+   * the last opened, the most recent or a new project opens, unless the
+   * address asks for one (`wanted`).
+   */
+  async function settleLocal(user: string, wanted: Wanted): Promise<void> {
+    const l = deps.readLink();
+    const c = deps.current();
+    const meta = l?.user === user && l.id ? get().projects.find((p) => p.id === l.id) : undefined;
+    if (l && meta) {
+      revision = l.revision;
+      dirty = l.dirty;
+      thumbWanted = !meta.thumbAt;
+      set({ openId: meta.id, name: meta.name });
+      deps.lastOpened.set(user, meta.id);
+      if (meta.revision > l.revision) {
+        // Changed on another device: theirs when nothing is pending here, else both.
+        if (l.dirty) await keepBoth();
+        else await load(meta.id);
+      } else if (l.dirty) await save(true);
+      persist();
+      maybeThumb();
+      return;
+    }
+    // A house of this browser (signed out, another account, or a project gone from the list).
+    const edited = !!c && (!deps.pristine(c) || !!(l && l.id && l.dirty) || !!l?.name);
+    if (c && edited) {
+      await adopt(l?.name ?? '', c);
+      return;
+    }
+    // An untouched house: the address decides, else the last opened, the most recent, or a new one.
+    if (wanted.id || wanted.template) return;
+    const last = deps.lastOpened.get(user);
+    const target = get().projects.find((p) => p.id === last) ?? get().projects[0];
+    if (target && (await load(target.id))) return;
+    await adopt('', c);
+  }
+
+  /** A new project from a template, opened in place. */
+  async function createInline(templateId?: string): Promise<string | null> {
+    if (get().projects.length >= get().max) return 'full';
+    await save(true);
+    const fresh: Current = { house: deps.template(templateId), conversation: deps.newConversation(), items: [] };
+    const r = await deps.api.create({ ...serialise(fresh), name: '' });
+    if (!r.ok) return r.code;
+    upsert(r.value.project);
+    show(r.value.project, fresh);
+    maybeThumb();
+    return null;
+  }
+
   const sync = {
     store,
 
@@ -334,7 +452,7 @@ export function createProjectSync(deps: SyncDeps) {
      * links the browser's house to the account (see the scope note,
      * docs/tasks/027-notes.md).
      */
-    start(user: string): Promise<void> {
+    start(user: string, wanted: Wanted = {}): Promise<void> {
       const gen = ++generation;
       set({ on: true, user, failed: null, loaded: false, projects: [] });
       return enqueue(async () => {
@@ -346,44 +464,25 @@ export function createProjectSync(deps: SyncDeps) {
             set({ failed: 'retry' });
             retryTimer = deps.setTimer(() => {
               retryTimer = null;
-              if (gen === generation) void sync.start(user);
+              if (gen === generation) void sync.start(user, wanted);
             }, retryMs);
             retryMs = Math.min(RETRY_MAX, retryMs * 2);
             return;
           }
           retryMs = RETRY_MIN;
-          const l = deps.readLink();
-          const c = deps.current();
-          const meta = l?.user === user && l.id ? get().projects.find((p) => p.id === l.id) : undefined;
-          if (l && meta) {
-            revision = l.revision;
-            dirty = l.dirty;
-            set({ openId: meta.id, name: meta.name });
-            deps.lastOpened.set(user, meta.id);
-            if (meta.revision > l.revision) {
-              // Changed on another device: theirs when nothing is pending here, else both.
-              if (l.dirty) await keepBoth();
-              else await load(meta.id);
-            } else if (l.dirty) await save(true);
-            persist();
-            return;
+          await settleLocal(user, wanted);
+          if (gen !== generation) return;
+          if (wanted.id && wanted.id !== get().openId) {
+            // The address names a project: it opens, or "not found" (nothing else is put on screen).
+            const ok = get().projects.some((p) => p.id === wanted.id) && (await load(wanted.id));
+            if (!ok) set({ missing: wanted.id });
           }
-          // A house of this browser (signed out, another account, or a project gone from the list).
-          const edited = !!c && (!deps.pristine(c) || !!(l && l.id && l.dirty) || !!l?.name);
-          if (c && edited) {
-            await adopt(l?.name ?? '', c);
-            return;
-          }
-          const last = deps.lastOpened.get(user);
-          const target = get().projects.find((p) => p.id === last) ?? get().projects[0];
-          if (target && (await load(target.id))) return;
-          await adopt('', c);
+          if (wanted.template) await createInline(wanted.template);
         } finally {
           if (gen === generation) set({ busy: false });
         }
       });
     },
-
     /** Signed out (or the feature went away): the house stays on screen as this browser's; the link is kept for the next sign-in. */
     stop(): void {
       if (!get().on) return;
@@ -465,16 +564,9 @@ export function createProjectSync(deps: SyncDeps) {
     /** A new project from a template; it opens. Null when done, else why not ('full', ...). */
     create(templateId?: string): Promise<string | null> {
       return enqueue(async () => {
-        if (get().projects.length >= get().max) return 'full';
         set({ busy: true });
         try {
-          await save(true);
-          const fresh: Current = { house: deps.template(templateId), conversation: deps.newConversation(), items: [] };
-          const r = await deps.api.create({ ...serialise(fresh), name: '' });
-          if (!r.ok) return r.code;
-          upsert(r.value.project);
-          show(r.value.project, fresh);
-          return null;
+          return await createInline(templateId);
         } finally {
           set({ busy: false });
         }
@@ -520,6 +612,12 @@ export function createProjectSync(deps: SyncDeps) {
           const r = await deps.api.remove(id);
           if (!r.ok && r.status !== 404) return false;
           set({ projects: get().projects.filter((p) => p.id !== id) });
+          // The browser's copy was that project (deleted from the projects page): it goes too, or the next visit would bring it back.
+          const l = deps.readLink();
+          if (!open && l?.id === id) {
+            deps.writeLink(null);
+            deps.forgetLocal();
+          }
           if (open) {
             dirty = false;
             await openNext(id);

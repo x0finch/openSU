@@ -20,6 +20,8 @@
 //   PUT    /api/projects/:id  framed {base, summary} + house + chat  save -> {project: meta}; 409 {revision} when base is not current
 //   PATCH  /api/projects/:id  JSON {name}  rename (revision and time unchanged) -> {project: meta}
 //   DELETE /api/projects/:id                                       -> {ok: true}
+//   PUT    /api/projects/:id/thumb  image/webp or image/jpeg, raw   -> {project: meta}
+//   GET    /api/projects/:id/thumb  the image; cached privately for a year (the list's `thumbAt` is its version)
 //
 // Off (404 `projects_off`) without sign-in, without D1 or with
 // PROJECTS_ENABLED=false; the browser then keeps its one local house.
@@ -34,6 +36,9 @@ export const NAME_MAX = 80;
 export const SUMMARY_MAX = 1024;
 /** The framed body of a create, save or read (see the header). */
 export const PROJECT_TYPE = 'application/x-opensu-project';
+/** The largest thumbnail, bytes (they are about 480 px wide, mostly under 30 KB). */
+export const THUMB_MAX = 96 * 1024;
+const THUMB_TYPES = ['image/webp', 'image/jpeg'];
 /** Project ids: 128 random bits, base64url. */
 export const PROJECT_ID = /^[A-Za-z0-9_-]{22}$/;
 
@@ -44,15 +49,17 @@ export interface ProjectMeta {
   revision: number;
   createdAt: number;
   updatedAt: number;
+  /** When the thumbnail was stored (0: none yet); also the version in its address. */
+  thumbAt: number;
 }
 
 const noStore = { 'cache-control': 'no-store' };
 const jsonError = (status: number, code: string, message: string, extra: Record<string, unknown> = {}) => Response.json({ error: { code, message, ...extra } }, { status, headers: noStore });
 const ok = (body: unknown, status = 200) => Response.json(body, { status, headers: noStore });
 
-const META = 'id, name, summary, revision, created_at, updated_at';
-type Row = { id: string; name: string; summary: string; revision: number; created_at: number; updated_at: number };
-const meta = (r: Row): ProjectMeta => ({ id: r.id, name: r.name, summary: r.summary, revision: r.revision, createdAt: r.created_at, updatedAt: r.updated_at });
+const META = 'id, name, summary, revision, created_at, updated_at, thumb_at';
+type Row = { id: string; name: string; summary: string; revision: number; created_at: number; updated_at: number; thumb_at: number };
+const meta = (r: Row): ProjectMeta => ({ id: r.id, name: r.name, summary: r.summary, revision: r.revision, createdAt: r.created_at, updatedAt: r.updated_at, thumbAt: r.thumb_at });
 
 /** A new project id: 16 random bytes, base64url (22 characters). */
 export function newProjectId(): string {
@@ -107,12 +114,47 @@ const cleanName = (v: unknown): string | null => (typeof v === 'string' && v.tri
 const CREATE = `INSERT INTO project (id, user_id, name, summary, revision, created_at, updated_at, house, chat)
 SELECT ?1, ?2, ?3, ?4, 1, ?5, ?5, ?6, ?7 WHERE (SELECT count(*) FROM project WHERE user_id = ?2) < ?8
 RETURNING ${META}`;
-const DUPLICATE = `INSERT INTO project (id, user_id, name, summary, revision, created_at, updated_at, house, chat)
-SELECT ?1, user_id, ?3, summary, 1, ?4, ?4, house, chat FROM project
+const DUPLICATE = `INSERT INTO project (id, user_id, name, summary, revision, created_at, updated_at, house, chat, thumb, thumb_type, thumb_at)
+SELECT ?1, user_id, ?3, summary, 1, ?4, ?4, house, chat, thumb, thumb_type, CASE WHEN thumb_at > 0 THEN ?4 ELSE 0 END FROM project
 WHERE id = ?2 AND user_id = ?5 AND (SELECT count(*) FROM project WHERE user_id = ?5) < ?6
 RETURNING ${META}`;
 const SAVE = `UPDATE project SET house = ?4, chat = ?5, summary = ?6, revision = revision + 1, updated_at = ?7
 WHERE id = ?1 AND user_id = ?2 AND revision = ?3 RETURNING ${META}`;
+
+/** /api/projects/:id/thumb: store (PUT, the image as the body) or read (GET) a project's thumbnail. */
+export async function thumbRoute(req: Request, env: AccountEnv, id: string): Promise<Response> {
+  const cfg = projectsConfig(env);
+  if (!cfg.enabled || !env.DB) return jsonError(404, 'projects_off', 'Projects are not kept with accounts on this server.');
+  if (!PROJECT_ID.test(id)) return jsonError(404, 'not_found', 'No such project.');
+  if (req.method !== 'GET' && req.method !== 'PUT') return jsonError(405, 'bad_method', 'Method not allowed.');
+  const type = (req.headers.get('content-type') ?? '').split(';')[0]!.trim().toLowerCase();
+  if (req.method === 'PUT') {
+    if (req.headers.get('origin') !== authConfig(env).siteUrl) return jsonError(403, 'bad_origin', 'Not allowed from this origin.');
+    if (!THUMB_TYPES.includes(type)) return jsonError(415, 'bad_request', 'Expected image/webp or image/jpeg.');
+    if (Number(req.headers.get('content-length') ?? 0) > THUMB_MAX) return jsonError(413, 'too_large', 'The image is too large.');
+  }
+  try {
+    const user = await userOf(req, env);
+    if (!user) return jsonError(401, 'signed_out', 'Sign in to keep projects with your account.');
+    const db = env.DB;
+    if (req.method === 'GET') {
+      const r = await db.prepare('SELECT thumb, thumb_type FROM project WHERE id = ?1 AND user_id = ?2 AND thumb_at > 0').bind(id, user.id).first<{ thumb: ArrayBuffer | Uint8Array; thumb_type: string }>();
+      if (!r?.thumb) return jsonError(404, 'not_found', 'No thumbnail.');
+      // The address carries the version (`?v=<thumbAt>`): a new image gets a new address.
+      return new Response((r.thumb instanceof Uint8Array ? r.thumb : new Uint8Array(r.thumb)) as unknown as BodyInit, { headers: { 'content-type': r.thumb_type, 'cache-control': 'private, max-age=31536000, immutable' } });
+    }
+    const buf = await req.arrayBuffer();
+    if (buf.byteLength > THUMB_MAX) return jsonError(413, 'too_large', 'The image is too large.');
+    if (!buf.byteLength) return jsonError(400, 'bad_request', 'Expected an image.');
+    const [n] = await bump(db, [`${hourKey()}|projects:${user.id}`]);
+    if ((n ?? 0) > PROJECT_WRITES_PER_HOUR) return jsonError(429, 'too_many', 'Too many changes. Try again later.');
+    const row = await db.prepare(`UPDATE project SET thumb = ?3, thumb_type = ?4, thumb_at = ?5 WHERE id = ?1 AND user_id = ?2 RETURNING ${META}`).bind(id, user.id, buf, type, Date.now()).first<Row>();
+    return row ? ok({ project: meta(row) }) : jsonError(404, 'not_found', 'No such project.');
+  } catch (e) {
+    console.error('projects: database error', e instanceof Error ? e.message.slice(0, 160) : 'error');
+    return jsonError(503, 'unavailable', 'Projects are not available right now.');
+  }
+}
 
 /** /api/projects and /api/projects/:id. Signed-in users only; writes from this site only. */
 export async function projectsRoute(req: Request, env: AccountEnv, id?: string): Promise<Response> {
