@@ -330,10 +330,11 @@ density" open question in UI_STYLE, not changed here.
 - The invitation needed three lines at 360 px in English; it was cut at
   two (e2e: "its text whole"). The phone Notice now grows to three lines.
 - The prompt's English placeholder "Say a sentence to change the house"
-  wrapped to a second, clipped line at 360 px, which also changed the
-  input's height after the first turn and so moved the house (the e2e
-  "the house does not move" checks failed only there). Shorter copy:
-  "Change the house in a sentence". Not checked whether 028's tree had the
+  wrapped to a second, clipped line at 360 px. Shorter copy: "Change the
+  house in a sentence". The e2e "the house does not move" checks failed
+  only in that configuration; with the two fixes the framing insets are
+  the same before and after the first turn (measured), but which of the
+  two caused it was not isolated. Not checked whether 028's tree had the
   same wrap at 360 (the 360 x 800 English configuration was not in earlier
   runs).
 - A regression of this task, fixed before the final screenshots: the
