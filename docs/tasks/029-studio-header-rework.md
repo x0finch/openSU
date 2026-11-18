@@ -105,3 +105,44 @@ Evidence: one comparison sheet per viewport (1440x900, 390x844) under
 `artifacts/task029/` with every surface open, cropped to the same scale,
 side by side, plus a table in the notes of title size, close box, inset,
 radius and width per surface, before and after.
+
+## Part 3 (owner, same day): one attachment, a shadcn-style base folder
+
+The owner decided, overriding Part 2 item 4 and task 025's two modes:
+
+1. Every surface floats. One attachment only: at the module gap from
+   its anchor. Remove the "joined" mode entirely: the `attach` option,
+   the neck drawn on the glass layer (`packages/render/src/glass.ts`),
+   the CSS-fallback notch, the audit rules `anchor-joined` and
+   `panel-attach` (replace with: every open surface is at the module gap
+   from its anchor), and the still-house / layout checks that assert a
+   joined panel. Toolbar panels (views, levels, sun; plan levels) open
+   below their own button like any popover (aligned by `place()`, not
+   stretched to the toolbar).
+2. Base components follow shadcn/ui's organisation (structure and API
+   shape; do not install shadcn or Radix, our glass is drawn on a
+   canvas layer): one folder holding every base component, one file per
+   component, small composable parts with variants as props, no feature
+   knowledge inside. Suggested: `apps/web/src/ui/` with `button`,
+   `icon-button`, `popover` (Popover, PopoverHeader, PopoverTitle,
+   PopoverBody, PopoverFooter), `sheet` (the phone form of the same
+   parts), `menu` (Menu, MenuItem, MenuLabel, MenuSeparator), `switch`,
+   `segmented`, `field`, `tooltip`, `toast`, `separator`, plus the
+   placement and glass-surface internals. Move `src/glass/` there (or
+   keep the name `glass/` if a rename costs more than it gives; say
+   which and why), and include the paper-page controls used on
+   `/projects`, the landing page and the not-found pages (buttons,
+   cards) so that those pages also only apply base components.
+3. Everything outside that folder only applies components: no element
+   there sets its own radius, padding of a surface, title size, hover,
+   focus ring, shadow, or positions a floating element. A feature file
+   may compose (`<Popover><PopoverHeader>...`) and lay out its own
+   content inside the body; nothing more. Extend `glass-check.mjs`
+   (rename it if the folder is renamed) to enforce this and list in the
+   notes every exception with its reason. Add a short `README.md` in the
+   folder: the components, their parts and variants, and the rule.
+4. One responsive rule in the base, not in callers: a Popover becomes a
+   Sheet on phones.
+
+Order: Part 1, then Parts 2 and 3 together. The full test run once at
+the end.
