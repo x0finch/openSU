@@ -48,7 +48,9 @@ const outside = walk(src).filter((f) => /\.(tsx?|css)$/.test(f) && !relative(src
 const ALLOW_025 = [
   { file: 'routes/index.tsx', rule: 'hover plate', why: 'the landing page is paper with no glass (DESIGN.md: "a light, editorial page ... with no glass at all")' },
   { file: 'components/ui.tsx', rule: 'hover plate', line: /hover:bg-wash hover:text-ink/, why: 'LangToggle, used on the landing page only (paper, no glass)' },
+  { file: 'projects/ProjectsPage.tsx', rule: 'hover plate', why: 'the projects page is paper like the landing page (task 027): its buttons have no glass to carry a plate' },
 ];
+
 /** JSX opening tags: name, attribute text, line. */
 function tags(text) {
   const out = [];

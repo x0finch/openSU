@@ -4,20 +4,19 @@
 import { Link } from '@tanstack/react-router';
 import { type KeyboardEvent as RKeyboardEvent, type ReactNode, type RefObject, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { TEMPLATE_META } from '@opensu/agent/templates-meta';
-import { ChevronDownSmallIcon, CloseIcon, CompassIcon, DownloadIcon, FolderIcon, LayersIcon, Mark, PersonIcon, PinIcon, ResetViewIcon } from '../components/icons';
+import { ChevronDownSmallIcon, CloseIcon, CompassIcon, CopyIcon, DownloadIcon, FolderIcon, LayersIcon, Mark, PencilIcon, PersonIcon, PinIcon, PlusIcon, ResetViewIcon } from '../components/icons';
 import { cx } from '../components/ui';
 import { GlassButton, GlassMenu, GlassMenuItem, GlassSegmented, GlassSep } from '../glass';
 import { type MessageKey, useT } from '../lib/i18n';
 import { freshView, type Mode, useStudio } from '../lib/store';
 import { resetToTemplate } from '../lib/autosave';
-import { fmtArea, fmtLen, useHouseName, useProjects } from '../lib/projects';
+import { fmtArea, fmtLen, goToProjects, projectSync, useHouseName, useProjects, useProjectsOffered } from '../lib/projects';
 import { bearingText, frontBearing, placeText } from '../lib/site';
 import { exportConversation, replaceHouse, useChat } from '../chat/chat-store';
 import { accountName, openAccount } from '../chat/AccountEntry';
 import { useKeys } from '../chat/keys';
 import { showKeyChoices } from '../chat/KeyPicker';
 import type { Derived } from './house-data';
-import { openProjects, useProjectsOffered } from './Projects';
 import { loadHouseData } from './useDerived';
 
 
@@ -101,8 +100,51 @@ export function TitleMenu({ derived, onRect, compact }: { derived: Derived | nul
   useDismiss(open, close, [box, menu]);
   // The name the user gave the project (task 027), else the house's own title.
   const name = useHouseName();
+  // Rename in place (task 027: the file name in the top bar, as in Figma and Google Docs): Enter saves, Escape cancels.
+  const [renaming, setRenaming] = useState(false);
+  const [draft, setDraft] = useState('');
+  const field = useRef<HTMLInputElement>(null);
+  useLayoutEffect(() => {
+    if (!renaming) return;
+    setDraft(name);
+    field.current?.focus();
+    field.current?.select();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [renaming]);
+  const commit = (save: boolean) => {
+    if (!renaming) return;
+    setRenaming(false);
+    const id = projectSync.store.getState().openId;
+    const next = draft.trim();
+    if (save && id && next && next !== name) void projectSync.rename(id, next);
+    requestAnimationFrame(() => trigger.current?.focus({ preventScroll: true }));
+  };
+  const titleText = compact ? 'text-[17px] max-[339px]:text-[15px]' : 'text-[20px]';
   return (
     <div className="pointer-events-auto relative min-w-0" ref={box} data-house-name="">
+      {renaming ? (
+        <div className={cx('-ml-1 flex items-center gap-[7px] px-1', compact ? 'h-8' : 'h-9')}>
+          <Mark width={18} height={18} className="shrink-0" />
+          <input
+            ref={field}
+            value={draft}
+            maxLength={80}
+            aria-label={t('projects.nameLabel')}
+            onChange={(e) => setDraft(e.target.value)}
+            onBlur={() => commit(true)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') commit(true);
+              else if (e.key === 'Escape') {
+                e.preventDefault();
+                e.stopPropagation();
+                commit(false);
+              }
+            }}
+            className={cx('-mx-1.5 h-[30px] w-[min(320px,calc(100vw-120px))] min-w-0 rounded-[8px] bg-page px-1.5 font-semibold tracking-[-0.01em] text-canvas-ink outline outline-1 outline-ink-3 focus:outline-2 focus:outline-ink', titleText)}
+            data-testid="title-rename-input"
+          />
+        </div>
+      ) : (
       <button
         ref={trigger}
         type="button"
@@ -126,12 +168,13 @@ export function TitleMenu({ derived, onRect, compact }: { derived: Derived | nul
         )}
       >
         <Mark width={18} height={18} className="shrink-0" />
-        <span className={cx('truncate font-semibold tracking-[-0.01em]', compact ? 'text-[17px] max-[339px]:text-[15px]' : 'text-[20px]')}>{name}</span>
+        <span className={cx('truncate font-semibold tracking-[-0.01em]', titleText)} data-testid="title-name">{name}</span>
         <ChevronDownSmallIcon width={16} height={16} className={cx('-ml-0.5 shrink-0 text-ink-2 transition-transform duration-200', open && 'rotate-180')} />
       </button>
+      )}
       <Facts derived={derived} className={cx('pl-0', compact ? 'mt-0' : 'mt-0.5')} />
       {/* The menu stands under the house name's block (its name and facts), not over the facts line. */}
-      <ProjectMenu ref={menu} open={open} anchor={() => box.current} onClose={close} compact={compact} />
+      <ProjectMenu ref={menu} open={open} anchor={() => box.current} onClose={close} compact={compact} onRename={() => setRenaming(true)} />
     </div>
   );
 }
@@ -146,7 +189,7 @@ function MenuItem({ children, onSelect, value, icon, danger, testId }: { childre
 
 const Sep = () => <GlassSep />;
 
-function ProjectMenu({ open, anchor, onClose, compact, ref }: { open: boolean; anchor: () => HTMLElement | null; onClose: (focus: boolean) => void; compact?: boolean; ref: RefObject<HTMLDivElement | null> }) {
+function ProjectMenu({ open, anchor, onClose, compact, onRename, ref }: { open: boolean; anchor: () => HTMLElement | null; onClose: (focus: boolean) => void; compact?: boolean; onRename: () => void; ref: RefObject<HTMLDivElement | null> }) {
   const t = useT();
   const lang = useStudio((s) => s.lang);
   const site = useStudio((s) => s.house?.site);
@@ -160,6 +203,7 @@ function ProjectMenu({ open, anchor, onClose, compact, ref }: { open: boolean; a
   // so the rows that replace the open house go; the line at the bottom says where edits are kept.
   const projectsOffered = useProjectsOffered();
   const cloud = useProjects((s) => s.on);
+  const openId = useProjects((s) => s.openId);
   const failed = useProjects((s) => s.failed);
   const [templates, setTemplates] = useState(false);
   const [confirm, setConfirm] = useState(false);
@@ -218,21 +262,44 @@ function ProjectMenu({ open, anchor, onClose, compact, ref }: { open: boolean; a
           </GlassMenuItem>
         </>
       )}
-      {/* Task 027: the account's projects; signed out it leads to sign-in (which says why). */}
+      {/* Task 027: the file browser (Figma's "Back to files"); signed out it shows this browser's project and invites sign-in. */}
       {projectsOffered && (
-        <GlassMenuItem
-          icon={<FolderIcon width={17} height={17} />}
-          onClick={(e) => {
-            openProjects(e.currentTarget, 'menu');
-            onClose(false);
-          }}
-          aria-haspopup="dialog"
-          data-testid="menu-projects"
-        >
-          {t('projects.title')}
-        </GlassMenuItem>
+        <MenuItem icon={<FolderIcon width={17} height={17} />} onSelect={() => { onClose(false); void goToProjects(); }} testId="menu-all-projects">
+          {t('projects.all')}
+        </MenuItem>
       )}
       {(authOn || projectsOffered) && <Sep />}
+      {/* The open project, as a file menu has it (Figma, Google Docs): new, rename, duplicate. */}
+      {cloud && openId && (
+        <>
+          <MenuItem
+            icon={<PlusIcon width={17} height={17} />}
+            testId="menu-new-project"
+            onSelect={async () => {
+              onClose(false);
+              const r = await projectSync.create();
+              if (r === null) setSitePanel({ kind: 'location', intro: true });
+            }}
+          >
+            {t('projects.new')}
+          </MenuItem>
+          <MenuItem icon={<PencilIcon width={16} height={16} />} testId="menu-rename" onSelect={() => { onClose(false); onRename(); }}>
+            {t('projects.rename')}
+          </MenuItem>
+          <MenuItem
+            icon={<CopyIcon width={16} height={16} />}
+            testId="menu-duplicate"
+            onSelect={async () => {
+              onClose(false);
+              const r = await projectSync.duplicate(openId);
+              if ('id' in r) await projectSync.open(r.id);
+            }}
+          >
+            {t('projects.copy')}
+          </MenuItem>
+          <Sep />
+        </>
+      )}
       <MenuItem icon={<PinIcon width={17} height={17} />} value={site ? placeText(site, lang) : ''} onSelect={() => { onClose(false); setSitePanel({ kind: 'location' }); }} testId="menu-location">
         {t('more.location')}
       </MenuItem>

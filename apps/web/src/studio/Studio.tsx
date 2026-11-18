@@ -28,7 +28,7 @@ import type { Derived } from './house-data';
 import { Loading } from './Loading';
 import { type DockExtent, PhoneDock, SHEET_MS } from './PhoneDock';
 import { PlanView } from './PlanView';
-import { ProjectsHost } from './Projects';
+import { ProjectMissing } from './ProjectMissing';
 import { DesktopTools, PanelCard, TRAY_ID } from './tools';
 import { GLASS, GlassLayer, type GlassTone } from '../glass';
 import { useDerived } from './useDerived';
@@ -464,7 +464,6 @@ export function Studio() {
           <SettingsHost />
           <SignInHost />
           <AccountMenuHost />
-          <ProjectsHost />
           <KeySheetHost />
         </div>
       ) : walkLandscape ? (
@@ -518,10 +517,11 @@ export function Studio() {
           <SettingsHost phone />
           <SignInHost phone />
           <AccountMenuHost />
-          <ProjectsHost phone />
           <KeySheetHost phone />
         </>
       )}
+      {/* An address of a project this account cannot open (task 027). */}
+      <ProjectMissing />
     </div>
     </GlassLayer>
   );

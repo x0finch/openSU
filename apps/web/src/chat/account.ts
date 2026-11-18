@@ -33,17 +33,15 @@ interface AccountState {
   menuRect: { x: number; y: number; width: number; height: number } | null;
   /** Set on a successful sign-in here: the short confirmation shows. */
   welcome: number;
-  /** Why the sign-in surface opened: 'projects' (task 027: "My projects" signed out) says what signing in keeps. */
-  reason: 'projects' | null;
 }
 
-export const useAccount = create<AccountState>(() => ({ open: false, anchor: null, origin: 'menu', step: 'email', email: '', resendAt: 0, busy: false, error: null, wrong: 0, menu: false, menuFrom: 'button', menuRect: null, welcome: 0, reason: null }));
+export const useAccount = create<AccountState>(() => ({ open: false, anchor: null, origin: 'menu', step: 'email', email: '', resendAt: 0, busy: false, error: null, wrong: 0, menu: false, menuFrom: 'button', menuRect: null, welcome: 0 }));
 
 /** Seconds between two codes for one address (the server also limits per hour). */
 export const RESEND_SECONDS = 45;
 
-export function openSignIn(anchor: HTMLElement | null, origin: 'menu' | 'account' | 'input' = 'menu', reason: 'projects' | null = null): void {
-  useAccount.setState({ open: true, anchor, origin, error: null, busy: false, menu: false, reason });
+export function openSignIn(anchor: HTMLElement | null, origin: 'menu' | 'account' | 'input' = 'menu'): void {
+  useAccount.setState({ open: true, anchor, origin, error: null, busy: false, menu: false });
   // From a credits note in the recent strip: the strip makes way (one glass surface at a time).
   if (origin === 'input' && !useStudio.getState().pinned) useStudio.getState().setRecent(false);
 }

@@ -19,8 +19,8 @@ export const SAVE_DELAY = 3000;
 /** Retry after a failed save: doubles from the first, up to the last. */
 export const RETRY_MIN = 2000;
 export const RETRY_MAX = 60_000;
-/** At most one thumbnail per this many ms of editing (it is rendered in the browser). */
-export const THUMB_EVERY = 20_000;
+/** At most one thumbnail per this many ms of editing (it is rendered in the browser, which costs a frame or more). */
+export const THUMB_EVERY = 60_000;
 
 export interface ProjectMeta {
   id: string;
@@ -586,15 +586,16 @@ export function createProjectSync(deps: SyncDeps) {
       });
     },
 
-    duplicate(id: string): Promise<string | null> {
+    /** A copy of a project (in the account); its id, or why not ('full', ...). */
+    duplicate(id: string): Promise<{ id: string } | { error: string }> {
       return enqueue(async () => {
-        if (get().projects.length >= get().max) return 'full';
+        if (get().projects.length >= get().max) return { error: 'full' };
         if (id === get().openId) await save(true);
         const meta = get().projects.find((p) => p.id === id);
         const r = await deps.api.duplicate(id, deps.copyName(meta ? deps.displayName(meta) : ''));
-        if (!r.ok) return r.code;
+        if (!r.ok) return { error: r.code };
         upsert(r.value.project);
-        return null;
+        return { id: r.value.project.id };
       });
     },
 

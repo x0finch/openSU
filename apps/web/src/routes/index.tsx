@@ -86,7 +86,8 @@ function Landing() {
               {t('account.signIn')}
             </Link>
           )}
-          <Link to="/studio" className="ml-1 hidden h-10 items-center rounded-ui px-4 text-sm font-medium whitespace-nowrap hover:bg-wash sm:inline-flex" data-testid="landing-studio">
+          {/* Task 027: signed in, the way in is the file browser (as in Figma, Canva, Google Docs). */}
+          <Link to={signedIn ? '/projects' : '/studio'} className="ml-1 hidden h-10 items-center rounded-ui px-4 text-sm font-medium whitespace-nowrap hover:bg-wash sm:inline-flex" data-testid="landing-studio">
             {signedIn ? t('landing.openStudio') : t('landing.cta')}
           </Link>
         </nav>

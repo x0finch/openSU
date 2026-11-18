@@ -21,9 +21,11 @@
 // nothing when sign-in is off; screenshots -> artifacts/task026/*.png.
 //
 // And of projects kept with the account (task 027, `projects`): first
-// sign-in adoption, autosave, new / rename / duplicate / switch / delete,
-// reload, a second browser, a conflict between two, the not-synced line, the
-// limit, sign-out; screenshots -> artifacts/task027/*.png.
+// sign-in adoption, autosave, thumbnails, the address per project (back,
+// reload, not found), new / rename / duplicate from the project menu, the
+// /projects page (cards, menu, right click, rename, duplicate, delete with
+// Undo, templates), a second browser, a conflict between two, the
+// not-synced line, the limit, sign-out; screenshots -> artifacts/task027/*.png.
 //
 // Requires a build (`pnpm --filter @opensu/web build`).
 import { execFileSync, spawn } from 'node:child_process';
@@ -324,39 +326,25 @@ try {
   if (wanted('projects')) {
     const preview = await startPreview({ PROJECTS_MAX: '6' });
     console.log(`projects: preview on ${preview.base}`);
-    const P = (page) => page.evaluate(() => { const s = window.__studio.projects.store.getState(); return { on: s.on, openId: s.openId, name: s.name, failed: s.failed, ids: s.projects.map((p) => p.id), names: s.projects.map((p) => p.name), loaded: s.loaded }; });
+    const P = (page) => page.evaluate(() => { const s = window.__studio.projects.store.getState(); return { on: s.on, openId: s.openId, name: s.name, failed: s.failed, missing: s.missing, ids: s.projects.map((p) => p.id), names: s.projects.map((p) => p.name), thumbs: s.projects.map((p) => p.thumbAt) }; });
     const server = (page) => page.evaluate(async () => (await (await fetch('/api/projects')).json()).projects);
+    const houseOf = async (page, id) => JSON.parse((await page.evaluate(async (x) => (await (await fetch(`/api/projects/${x}`)).text()).split('\n')[1], id)));
     const houseName = (page) => page.evaluate(() => window.__studio.store.getState().house?.name);
-    const title = (page) => page.getByTestId('project-menu').first().evaluate((e) => e.textContent.trim());
+    const urlP = (page) => new URL(page.url()).searchParams.get('p');
+    const title = (page) => page.getByTestId('title-name').first().textContent();
     /** An edit the way the studio makes one (the house in the store changes). */
     const edit = (page, name) => page.evaluate((n) => { const s = window.__studio.store.getState(); s.setHouse({ ...s.house, name: n }); }, name);
     const waitOpen = (page) => page.waitForFunction(() => !!window.__studio.projects?.store.getState().openId && !window.__studio.projects.store.getState().busy, null, { timeout: 30000 });
-    const surface = (page, phone) => page.waitForSelector(phone ? '[data-testid=projects-sheet] [data-testid=projects-body]' : '[data-testid=projects-surface]', { timeout: 15000 });
-    const closeSurface = async (page) => {
-      await page.keyboard.press('Escape');
-      await page.waitForSelector('[data-testid=projects-body]', { state: 'detached', timeout: 10000 });
-      await page.waitForTimeout(300);
+    // `load`, not `networkidle`: a thumbnail being rendered (SwiftShader takes seconds) may still hold the page that is left.
+    const studio = async (page, path) => {
+      await page.goto(`${preview.base}${path}`, { waitUntil: 'load', timeout: 120000 });
+      await page.waitForFunction(() => window.__studio?.ready3d === true, null, { timeout: 180000 });
     };
-    const openSurface = async (page, phone) => {
-      await openMenu(page);
-      await page.getByTestId('menu-projects').click();
-      await surface(page, phone);
-      await page.waitForTimeout(900);
+    const projectsPage = async (page, q = '') => {
+      await page.goto(`${preview.base}/projects${q}`, { waitUntil: 'load', timeout: 120000 });
+      await page.waitForFunction(() => !!window.__studio?.chat?.getState().server, null, { timeout: 30000 });
+      await page.waitForTimeout(700);
     };
-    const row = (page, i) => page.getByTestId('project-row').nth(i);
-    /** Signs in through the open sign-in surface (email, the code typed). */
-    const signInHere = async (page, email) => {
-      await page.waitForSelector('[data-testid=signin-email-input]');
-      await page.getByTestId('signin-email-input').fill(email);
-      await page.getByTestId('signin-email-input').press('Enter');
-      await page.waitForSelector('[data-testid=otp-0]');
-      await page.waitForTimeout(300);
-      await page.getByTestId('otp-0').focus();
-      await page.keyboard.type(await code(preview.base, email));
-      await page.waitForFunction(() => !!window.__studio.chat.getState().server?.user, null, { timeout: 20000 });
-      await waitOpen(page);
-    };
-    /** Signs in without the UI (a second device), then reloads. */
     const signInDirect = async (page, email) => {
       await page.evaluate(async (e) => {
         const post = (p, b) => fetch(`/api/auth${p}`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(b) });
@@ -364,145 +352,161 @@ try {
         const { code: c } = await (await fetch(`/api/auth-test/code?email=${encodeURIComponent(e)}`)).json();
         await post('/sign-in/email-otp', { email: e, otp: c });
       }, email);
-      await page.reload({ waitUntil: 'networkidle' });
-      await page.waitForFunction(() => window.__studio?.ready3d === true, null, { timeout: 180000 });
-      await waitOpen(page);
     };
-    /** More projects for the account, made the way the browser makes them (framed body), then the list is read again. */
-    const addProjects = async (page, names) => {
-      await page.evaluate(async (list) => {
-        const h = window.__studio.store.getState().house;
+    /** More projects for the account, made the way the browser makes them (framed body). */
+    const addProjects = (page, names) =>
+      page.evaluate(async (list) => {
+        const h = window.__studio?.store?.getState().house ?? { name: 'x', style: 'modern-pitched', site: { width: 12000, depth: 14000 } };
         for (const n of list) {
           const house = JSON.stringify({ ...h, name: n });
           const summary = JSON.stringify({ title: n, style: h.style, w: h.site.width, d: h.site.depth, area: 142.6, storeys: 2, attic: false });
           await fetch('/api/projects', { method: 'POST', headers: { 'content-type': 'application/x-opensu-project' }, body: `${JSON.stringify({ summary })}\n${house}\n{"conversation":"c-${n.length}","items":[]}` });
         }
-        await window.__studio.projects.refresh();
       }, names);
-    };
+    const cards = (page) => page.getByTestId('project-card').count();
+    const card = (page, id) => page.locator(`[data-testid=project-card][data-id="${id}"]`);
 
     // ---- Functional checks: desktop, zh ----
     const A = await open(preview.base, DESKTOP);
     const a = A.page;
-    // Signed out: the row is there and leads to sign-in, which says why.
     await openMenu(a);
-    check((await a.getByTestId('menu-projects').count()) === 1, 'signed out: the project menu has "我的项目"');
-    check(((await a.getByTestId('menu-saved').textContent()) ?? '').includes('浏览器'), 'signed out: edits are kept in this browser (as before)');
-    await a.getByTestId('menu-projects').click();
-    await a.waitForSelector('[data-testid=signin-sheet]');
-    const why = ((await a.getByTestId('signin-why').textContent()) ?? '').trim();
-    check(why === '登录后，项目随账户保存，换台设备也能打开。', `signed out: "我的项目" opens sign-in with one line on why (${why})`);
-    // A local edit before the first sign-in: it becomes the account's project and stays open.
-    await a.keyboard.press('Escape');
-    await a.waitForTimeout(500);
+    check((await a.getByTestId('menu-all-projects').count()) === 1 && ((await a.getByTestId('menu-saved').textContent()) ?? '').includes('浏览器'), 'signed out: the project menu has "所有项目"; edits are kept in this browser (as before)');
+    await closeMenu(a);
     await edit(a, '本地画的房子');
     await a.waitForTimeout(900);
-    await openMenu(a);
-    await a.getByTestId('menu-projects').click();
-    await signInHere(a, 'projects@example.com');
-    await surface(a);
-    check(true, 'after signing in from "我的项目" the list opens');
-    let st = await P(a);
+    await projectsPage(a);
+    check((await cards(a)) === 1 && ((await a.getByTestId('project-name').first().textContent()) ?? '') === '本地画的房子' && (await a.getByTestId('projects-invite').count()) === 1, 'signed out, /projects: this browser\'s project as one card and one line inviting sign-in');
+    // First sign-in with an edited local house: it becomes the project and stays open; the address names it.
+    await signInDirect(a, 'projects@example.com');
+    await studio(a, '/studio');
+    await waitOpen(a);
     let srv = await server(a);
-    check(st.on && srv.length === 1 && st.openId === srv[0].id && (await houseName(a)) === '本地画的房子', `first sign-in: the local house became the project and stays open (${srv.length} on the server)`);
-    check((await a.getByTestId('project-row').count()) === 1 && (await row(a, 0).getAttribute('data-open')) === '', 'the list: one row, the open one checked');
-    check(/12 × 14 m · \d+\.\d m² · 2 层\s*·\s*刚刚/.test((await row(a, 0).getByTestId('project-facts').textContent()) ?? ''), `the row: facts and when (${await row(a, 0).getByTestId('project-facts').textContent()})`);
-    await closeSurface(a);
-    // Autosave: an edit reaches the account a few seconds later, with nothing shown while it works.
-    const rev0 = srv[0].revision;
+    const p1 = srv[0]?.id;
+    check(srv.length === 1 && (await houseName(a)) === '本地画的房子' && urlP(a) === p1, `first sign-in: the local house became the project, stays open, and is in the address (?p=${urlP(a)})`);
+    // Autosave: an edit reaches the account a few seconds later.
     await edit(a, '本地画的房子 改');
     await a.waitForTimeout(1200);
-    check((await server(a))[0].revision === rev0, 'not saved while editing (debounce)');
-    await a.waitForFunction(async (r) => (await (await fetch('/api/projects')).json()).projects[0].revision > r, rev0, { timeout: 10000, polling: 500 });
+    check((await server(a))[0].revision === 1, 'not saved while editing (debounce)');
+    await a.waitForFunction(async () => (await (await fetch('/api/projects')).json()).projects[0].revision > 1, null, { timeout: 10000, polling: 500 });
     check(true, 'saved to the account a few seconds after the change');
+    await a.waitForFunction(async () => (await (await fetch('/api/projects')).json()).projects[0].thumbAt > 0, null, { timeout: 30000, polling: 1000 });
+    const thumb = await a.evaluate(async (id) => { const p = (await (await fetch('/api/projects')).json()).projects[0]; const r = await fetch(`/api/projects/${id}/thumb?v=${p.thumbAt}`); return { type: r.headers.get('content-type'), cache: r.headers.get('cache-control'), kb: (await r.arrayBuffer()).byteLength / 1024 }; }, p1);
+    check(/image\/(webp|jpeg)/.test(thumb.type) && thumb.kb < 60 && /private/.test(thumb.cache), `a thumbnail was rendered in the browser and stored (${thumb.type}, ${thumb.kb.toFixed(1)} KB, ${thumb.cache})`);
     await openMenu(a);
-    check(((await a.getByTestId('menu-saved').textContent()) ?? '') === '修改自动保存到账户', `the menu line: saved with the account (${await a.getByTestId('menu-saved').textContent()})`);
-    check((await a.getByText('换一个模板').count()) === 0 && (await a.getByTestId('reset-house').count()) === 0, 'signed in: the rows that replace the open house are gone (templates are in "新建项目")');
+    check(((await a.getByTestId('menu-saved').textContent()) ?? '') === '修改自动保存到账户', 'the menu line: saved with the account');
+    check((await a.getByText('换一个模板').count()) === 0 && (await a.getByTestId('reset-house').count()) === 0 && (await a.getByTestId('menu-new-project').count()) === 1 && (await a.getByTestId('menu-rename').count()) === 1 && (await a.getByTestId('menu-duplicate').count()) === 1, 'signed in: new, rename, duplicate in the project menu; the rows that replaced the open house are gone');
     await closeMenu(a);
-    // A conversation in this project.
     await turn(a, '你好 项目一');
     const chat1 = await a.evaluate(() => window.__studio.chat.getState().items.length);
-    // New project from a template.
-    await openSurface(a);
+    // New project from the menu: a new address; back returns to the first, with its conversation.
+    await openMenu(a);
+    await a.getByTestId('menu-new-project').click();
+    await a.waitForFunction((id) => { const s = window.__studio.projects.store.getState(); return s.openId && s.openId !== id && !s.busy; }, p1);
+    await a.waitForTimeout(600);
+    await a.keyboard.press('Escape');
+    const p2 = (await P(a)).openId;
+    check(urlP(a) === p2 && (await a.evaluate(() => window.__studio.chat.getState().items.length)) === 0 && (await houseName(a)) === '白墙坡顶小院', 'new project: opens with its own address and an empty conversation');
+    await edit(a, '第二个 改');
+    await a.goBack();
+    await a.waitForFunction((id) => window.__studio.projects.store.getState().openId === id && !window.__studio.projects.store.getState().busy, p1, { timeout: 15000 });
+    check((await houseName(a)) === '本地画的房子 改' && (await a.evaluate(() => window.__studio.chat.getState().items.length)) === chat1 && (await houseOf(a, p2)).name === '第二个 改', 'back: the first project with its conversation; the second\'s pending save went first');
+    // Rename in place on the title.
+    await openMenu(a);
+    await a.getByTestId('menu-rename').click();
+    await a.waitForSelector('[data-testid=title-rename-input]');
+    await a.getByTestId('title-rename-input').fill('老家');
+    await a.getByTestId('title-rename-input').press('Enter');
+    await a.waitForFunction(() => window.__studio.projects.store.getState().name === '老家');
+    check(((await title(a)) ?? '') === '老家' && (await server(a)).find((p) => p.id === p1)?.name === '老家', 'rename: inline on the title, Enter saves');
+    await openMenu(a);
+    await a.getByTestId('menu-rename').click();
+    await a.getByTestId('title-rename-input').fill('不要了');
+    await a.getByTestId('title-rename-input').press('Escape');
+    await a.waitForTimeout(300);
+    check(((await title(a)) ?? '') === '老家', 'rename: Escape cancels');
+    // Duplicate from the menu: the copy opens.
+    await openMenu(a);
+    await a.getByTestId('menu-duplicate').click();
+    await a.waitForFunction((id) => { const s = window.__studio.projects.store.getState(); return s.openId !== id && !s.busy && s.projects.length === 3; }, p1);
+    check((await P(a)).name === '老家 副本' && urlP(a) === (await P(a)).openId, 'duplicate: "老家 副本" opens at its own address');
+    // An address this account cannot open.
+    await studio(a, '/studio?p=AAAAAAAAAAAAAAAAAAAAAA');
+    await a.waitForSelector('[data-testid=project-missing]', { timeout: 20000 });
+    check((await a.getByTestId('project-missing-home').getAttribute('href')) === '/projects', 'an address the account does not have: "not found" with the way home');
+    // The projects page.
+    await a.getByTestId('project-missing-home').click();
+    await a.waitForURL('**/projects');
+    await a.waitForFunction(() => window.__studio?.projects?.store.getState().projects.length === 3, null, { timeout: 15000 });
+    await a.waitForTimeout(800);
+    check((await cards(a)) === 3 && (await a.getByTestId('project-new-card').count()) === 1, '/projects: "新建项目" first, then three cards');
+    check((await a.locator('[data-testid=project-card] [data-testid=project-thumb]').count()) >= 1, 'cards show the stored thumbnails');
+    const firstCard = (await a.getByTestId('project-card').first().getAttribute('data-id'));
+    check(firstCard === (await server(a))[0].id, 'most recently changed first');
+    // Card menu: rename, duplicate; right click opens the same menu.
+    await card(a, p1).click({ button: 'right', position: { x: 40, y: 40 } });
+    await a.waitForSelector('[data-testid=project-menu-card]');
+    check(true, 'right click on a card opens its menu');
+    await a.getByTestId('card-rename').click();
+    await a.getByTestId('project-name-input').fill('河边老家');
+    await a.getByTestId('project-name-input').press('Enter');
+    await a.waitForFunction((id) => window.__studio.projects.store.getState().projects.find((p) => p.id === id)?.name === '河边老家', p1);
+    check(true, 'card rename: inline, Enter saves');
+    await card(a, p1).getByTestId('project-more').click();
+    await a.getByTestId('card-duplicate').click();
+    await a.waitForFunction(() => window.__studio.projects.store.getState().projects.length === 4);
+    check((await cards(a)) === 4, 'card duplicate');
+    // Delete: asks once in place, then a toast with Undo; sent when the toast ends.
+    const victim = (await P(a)).ids.find((id) => id !== p1);
+    await card(a, victim).getByTestId('project-more').click();
+    await a.getByTestId('card-delete').click();
+    check((await card(a, victim).getByTestId('project-delete-ask').count()) === 1, 'delete asks once, in place on the card');
+    await card(a, victim).getByTestId('project-delete-confirm').click();
+    await a.waitForSelector('[data-testid=project-deleted-toast]');
+    check((await card(a, victim).count()) === 0 && (await server(a)).length === 4, 'the card goes; nothing sent yet (the toast offers Undo)');
+    await a.getByTestId('project-undo').click();
+    check((await card(a, victim).count()) === 1, 'Undo brings it back');
+    await card(a, victim).getByTestId('project-more').click();
+    await a.getByTestId('card-delete').click();
+    await card(a, victim).getByTestId('project-delete-confirm').click();
+    await a.waitForSelector('[data-testid=project-deleted-toast]', { state: 'detached', timeout: 15000 });
+    await a.waitForFunction(async (id) => !(await (await fetch('/api/projects')).json()).projects.some((p) => p.id === id), victim, { timeout: 10000, polling: 300 });
+    check((await server(a)).length === 3, 'the delete is sent when the toast ends');
+    // New project from the page: the templates as cards, one opens in the studio.
     await a.getByTestId('project-new').click();
     await a.waitForSelector('[data-testid=project-templates]');
     await a.getByTestId('project-template-t2').click();
-    await a.waitForSelector('[data-testid=projects-surface]', { state: 'detached', timeout: 10000 });
+    await a.waitForURL('**/studio?**');
+    await a.waitForFunction(() => window.__studio?.ready3d === true, null, { timeout: 180000 });
+    await a.waitForFunction(() => new URL(location.href).searchParams.has('p') && !new URL(location.href).searchParams.has('new'), null, { timeout: 20000 });
     await waitOpen(a);
-    await a.waitForTimeout(800);
-    await a.keyboard.press('Escape');
-    st = await P(a);
-    check(st.ids.length === 2 && st.openId !== srv[0].id && (await houseName(a)) === '平顶现代', `new project from a template: it opens, the first is kept (${st.ids.length})`);
-    check((await a.evaluate(() => window.__studio.chat.getState().items.length)) === 0, 'the new project has its own (empty) conversation');
-    // Switch back: house, conversation together; the pending save of the open one first.
-    await edit(a, '平顶现代 改');
-    await openSurface(a);
-    await a.locator(`[data-testid=project-row][data-id="${srv[0].id}"] [data-testid=project-open]`).click();
-    await a.waitForSelector('[data-testid=projects-surface]', { state: 'detached', timeout: 10000 });
-    await waitOpen(a);
-    const t2Saved = (await a.evaluate(async (id) => (await (await fetch(`/api/projects/${id}`)).text()).split('\n')[1], st.openId));
-    check(JSON.parse(t2Saved).name === '平顶现代 改', 'switching sends the open project\'s pending save first');
-    check((await houseName(a)) === '本地画的房子 改' && (await a.evaluate(() => window.__studio.chat.getState().items.length)) === chat1, `switching swaps house and conversation together (${chat1} items back)`);
-    // Rename (inline).
-    await openSurface(a);
-    const first = a.locator(`[data-testid=project-row][data-id="${srv[0].id}"]`);
-    await first.getByTestId('project-more').click();
-    await first.getByTestId('project-rename').click();
-    await a.getByTestId('project-name-input').fill('老家');
-    await a.getByTestId('project-name-input').press('Enter');
-    await a.waitForFunction((id) => window.__studio.projects.store.getState().projects.find((p) => p.id === id)?.name === '老家', srv[0].id);
-    check((await title(a)) === '老家', `rename: the open project's title follows (${await title(a)})`);
-    // Duplicate.
-    await first.getByTestId('project-more').click();
-    await first.getByTestId('project-duplicate').click();
-    await a.waitForFunction(() => window.__studio.projects.store.getState().projects.length === 3);
-    check((await P(a)).names.includes('老家 副本'), 'duplicate: "老家 副本" in the list');
-    // Delete asks once, in the row; deleting the open one opens the next most recent.
-    const before = await P(a);
-    await first.getByTestId('project-more').click();
-    await first.getByTestId('project-delete').click();
-    check((await a.locator('[data-testid=project-row][data-state=delete]').count()) === 1 && ((await a.getByTestId('project-delete-ask').textContent()) ?? '').includes('老家'), 'delete: the row turns into "删除「老家」？ / 取消"');
-    await a.getByTestId('project-delete-cancel').click();
-    check((await P(a)).ids.length === 3, 'cancel keeps it');
-    await first.getByTestId('project-more').click();
-    await first.getByTestId('project-delete').click();
-    await a.getByTestId('project-delete-confirm').click();
-    await a.waitForFunction((id) => !window.__studio.projects.store.getState().projects.some((p) => p.id === id) && !window.__studio.projects.store.getState().busy, srv[0].id);
-    await waitOpen(a);
-    st = await P(a);
-    check(st.ids.length === 2 && st.openId === st.ids[0] && st.openId !== srv[0].id && (await server(a)).length === 2, `deleting the open project opens the next most recent (${before.ids.length} -> ${st.ids.length})`);
-    await closeSurface(a);
-    // Reload: the same project opens, nothing duplicated.
-    const openBefore = st.openId;
+    check((await houseName(a)) === '平顶现代' && (await server(a)).length === 4, 'a template card makes a new project and opens it at its address');
+    const p4 = urlP(a);
+    // Reload: the same project.
     await a.reload({ waitUntil: 'networkidle' });
     await a.waitForFunction(() => window.__studio?.ready3d === true, null, { timeout: 180000 });
     await waitOpen(a);
-    st = await P(a);
-    check(st.openId === openBefore && st.ids.length === 2, 'reload: the project open last on this browser opens; nothing added');
+    check((await P(a)).openId === p4 && (await server(a)).length === 4, 'reload: the same project at the same address; nothing added');
 
-    // A second device: the same projects.
+    // A second browser: the same projects; a conflict keeps both.
     const B = await open(preview.base, { ...DESKTOP, viewport: { width: 1280, height: 800 } });
     const b = B.page;
     await signInDirect(b, 'projects@example.com');
-    const sb = await P(b);
-    check(sb.ids.length === 2 && JSON.stringify([...sb.ids].sort()) === JSON.stringify([...st.ids].sort()) && sb.openId === sb.ids[0], `second browser: the same projects, the most recent open (${sb.ids.length})`);
-    // Conflict: both edit the same project; the later save keeps both.
-    await b.evaluate((id) => window.__studio.projects.open(id), openBefore);
+    await projectsPage(b);
+    await b.waitForFunction(() => window.__studio.projects.store.getState().projects.length === 4, null, { timeout: 15000 });
+    check((await cards(b)) === 4, 'second browser: the same four projects on /projects');
+    await studio(b, `/studio?p=${p4}`);
     await waitOpen(b);
+    check((await P(b)).openId === p4 && (await houseName(b)) === '平顶现代', 'second browser: the address opens the same project');
     await edit(a, '设备 A 的修改');
     await a.evaluate(() => window.__studio.projects.flush());
     await edit(b, '设备 B 的修改');
     await b.evaluate(() => window.__studio.projects.flush());
-    await b.waitForSelector('[data-testid=project-toast]', { timeout: 10000 });
-    const toastText = ((await b.getByTestId('project-toast').textContent()) ?? '').trim();
-    const sb2 = await P(b);
-    const onServer = await server(b);
-    const aHouse = JSON.parse((await b.evaluate(async (id) => (await (await fetch(`/api/projects/${id}`)).text()).split('\n')[1], openBefore)));
-    check(sb2.openId !== openBefore && onServer.length === 3 && aHouse.name === '设备 A 的修改' && (await houseName(b)) === '设备 B 的修改', `conflict with local edits: A's version kept, B's saved as a copy that stays open (${onServer.length} projects)`);
+    // The toast's message (read from its store: under SwiftShader the thumbnail of the copy can hold the page past the toast's few seconds).
+    await b.waitForFunction(() => window.__studio.toast.getState().testId === 'project-toast', null, { timeout: 15000 });
+    const toastText = await b.evaluate(() => window.__studio.toast.getState().text);
+    check((await P(b)).openId !== p4 && (await server(b)).length === 5 && (await houseOf(b, p4)).name === '设备 A 的修改' && (await houseName(b)) === '设备 B 的修改', 'conflict with local edits: A\'s version kept, B\'s saved as a copy that stays open');
     check(toastText === '另一台设备改过这个项目，你的修改已存为副本', `one toast says so (${toastText})`);
-    if (!smoke) await shot(b, 'desktop-1280-zh-conflict-toast', outDir27);
-    // Without local edits: the other device's version is loaded.
-    await b.evaluate((id) => window.__studio.projects.open(id), openBefore);
+    await studio(b, `/studio?p=${p4}`);
     await waitOpen(b);
     await edit(a, '设备 A 再改');
     await a.evaluate(() => window.__studio.projects.flush());
@@ -510,7 +514,7 @@ try {
     check((await houseName(b)) === '设备 A 再改', 'no local edits: the newer version from the other device is loaded when the page shows again');
     await B.ctx.close();
 
-    // Not synced: a failing save shows one quiet line and retries; nothing is lost.
+    // Not synced: one quiet line, retried, nothing lost.
     await a.route('**/api/projects/*', (r) => (r.request().method() === 'PUT' ? r.abort() : r.continue()));
     await a.evaluate(() => window.__studio.projects.check());
     await edit(a, '离线时的修改');
@@ -521,25 +525,30 @@ try {
     await a.unroute('**/api/projects/*');
     await a.evaluate(() => window.dispatchEvent(new Event('online')));
     await a.waitForFunction(() => window.__studio.projects.store.getState().failed === null, null, { timeout: 15000 });
-    const saved = JSON.parse((await a.evaluate(async (id) => (await (await fetch(`/api/projects/${id}`)).text()).split('\n')[1], openBefore)));
-    check(saved.name === '离线时的修改', 'back online: retried and saved, the line is gone');
-    // The limit: "新建项目" explains in one line.
-    await addProjects(a, ['甲', '乙', '丙']);
-    await openSurface(a);
-    check((await a.getByTestId('project-new').isDisabled()) && ((await a.getByTestId('projects-full').textContent()) ?? '').length > 0, `at the limit: "新建项目" is off and says why (${await a.getByTestId('projects-full').textContent()})`);
-    check(!/\d/.test((await a.getByTestId('projects-full').textContent()) ?? ''), 'the limit line states no number');
-    await closeSurface(a);
+    check((await houseOf(a, p4)).name === '离线时的修改', 'back online: retried and saved, the line is gone');
+    // The limit (6 here): "新建项目" says why, without a number.
+    await addProjects(a, ['甲']);
+    await projectsPage(a);
+    await a.waitForFunction(() => window.__studio.projects.store.getState().projects.length === 6, null, { timeout: 15000 });
+    const fullLine = ((await a.getByTestId('project-new-card').getByTestId('project-when').textContent()) ?? '');
+    check((await a.getByTestId('project-new').isDisabled()) && fullLine.length > 0 && !/\d/.test(fullLine), `at the limit: "新建项目" is off and says why, no number (${fullLine})`);
+    // The account menu goes to the page.
+    await studio(a, `/studio?p=${p4}`);
+    await waitOpen(a);
+    await a.getByTestId('account-button').click();
+    await a.getByTestId('account-projects').click();
+    await a.waitForURL('**/projects');
+    check(true, 'the account menu\'s "我的项目" goes to /projects');
     // Sign-out: the open house stays as this browser's.
+    await studio(a, `/studio?p=${p4}`);
+    await waitOpen(a);
     const kept = await houseName(a);
     await a.getByTestId('account-button').click();
-    await a.waitForSelector('[data-testid=account-menu]');
-    check((await a.getByTestId('account-projects').count()) === 1, 'the account menu has "我的项目" (the reserved slot)');
     await a.getByTestId('account-signout').click();
     await a.waitForFunction(() => !window.__studio.chat.getState().server?.user);
     await a.waitForTimeout(500);
     check((await houseName(a)) === kept && !(await P(a)).on, `sign-out: the open house stays on screen as the local project (${kept})`);
-    await a.reload({ waitUntil: 'networkidle' });
-    await a.waitForFunction(() => window.__studio?.ready3d === true, null, { timeout: 180000 });
+    await studio(a, '/studio');
     check((await houseName(a)) === kept, 'and after a reload, signed out');
     await A.ctx.close();
 
@@ -548,50 +557,65 @@ try {
     let k = 0;
     for (const [tag, opts, phone, lang] of sets) {
       const { ctx, page } = await open(preview.base, opts, `/studio?lang=${lang}`);
-      await openMenu(page);
-      await page.getByTestId('menu-projects').click();
-      await page.waitForSelector('[data-testid=signin-sheet]');
-      await page.waitForTimeout(900);
-      await shot(page, `${tag}-signed-out`, outDir27);
-      await signInHere(page, `shots${++k}@example.com`);
-      await surface(page, phone);
-      await page.waitForTimeout(900);
-      await shot(page, `${tag}-list-first`, outDir27);
-      await closeSurface(page);
+      const snap = async (name) => {
+        if (!phone) await page.mouse.move(2, opts.viewport.height - 2);
+        await page.waitForTimeout(400);
+        await shot(page, `${tag}-${name}`, outDir27);
+      };
+      await projectsPage(page, `?lang=${lang}`);
+      await snap('page-signed-out');
+      await signInDirect(page, `shots${++k}@example.com`);
+      await studio(page, `/studio?lang=${lang}`);
+      await waitOpen(page);
+      await page.waitForFunction(() => window.__studio.projects.store.getState().projects[0]?.thumbAt > 0, null, { timeout: 30000 });
+      await projectsPage(page, `?lang=${lang}`);
+      await snap('page-first');
       await addProjects(page, lang === 'zh' ? ['王家老宅翻建', '河边的小院'] : ['Riverside cottage', 'Grandparents’ house']);
-      await openSurface(page, phone);
-      const rows = await page.getByTestId('project-row').evaluateAll((els) => els.map((e) => e.getBoundingClientRect().height));
-      check(rows.every((h) => h >= (phone ? 44 : 40)), `${tag}: rows ${rows.map((h) => h.toFixed(0)).join(', ')} px tall`);
-      await shot(page, `${tag}-list-few`, outDir27);
+      await projectsPage(page, `?lang=${lang}`);
+      await snap('page-few');
+      const cols = await page.getByTestId('project-card').evaluateAll((els) => new Set(els.map((e) => Math.round(e.getBoundingClientRect().left))).size);
+      if (phone) check(cols === 2, `${tag}: two columns on the phone (${cols})`);
       await page.getByTestId('project-new').click();
+      await page.waitForSelector('[data-testid=project-templates]');
+      await page.waitForFunction(() => document.querySelectorAll('[data-testid=project-templates] [data-testid=project-thumb]').length === 3, null, { timeout: 30000 }).catch(() => {});
+      await snap('page-new-project');
+      await page.getByTestId('project-new').click();
+      const second = page.getByTestId('project-card').nth(1);
+      await second.getByTestId('project-more').click();
+      await page.waitForSelector('[data-testid=project-menu-card]');
       await page.waitForTimeout(500);
-      await shot(page, `${tag}-new-project`, outDir27);
-      await page.getByTestId('project-new').click();
-      await row(page, 1).getByTestId('project-more').click();
-      await page.waitForTimeout(300);
-      await shot(page, `${tag}-row-actions`, outDir27);
-      await row(page, 1).getByTestId('project-rename').click();
-      await page.waitForTimeout(300);
-      await shot(page, `${tag}-rename`, outDir27);
+      await snap('page-card-menu');
+      await page.getByTestId('card-rename').click();
+      await snap('page-rename');
       await page.keyboard.press('Escape');
-      await row(page, 1).getByTestId('project-more').click();
-      await row(page, 1).getByTestId('project-delete').click();
-      await page.waitForTimeout(300);
-      await shot(page, `${tag}-delete-confirm`, outDir27);
-      await page.getByTestId('project-delete-cancel').click();
-      await closeSurface(page);
+      await second.getByTestId('project-more').click();
+      await page.getByTestId('card-delete').click();
+      await snap('page-delete-confirm');
+      await second.getByTestId('project-delete-confirm').click();
+      await page.waitForSelector('[data-testid=project-deleted-toast]');
+      await snap('page-delete-toast');
+      await page.getByTestId('project-undo').click();
       await addProjects(page, lang === 'zh' ? ['东边那块地', '方案二', '方案三'] : ['East plot', 'Option two', 'Option three']);
-      await openSurface(page, phone);
-      await shot(page, `${tag}-list-limit`, outDir27);
-      await closeSurface(page);
+      await projectsPage(page, `?lang=${lang}`);
+      await snap('page-limit');
+      const w = await page.evaluate(() => [document.documentElement.scrollWidth, window.innerWidth]);
+      check(w[0] <= w[1], `${tag}: /projects has no horizontal scroll (${w[0]} <= ${w[1]})`);
+      await studio(page, `/studio?lang=${lang}`);
+      await waitOpen(page);
+      await openMenu(page);
+      await snap('studio-menu');
+      await page.getByTestId('menu-rename').click();
+      await snap('studio-rename');
+      await page.keyboard.press('Escape');
       await page.route('**/api/projects/*', (r) => (r.request().method() === 'PUT' ? r.abort() : r.continue()));
       await edit(page, lang === 'zh' ? '离线修改' : 'Edited offline');
       await page.waitForFunction(() => window.__studio.projects.store.getState().failed === 'retry', null, { timeout: 15000 });
       await openMenu(page);
-      await shot(page, `${tag}-not-synced`, outDir27);
+      await snap('studio-not-synced');
       await page.unroute('**/api/projects/*');
-      const w = await page.evaluate(() => [document.documentElement.scrollWidth, window.innerWidth]);
-      check(w[0] <= w[1], `${tag}: no horizontal scroll`);
+      await studio(page, `/studio?lang=${lang}&p=AAAAAAAAAAAAAAAAAAAAAA`);
+      await page.waitForSelector('[data-testid=project-missing]', { timeout: 20000 });
+      await snap('studio-not-found');
       await ctx.close();
     }
     preview.stop();

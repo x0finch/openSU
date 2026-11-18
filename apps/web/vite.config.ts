@@ -60,7 +60,7 @@ export default defineConfig({
     tanstackStart({
       prerender: {
         enabled: true,
-        // Only the landing page and the client-only studio shell are static;
+        // Only the landing page and the client-only studio and projects shells are static;
         // share pages and the API stay dynamic on the Worker.
         autoSubfolderIndex: false,
         autoStaticPathsDiscovery: false,
@@ -70,6 +70,7 @@ export default defineConfig({
       pages: [
         { path: '/', prerender: { enabled: true } },
         { path: '/studio', prerender: { enabled: true } },
+        { path: '/projects', prerender: { enabled: true } },
       ],
     }),
     react(),

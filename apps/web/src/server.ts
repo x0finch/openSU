@@ -19,7 +19,7 @@ const accountEnv = env as AccountEnv;
 /** The static assets (wrangler.jsonc `assets.binding`). */
 const assets = (env as { ASSETS?: { fetch(req: Request): Promise<Response> } }).ASSETS;
 /** The prerendered pages wrangler.jsonc sends through the Worker first (`assets.run_worker_first`). */
-const PAGES = new Set(['/', '/index.html', '/studio', '/studio.html', '/auth-done', '/auth-done.html']);
+const PAGES = new Set(['/', '/index.html', '/studio', '/studio.html', '/projects', '/projects.html', '/auth-done', '/auth-done.html']);
 await startAuth(accountEnv);
 
 export default createServerEntry({

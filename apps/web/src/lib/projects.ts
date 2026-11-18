@@ -7,11 +7,11 @@ import type { House } from '@opensu/model';
 import { useEffect } from 'react';
 import { useStore } from 'zustand';
 import { type ChatItem, newChat, restoreItems, useChat } from '../chat/chat-store';
-import { autosaveHooks, quietly, saveNow } from './autosave';
+import { autosaveHooks, clearSaved, quietly, saveNow } from './autosave';
 import { type Lang, type MessageKey, translate } from './i18n';
 import { createProjectSync, type Current, type LocalLink, parseSummary, type ProjectMeta, type ProjectsApi, type ProjectsState, type Result, type Summary } from './project-sync';
 import { freshView, useStudio } from './store';
-import { toast } from './toast';
+import { toast, useToast } from './toast';
 
 export type { ProjectMeta, ProjectsState, Summary } from './project-sync';
 export { parseSummary } from './project-sync';
@@ -85,7 +85,19 @@ const api: ProjectsApi = {
   save: (id, p) => call('PUT', `/${id}`, { framed: [{ base: p.base, summary: p.summary }, p.house, p.chat] }, leaving),
   rename: (id, name) => call('PATCH', `/${id}`, { json: { name } }),
   remove: (id) => call('DELETE', `/${id}`),
+  putThumb: async (id, image) => {
+    try {
+      const res = await fetch(`${ENDPOINT}/${id}/thumb`, { method: 'PUT', headers: { 'content-type': image.type }, body: image, credentials: 'same-origin' });
+      const json = (await res.json().catch(() => ({}))) as { project?: ProjectMeta; error?: { code?: string } };
+      return res.ok && json.project ? { ok: true, value: { project: json.project } } : { ok: false, status: res.status, code: json.error?.code ?? 'error' };
+    } catch {
+      return { ok: false, status: 0, code: 'network' };
+    }
+  },
 };
+
+/** The address of a project's thumbnail (its version makes it cacheable for good); null: none yet. */
+export const thumbUrl = (p: { id: string; thumbAt: number }) => (p.thumbAt ? `${ENDPOINT}/${p.id}/thumb?v=${p.thumbAt}` : null);
 
 /* ------------------------------------------------------------------ */
 /* The browser copy's link and the studio                              */
@@ -189,6 +201,22 @@ export const projectSync = createProjectSync({
   },
   setTimer: (fn, ms) => globalThis.setTimeout(fn, ms),
   clearTimer: (t) => globalThis.clearTimeout(t as ReturnType<typeof setTimeout>),
+  // Never on the server: keeps three.js out of the Worker bundle.
+  thumb: async (house) => {
+    const m = await (import.meta.env.SSR ? new Promise<never>(() => {}) : import('../studio/thumb'));
+    // When the browser is idle (it takes the main thread for a moment).
+    await new Promise<void>((ok) => (typeof requestIdleCallback === 'function' ? requestIdleCallback(() => ok(), { timeout: 4000 }) : setTimeout(ok, 0)));
+    const t0 = performance.now();
+    const blob = await m.renderThumb(house);
+    // Test hook (e2e, audit): what the last picture cost on this machine.
+    (globalThis as { __thumb?: unknown }).__thumb = { ms: Math.round(performance.now() - t0), kb: blob ? Math.round(blob.size / 102.4) / 10 : 0, type: blob?.type ?? null };
+    return blob;
+  },
+  now: () => Date.now(),
+  forgetLocal: () => {
+    clearSaved();
+    writeJson(LINK_KEY, null);
+  },
 });
 
 /** Set while the hook runs: looks again at whether to sync (a template opened by address became the browser's house). */
@@ -211,30 +239,67 @@ export function useHouseName(): string {
   return name || houseTitle(l, house);
 }
 
+/** The server keeps projects with accounts (and offers sign-in). */
+export const useProjectsOffered = () => useChat((s) => !!s.server?.projects && !!(s.server.auth?.email || s.server.auth?.google));
+
+/** To the projects page (`/projects`), after the open project's pending save. */
+export async function goToProjects(): Promise<void> {
+  await projectSync.flush();
+  location.assign('/projects');
+}
+
 /** Sends a pending save before the account goes (sign-out). */
 export const flushProjects = () => projectSync.flush();
+
+/** The address's wishes: `?p=<id>` (a project) and `?new=<template>` (a new project, from the projects page). */
+function wantedFromUrl(): { id: string | null; template: string | null } {
+  const q = new URLSearchParams(location.search);
+  const id = q.get('p');
+  const tpl = q.get('new');
+  return { id: id && /^[A-Za-z0-9_-]{22}$/.test(id) ? id : id ? id.slice(0, 64) : null, template: tpl && /^t\d$/.test(tpl) ? tpl : null };
+}
+
+/** Writes the open project into the address (`?p=`), keeping the other parameters; `push`: a new history entry. */
+function writeUrl(id: string | null, push: boolean): void {
+  const u = new URL(location.href);
+  if (id) u.searchParams.set('p', id);
+  else u.searchParams.delete('p');
+  u.searchParams.delete('new');
+  if (u.href === location.href) return;
+  if (push) history.pushState(history.state, '', u);
+  else history.replaceState(history.state, '', u);
+}
+
+/** Opened by address while signed out (or without projects here): nothing to open, say so. */
+export const useUrlMissing = () => useProjects((s) => s.missing);
 
 /**
  * Starts syncing when someone is signed in on a server that keeps projects
  * and a house is on screen; stops on sign-out. Saves when the page is
  * hidden, checks for changes from another device when it shows again, and
- * retries when the connection comes back.
+ * retries when the connection comes back. Every project has its address
+ * (`/studio?p=<id>`): the open one is written there, back and forward
+ * open the project they name.
  */
 export function useProjectSync(): void {
   useEffect(() => {
     // A template opened by address (`?sample=`) is not a project until it is edited (autosave detaches it then).
     const sample = () => new URLSearchParams(location.search).has('sample');
     let user: string | null = null;
+    let fromHistory = false;
     const update = () => {
       const s = useChat.getState().server;
+      const wanted = wantedFromUrl();
+      // An address of a project, and nobody (or no projects) to open it with: "not found or no access".
+      if (s && wanted.id && !(s.user && s.projects)) projectSync.store.setState({ missing: wanted.id });
       const want = s?.user && s.projects && useStudio.getState().house && !sample() ? s.user.email : null;
       if (want === user) return;
       if (user) projectSync.stop();
       user = want;
       if (!want) return;
-      void import('../studio/house-data').then((m) => {
+      void (import.meta.env.SSR ? new Promise<HouseData>(() => {}) : import('../studio/house-data')).then((m) => {
         houseData = m;
-        if (user === want) void projectSync.start(want);
+        if (user === want) void projectSync.start(want, wantedFromUrl());
       });
     };
     update();
@@ -245,6 +310,21 @@ export function useProjectSync(): void {
     const offHouse = useStudio.subscribe((s, p) => {
       if (!p.house && s.house) update();
     });
+    // The open project goes into the address: a switch is a new history entry, the first one is not.
+    const offOpen = projectSync.store.subscribe((s, p) => {
+      if (s.openId === p.openId || !s.openId) return;
+      // A project made from the projects page (`?new=`) takes that entry's place.
+      writeUrl(s.openId, !!p.openId && !fromHistory && !new URLSearchParams(location.search).has('new'));
+    });
+    const onPop = () => {
+      const { id } = wantedFromUrl();
+      if (!id || id === projectSync.store.getState().openId || !projectSync.store.getState().on) return;
+      fromHistory = true;
+      void projectSync.open(id).then((ok) => {
+        fromHistory = false;
+        if (!ok) projectSync.store.setState({ missing: id });
+      });
+    };
     const onHide = () => {
       if (document.visibilityState === 'hidden') {
         leaving = true;
@@ -259,15 +339,18 @@ export function useProjectSync(): void {
     document.addEventListener('visibilitychange', onHide);
     window.addEventListener('pagehide', onLeave);
     window.addEventListener('online', onOnline);
+    window.addEventListener('popstate', onPop);
     // Test hook (e2e): the sync's store and its calls.
-    window.__studio = { ...window.__studio, projects: projectSync };
+    window.__studio = { ...window.__studio, projects: projectSync, toast: useToast };
     return () => {
       recheck = null;
       offChat();
       offHouse();
+      offOpen();
       document.removeEventListener('visibilitychange', onHide);
       window.removeEventListener('pagehide', onLeave);
       window.removeEventListener('online', onOnline);
+      window.removeEventListener('popstate', onPop);
     };
   }, []);
 }

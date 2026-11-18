@@ -13,7 +13,7 @@ import { closeAccountMenu, openSignIn, signOut, useAccount } from './account';
 import { useChat } from './chat-store';
 import { useKeys } from './keys';
 import { showKeyChoices } from './KeyPicker';
-import { openProjects, useProjectsOffered } from '../studio/Projects';
+import { goToProjects, useProjectsOffered } from '../lib/projects';
 import { useToast } from '../lib/toast';
 
 export const ACCOUNT_BUTTON = '[data-account-button]';
@@ -223,11 +223,10 @@ export function AccountMenuHost() {
           {/* Task 027: the account's projects, the first row under who is signed in. */}
           {projectsOffered && (
             <GlassMenuItem
-              onClick={(e) => {
+              onClick={() => {
                 closeAccountMenu();
-                openProjects(e.currentTarget, 'account');
+                void goToProjects();
               }}
-              aria-haspopup="dialog"
               data-testid="account-projects"
             >
               {t('projects.title')}

@@ -148,7 +148,6 @@ function SignInBody({ phone }: { phone?: boolean }) {
   const error = useAccount((s) => s.error);
   const wrong = useAccount((s) => s.wrong);
   const resendAt = useAccount((s) => s.resendAt);
-  const reason = useAccount((s) => s.reason);
   const google = useChat((s) => !!s.server?.auth?.google);
   const emailOn = useChat((s) => !!s.server?.auth?.email);
   const [value, setValue] = useState(email);
@@ -210,7 +209,7 @@ function SignInBody({ phone }: { phone?: boolean }) {
   return (
     <div className={cx('flex flex-col gap-4', phone ? 'px-5 pt-1 pb-6' : 'p-[22px]')} data-testid="signin-email">
       {head(t('account.title'))}
-      <p className="-mt-2 text-[13.5px] leading-5 text-ink-2" data-testid="signin-why">{t(reason === 'projects' ? 'projects.why' : 'account.why')}</p>
+      <p className="-mt-2 text-[13.5px] leading-5 text-ink-2">{t('account.why')}</p>
       {emailOn && (
         <form onSubmit={submitEmail} className="flex flex-col gap-3" noValidate>
           <label className="lg-field flex h-12 items-center px-4">

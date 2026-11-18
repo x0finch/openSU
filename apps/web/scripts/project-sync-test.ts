@@ -372,7 +372,7 @@ test('switch, create, rename, duplicate, delete (the open one: the next most rec
   assert.equal(state().name, '老家');
   assert.equal(a.rows.get(fresh)!.revision, 1, 'a rename is not a save');
 
-  assert.equal(await sync.duplicate(fresh), null);
+  assert.ok('id' in (await sync.duplicate(fresh)));
   assert.equal(a.rows.size, 4);
   assert.ok([...a.rows.values()].some((r) => r.name === '老家 副本'));
 
@@ -386,7 +386,7 @@ test('switch, create, rename, duplicate, delete (the open one: the next most rec
   a.max = a.rows.size;
   await sync.refresh();
   assert.equal(await sync.create(), 'full');
-  assert.equal(await sync.duplicate(state().openId!), 'full');
+  assert.deepEqual(await sync.duplicate(state().openId!), { error: 'full' });
 });
 
 test('deleting the last project opens a new one from the default template', async () => {

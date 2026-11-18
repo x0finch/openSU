@@ -276,6 +276,25 @@ export function MoreIcon(p: P) {
   );
 }
 
+/** A pencil: rename. */
+export function PencilIcon(p: P) {
+  return (
+    <Svg {...p}>
+      <path d="m14.5 6 3.5 3.5M5.5 18.5l1-4.2 9.3-9.3a1.6 1.6 0 0 1 2.3 0l1.2 1.2a1.6 1.6 0 0 1 0 2.3l-9.3 9.3Z" />
+    </Svg>
+  );
+}
+
+/** Two sheets: duplicate. */
+export function CopyIcon(p: P) {
+  return (
+    <Svg {...p}>
+      <rect x={8.5} y={8.5} width={10} height={10} rx={1.8} />
+      <path d="M15.5 8.5V7a1.5 1.5 0 0 0-1.5-1.5H7A1.5 1.5 0 0 0 5.5 7v7A1.5 1.5 0 0 0 7 15.5h1.5" />
+    </Svg>
+  );
+}
+
 /** A folder: the projects kept with the account. */
 export function FolderIcon(p: P) {
   return (
