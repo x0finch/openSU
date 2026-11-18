@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { clearSaved, savedHouse } from '../lib/autosave';
 import { useStudio } from '../lib/store';
+import { isViewOnly } from '../lib/view-only';
 import type { Derived } from './house-data';
 
 type HouseData = typeof import('./house-data');
@@ -20,6 +21,8 @@ export function useDerived(): Derived | null {
       if (!alive) return;
       const h = useStudio.getState().house;
       if (!h) {
+        // A shared project (task 028) is put on screen by its loader (src/lib/share.ts), nothing else.
+        if (isViewOnly()) return;
         // The autosaved house when there is one that still resolves, else the template.
         const saved = savedHouse();
         let ok = false;

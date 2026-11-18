@@ -9,16 +9,18 @@
 import { TEMPLATE_META } from '@opensu/agent/templates-meta';
 import { Link } from '@tanstack/react-router';
 import { type MouseEvent as RMouseEvent, type ReactNode, type RefObject, useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { CubeIcon, Mark, MoreIcon, PlusIcon } from '../components/icons';
+import { CubeIcon, LinkIcon, Mark, MoreIcon, PlusIcon } from '../components/icons';
 import { cx, LangToggle } from '../components/ui';
 import { GlassLayer, GlassMenu, GlassMenuItem, GlassSep, GlassToast } from '../glass';
 import { loadSaved } from '../lib/autosave';
 import { type Lang, useT } from '../lib/i18n';
-import { houseTitle, type ProjectMeta, projectName, projectSync, thumbUrl, useProjects, useProjectSync } from '../lib/projects';
+import { projectTitle, type ProjectMeta, projectName, projectSync, thumbUrl, useProjects, useProjectSync } from '../lib/projects';
 import { restoreLang, useStudio } from '../lib/store';
 import { fetchServerStatus, useChat } from '../chat/chat-store';
 import { AccountButton, AccountMenuHost, StudioToast } from '../chat/AccountEntry';
 import { SignInHost } from '../chat/SignIn';
+import { openShare } from '../lib/share';
+import { ShareHost } from '../studio/Share';
 
 /** How long a deleted project can be brought back (the toast), ms. */
 export const UNDO_MS = 6000;
@@ -64,11 +66,18 @@ function Thumb({ src, alt }: { src: string | null; alt: string }) {
   );
 }
 
-function CardText({ name, line, more, renaming, wrap }: { name: ReactNode; line: string; more?: ReactNode; renaming?: boolean; wrap?: boolean }) {
+function CardText({ name, line, more, renaming, wrap, mark }: { name: ReactNode; line: string; more?: ReactNode; renaming?: boolean; wrap?: boolean; mark?: ReactNode }) {
   return (
     <div className="mt-2.5 flex items-start gap-1">
       <div className="min-w-0 flex-1">
-        {renaming ? name : <p className="truncate text-[14px] leading-5 font-medium sm:text-[15px] sm:leading-[22px]" data-testid="project-name">{name}</p>}
+        {renaming ? (
+          name
+        ) : (
+          <div className="flex min-w-0 items-center gap-1.5">
+            <p className="truncate text-[14px] leading-5 font-medium sm:text-[15px] sm:leading-[22px]" data-testid="project-name">{name}</p>
+            {mark}
+          </div>
+        )}
         {line && <p className={cx('tnum text-[12.5px] leading-[18px] text-ink-2 sm:text-[13px]', !wrap && 'truncate')} data-testid="project-when">{line}</p>}
       </div>
       {more}
@@ -155,6 +164,15 @@ function ProjectCard({ p, onDelete, menuOpen, onMenu, renaming, onRenamed, askin
             )
           }
           line={edited}
+          // Task 028: shared with a link, Google Drive's mark beside the name.
+          mark={
+            p.share ? (
+              <span className="inline-flex shrink-0 text-ink-2" data-testid="project-shared">
+                <LinkIcon width={15} height={15} />
+                <span className="sr-only">{t('projects.shared')}</span>
+              </span>
+            ) : undefined
+          }
           more={
             <button
               ref={more}
@@ -303,7 +321,7 @@ export function ProjectsPage() {
   const full = projects.length >= max;
   const menuProject = menu ? projects.find((p) => p.id === menu.id) : null;
   const local = !cloud ? loadSaved() : null;
-  const localName = typeof window === 'undefined' ? '' : (readLinkName() || houseTitle(lang, local?.house ?? null));
+  const localName = typeof window === 'undefined' ? '' : projectTitle(lang, readLinkName(), local?.house ?? null);
 
   return (
     <GlassLayer>
@@ -380,6 +398,17 @@ export function ProjectsPage() {
           {menuProject && (
             <>
               <GlassMenuItem onClick={() => location.assign(`/studio?p=${menuProject.id}`)} data-testid="card-open">{t('projects.open')}</GlassMenuItem>
+              {/* Task 028: the studio's share surface, at the card (Google Drive, Figma: right click > Share). */}
+              <GlassMenuItem
+                onClick={() => {
+                  const el = menu?.el ?? null;
+                  setMenu(null);
+                  openShare(el, menuProject.id);
+                }}
+                data-testid="card-share"
+              >
+                {t('share.button')}
+              </GlassMenuItem>
               <GlassMenuItem onClick={() => { setMenu(null); setRenaming(menuProject.id); }} data-testid="card-rename">{t('projects.rename')}</GlassMenuItem>
               <GlassMenuItem
                 disabled={full}
@@ -409,6 +438,7 @@ export function ProjectsPage() {
         <div className="pointer-events-none fixed inset-0 z-40">
           <AccountMenuHost />
           <SignInHost phone={phone} />
+          <ShareHost phone={phone} />
         </div>
         {!toast && <StudioToast className="fixed inset-x-0 bottom-[max(24px,env(safe-area-inset-bottom))] z-50 px-4" />}
         {toast && (

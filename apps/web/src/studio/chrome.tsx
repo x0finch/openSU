@@ -12,6 +12,7 @@ import { freshView, type Mode, useStudio } from '../lib/store';
 import { resetToTemplate } from '../lib/autosave';
 import { fmtArea, fmtLen, goToProjects, projectSync, useHouseName, useProjects, useProjectsOffered } from '../lib/projects';
 import { bearingText, frontBearing, placeText } from '../lib/site';
+import { useViewOnly } from '../lib/view-only';
 import { exportConversation, replaceHouse, useChat } from '../chat/chat-store';
 import { accountName, openAccount } from '../chat/AccountEntry';
 import { useKeys } from '../chat/keys';
@@ -206,6 +207,8 @@ function ProjectMenu({ open, anchor, onClose, compact, onRename, ref }: { open: 
   const cloud = useProjects((s) => s.on);
   const openId = useProjects((s) => s.openId);
   const failed = useProjects((s) => s.failed);
+  // Viewing a shared project (task 028): only the account, the language and "about"; nothing that edits.
+  const edit = !useViewOnly();
   const [templates, setTemplates] = useState(false);
   const [confirm, setConfirm] = useState(false);
   // Arrow keys move between items; focus starts on the first.
@@ -301,19 +304,23 @@ function ProjectMenu({ open, anchor, onClose, compact, onRename, ref }: { open: 
           <Sep />
         </>
       )}
-      <MenuItem icon={<PinIcon width={17} height={17} />} value={site ? placeText(site, lang) : ''} onSelect={() => { onClose(false); setSitePanel({ kind: 'location' }); }} testId="menu-location">
-        {t('more.location')}
-      </MenuItem>
-      <MenuItem icon={<CompassIcon width={17} height={17} />} value={site ? bearingText(frontBearing(site.northDeg), lang) : ''} onSelect={() => { onClose(false); setSitePanel({ kind: 'orientation' }); }} testId="menu-orientation">
-        {t('more.orientation')}
-      </MenuItem>
-      {!cloud && <Sep />}
-      {!cloud && (
+      {edit && (
+        <>
+          <MenuItem icon={<PinIcon width={17} height={17} />} value={site ? placeText(site, lang) : ''} onSelect={() => { onClose(false); setSitePanel({ kind: 'location' }); }} testId="menu-location">
+            {t('more.location')}
+          </MenuItem>
+          <MenuItem icon={<CompassIcon width={17} height={17} />} value={site ? bearingText(frontBearing(site.northDeg), lang) : ''} onSelect={() => { onClose(false); setSitePanel({ kind: 'orientation' }); }} testId="menu-orientation">
+            {t('more.orientation')}
+          </MenuItem>
+        </>
+      )}
+      {edit && !cloud && <Sep />}
+      {edit && !cloud && (
       <MenuItem icon={<LayersIcon width={17} height={17} />} onSelect={() => setTemplates(!templates)} value={<ChevronDownSmallIcon width={15} height={15} className={cx('transition-transform', templates && 'rotate-180')} />}>
         {t('more.templates')}
       </MenuItem>
       )}
-      {!cloud && templates && (
+      {edit && !cloud && templates && (
         <div className="mb-1 ml-9">
           {TEMPLATE_META.map((m) => (
             <MenuItem key={m.id} onSelect={() => void pick(m.id)} value={`${m.plot.width / 1000} × ${m.plot.depth / 1000} m`}>
@@ -323,7 +330,7 @@ function ProjectMenu({ open, anchor, onClose, compact, onRename, ref }: { open: 
           <p className="px-3 pt-0.5 pb-1.5 text-[12px] leading-4 text-ink-2">{t('tpl.note')}</p>
         </div>
       )}
-      {!cloud && (
+      {edit && !cloud && (
       <MenuItem
         icon={<ResetViewIcon width={16} height={16} />}
         danger={confirm}
@@ -339,10 +346,11 @@ function ProjectMenu({ open, anchor, onClose, compact, onRename, ref }: { open: 
         {confirm ? t('house.resetConfirm') : t('house.reset')}
       </MenuItem>
       )}
-      <Sep />
+      {edit && <Sep />}
       <MenuItem value={t('lang.switch')} onSelect={() => setLang(lang === 'zh' ? 'en' : 'zh')} icon={<span className="text-[11px] font-semibold">{lang === 'zh' ? '文' : 'A'}</span>}>
         {t('more.lang')}
       </MenuItem>
+      {edit && (
       <MenuItem
         icon={<SparkDot />}
         onSelect={() => {
@@ -354,7 +362,9 @@ function ProjectMenu({ open, anchor, onClose, compact, onRename, ref }: { open: 
       >
         {t('chat.settings')}
       </MenuItem>
+      )}
       {/* Task 020: the conversation as one JSON file, built here (no server call). */}
+      {edit && (
       <GlassMenuItem
         icon={<DownloadIcon width={16} height={16} />}
         disabled={!hasChat}
@@ -367,14 +377,17 @@ function ProjectMenu({ open, anchor, onClose, compact, onRename, ref }: { open: 
       >
         {t('more.export')}
       </GlassMenuItem>
+      )}
       <Link to="/" role="menuitem" tabIndex={-1} className="lg-plate flex h-10 w-full items-center gap-2.5 rounded-[16px] px-3 text-[14px] font-medium focus-visible:outline-none">
         <span className="grid size-5 place-items-center"><Mark width={15} height={15} /></span>
         {t('more.about')}
       </Link>
       {/* No status while saving works; one quiet line when it does not (task 027). */}
+      {edit && (
       <p className="px-3 pt-1 pb-1.5 text-[12px] leading-4 text-ink-2" data-testid="menu-saved" data-failed={failed ?? undefined}>
         {failed === 'retry' ? t('projects.notSynced') : failed === 'too-large' ? t('projects.tooLarge') : failed === 'full' ? t('projects.notAdded') : cloud ? t('house.autosavedAccount') : t('house.autosaved')}
       </p>
+      )}
     </GlassMenu>
   );
 }

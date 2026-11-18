@@ -3,16 +3,18 @@
 // swap of house, conversation and undo history, and the hook that starts
 // and stops syncing with the sign-in. Signed out (or on a server that does
 // not keep projects) nothing here runs: one local house, as before.
+import { DEFAULT_TEMPLATE, TEMPLATE_META } from '@opensu/agent/templates-meta';
 import type { House } from '@opensu/model';
 import { useEffect } from 'react';
 import { useStore } from 'zustand';
 import { type ChatItem, newChat, restoreItems, useChat } from '../chat/chat-store';
-import { autosaveHooks, clearSaved, quietly, restoreChat, savedHouse, saveNow } from './autosave';
+import { autosaveHooks, clearSaved, loadSaved, quietly, replaceSaved, restoreChat, savedHouse, saveNow } from './autosave';
 import { type Lang, type MessageKey, translate } from './i18n';
 import { createProjectSync, type Current, type LocalLink, parseSummary, type ProjectMeta, type ProjectsApi, type ProjectsState, type Result, type Summary } from './project-sync';
 import { freshView, useStudio } from './store';
 import { thumbSource } from './thumb-source';
 import { toast, useToast } from './toast';
+import { isViewOnly, useShared } from './view-only';
 
 export type { ProjectMeta, ProjectsState, Summary } from './project-sync';
 export { parseSummary } from './project-sync';
@@ -21,11 +23,25 @@ export { parseSummary } from './project-sync';
 /* Names and facts                                                     */
 /* ------------------------------------------------------------------ */
 
-/** The house's own title: its name; the internal golden benchmark shows its style title instead. */
+/**
+ * The house's own title: its name; the internal golden benchmark shows its
+ * style title instead. No house yet (nothing saved in this browser): the
+ * house the studio opens with, the default template.
+ */
 export function houseTitle(lang: Lang, house: { name: string; style: string } | null | undefined): string {
-  if (house?.name && !house.name.startsWith('Golden sample')) return house.name;
-  const key = `project.title.${house?.style ?? 'modern-pitched'}` as MessageKey;
-  return translate(lang, key) || house?.style || '';
+  if (!house) return TEMPLATE_META.find((t) => t.id === DEFAULT_TEMPLATE)!.name;
+  if (house.name && !house.name.startsWith('Golden sample')) return house.name;
+  const key = `project.title.${house.style || 'modern-pitched'}` as MessageKey;
+  return translate(lang, key) || house.style || '';
+}
+
+/**
+ * The one naming rule (task 028: the studio's title and the projects
+ * page's card once disagreed): the name the user gave, else the house's
+ * own title.
+ */
+export function projectTitle(lang: Lang, name: string | null | undefined, house: { name: string; style: string } | null | undefined): string {
+  return name || houseTitle(lang, house);
 }
 
 /** Lengths and areas as the facts line shows them (the house name's facts and the projects list). */
@@ -34,9 +50,8 @@ export const fmtLen = (m: number) => String(Math.round(m * 10) / 10);
 
 /** A project's display name: the name the user gave, else its house's title. */
 export function projectName(lang: Lang, p: { name: string; summary: string }): string {
-  if (p.name) return p.name;
   const s = parseSummary(p.summary);
-  return houseTitle(lang, s ? { name: s.title, style: s.style } : null);
+  return projectTitle(lang, p.name, s ? { name: s.title, style: s.style } : { name: '', style: '' });
 }
 
 /* ------------------------------------------------------------------ */
@@ -86,6 +101,7 @@ const api: ProjectsApi = {
   save: (id, p) => call('PUT', `/${id}`, { framed: [{ base: p.base, summary: p.summary }, p.house, p.chat] }, leaving),
   rename: (id, name) => call('PATCH', `/${id}`, { json: { name } }),
   remove: (id) => call('DELETE', `/${id}`),
+  share: (id, on) => call(on ? 'POST' : 'DELETE', `/${id}/share`),
   putThumb: async (id, image) => {
     try {
       const res = await fetch(`${ENDPOINT}/${id}/thumb`, { method: 'PUT', headers: { 'content-type': image.type }, body: image, credentials: 'same-origin' });
@@ -161,6 +177,17 @@ function applyCurrent(c: Current): void {
 
 const randomId = () => globalThis.crypto?.randomUUID?.() ?? `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 12)}`;
 
+/** The house is a template as it comes and there is no conversation (not worth adopting). */
+function pristine(c: Current): boolean {
+  if (c.items.length || !houseData) return false;
+  const h = JSON.stringify(c.house);
+  for (const id of ['t1', 't2', 't3']) {
+    if (!templateJson.has(id)) templateJson.set(id, JSON.stringify(houseData.templateById(id)));
+    if (templateJson.get(id) === h) return true;
+  }
+  return false;
+}
+
 export const projectSync = createProjectSync({
   api,
   current: () => {
@@ -175,20 +202,9 @@ export const projectSync = createProjectSync({
     return l && typeof l === 'object' && typeof l.revision === 'number' ? l : null;
   },
   writeLink: (l) => writeJson(LINK_KEY, l),
-  pristine: (c) => {
-    if (c.items.length || !houseData) return false;
-    const h = JSON.stringify(c.house);
-    for (const id of ['t1', 't2', 't3']) {
-      if (!templateJson.has(id)) templateJson.set(id, JSON.stringify(houseData.templateById(id)));
-      if (templateJson.get(id) === h) return true;
-    }
-    return false;
-  },
+  pristine: (c) => pristine(c),
   template: (id) => houseData!.templateById(id ?? 't1'),
-  summary: (house: House): Summary => {
-    const d = houseData!.derive(house);
-    return { title: house.name, style: house.style, w: house.site.width, d: house.site.depth, area: Math.round(d.area * 10) / 10, storeys: d.storeys, attic: d.attic };
-  },
+  summary: (house: House): Summary => summaryOf(house),
   chatText,
   copyName: (name) => translate(lang(), 'projects.copyName', { name }),
   displayName: (m) => projectName(lang(), m),
@@ -233,10 +249,45 @@ export function useProjects<T>(pick: (s: ProjectsState) => T): T {
 
 /** The open house's display name: the name the user gave, else its own title. */
 export function useHouseName(): string {
-  const name = useProjects((s) => s.name);
+  const own = useProjects((s) => s.name);
+  // A shared project (task 028): the owner's name for it, never this browser's own project's.
+  const shared = useShared((s) => (s.token ? s.name : null));
   const house = useStudio((s) => s.house);
   const l = useStudio((s) => s.lang);
-  return name || houseTitle(l, house);
+  return projectTitle(l, shared ?? own, house);
+}
+
+/* ------------------------------------------------------------------ */
+/* A copy of a shared project (task 028)                               */
+/* ------------------------------------------------------------------ */
+
+const houseModule = () => (import.meta.env.SSR ? new Promise<HouseData>(() => {}) : import('../studio/house-data'));
+
+/** Makes `house` a new project of the signed-in account, named `name`; its id, or why not ('full', ...). */
+export async function createProjectFrom(house: House, name: string): Promise<{ id: string } | { error: string }> {
+  houseData ??= await houseModule();
+  const r = await api.create({ house: JSON.stringify(house), chat: chatText(randomId(), []), summary: JSON.stringify(summaryOf(house)), name });
+  return r.ok ? { id: r.value.project.id } : { error: r.code };
+}
+
+function summaryOf(house: House): Summary {
+  const d = houseData!.derive(house);
+  return { title: house.name, style: house.style, w: house.site.width, d: house.site.depth, area: Math.round(d.area * 10) / 10, storeys: d.storeys, attic: d.attic };
+}
+
+/** This browser's own house holds edits (not a template as it comes, or it has a conversation, or a name). */
+export async function localHouseEdited(): Promise<boolean> {
+  const saved = loadSaved();
+  if (!saved) return false;
+  houseData ??= await houseModule();
+  const link = readJson<LocalLink>(LINK_KEY);
+  return !!link?.name || !pristine({ house: saved.house, conversation: '', items: saved.chat });
+}
+
+/** `house` becomes this browser's own project (signed out): saved here, linked to no account, named `name`. */
+export function keepAsLocal(house: House, name: string): void {
+  replaceSaved(house, randomId());
+  writeJson(LINK_KEY, { user: null, id: null, revision: 0, dirty: false, name } satisfies LocalLink);
 }
 
 /** The server keeps projects with accounts (and offers sign-in). */
@@ -284,6 +335,11 @@ export const useUrlMissing = () => useProjects((s) => s.missing);
 export function useProjectSync(opts: { page?: boolean } = {}): void {
   const page = !!opts.page;
   useEffect(() => {
+    // A shared project on screen (task 028): nothing of this browser's own project is read, linked or saved.
+    if (isViewOnly()) {
+      window.__studio = { ...window.__studio, projects: projectSync, toast: useToast };
+      return;
+    }
     // The projects page has no studio: this browser's house (if any) is put in the store without being shown,
     // so a sign-in there adopts an edited one as the studio would.
     if (page && !useStudio.getState().house) {

@@ -164,6 +164,16 @@ export function DownloadIcon(p: P) {
   );
 }
 
+/** A link (two chain links): a shared project (task 028). */
+export function LinkIcon(p: P) {
+  return (
+    <Svg {...p}>
+      <path d="M10.2 13.8a3.6 3.6 0 0 0 5.1 0l3.1-3.1a3.6 3.6 0 0 0-5.1-5.1l-1.1 1.1" />
+      <path d="M13.8 10.2a3.6 3.6 0 0 0-5.1 0l-3.1 3.1a3.6 3.6 0 0 0 5.1 5.1l1.1-1.1" />
+    </Svg>
+  );
+}
+
 export function ShareIcon(p: P) {
   return (
     <Svg {...p}>

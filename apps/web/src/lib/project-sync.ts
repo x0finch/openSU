@@ -35,6 +35,8 @@ export interface ProjectMeta {
   updatedAt: number;
   /** When its thumbnail was stored (0: none yet); also the version in the image's address. */
   thumbAt: number;
+  /** Its share token while anyone with the link can view (task 028); null: not shared. Older servers send none. */
+  share?: string | null;
 }
 
 /** What a row shows besides the name (stored as text next to the project). */
@@ -91,6 +93,8 @@ export interface ProjectsApi {
   rename(id: string, name: string): Promise<Result<{ project: ProjectMeta }>>;
   remove(id: string): Promise<Result<unknown>>;
   putThumb(id: string, image: Blob): Promise<Result<{ project: ProjectMeta }>>;
+  /** Turns sharing on (a token) or off (task 028). */
+  share(id: string, on: boolean): Promise<Result<{ project: ProjectMeta }>>;
 }
 
 export interface SyncDeps {
@@ -643,6 +647,16 @@ export function createProjectSync(deps: SyncDeps) {
         } finally {
           set({ busy: false });
         }
+      });
+    },
+
+    /** Turns sharing of a project on or off (task 028); the project as it is now, or null when that failed. */
+    share(id: string, on: boolean): Promise<ProjectMeta | null> {
+      return enqueue(async () => {
+        const r = await deps.api.share(id, on);
+        if (!r.ok) return null;
+        upsert(r.value.project);
+        return r.value.project;
       });
     },
 

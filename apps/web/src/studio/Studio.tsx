@@ -29,6 +29,8 @@ import { Loading } from './Loading';
 import { type DockExtent, PhoneDock, SHEET_MS } from './PhoneDock';
 import { PlanView } from './PlanView';
 import { ProjectMissing } from './ProjectMissing';
+import { ShareButton, ShareHost } from './Share';
+import { useSharedProject } from '../lib/share';
 import { DesktopTools, PanelCard, TRAY_ID } from './tools';
 import { GLASS, GlassLayer, type GlassTone } from '../glass';
 import { useDerived } from './useDerived';
@@ -312,6 +314,7 @@ export function Studio() {
   useUrlState();
   useAutosave();
   useProjectSync();
+  useSharedProject();
   useSunPlayer();
   useEscapeCloses();
   useEscapeExitsWalk();
@@ -450,6 +453,8 @@ export function Studio() {
           {/* The toolbar and, right of it, the account button (task 026): one row, one height, the module's gap. */}
           <div className="absolute top-[18px] right-[18px] flex items-center" style={{ gap: GLASS.anchorGap }} data-testid="top-trailing">
             {mode !== 'sheet' && <DesktopTools derived={derived} />}
+            {/* Task 028: "分享" between the toolbar and the account (Figma, Google Docs, Canva). */}
+            <ShareButton />
             <AccountButton />
           </div>
           {mode !== 'sheet' && <PanelCard derived={derived} onRect={onPanel} />}
@@ -464,6 +469,7 @@ export function Studio() {
           <SettingsHost />
           <SignInHost />
           <AccountMenuHost />
+          <ShareHost />
           <KeySheetHost />
         </div>
       ) : walkLandscape ? (
@@ -490,7 +496,8 @@ export function Studio() {
                     <TitleMenu derived={derived} compact />
                   </div>
                   <ModeSwitch size="sm" className="shrink-0" />
-                  <div className="flex flex-1 justify-end">
+                  <div className="flex flex-1 justify-end gap-2">
+                    <ShareButton size={44} round />
                     <AccountButton size={44} round />
                   </div>
                 </>
@@ -501,8 +508,11 @@ export function Studio() {
                     <div ref={phoneTitleRef} className="min-w-0 pt-0.5">
                       <TitleMenu derived={derived} compact />
                     </div>
-                    {/* 36 px (44 px to touch): its centre on the house name's line. */}
-                    <AccountButton size={36} round className="shrink-0" />
+                    {/* 36 px (44 px to touch): their centres on the house name's line. Task 028: share left of the account (Google Docs, Figma iOS). */}
+                    <div className="flex shrink-0 gap-2">
+                      <ShareButton size={36} round />
+                      <AccountButton size={36} round />
+                    </div>
                   </div>
                   <div className="flex justify-center">
                     {/* On its own row it lies under the menus that open from the top row: it steps aside while one is open. */}
@@ -517,6 +527,7 @@ export function Studio() {
           <SettingsHost phone />
           <SignInHost phone />
           <AccountMenuHost />
+          <ShareHost phone />
           <KeySheetHost phone />
         </>
       )}

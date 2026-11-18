@@ -12,6 +12,7 @@ import type { House } from '@opensu/model';
 import { useEffect } from 'react';
 import { type ChatItem, newChat, restoreItems, type SavedHistory, undoHistory, useChat } from '../chat/chat-store';
 import { freshView, useStudio } from './store';
+import { isViewOnly } from './view-only';
 
 const KEY = 'opensu.autosave.v1';
 const VERSION = 1;
@@ -75,6 +76,15 @@ export function saveNow(): void {
   if (house) save(house, chat.items, chat.conversation);
 }
 
+/** `house` becomes the saved one, without a conversation or undo steps (a shared project kept as this browser's, task 028). */
+export function replaceSaved(house: House, conversation: string): void {
+  try {
+    globalThis.localStorage?.setItem(KEY, JSON.stringify({ v: VERSION, savedAt: Date.now(), house, chat: [], conversation } satisfies Saved));
+  } catch {
+    /* private mode or full storage: nothing kept */
+  }
+}
+
 function save(house: House, chat: ChatItem[], conversation: string): void {
   const data: Saved = { v: VERSION, savedAt: Date.now(), house, chat, history: undoHistory(), conversation };
   try {
@@ -94,9 +104,9 @@ function sampleRequested(): boolean {
   return typeof location !== 'undefined' && new URLSearchParams(location.search).has('sample');
 }
 
-/** The house to open with: the autosaved one unless a sample is requested. */
+/** The house to open with: the autosaved one unless a sample is requested (or a shared project is on screen, task 028). */
 export function savedHouse(): House | null {
-  if (sampleRequested()) return null;
+  if (sampleRequested() || isViewOnly()) return null;
   return loadSaved()?.house ?? null;
 }
 
@@ -104,7 +114,7 @@ let restoredChat = false;
 
 /** Puts the saved transcript back into the assistant (once per page). */
 export function restoreChat(): void {
-  if (restoredChat || sampleRequested()) return;
+  if (restoredChat || sampleRequested() || isViewOnly()) return;
   restoredChat = true;
   const s = loadSaved();
   if (s?.chat.length) restoreItems(s.chat, s.history, s.house, typeof s.conversation === 'string' ? s.conversation : undefined);
@@ -133,6 +143,8 @@ function adoptSample(): void {
  */
 export function useAutosave(): void {
   useEffect(() => {
+    // A shared project on screen (task 028): this browser's copy is neither read nor written.
+    if (isViewOnly()) return;
     if (!sampleRequested()) restoreChat();
     let timer = 0;
     const schedule = () => {

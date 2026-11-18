@@ -12,6 +12,7 @@ import { cx } from '../components/ui';
 import { GlassButtonGroup, GlassChoice, GlassSegmented, GlassGroupButton, GlassPopover, GlassRow, GlassSep, GlassSlider, GlassTip } from '../glass';
 import { levelName, type MessageKey, useT } from '../lib/i18n';
 import { bearingText, bearingWords, frontBearing, placeText, utcText } from '../lib/site';
+import { useViewOnly } from '../lib/view-only';
 import { SUN_DATES, type SunDateId, type Tray, useStudio } from '../lib/store';
 import { clock, compass, dayText, hourTicks, sunDate } from '../lib/sun';
 import { DEFAULT_VIEW, presetById, type ViewId } from '../lib/views';
@@ -527,6 +528,16 @@ function MiniDial({ northDeg }: { northDeg: number }) {
 }
 
 function SiteRow({ icon, text, meta, onClick, label, testId }: { icon: ReactNode; text: ReactNode; meta: string; onClick: () => void; label: string; testId: string }) {
+  // Viewing a shared project (task 028): the place and orientation are facts, not a way to change them.
+  if (useViewOnly()) {
+    return (
+      <div aria-label={label} data-testid={testId} className="flex min-h-11 items-center gap-2.5 py-1.5 text-[14px] font-medium">
+        {icon}
+        <span className="min-w-0 flex-1 leading-[18px] [overflow-wrap:anywhere]">{text}</span>
+        <span className="tnum shrink-0 text-[13px] font-normal text-ink-2">{meta}</span>
+      </div>
+    );
+  }
   return (
     <GlassRow onClick={onClick} aria-label={label} data-testid={testId} className="-mx-3 w-[calc(100%+24px)] py-1.5 text-[14px]">
       {icon}

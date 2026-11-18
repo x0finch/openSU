@@ -731,6 +731,36 @@ create and save about 5.2-5.7 ms median (p90 8-9.5 ms), of which about
 workerd does natively; read one 4.8-5 ms; the list 2.2 ms (most of it the
 session lookup).
 
+## Share links (task 028)
+
+A signed-in owner turns on "anyone with the link can view" for a project
+kept with the account; the address is `/studio?s=<token>`. The token is 16
+random bytes (not the project id) and is the only key: turning sharing off
+clears it (the address stops working at once), turning it on again makes a
+new one. A viewer needs no session and sees the studio in view-only mode
+(no prompt, no conversation, nothing that edits; their own browser copy is
+never read or written) with "make my own copy".
+
+- **Columns** `project.share_token` (unique when set) and `shared_at`
+  (`migrations/0006_share.sql`).
+- **Routes**: `POST/DELETE /api/projects/:id/share` (the owner: session,
+  `SITE_URL` origin, the write counter); `GET /api/share/:token` (public:
+  `{name, updatedAt, house}`, the house as stored; `no-cache` with an ETag,
+  so a link turned off dies at once and an unchanged house answers 304) and
+  `GET /api/share/:token/thumb` (5 minutes public cache). Public reads are
+  limited to 1200 per IP per hour (the quota's counter table: one D1 write
+  per read).
+- **Link preview**: `/studio?s=` goes through the Worker (it already does
+  for the canonical host); one indexed read sets the page's title,
+  description and `og:*` tags, `og:image` being the thumbnail by token.
+- Absent when projects are off (`PROJECTS_ENABLED=false`, no sign-in or no
+  D1).
+
+CPU (`scripts/auth-check.ts`, Node approximation as above, medians): on /
+off 1.5 ms; the public read of a 483 KB house 3.1 ms (p90 5.8 ms), 0.14 ms
+when it answers 304; the thumbnail 0.15 ms; the preview (read and rewrite
+of the page) 0.07 ms.
+
 ## Deployment
 
 Deployment follows the Cloudflare guide for TanStack Start

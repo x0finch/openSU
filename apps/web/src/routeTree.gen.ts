@@ -19,7 +19,10 @@ import { Route as ApiProjectsRouteImport } from './routes/api/projects'
 import { Route as ApiTurnsRouteImport } from './routes/api/turns'
 import { Route as SIdRouteImport } from './routes/s/$id'
 import { Route as ApiProjectsIdRouteImport } from './routes/api/projects.$id'
+import { Route as ApiShareTokenRouteImport } from './routes/api/share.$token'
+import { Route as ApiProjectsIdShareRouteImport } from './routes/api/projects.$id.share'
 import { Route as ApiProjectsIdThumbRouteImport } from './routes/api/projects.$id.thumb'
+import { Route as ApiShareTokenThumbRouteImport } from './routes/api/share.$token.thumb'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -71,10 +74,25 @@ const ApiProjectsIdRoute = ApiProjectsIdRouteImport.update({
   path: '/$id',
   getParentRoute: () => ApiProjectsRoute,
 } as any)
+const ApiShareTokenRoute = ApiShareTokenRouteImport.update({
+  id: '/api/share/$token',
+  path: '/api/share/$token',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiProjectsIdShareRoute = ApiProjectsIdShareRouteImport.update({
+  id: '/share',
+  path: '/share',
+  getParentRoute: () => ApiProjectsIdRoute,
+} as any)
 const ApiProjectsIdThumbRoute = ApiProjectsIdThumbRouteImport.update({
   id: '/thumb',
   path: '/thumb',
   getParentRoute: () => ApiProjectsIdRoute,
+} as any)
+const ApiShareTokenThumbRoute = ApiShareTokenThumbRouteImport.update({
+  id: '/thumb',
+  path: '/thumb',
+  getParentRoute: () => ApiShareTokenRoute,
 } as any)
 
 export interface FileRoutesByFullPath {
@@ -88,7 +106,10 @@ export interface FileRoutesByFullPath {
   '/api/turns': typeof ApiTurnsRoute
   '/s/$id': typeof SIdRoute
   '/api/projects/$id': typeof ApiProjectsIdRouteWithChildren
+  '/api/share/$token': typeof ApiShareTokenRouteWithChildren
+  '/api/projects/$id/share': typeof ApiProjectsIdShareRoute
   '/api/projects/$id/thumb': typeof ApiProjectsIdThumbRoute
+  '/api/share/$token/thumb': typeof ApiShareTokenThumbRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -101,7 +122,10 @@ export interface FileRoutesByTo {
   '/api/turns': typeof ApiTurnsRoute
   '/s/$id': typeof SIdRoute
   '/api/projects/$id': typeof ApiProjectsIdRouteWithChildren
+  '/api/share/$token': typeof ApiShareTokenRouteWithChildren
+  '/api/projects/$id/share': typeof ApiProjectsIdShareRoute
   '/api/projects/$id/thumb': typeof ApiProjectsIdThumbRoute
+  '/api/share/$token/thumb': typeof ApiShareTokenThumbRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -115,7 +139,10 @@ export interface FileRoutesById {
   '/api/turns': typeof ApiTurnsRoute
   '/s/$id': typeof SIdRoute
   '/api/projects/$id': typeof ApiProjectsIdRouteWithChildren
+  '/api/share/$token': typeof ApiShareTokenRouteWithChildren
+  '/api/projects/$id/share': typeof ApiProjectsIdShareRoute
   '/api/projects/$id/thumb': typeof ApiProjectsIdThumbRoute
+  '/api/share/$token/thumb': typeof ApiShareTokenThumbRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -130,7 +157,10 @@ export interface FileRouteTypes {
     | '/api/turns'
     | '/s/$id'
     | '/api/projects/$id'
+    | '/api/share/$token'
+    | '/api/projects/$id/share'
     | '/api/projects/$id/thumb'
+    | '/api/share/$token/thumb'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -143,7 +173,10 @@ export interface FileRouteTypes {
     | '/api/turns'
     | '/s/$id'
     | '/api/projects/$id'
+    | '/api/share/$token'
+    | '/api/projects/$id/share'
     | '/api/projects/$id/thumb'
+    | '/api/share/$token/thumb'
   id:
     | '__root__'
     | '/'
@@ -156,7 +189,10 @@ export interface FileRouteTypes {
     | '/api/turns'
     | '/s/$id'
     | '/api/projects/$id'
+    | '/api/share/$token'
+    | '/api/projects/$id/share'
     | '/api/projects/$id/thumb'
+    | '/api/share/$token/thumb'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -169,6 +205,7 @@ export interface RootRouteChildren {
   ApiProjectsRoute: typeof ApiProjectsRouteWithChildren
   ApiTurnsRoute: typeof ApiTurnsRoute
   SIdRoute: typeof SIdRoute
+  ApiShareTokenRoute: typeof ApiShareTokenRouteWithChildren
 }
 
 declare module '@tanstack/react-router' {
@@ -243,6 +280,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiProjectsIdRouteImport
       parentRoute: typeof ApiProjectsRoute
     }
+    '/api/share/$token': {
+      id: '/api/share/$token'
+      path: '/api/share/$token'
+      fullPath: '/api/share/$token'
+      preLoaderRoute: typeof ApiShareTokenRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/projects/$id/share': {
+      id: '/api/projects/$id/share'
+      path: '/share'
+      fullPath: '/api/projects/$id/share'
+      preLoaderRoute: typeof ApiProjectsIdShareRouteImport
+      parentRoute: typeof ApiProjectsIdRoute
+    }
     '/api/projects/$id/thumb': {
       id: '/api/projects/$id/thumb'
       path: '/thumb'
@@ -250,14 +301,23 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiProjectsIdThumbRouteImport
       parentRoute: typeof ApiProjectsIdRoute
     }
+    '/api/share/$token/thumb': {
+      id: '/api/share/$token/thumb'
+      path: '/thumb'
+      fullPath: '/api/share/$token/thumb'
+      preLoaderRoute: typeof ApiShareTokenThumbRouteImport
+      parentRoute: typeof ApiShareTokenRoute
+    }
   }
 }
 
 interface ApiProjectsIdRouteChildren {
+  ApiProjectsIdShareRoute: typeof ApiProjectsIdShareRoute
   ApiProjectsIdThumbRoute: typeof ApiProjectsIdThumbRoute
 }
 
 const ApiProjectsIdRouteChildren: ApiProjectsIdRouteChildren = {
+  ApiProjectsIdShareRoute: ApiProjectsIdShareRoute,
   ApiProjectsIdThumbRoute: ApiProjectsIdThumbRoute,
 }
 
@@ -277,6 +337,18 @@ const ApiProjectsRouteWithChildren = ApiProjectsRoute._addFileChildren(
   ApiProjectsRouteChildren,
 )
 
+interface ApiShareTokenRouteChildren {
+  ApiShareTokenThumbRoute: typeof ApiShareTokenThumbRoute
+}
+
+const ApiShareTokenRouteChildren: ApiShareTokenRouteChildren = {
+  ApiShareTokenThumbRoute: ApiShareTokenThumbRoute,
+}
+
+const ApiShareTokenRouteWithChildren = ApiShareTokenRoute._addFileChildren(
+  ApiShareTokenRouteChildren,
+)
+
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   ProjectsRoute: ProjectsRoute,
@@ -287,6 +359,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiProjectsRoute: ApiProjectsRouteWithChildren,
   ApiTurnsRoute: ApiTurnsRoute,
   SIdRoute: SIdRoute,
+  ApiShareTokenRoute: ApiShareTokenRouteWithChildren,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

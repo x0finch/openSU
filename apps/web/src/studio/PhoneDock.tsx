@@ -15,6 +15,7 @@ import { ChatInput, PinnedChat, RecentStrip } from '../chat/ChatPanel';
 import { useKeys } from '../chat/keys';
 import { useAccount } from '../chat/account';
 import { GlassSheet } from '../glass';
+import { useShareUi } from '../lib/share';
 import { useStudio } from '../lib/store';
 import { Hints } from './chrome';
 import { StudioToast } from '../chat/AccountEntry';
@@ -56,7 +57,9 @@ export function PhoneDock({ derived, landscape, onExtent }: { derived: Derived |
   // The sign-in sheet (task 019) or the key sheet (task 022) takes the bottom: the dock steps aside.
   const signInOpen = useAccount((s) => s.open);
   const keySheetOpen = useKeys((s) => !!s.sheet);
-  const signing = signInOpen || keySheetOpen;
+  // ...and the share sheet (task 028).
+  const shareOpen = useShareUi((s) => s.open);
+  const signing = signInOpen || keySheetOpen || shareOpen;
   const walk = useStudio((s) => s.walk);
   const pinned = useStudio((s) => s.pinned);
   const recent = useStudio((s) => s.recent);

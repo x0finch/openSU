@@ -8,6 +8,8 @@ import { ChevronRightIcon, SendIcon, SparkIcon } from '../components/icons';
 import { cx } from '../components/ui';
 import { type MessageKey, useT } from '../lib/i18n';
 import { useStudio } from '../lib/store';
+import { useViewOnly } from '../lib/view-only';
+import { ViewOnlyBar } from '../studio/Share';
 import { type ChatItem, fetchServerStatus, loadAgent, newChat, outOfCredits, ownKeyInUse, redoTurn, retry, send, type ServerStatus, stop, undoTurn, useChat } from './chat-store';
 import { openSignIn } from './account';
 import type { Lang } from '../lib/i18n';
@@ -614,7 +616,17 @@ function statusKey(phase: ChatItem['phase']): MessageKey {
  * pinned, a spark stands in its place. Enter sends (not while an IME is
  * composing), Shift+Enter breaks the line, Escape gives the drawing back.
  */
-export function ChatInput({ phone, pinned, className }: { phone?: boolean; pinned?: boolean; className?: string }) {
+/**
+ * The prompt. Viewing a shared project (task 028, the one view-only flag)
+ * its place holds the view-only bar instead: one place for desktop, phone,
+ * the sheets view and landscape.
+ */
+export function ChatInput(props: { phone?: boolean; pinned?: boolean; className?: string }) {
+  const viewOnly = useViewOnly();
+  return viewOnly ? <ViewOnlyBar phone={props.phone} /> : <PromptInput {...props} />;
+}
+
+function PromptInput({ phone, pinned, className }: { phone?: boolean; pinned?: boolean; className?: string }) {
   const t = useT();
   const running = useChat((s) => s.running);
   const text = useChat((s) => s.draft);

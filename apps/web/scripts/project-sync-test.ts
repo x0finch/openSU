@@ -69,6 +69,11 @@ class Account {
         r.thumbAt = ++this.clock;
         return { ok: true as const, value: { project: this.meta(r) } };
       }),
+      share: (id, on) => wrap(`share ${id} ${on}`, () => {
+        const r = this.rows.get(id);
+        if (!r) return fail(404, 'not_found');
+        return { ok: true as const, value: { project: { ...this.meta(r), share: on ? `tok-${id}` : null } } };
+      }),
     };
   }
 }
@@ -497,4 +502,18 @@ test('no viewer to draw with (plan only): no picture, asked again later, drawn o
   await s.tick(THUMB_EVERY);
   assert.ok(a.rows.get(id)!.thumbAt > 0);
   assert.equal(a.rows.get(id)!.thumb, '平面');
+});
+
+test('share (task 028): on and off update the list; a failure changes nothing', async () => {
+  const a = new Account();
+  const { sync, state } = studio(a, { house: house('分享') });
+  await sync.start('me@example.com');
+  const id = state().openId!;
+  assert.equal((await sync.share(id, true))?.share, `tok-${id}`);
+  assert.equal(state().projects.find((p) => p.id === id)!.share, `tok-${id}`);
+  assert.equal((await sync.share(id, false))?.share, null);
+  assert.equal(state().projects.find((p) => p.id === id)!.share, null);
+  a.down = true;
+  assert.equal(await sync.share(id, true), null);
+  assert.equal(state().projects.find((p) => p.id === id)!.share, null);
 });

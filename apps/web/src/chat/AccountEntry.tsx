@@ -81,7 +81,7 @@ export function AccountButton(props: { size?: number; round?: boolean; className
 
 const CACHE_KEY = 'opensu.account.v1';
 /** What this browser last learned: sign-in offered, and someone signed in (only to reserve the button's place). */
-function readCache(): { on: boolean; in: boolean } | null {
+export function readCache(): { on: boolean; in: boolean } | null {
   try {
     const v = JSON.parse(localStorage.getItem(CACHE_KEY) ?? 'null') as { on?: unknown; in?: unknown } | null;
     return v ? { on: v.on === true, in: v.in === true } : null;
