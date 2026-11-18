@@ -119,3 +119,16 @@ Cloud projects (027) and share links (028): only the menu slot.
   `GlassMenuItem`'s height, shared with every menu; left for a separate batch); `row-align` 3.1 px in
   the p844x390 header (name line vs the mode switch; not checked whether the
   header before this task had it too).
+
+## Final checks (2026-11-18)
+
+- `pnpm -r typecheck`: passes. `pnpm -r test` on the final tree (third run):
+  passes. Packages 247 tests (model 108, agent 49, render 30, plan 24,
+  kernel 23, sheet 10, furnish 3); web: node tests 47 + 5, glass check,
+  shots, glass contrast, chat e2e, account e2e, `ui-audit --smoke` (5 known
+  findings, nothing new), relay and auth checks.
+- First run: one account-e2e check failed once ("sign-in: the email field is
+  focused on arrival", phone section); three reruns of that section passed.
+  Treated as a timing flake under load, not fixed.
+- Second run: `shots.mjs` saw sign-in turned on because `ui-audit.mjs` (run
+  by hand before) never deleted its `dist/server/.dev.vars`; it now does.
