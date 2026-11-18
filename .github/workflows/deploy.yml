@@ -17,6 +17,8 @@
 # Repository variables (optional; see apps/web/README.md "Accounts and quota"):
 #   OPENSU_MODEL           model id for the owner's key
 #   SITE_URL               public site URL, e.g. https://opensu.009003.xyz
+#   CANONICAL_REDIRECT     "false" stops sending other hosts (the workers.dev
+#                          address) to SITE_URL with a 308
 #   AUTH_EMAIL_FROM        sender, e.g. "openSU <code@mail.opensu.009003.xyz>"
 #   AUTH_ENABLED           "false" hides sign-in even with the secrets set
 #   QUOTA_ENABLED          "false" turns the daily quota off
@@ -108,6 +110,7 @@ jobs:
           KEYS_SECRET: ${{ secrets.KEYS_SECRET }}
           OPENSU_MODEL: ${{ vars.OPENSU_MODEL }}
           SITE_URL: ${{ vars.SITE_URL }}
+          CANONICAL_REDIRECT: ${{ vars.CANONICAL_REDIRECT }}
           AUTH_EMAIL_FROM: ${{ vars.AUTH_EMAIL_FROM }}
           AUTH_ENABLED: ${{ vars.AUTH_ENABLED }}
           QUOTA_ENABLED: ${{ vars.QUOTA_ENABLED }}
@@ -125,7 +128,7 @@ jobs:
           [ -n "$BETTER_AUTH_SECRET" ] || echo "::notice::BETTER_AUTH_SECRET not set; sign-in is hidden, anonymous trials are counted per IP."
           umask 077
           node -e '
-            const names = ["OPENROUTER_API_KEY", "BETTER_AUTH_SECRET", "RESEND_API_KEY", "GOOGLE_CLIENT_ID", "GOOGLE_CLIENT_SECRET", "KEYS_SECRET", "OPENSU_MODEL", "SITE_URL", "AUTH_EMAIL_FROM", "AUTH_ENABLED", "QUOTA_ENABLED", "QUOTA_USER_DAILY", "QUOTA_ANON_TRIAL", "QUOTA_IP_DAILY", "QUOTA_SITE_DAILY", "QUOTA_CALLS_PER_TURN", "QUOTA_TZ", "TURN_RECORDS", "TURN_RECORDS_DAYS", "TURN_RECORDS_DAILY_MB"];
+            const names = ["OPENROUTER_API_KEY", "BETTER_AUTH_SECRET", "RESEND_API_KEY", "GOOGLE_CLIENT_ID", "GOOGLE_CLIENT_SECRET", "KEYS_SECRET", "OPENSU_MODEL", "SITE_URL", "CANONICAL_REDIRECT", "AUTH_EMAIL_FROM", "AUTH_ENABLED", "QUOTA_ENABLED", "QUOTA_USER_DAILY", "QUOTA_ANON_TRIAL", "QUOTA_IP_DAILY", "QUOTA_SITE_DAILY", "QUOTA_CALLS_PER_TURN", "QUOTA_TZ", "TURN_RECORDS", "TURN_RECORDS_DAYS", "TURN_RECORDS_DAILY_MB"];
             const out = Object.fromEntries(names.filter((n) => process.env[n]).map((n) => [n, process.env[n]]));
             if (Object.keys(out).length) require("fs").writeFileSync(process.env.RUNNER_TEMP + "/worker-secrets.json", JSON.stringify(out));
             console.log("setting: " + (Object.keys(out).join(", ") || "nothing"));

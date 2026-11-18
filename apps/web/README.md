@@ -419,6 +419,7 @@ hidden and the anonymous limits apply (counted per IP when there is no
 | Name | Kind | Default | Meaning |
 |---|---|---|---|
 | `SITE_URL` | variable | none | public URL (`https://opensu.009003.xyz`); Better Auth's base URL and trusted origin, the Google redirect URI and the cookies derive from it. Sign-in needs it |
+| `CANONICAL_REDIRECT` | variable | on | with `SITE_URL` set, a request to any other host (the `workers.dev` address) gets a 308 to the same path and query on `SITE_URL`, so the session cookie lives on one host (task 026). Not for localhost. `false` turns it off, the escape hatch if the custom domain breaks |
 | `BETTER_AUTH_SECRET` | secret | none | 32+ random characters (`openssl rand -base64 32`); signs sessions and the visitor cookie. Sign-in needs it |
 | `RESEND_API_KEY` | secret | none | Resend API key ("sending access" is enough); email codes need it and `AUTH_EMAIL_FROM` |
 | `AUTH_EMAIL_FROM` | variable | none | sender on your verified domain, e.g. `openSU <code@mail.opensu.009003.xyz>` |

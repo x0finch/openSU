@@ -1,5 +1,6 @@
-// The Worker's entry (TanStack Start picks up `src/server.ts`). It answers
-// the sign-in routes itself and hands everything else to Start.
+// The Worker's entry (TanStack Start picks up `src/server.ts`). It sends
+// other hosts to SITE_URL (task 026), answers the sign-in routes itself and
+// hands everything else to Start.
 //
 // Better Auth is built here, in the global scope, when sign-in is
 // configured, and its routes are run once without touching the database:
@@ -12,13 +13,16 @@
 import handler, { createServerEntry } from '@tanstack/react-start/server-entry';
 import { env } from 'cloudflare:workers';
 import { accountRoute, startAuth } from './server/accounts';
-import type { AccountEnv } from './server/config';
+import { type AccountEnv, canonicalRedirect } from './server/config';
 
 const accountEnv = env as AccountEnv;
 await startAuth(accountEnv);
 
 export default createServerEntry({
   async fetch(request, opts) {
+    // One canonical host (task 026), before anything else runs.
+    const canonical = canonicalRedirect(request.url, accountEnv);
+    if (canonical) return new Response(null, { status: 308, headers: { location: canonical } });
     if (new URL(request.url).pathname.startsWith('/api/auth')) {
       const res = await accountRoute(request, accountEnv);
       if (res) return res;

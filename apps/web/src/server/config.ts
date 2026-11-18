@@ -23,6 +23,8 @@ export interface AccountEnv {
   DB?: D1Like;
   /** Public site URL, e.g. https://opensu.example (Google redirect URI and cookies derive from it). */
   SITE_URL?: string;
+  /** "false" stops redirecting other hosts (the workers.dev address) to SITE_URL (task 026). */
+  CANONICAL_REDIRECT?: string;
   /** "false" turns sign-in off even when the secrets exist (self-hosters). */
   AUTH_ENABLED?: string;
   /** Better Auth secret (32+ random bytes); also signs the anonymous visitor cookie. */
@@ -144,6 +146,25 @@ export function siteOrigin(raw: string | undefined): string | null {
   } catch {
     return null;
   }
+}
+
+/**
+ * One canonical host (task 026): a session cookie lands on the host that
+ * set it, so a visitor signed in on `SITE_URL` looks signed out on the
+ * `workers.dev` address. When `SITE_URL` is set and a request's host is
+ * another one, the answer is the same path and query on `SITE_URL`. Not
+ * for localhost, and not with CANONICAL_REDIRECT=false (the escape hatch
+ * if the custom domain breaks). A string comparison: no measurable CPU.
+ */
+export function canonicalRedirect(requestUrl: string, env: Pick<AccountEnv, 'SITE_URL' | 'CANONICAL_REDIRECT'>): string | null {
+  if (!env.SITE_URL || off(env.CANONICAL_REDIRECT)) return null;
+  const site = siteOrigin(env.SITE_URL);
+  if (!site) return null;
+  const u = new URL(requestUrl);
+  if (u.hostname === 'localhost' || u.hostname === '127.0.0.1' || u.hostname === '[::1]') return null;
+  const s = new URL(site);
+  if (u.host === s.host) return null;
+  return `${site}${u.pathname}${u.search}`;
 }
 
 /** True when a request is addressed to this machine (the test hook's guard). */
