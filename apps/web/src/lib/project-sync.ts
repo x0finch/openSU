@@ -21,6 +21,8 @@ export const RETRY_MIN = 2000;
 export const RETRY_MAX = 60_000;
 /** At most one thumbnail per this many ms of editing (it is rendered in the browser, which costs a frame or more). */
 export const THUMB_EVERY = 60_000;
+/** ...and only after this much quiet since the change it shows (not while someone is working). */
+export const THUMB_QUIET = 15_000;
 
 export interface ProjectMeta {
   id: string;
@@ -181,6 +183,8 @@ export function createProjectSync(deps: SyncDeps) {
   let generation = 0;
   /** The open project's thumbnail is older than its house. */
   let thumbWanted = false;
+  /** Not before this time (the quiet after the last change). */
+  let thumbNotBefore = 0;
   let thumbTimer: unknown = null;
   let lastThumb = -Infinity;
   let thumbing = false;
@@ -200,11 +204,11 @@ export function createProjectSync(deps: SyncDeps) {
     timer = retryTimer = thumbTimer = null;
   }
 
-  /** Renders and stores the open project's thumbnail, at most once per THUMB_EVERY. */
+  /** Renders and stores the open project's thumbnail: THUMB_QUIET after the change, at most once per THUMB_EVERY. */
   function maybeThumb(): void {
     const id = get().openId;
     if (!thumbWanted || !id || !get().on || thumbing || thumbTimer !== null) return;
-    const wait = lastThumb + THUMB_EVERY - deps.now();
+    const wait = Math.max(lastThumb + THUMB_EVERY, thumbNotBefore) - deps.now();
     if (wait > 0) {
       thumbTimer = deps.setTimer(() => {
         thumbTimer = null;
@@ -261,6 +265,7 @@ export function createProjectSync(deps: SyncDeps) {
     }
     // A project without a picture yet (made elsewhere, or before pictures) gets one now.
     thumbWanted = !meta.thumbAt;
+    thumbNotBefore = deps.now() + THUMB_QUIET;
     set({ openId: meta.id, name: meta.name, failed: null, missing: null });
     persist();
     if (get().user) deps.lastOpened.set(get().user!, meta.id);
@@ -346,6 +351,7 @@ export function createProjectSync(deps: SyncDeps) {
         upsert(r.value.project);
         persist();
         thumbWanted = true;
+        thumbNotBefore = deps.now() + THUMB_QUIET;
         maybeThumb();
         return;
       }
@@ -406,6 +412,7 @@ export function createProjectSync(deps: SyncDeps) {
       revision = l.revision;
       dirty = l.dirty;
       thumbWanted = !meta.thumbAt;
+      thumbNotBefore = deps.now() + THUMB_QUIET;
       set({ openId: meta.id, name: meta.name });
       deps.lastOpened.set(user, meta.id);
       if (meta.revision > l.revision) {

@@ -364,6 +364,15 @@ try {
         }
       }, names);
     const cards = (page) => page.getByTestId('project-card').count();
+    /** Polls `fn` in the page (it may be async: waitForFunction would take its promise as true) until it holds. */
+    const until = async (page, fn, arg, timeout = 10000) => {
+      const end = Date.now() + timeout;
+      for (;;) {
+        if (await page.evaluate(fn, arg)) return true;
+        if (Date.now() > end) throw new Error(`timed out: ${String(fn).slice(0, 120)}`);
+        await new Promise((r) => setTimeout(r, 400));
+      }
+    };
     const card = (page, id) => page.locator(`[data-testid=project-card][data-id="${id}"]`);
 
     // ---- Functional checks: desktop, zh ----
@@ -387,11 +396,12 @@ try {
     await edit(a, '本地画的房子 改');
     await a.waitForTimeout(1200);
     check((await server(a))[0].revision === 1, 'not saved while editing (debounce)');
-    await a.waitForFunction(async () => (await (await fetch('/api/projects')).json()).projects[0].revision > 1, null, { timeout: 10000, polling: 500 });
+    await until(a, async () => (await (await fetch('/api/projects')).json()).projects[0].revision > 1);
     check(true, 'saved to the account a few seconds after the change');
-    await a.waitForFunction(async () => (await (await fetch('/api/projects')).json()).projects[0].thumbAt > 0, null, { timeout: 30000, polling: 1000 });
-    const thumb = await a.evaluate(async (id) => { const p = (await (await fetch('/api/projects')).json()).projects[0]; const r = await fetch(`/api/projects/${id}/thumb?v=${p.thumbAt}`); return { type: r.headers.get('content-type'), cache: r.headers.get('cache-control'), kb: (await r.arrayBuffer()).byteLength / 1024 }; }, p1);
-    check(/image\/(webp|jpeg)/.test(thumb.type) && thumb.kb < 60 && /private/.test(thumb.cache), `a thumbnail was rendered in the browser and stored (${thumb.type}, ${thumb.kb.toFixed(1)} KB, ${thumb.cache})`);
+    // A thumbnail follows a quiet moment after the last change (THUMB_QUIET, 15 s).
+    await until(a, async () => (await (await fetch('/api/projects')).json()).projects[0].thumbAt > 0, null, 45000);
+    const thumb = await a.evaluate(async (id) => { const p = (await (await fetch('/api/projects')).json()).projects.find((x) => x.id === id); const r = await fetch(`/api/projects/${id}/thumb?v=${p.thumbAt}`); const body = await r.arrayBuffer(); return { type: r.headers.get('content-type'), cache: r.headers.get('cache-control'), kb: body.byteLength / 1024, text: r.ok ? '' : new TextDecoder().decode(body) }; }, p1);
+    check(/image\/(webp|jpeg)/.test(thumb.type) && thumb.kb < 60 && /private/.test(thumb.cache), `a thumbnail was rendered in the browser and stored (${thumb.type}, ${thumb.kb.toFixed(1)} KB, ${thumb.cache}${thumb.text})`);
     await openMenu(a);
     check(((await a.getByTestId('menu-saved').textContent()) ?? '') === '修改自动保存到账户', 'the menu line: saved with the account');
     check((await a.getByText('换一个模板').count()) === 0 && (await a.getByTestId('reset-house').count()) === 0 && (await a.getByTestId('menu-new-project').count()) === 1 && (await a.getByTestId('menu-rename').count()) === 1 && (await a.getByTestId('menu-duplicate').count()) === 1, 'signed in: new, rename, duplicate in the project menu; the rows that replaced the open house are gone');
@@ -469,7 +479,7 @@ try {
     await a.getByTestId('card-delete').click();
     await card(a, victim).getByTestId('project-delete-confirm').click();
     await a.waitForSelector('[data-testid=project-deleted-toast]', { state: 'detached', timeout: 15000 });
-    await a.waitForFunction(async (id) => !(await (await fetch('/api/projects')).json()).projects.some((p) => p.id === id), victim, { timeout: 10000, polling: 300 });
+    await until(a, async (id) => !(await (await fetch('/api/projects')).json()).projects.some((p) => p.id === id), victim);
     check((await server(a)).length === 3, 'the delete is sent when the toast ends');
     // New project from the page: the templates as cards, one opens in the studio.
     await a.getByTestId('project-new').click();
@@ -567,7 +577,7 @@ try {
       await signInDirect(page, `shots${++k}@example.com`);
       await studio(page, `/studio?lang=${lang}`);
       await waitOpen(page);
-      await page.waitForFunction(() => window.__studio.projects.store.getState().projects[0]?.thumbAt > 0, null, { timeout: 30000 });
+      await page.waitForFunction(() => window.__studio.projects.store.getState().projects[0]?.thumbAt > 0, null, { timeout: 45000 });
       await projectsPage(page, `?lang=${lang}`);
       await snap('page-first');
       await addProjects(page, lang === 'zh' ? ['王家老宅翻建', '河边的小院'] : ['Riverside cottage', 'Grandparents’ house']);

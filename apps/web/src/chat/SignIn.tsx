@@ -158,9 +158,18 @@ function SignInBody({ phone }: { phone?: boolean }) {
     // The phone sheet is hidden for its first frame; focus once it shows.
     const focus = () => field.current?.focus({ preventScroll: true });
     focus();
-    // Retried until it takes (a slow first frame can keep the sheet hidden longer).
-    const ids = [60, 150, 300, 500, 800, 1200].map((ms) => window.setTimeout(() => document.activeElement !== field.current && focus(), ms));
-    return () => ids.forEach(clearTimeout);
+    // Retried until it takes: the sheet stays hidden until its first spring frame, and under load (a phone
+    // drawing its first 3D frame) that frame can come seconds later; a fixed list of retries up to 1.2 s
+    // missed it (task 027: the flaky "focused on arrival" check). Stops once focused, or once the person
+    // has put focus somewhere else themselves.
+    const started = performance.now();
+    const id = window.setInterval(() => {
+      const a = document.activeElement;
+      const elsewhere = a && a !== document.body && a !== field.current && !a.closest('[data-testid=signin-sheet]');
+      if (a === field.current || (elsewhere && a.matches('input, textarea')) || performance.now() - started > 6000) clearInterval(id);
+      else focus();
+    }, 80);
+    return () => clearInterval(id);
   }, [step]);
 
   const submitEmail = (e: FormEvent) => {

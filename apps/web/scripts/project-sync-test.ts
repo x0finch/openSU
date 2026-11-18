@@ -5,7 +5,7 @@
 //   node --experimental-strip-types --no-warnings --test scripts/project-sync-test.ts
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { createProjectSync, type Current, type LocalLink, type ProjectMeta, type ProjectsApi, RETRY_MIN, SAVE_DELAY, type SyncDeps, THUMB_EVERY } from '../src/lib/project-sync.ts';
+import { createProjectSync, type Current, type LocalLink, type ProjectMeta, type ProjectsApi, RETRY_MIN, SAVE_DELAY, type SyncDeps, THUMB_EVERY, THUMB_QUIET } from '../src/lib/project-sync.ts';
 
 type Row = ProjectMeta & { house: string; chat: string; thumb?: string };
 
@@ -420,13 +420,15 @@ test('the open project deleted on another device: when visible again the next op
 
 const thumbs = (a: Account) => a.calls.filter((c) => c.startsWith('thumb'));
 
-test('thumbnails: one after a save, then at most one per THUMB_EVERY, of the house as saved; a project without one gets one when opened', async () => {
+test('thumbnails: one after a save and a quiet moment, then at most one per THUMB_EVERY, of the house as saved; a project without one gets one when opened', async () => {
   const a = new Account();
   const old = a.add(house('旧的，没有图'));
   const { sync, edit, s, state } = studio(a, { house: house('图') });
   await sync.start('me@example.com');
   const id = state().openId!;
-  await settle();
+  await s.tick(THUMB_QUIET - 100);
+  assert.equal(thumbs(a).length, 0, 'not at once: after a quiet moment');
+  await s.tick(100);
   assert.equal(thumbs(a).length, 1, 'the adopted project gets its picture');
   assert.equal(a.rows.get(id)!.thumb, '图');
   edit('图 1');
@@ -441,7 +443,7 @@ test('thumbnails: one after a save, then at most one per THUMB_EVERY, of the hou
   await s.tick(THUMB_EVERY * 3);
   assert.equal(thumbs(a).length, 2, 'nothing changed: no new picture');
   await sync.open(old.id);
-  await s.tick(THUMB_EVERY);
+  await s.tick(THUMB_EVERY + THUMB_QUIET);
   assert.equal(a.rows.get(old.id)!.thumb, '旧的，没有图');
 });
 
