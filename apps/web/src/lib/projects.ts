@@ -7,10 +7,11 @@ import type { House } from '@opensu/model';
 import { useEffect } from 'react';
 import { useStore } from 'zustand';
 import { type ChatItem, newChat, restoreItems, useChat } from '../chat/chat-store';
-import { autosaveHooks, clearSaved, quietly, saveNow } from './autosave';
+import { autosaveHooks, clearSaved, quietly, restoreChat, savedHouse, saveNow } from './autosave';
 import { type Lang, type MessageKey, translate } from './i18n';
 import { createProjectSync, type Current, type LocalLink, parseSummary, type ProjectMeta, type ProjectsApi, type ProjectsState, type Result, type Summary } from './project-sync';
 import { freshView, useStudio } from './store';
+import { thumbSource } from './thumb-source';
 import { toast, useToast } from './toast';
 
 export type { ProjectMeta, ProjectsState, Summary } from './project-sync';
@@ -202,14 +203,13 @@ export const projectSync = createProjectSync({
   setTimer: (fn, ms) => globalThis.setTimeout(fn, ms),
   clearTimer: (t) => globalThis.clearTimeout(t as ReturnType<typeof setTimeout>),
   // Never on the server: keeps three.js out of the Worker bundle.
-  thumb: async (house) => {
-    const m = await (import.meta.env.SSR ? new Promise<never>(() => {}) : import('../studio/thumb'));
-    // When the browser is idle (it takes the main thread for a moment).
+  thumb: async () => {
+    // When the browser is idle; drawn by the studio's own viewer (src/lib/thumb-source.ts).
     await new Promise<void>((ok) => (typeof requestIdleCallback === 'function' ? requestIdleCallback(() => ok(), { timeout: 4000 }) : setTimeout(ok, 0)));
     const t0 = performance.now();
-    const blob = await m.renderThumb(house);
-    // Test hook (e2e, audit): what the last picture cost on this machine.
-    (globalThis as { __thumb?: unknown }).__thumb = { ms: Math.round(performance.now() - t0), kb: blob ? Math.round(blob.size / 102.4) / 10 : 0, type: blob?.type ?? null };
+    const blob = await thumbSource.capture();
+    // Test hook (e2e): what the last picture cost on this machine (main thread, ms) and weighed.
+    if (blob) (globalThis as { __thumb?: unknown }).__thumb = { ms: Math.round(performance.now() - t0), mainMs: (globalThis as { __thumbMainMs?: number }).__thumbMainMs, kb: Math.round(blob.size / 102.4) / 10, type: blob.type };
     return blob;
   },
   now: () => Date.now(),
@@ -281,15 +281,25 @@ export const useUrlMissing = () => useProjects((s) => s.missing);
  * (`/studio?p=<id>`): the open one is written there, back and forward
  * open the project they name.
  */
-export function useProjectSync(): void {
+export function useProjectSync(opts: { page?: boolean } = {}): void {
+  const page = !!opts.page;
   useEffect(() => {
+    // The projects page has no studio: this browser's house (if any) is put in the store without being shown,
+    // so a sign-in there adopts an edited one as the studio would.
+    if (page && !useStudio.getState().house) {
+      const saved = savedHouse();
+      if (saved) {
+        quietly(() => useStudio.getState().setHouse(saved));
+        restoreChat();
+      }
+    }
     // A template opened by address (`?sample=`) is not a project until it is edited (autosave detaches it then).
     const sample = () => new URLSearchParams(location.search).has('sample');
     let user: string | null = null;
     let fromHistory = false;
     const update = () => {
       const s = useChat.getState().server;
-      const wanted = wantedFromUrl();
+      const wanted = page ? { id: null } : wantedFromUrl();
       // An address of a project, and nobody (or no projects) to open it with: "not found or no access".
       if (s && wanted.id && !(s.user && s.projects)) projectSync.store.setState({ missing: wanted.id });
       const want = s?.user && s.projects && useStudio.getState().house && !sample() ? s.user.email : null;
@@ -299,7 +309,7 @@ export function useProjectSync(): void {
       if (!want) return;
       void (import.meta.env.SSR ? new Promise<HouseData>(() => {}) : import('../studio/house-data')).then((m) => {
         houseData = m;
-        if (user === want) void projectSync.start(want, wantedFromUrl());
+        if (user === want) void projectSync.start(want, page ? { browse: true } : wantedFromUrl());
       });
     };
     update();
@@ -312,11 +322,12 @@ export function useProjectSync(): void {
     });
     // The open project goes into the address: a switch is a new history entry, the first one is not.
     const offOpen = projectSync.store.subscribe((s, p) => {
-      if (s.openId === p.openId || !s.openId) return;
+      if (page || s.openId === p.openId || !s.openId) return;
       // A project made from the projects page (`?new=`) takes that entry's place.
       writeUrl(s.openId, !!p.openId && !fromHistory && !new URLSearchParams(location.search).has('new'));
     });
     const onPop = () => {
+      if (page) return;
       const { id } = wantedFromUrl();
       if (!id || id === projectSync.store.getState().openId || !projectSync.store.getState().on) return;
       fromHistory = true;
@@ -352,5 +363,5 @@ export function useProjectSync(): void {
       window.removeEventListener('online', onOnline);
       window.removeEventListener('popstate', onPop);
     };
-  }, []);
+  }, [page]);
 }

@@ -155,6 +155,8 @@ export function AccountMenuHost() {
   const user = useUser();
   const server = useChat((s) => s.server);
   const projectsOffered = useProjectsOffered();
+  // On the projects page (task 027): no row to the page you are on, and no keys row (the key picker lives in the studio).
+  const onProjectsPage = typeof location !== 'undefined' && location.pathname.startsWith('/projects');
   const menu = useRef<HTMLElement | null>(null);
   const show = open && !!user;
   // Signed out elsewhere (or the status changed): nothing to show.
@@ -221,7 +223,7 @@ export function AccountMenuHost() {
           </div>
           <GlassSep />
           {/* Task 027: the account's projects, the first row under who is signed in. */}
-          {projectsOffered && (
+          {projectsOffered && !onProjectsPage && (
             <GlassMenuItem
               onClick={() => {
                 closeAccountMenu();
@@ -238,6 +240,7 @@ export function AccountMenuHost() {
               <span className="tnum shrink-0 text-[13px] font-normal text-ink-2">{quota.remaining > 0 ? t('quota.left', { n: quota.remaining }) : t('quota.usedUp')}</span>
             </div>
           )}
+          {!onProjectsPage && (
           <GlassMenuItem
             onClick={() => {
               closeAccountMenu();
@@ -249,7 +252,8 @@ export function AccountMenuHost() {
           >
             {t('account.myKeys')}
           </GlassMenuItem>
-          <GlassSep />
+          )}
+          {(!onProjectsPage || quota) && <GlassSep />}
           <GlassMenuItem
             onClick={() => {
               closeAccountMenu();

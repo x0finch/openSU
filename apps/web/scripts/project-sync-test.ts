@@ -89,6 +89,8 @@ function studio(account: Account, start: Partial<Current> = {}, link: LocalLink 
     last: new Map<string, string>(),
     running: false,
     forgot: 0,
+    /** No 3D viewer to draw a thumbnail with (a plan-only session). */
+    noViewer: false,
     /** Advances the fake clock, running due timers. */
     async tick(ms: number) {
       const end = now + ms;
@@ -130,7 +132,7 @@ function studio(account: Account, start: Partial<Current> = {}, link: LocalLink 
     },
     clearTimer: (t) => void timers.delete(t as number),
     // The picture of a house is its name here (what was on screen when it was taken).
-    thumb: async (h) => ({ house: (h as { name: string }).name }) as unknown as Blob,
+    thumb: async (h) => (s.noViewer ? null : ({ house: (h as { name: string }).name } as unknown as Blob)),
     now: () => now,
     forgetLocal: () => void s.forgot++,
   };
@@ -481,4 +483,18 @@ test('deleting from the projects page the project this browser holds: the browse
   assert.equal(a.rows.size, 0);
   assert.equal(s.link, null);
   assert.equal(s.forgot, 1);
+});
+
+test('no viewer to draw with (plan only): no picture, asked again later, drawn once one is there', async () => {
+  const a = new Account();
+  const { sync, s, state } = studio(a, { house: house('平面') });
+  s.noViewer = true;
+  await sync.start('me@example.com');
+  const id = state().openId!;
+  await s.tick(THUMB_QUIET + THUMB_EVERY * 2);
+  assert.equal(a.rows.get(id)!.thumbAt, 0);
+  s.noViewer = false;
+  await s.tick(THUMB_EVERY);
+  assert.ok(a.rows.get(id)!.thumbAt > 0);
+  assert.equal(a.rows.get(id)!.thumb, '平面');
 });

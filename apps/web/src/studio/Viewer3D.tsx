@@ -1,4 +1,5 @@
 import type { ResolvedHouse } from '@opensu/model';
+import { thumbSource } from '../lib/thumb-source';
 import type { FrameInsets } from '@opensu/render';
 import { cameras as camTokens } from '@opensu/render/tokens';
 import { useEffect, useRef, useState } from 'react';
@@ -139,6 +140,8 @@ export function Viewer3D({ resolved, active, insets, layoutKey, insetMs, compact
         applySun(e, st);
         e.setView(scenePreset(st), shownCut(st), true);
         engine.current = e;
+        // Project thumbnails come from this viewer (task 027).
+        thumbSource.set((w, h) => e.thumbnail(w, h));
         framing.chosen = () => (e.viewer.currentView ? e.viewer.framedInsets : null);
         shown.current = latest.current;
         walkBridge.attach(e);
@@ -156,6 +159,7 @@ export function Viewer3D({ resolved, active, insets, layoutKey, insetMs, compact
       glassRegistry.attachWebGL(null);
       glassTarget.current = null;
       walkBridge.attach(null);
+      thumbSource.set(null);
       engine.current?.dispose();
       engine.current = null;
       if (window.__studio) window.__studio.ready3d = false;

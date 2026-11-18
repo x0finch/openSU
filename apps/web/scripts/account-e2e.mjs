@@ -385,8 +385,42 @@ try {
     await a.waitForTimeout(900);
     await projectsPage(a);
     check((await cards(a)) === 1 && ((await a.getByTestId('project-name').first().textContent()) ?? '') === '本地画的房子' && (await a.getByTestId('projects-invite').count()) === 1, 'signed out, /projects: this browser\'s project as one card and one line inviting sign-in');
-    // First sign-in with an edited local house: it becomes the project and stays open; the address names it.
-    await signInDirect(a, 'projects@example.com');
+    // The page's account entry is the studio's: signed out the "登录" capsule; sign-in there adopts the edited local house.
+    check((await a.getByTestId('account-button').getAttribute('data-state')) === 'signed-out' && (await a.getByTestId('projects-signin').count()) === 0, '/projects signed out: the studio\'s account button ("登录"), no second sign-in control');
+    await a.getByTestId('account-button').click();
+    await a.waitForSelector('[data-testid=signin-email-input]');
+    await a.getByTestId('signin-email-input').fill('projects@example.com');
+    await a.getByTestId('signin-email-input').press('Enter');
+    await a.waitForSelector('[data-testid=otp-0]');
+    await a.waitForTimeout(300);
+    await a.getByTestId('otp-0').focus();
+    await a.keyboard.type(await code(preview.base, 'projects@example.com'));
+    await a.waitForFunction(() => !!window.__studio.chat.getState().server?.user, null, { timeout: 20000 });
+    await a.waitForFunction(() => window.__studio.projects.store.getState().projects.length === 1, null, { timeout: 20000 });
+    await a.waitForTimeout(600);
+    check((await cards(a)) === 1 && ((await a.getByTestId('project-card').getByTestId('project-name').first().textContent()) ?? '') === '本地画的房子' && (await a.getByTestId('account-button').getAttribute('data-state')) === 'signed-in', '/projects: signing in there makes the edited local house the account\'s project; the button is the avatar');
+    await a.getByTestId('account-button').click();
+    await a.waitForSelector('[data-testid=account-menu]');
+    check((await a.getByTestId('account-projects').count()) === 0 && (await a.getByTestId('account-signout').count()) === 1, 'the account menu on /projects: the same menu, without a row to the page it is on');
+    await a.keyboard.press('Escape');
+    // Card sizes: the page uses the window (cards of 240 px or more, the grid to the content's right edge).
+    for (const w of [1280, 1440, 2000]) {
+      await a.setViewportSize({ width: w, height: 900 });
+      await a.waitForTimeout(400);
+      const m = await a.evaluate(() => {
+        const grid = document.querySelector('[data-testid=projects-grid]').getBoundingClientRect();
+        const cs = getComputedStyle(document.querySelector('[data-testid=projects-grid]'));
+        const card = document.querySelector('[data-testid=project-card]').getBoundingClientRect();
+        const head = document.querySelector('header').getBoundingClientRect();
+        return { cols: cs.gridTemplateColumns.split(' ').length, card: card.width, gridW: grid.width, gridR: grid.right, head: head.right };
+      });
+      check(m.card >= 240 && m.card <= 320 && m.gridW >= 1100 && Math.abs(m.head - m.gridR) <= 41, `/projects at ${w}: ${m.cols} columns of ${m.card.toFixed(0)} px over ${m.gridW.toFixed(0)} px`);
+      if (!smoke) {
+        await addProjects(a, []);
+      }
+    }
+    await a.setViewportSize({ width: 1440, height: 900 });
+    // The studio: the project open, its address.
     await studio(a, '/studio');
     await waitOpen(a);
     let srv = await server(a);
@@ -401,7 +435,7 @@ try {
     // A thumbnail follows a quiet moment after the last change (THUMB_QUIET, 15 s).
     await until(a, async () => (await (await fetch('/api/projects')).json()).projects[0].thumbAt > 0, null, 45000);
     const thumb = await a.evaluate(async (id) => { const p = (await (await fetch('/api/projects')).json()).projects.find((x) => x.id === id); const r = await fetch(`/api/projects/${id}/thumb?v=${p.thumbAt}`); const body = await r.arrayBuffer(); return { type: r.headers.get('content-type'), cache: r.headers.get('cache-control'), kb: body.byteLength / 1024, text: r.ok ? '' : new TextDecoder().decode(body) }; }, p1);
-    check(/image\/(webp|jpeg)/.test(thumb.type) && thumb.kb < 60 && /private/.test(thumb.cache), `a thumbnail was rendered in the browser and stored (${thumb.type}, ${thumb.kb.toFixed(1)} KB, ${thumb.cache}${thumb.text})`);
+    check(/image\/(webp|jpeg)/.test(thumb.type) && thumb.kb < 60 && /private/.test(thumb.cache), `a thumbnail was drawn by the studio's viewer and stored (${thumb.type}, ${thumb.kb.toFixed(1)} KB, ${thumb.cache}${thumb.text}; ${JSON.stringify(await a.evaluate(() => globalThis.__thumb ?? null))})`);
     await openMenu(a);
     check(((await a.getByTestId('menu-saved').textContent()) ?? '') === '修改自动保存到账户', 'the menu line: saved with the account');
     check((await a.getByText('换一个模板').count()) === 0 && (await a.getByTestId('reset-house').count()) === 0 && (await a.getByTestId('menu-new-project').count()) === 1 && (await a.getByTestId('menu-rename').count()) === 1 && (await a.getByTestId('menu-duplicate').count()) === 1, 'signed in: new, rename, duplicate in the project menu; the rows that replaced the open house are gone');
@@ -583,6 +617,16 @@ try {
       await addProjects(page, lang === 'zh' ? ['王家老宅翻建', '河边的小院'] : ['Riverside cottage', 'Grandparents’ house']);
       await projectsPage(page, `?lang=${lang}`);
       await snap('page-few');
+      if (!phone) {
+        // The same page at 1280 and 2000 wide (the grid fills the content width).
+        for (const [w, h] of [[1280, 800], [2000, 1100]]) {
+          await page.setViewportSize({ width: w, height: h });
+          await page.mouse.move(2, h - 2);
+          await page.waitForTimeout(500);
+          await shot(page, `${tag}-page-few-w${w}`, outDir27);
+        }
+        await page.setViewportSize(opts.viewport);
+      }
       const cols = await page.getByTestId('project-card').evaluateAll((els) => new Set(els.map((e) => Math.round(e.getBoundingClientRect().left))).size);
       if (phone) check(cols === 2, `${tag}: two columns on the phone (${cols})`);
       await page.getByTestId('project-new').click();

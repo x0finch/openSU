@@ -14,9 +14,11 @@ import { cx, LangToggle } from '../components/ui';
 import { GlassLayer, GlassMenu, GlassMenuItem, GlassSep, GlassToast } from '../glass';
 import { loadSaved } from '../lib/autosave';
 import { type Lang, useT } from '../lib/i18n';
-import { houseTitle, type ProjectMeta, projectName, projectSync, thumbUrl, useProjects } from '../lib/projects';
+import { houseTitle, type ProjectMeta, projectName, projectSync, thumbUrl, useProjects, useProjectSync } from '../lib/projects';
 import { restoreLang, useStudio } from '../lib/store';
 import { fetchServerStatus, useChat } from '../chat/chat-store';
+import { AccountButton, AccountMenuHost, StudioToast } from '../chat/AccountEntry';
+import { SignInHost } from '../chat/SignIn';
 
 /** How long a deleted project can be brought back (the toast), ms. */
 export const UNDO_MS = 6000;
@@ -46,30 +48,10 @@ function useEdited(at: number): string {
 /* Cards                                                               */
 /* ------------------------------------------------------------------ */
 
-const TILE = 'relative block aspect-[4/3] overflow-hidden rounded-[14px] border border-hairline bg-wash transition-colors';
+/** One grid for the projects and the templates: two columns on phones, else as many cards of 240 px or more as fit (Figma, Canva, Google Docs). */
+const GRID = 'grid grid-cols-2 gap-x-4 gap-y-6 sm:grid-cols-[repeat(auto-fill,minmax(240px,1fr))] sm:gap-x-6 sm:gap-y-8';
 
-/** Pictures of the templates, rendered in this browser the first time the strip opens (kept for the page). */
-const templateThumbs = new Map<string, string>();
-function useTemplateThumbs(on: boolean): Map<string, string> {
-  const [, bump] = useState(0);
-  useEffect(() => {
-    if (!on || templateThumbs.size) return;
-    let live = true;
-    void (async () => {
-      // Never on the server: keeps the model and three.js out of the Worker bundle.
-      const [{ templateById }, { renderThumb }] = await (import.meta.env.SSR ? new Promise<never>(() => {}) : Promise.all([import('../studio/house-data'), import('../studio/thumb')]));
-      for (const m of TEMPLATE_META) {
-        const blob = await renderThumb(templateById(m.id)).catch(() => null);
-        if (blob) templateThumbs.set(m.id, URL.createObjectURL(blob));
-        if (live) bump((n) => n + 1);
-      }
-    })();
-    return () => {
-      live = false;
-    };
-  }, [on]);
-  return templateThumbs;
-}
+const TILE = 'relative block aspect-[4/3] overflow-hidden rounded-[14px] border border-hairline bg-wash transition-colors';
 
 /** The picture of a project, or a quiet placeholder until it has one. */
 function Thumb({ src, alt }: { src: string | null; alt: string }) {
@@ -86,8 +68,8 @@ function CardText({ name, line, more, renaming, wrap }: { name: ReactNode; line:
   return (
     <div className="mt-2.5 flex items-start gap-1">
       <div className="min-w-0 flex-1">
-        {renaming ? name : <p className="truncate text-[14px] leading-5 font-medium" data-testid="project-name">{name}</p>}
-        {line && <p className={cx('tnum text-[12.5px] leading-[18px] text-ink-2', !wrap && 'truncate')} data-testid="project-when">{line}</p>}
+        {renaming ? name : <p className="truncate text-[14px] leading-5 font-medium sm:text-[15px] sm:leading-[22px]" data-testid="project-name">{name}</p>}
+        {line && <p className={cx('tnum text-[12.5px] leading-[18px] text-ink-2 sm:text-[13px]', !wrap && 'truncate')} data-testid="project-when">{line}</p>}
       </div>
       {more}
     </div>
@@ -138,7 +120,7 @@ function ProjectCard({ p, onDelete, menuOpen, onMenu, renaming, onRenamed, askin
       </a>
       {asking ? (
         <div className="mt-2.5 flex flex-wrap items-center gap-x-2 gap-y-1.5" data-testid="project-delete-ask">
-          <p className="w-full text-[14px] leading-5 font-medium">{t('projects.deleteAsk')}</p>
+          <p className="w-full text-[14px] leading-5 font-medium sm:text-[15px]">{t('projects.deleteAsk')}</p>
           <PaperButton strong testId="project-delete-confirm" onClick={() => { setAsking(false); onDelete(); }}>
             {t('projects.delete')}
           </PaperButton>
@@ -165,7 +147,7 @@ function ProjectCard({ p, onDelete, menuOpen, onMenu, renaming, onRenamed, askin
                     onRenamed();
                   }
                 }}
-                className="-mx-1.5 -my-0.5 h-6 w-[calc(100%+12px)] rounded-[6px] bg-page px-1.5 text-[14px] leading-5 font-medium outline outline-1 outline-ink-3 focus:outline-2 focus:outline-ink"
+                className="-mx-1.5 -my-0.5 h-6 w-[calc(100%+12px)] rounded-[6px] bg-page px-1.5 text-[14px] leading-5 font-medium sm:h-[26px] sm:text-[15px] outline outline-1 outline-ink-3 focus:outline-2 focus:outline-ink"
                 data-testid="project-name-input"
               />
             ) : (
@@ -211,8 +193,24 @@ function NewCard({ full, open, onToggle }: { full: boolean; open: boolean; onTog
 /* The page                                                            */
 /* ------------------------------------------------------------------ */
 
+/** Phones: the studio's phone header sizes (the account button round, 36 px, 44 to touch). */
+function usePhone(): boolean {
+  const [on, setOn] = useState(false);
+  useEffect(() => {
+    const mq = matchMedia('(max-width: 639px)');
+    const fn = () => setOn(mq.matches);
+    fn();
+    mq.addEventListener('change', fn);
+    return () => mq.removeEventListener('change', fn);
+  }, []);
+  return on;
+}
+
 export function ProjectsPage() {
   const t = useT();
+  const phone = usePhone();
+  // The sync, as in the studio: a sign-in here adopts this browser's edited house (nothing is opened or made otherwise).
+  useProjectSync({ page: true });
   const lang = useStudio((s) => s.lang);
   const server = useChat((s) => s.server);
   const projects = useProjects((s) => s.projects);
@@ -227,7 +225,6 @@ export function ProjectsPage() {
   const [pending, setPending] = useState<Map<string, number>>(new Map());
   const [toast, setToast] = useState<{ id: string; name: string } | null>(null);
   const menuRef = useRef<HTMLElement | null>(null);
-  const tplThumbs = useTemplateThumbs(templates);
   const pendingRef = useRef(pending);
   pendingRef.current = pending;
 
@@ -311,36 +308,32 @@ export function ProjectsPage() {
   return (
     <GlassLayer>
       <div className="min-h-dvh bg-page text-ink">
-        <header className="mx-auto flex h-16 w-full max-w-[1200px] items-center justify-between px-4 md:h-20 md:px-10">
+        <header className="mx-auto flex h-16 w-full max-w-[1280px] items-center justify-between px-4 md:h-20 md:px-10">
           <Link to="/" className="hit flex items-center gap-2" aria-label="openSU">
             <Mark />
             <span className="text-[15px] font-semibold tracking-tight">openSU</span>
           </Link>
           <nav className="flex min-w-0 items-center gap-1">
-            {server?.user && <span className="hidden max-w-[240px] truncate px-2 text-sm text-ink-2 sm:inline" data-testid="projects-user">{server.user.name || server.user.email}</span>}
             <LangToggle size="lg" />
+            {/* The account entry of the studio (task 026): the same button, menu and sign-in surface. */}
+            <AccountButton {...(phone ? { size: 36, round: true } : {})} className="ml-1" />
           </nav>
         </header>
-        <main className="mx-auto w-full max-w-[1200px] px-4 pb-24 md:px-10">
+        <main className="mx-auto w-full max-w-[1280px] px-4 pb-24 md:px-10">
           <h1 className="pt-2 text-[26px] leading-tight font-semibold tracking-[-0.02em] md:pt-4 md:text-[32px]">{t('projects.title')}</h1>
           {server && !cloud && (
             <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2" data-testid="projects-invite">
               <p className="text-[14px] leading-6 text-ink-2">{t('projects.why')}</p>
-              {offered && (
-                <a href="/studio?signin=1" className="inline-flex h-9 items-center rounded-full bg-ink px-4 text-[14px] font-medium text-white transition-colors hover:bg-black" data-testid="projects-signin">
-                  {t('account.signIn')}
-                </a>
-              )}
             </div>
           )}
           {cloud && templates && !full && (
             <section className="mt-6" data-testid="project-templates" aria-label={t('projects.templates')}>
               <h2 className="text-[13px] font-medium text-ink-2">{t('projects.templates')}</h2>
-              <div className="mt-3 grid grid-cols-2 gap-x-4 gap-y-5 sm:grid-cols-3 lg:grid-cols-5">
+              <div className={cx('mt-3', GRID)}>
                 {TEMPLATE_META.map((m) => (
                   <a key={m.id} href={`/studio?new=${m.id}`} className="min-w-0" data-testid={`project-template-${m.id}`}>
                     <span className={cx(TILE, 'hover:border-ink-3')}>
-                      <Thumb src={tplThumbs.get(m.id) ?? null} alt="" />
+                      <Thumb src={null} alt="" />
                     </span>
                     <CardText name={m.name} line={`${m.plot.width / 1000} × ${m.plot.depth / 1000} m`} />
                   </a>
@@ -348,7 +341,7 @@ export function ProjectsPage() {
               </div>
             </section>
           )}
-          <section className="mt-6 grid grid-cols-2 gap-x-4 gap-y-6 sm:grid-cols-3 md:mt-8 lg:grid-cols-4 xl:grid-cols-5" data-testid="projects-grid" aria-label={t('projects.title')}>
+          <section className={cx('mt-6 md:mt-8', GRID)} data-testid="projects-grid" aria-label={t('projects.title')}>
             {cloud && <NewCard full={full} open={templates} onToggle={() => setTemplates(!templates)} />}
             {cloud &&
               shown.map((p) => (
@@ -412,6 +405,12 @@ export function ProjectsPage() {
             </>
           )}
         </GlassMenu>
+        {/* The account's surfaces, as in the studio: the menu at the button, sign-in (a popover; a sheet on phones). */}
+        <div className="pointer-events-none fixed inset-0 z-40">
+          <AccountMenuHost />
+          <SignInHost phone={phone} />
+        </div>
+        {!toast && <StudioToast className="fixed inset-x-0 bottom-[max(24px,env(safe-area-inset-bottom))] z-50 px-4" />}
         {toast && (
           <div className="pointer-events-none fixed inset-x-0 bottom-[max(24px,env(safe-area-inset-bottom))] z-50 flex justify-center px-4">
             <GlassToast className="gap-3 pr-1.5" data-testid="project-deleted-toast" key={toast.id}>

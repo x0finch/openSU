@@ -121,7 +121,7 @@ export interface SyncDeps {
   lastOpened: { get(user: string): string | null; set(user: string, id: string): void };
   setTimer(fn: () => void, ms: number): unknown;
   clearTimer(t: unknown): void;
-  /** A small image of the house's default view (null: could not be rendered here). */
+  /** A small image of the house's default view (null: cannot be drawn right now; it is asked again later). */
   thumb(house: House): Promise<Blob | null>;
   now(): number;
   /** The browser's copy of the house is dropped (its project was deleted while it was not open). */
@@ -132,6 +132,8 @@ export interface SyncDeps {
 export interface Wanted {
   id?: string | null;
   template?: string | null;
+  /** The projects page: nothing is opened or made for an untouched house (an edited one is still adopted). */
+  browse?: boolean;
 }
 
 /** What the UI shows. */
@@ -224,13 +226,20 @@ export function createProjectSync(deps: SyncDeps) {
     void (async () => {
       try {
         const img = await deps.thumb(c.house);
-        if (!img || get().openId !== id) return;
+        if (get().openId !== id) return;
+        if (!img) {
+          // Nothing to draw it with right now (no 3D view, or a cutaway / the sun study / walking): later.
+          thumbWanted = true;
+          return;
+        }
         const r = await deps.api.putThumb(id, img);
         if (r.ok) upsert(r.value.project);
       } catch {
         /* a picture is never worth an error */
       } finally {
         thumbing = false;
+        // Wanted again (not drawn this time, or a change since): the next try after THUMB_EVERY.
+        if (thumbWanted) maybeThumb();
       }
     })();
   }
@@ -431,7 +440,7 @@ export function createProjectSync(deps: SyncDeps) {
       return;
     }
     // An untouched house: the address decides, else the last opened, the most recent, or a new one.
-    if (wanted.id || wanted.template) return;
+    if (wanted.id || wanted.template || wanted.browse) return;
     const last = deps.lastOpened.get(user);
     const target = get().projects.find((p) => p.id === last) ?? get().projects[0];
     if (target && (await load(target.id))) return;

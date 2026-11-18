@@ -16,6 +16,7 @@ import {
   Vector2,
   Vector3,
   WebGLRenderer,
+  WebGLRenderTarget,
 } from 'three';
 import type { LineMaterial } from 'three/addons/lines/LineMaterial.js';
 import { bakeScene, CLIP_GROUP } from './style/batch.js';
@@ -884,6 +885,80 @@ export class IllustrationViewer {
   }
 
   /** Schedule one frame. Nothing renders unless something asked for it. */
+  /**
+   * One frame of `preset` at `width` x `height` CSS px into an offscreen
+   * target, read back as RGBA rows (top row first), with the scene, the
+   * renderer and its compiled programs as they are: no second context, no
+   * shader compile (the target is encoded like the canvas, as the glass
+   * target is). The canvas, the user's camera and the view state are left
+   * untouched; when the preset needs another presentation sun, the shadow
+   * map is redrawn for the capture and again for the next visible frame
+   * (which looks the same). Null while the scene is not the plain house:
+   * walking, a cutaway, the sun study or the grow transition (the caller
+   * tries again later). The frame is drawn at once; its pixels are read
+   * back asynchronously (a fence, no stall of the main thread waiting for
+   * the GPU).
+   */
+  renderView(preset: ViewPreset, width: number, height: number): Promise<{ pixels: Uint8Array; width: number; height: number }> | null {
+    if (this.walker || this.cutLevel || this.growZ !== null || this.lighting.mode === 'physical' || !this.content) return null;
+    const w = Math.max(1, Math.round(width));
+    const h = Math.max(1, Math.round(height));
+    const target = new WebGLRenderTarget(w, h, { samples: 4, depthBuffer: true });
+    target.texture.colorSpace = SRGBColorSpace;
+    target.texture.internalFormat = 'RGBA8';
+    (target as unknown as { isXRRenderTarget: boolean }).isXRRenderTarget = true;
+    const cam = cameraForView(preset, this.viewPoints(preset), w / h);
+    const ownCamera = this.camera;
+    const lineMats = [this.edgeMaterial, this.floorMaterial, ...this.clipLineMaterials];
+    const resolutions = lineMats.map((m) => m.resolution.clone());
+    const kind = preset.kind;
+    const az = preset.azimuthDeg ?? 135;
+    const nowKind = this.preset?.kind ?? 'axo';
+    const nowAz = this.preset?.azimuthDeg ?? 135;
+    const otherSun = kind !== nowKind || az !== nowAz;
+    const prevTarget = this.renderer.getRenderTarget();
+    const pixels = new Uint8Array(w * h * 4);
+    let read: Promise<unknown>;
+    try {
+      if (otherSun) {
+        const s = sunForView(this.lighting, kind, az);
+        this.sun.setDirection(s.azimuthDeg, s.elevationDeg);
+        this.sun.fit(this.bounds, 0);
+        this.renderer.shadowMap.needsUpdate = true;
+      }
+      // Line widths are in CSS px of the frame they are drawn into.
+      for (const m of lineMats) m.resolution.set(w, h);
+      this.camera = cam;
+      this.updateBillboards();
+      this.renderer.setRenderTarget(target);
+      this.renderer.render(this.scene, cam);
+      read = this.renderer.readRenderTargetPixelsAsync(target, 0, 0, w, h, pixels);
+    } catch (e) {
+      target.dispose();
+      throw e;
+    } finally {
+      this.renderer.setRenderTarget(prevTarget);
+      this.camera = ownCamera;
+      lineMats.forEach((m, i) => m.resolution.copy(resolutions[i]!));
+      this.updateBillboards();
+      if (otherSun) this.applySun();
+    }
+    return read.then(
+      () => {
+        target.dispose();
+        // WebGL rows run bottom-up.
+        const row = w * 4;
+        const flipped = new Uint8Array(pixels.length);
+        for (let y = 0; y < h; y++) flipped.set(pixels.subarray((h - 1 - y) * row, (h - y) * row), y * row);
+        return { pixels: flipped, width: w, height: h };
+      },
+      (e: unknown) => {
+        target.dispose();
+        throw e;
+      },
+    );
+  }
+
   requestRender(): void {
     if (this.pending) return;
     this.pending = true;

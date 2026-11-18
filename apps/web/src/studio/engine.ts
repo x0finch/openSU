@@ -9,7 +9,7 @@ import {
   createHouseObject, defaultLighting, type FrameInsets, IllustrationViewer, type LightingMode, type SceneStats, type StudySite, studySun, type StudySun, sunForView,
   type ViewPreset, type WalkState,
 } from '@opensu/render';
-import { EYE_ALTERNATE } from '../lib/views';
+import { DEFAULT_VIEW, EYE_ALTERNATE, presetById } from '../lib/views';
 
 export interface Engine {
   /**
@@ -68,6 +68,13 @@ export interface Engine {
   onMoved(cb: (moved: boolean) => void): void;
   /** The underlying viewer (tests and debugging). */
   readonly viewer: IllustrationViewer;
+  /**
+   * A project's thumbnail (task 027): the default view drawn once by this
+   * viewer into an offscreen target (no second WebGL context), WebP or JPEG.
+   * Null while the scene is not the plain house (walking, a cutaway, the sun
+   * study, growing): try again later.
+   */
+  thumbnail(width: number, height: number): Promise<Blob | null>;
   dispose(): void;
 }
 
@@ -800,6 +807,27 @@ export function createEngine(container: HTMLElement, resolved: ResolvedHouse, op
       return ink / n;
     },
     stats: () => viewer.lastStats,
+    async thumbnail(width, height) {
+      // The synchronous parts (issuing the frame; copying the pixels back) are timed for the e2e hook; the
+      // read-back waits on a GPU fence and the encoding runs off the main thread in Chromium.
+      let t0 = performance.now();
+      const pending = viewer.renderView(presetById(DEFAULT_VIEW), width, height);
+      if (!pending) return null;
+      let main = performance.now() - t0;
+      const shot = await pending;
+      t0 = performance.now();
+      const c = document.createElement('canvas');
+      c.width = shot.width;
+      c.height = shot.height;
+      c.getContext('2d')!.putImageData(new ImageData(new Uint8ClampedArray(shot.pixels.buffer as ArrayBuffer), shot.width, shot.height), 0, 0);
+      main += performance.now() - t0;
+      (globalThis as { __thumbMainMs?: number }).__thumbMainMs = Math.round(main);
+      const encode = (type: string) => new Promise<Blob | null>((ok) => c.toBlob(ok, type, 0.82));
+      const webp = await encode('image/webp');
+      if (webp?.type === 'image/webp') return webp;
+      const jpeg = await encode('image/jpeg');
+      return jpeg?.type === 'image/jpeg' ? jpeg : null;
+    },
     dispose() {
       disposed = true;
       clearTimeout(sunTimer);
