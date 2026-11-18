@@ -396,10 +396,16 @@ free tier's 10 ms CPU).
   on. Rows older than three days are deleted now and then (primary-key range
   deletes). On a database error the owner's key is refused
   (`quota_unavailable`, fail closed).
-- `GET /api/chat` reports `auth` (`email`, `google`), `user` (the email),
+- `GET /api/chat` reports `auth` (`email`, `google`), `user` (the email,
+  and the name and picture when the account has them),
   `quota` (`kind`, `limit`, `remaining`, `resetAt`, `reason`) and `limits`.
-- **Studio**: the project menu has the account entry (sign in, or the email
-  and sign out; hidden when no sign-in method is configured). The sign-in
+- **Studio**: the account button (task 026, `src/chat/AccountEntry.tsx`)
+  stands right of the toolbar: signed out a "登录" capsule that opens the
+  sign-in surface, signed in the Google picture (or the name's first letter)
+  that opens the account menu (who, today's allowance, my keys, sign out).
+  The project menu's first row opens the same surface. All of it is hidden
+  when no sign-in method is configured. `/studio?signin=1` (the landing's
+  "登录") opens sign-in once. The sign-in
   sheet (`src/chat/SignIn.tsx`) is a glass popover that grows out of the
   control that opened it (desktop) or the inset bottom sheet (phone). The
   input shows the credits left when 3 or fewer remain; out of credits, the
@@ -486,7 +492,7 @@ into the repository or a chat.
 6. **Numbers** (optional): Variables `QUOTA_USER_DAILY`, `QUOTA_ANON_TRIAL`,
    `QUOTA_IP_DAILY`, `QUOTA_SITE_DAILY`, `QUOTA_CALLS_PER_TURN`, `QUOTA_TZ`
    only if you want other values than the defaults above.
-7. Push. Then check: the studio's menu shows "登录"; a code arrives; in the
+7. Push. Then check: the studio shows "登录" at the top right; a code arrives; in the
    Cloudflare dashboard (Workers -> opensu-web -> Observability) look at the
    CPU time of `/api/auth/*` and `/api/chat` requests (see "Free tier" below:
    the numbers here are Node estimates).

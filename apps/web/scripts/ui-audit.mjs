@@ -139,8 +139,8 @@ const CONFIGS = [
   { name: 'p390-zh-css', w: 390, h: 844, phone: true, lang: 'zh', css: true, set: GLASS },
 ];
 const SETS = {
-  [LAYOUT]: ['landing', '3d-idle', 'panel-', 'project-menu', 'site-location', 'plan-', 'sheets', 'chat-text', 'chat-long-text', 'chat-done', 'chat-recent', 'pinned-', 'signin-email'],
-  [GLASS]: ['3d-idle', 'panel-', 'project-menu', 'chat-text', 'chat-done', 'chat-recent', 'pinned-', 'plan-pinned', 'signin-email', 'key-own-sheet'],
+  [LAYOUT]: ['landing', '3d-idle', 'panel-', 'project-menu', 'site-location', 'plan-', 'sheets', 'chat-text', 'chat-long-text', 'chat-done', 'chat-recent', 'pinned-', 'signin-email', 'account-'],
+  [GLASS]: ['3d-idle', 'panel-', 'project-menu', 'chat-text', 'chat-done', 'chat-recent', 'pinned-', 'plan-pinned', 'signin-email', 'key-own-sheet', 'account-'],
   [SMOKE]: ['3d-idle', 'project-menu', 'pinned-idle', 'plan-pinned'],
 };
 const configs = smoke ? [{ ...CONFIGS[0], set: SMOKE }] : CONFIGS.filter((c) => !onlyConfigs || onlyConfigs.some((o) => c.name.startsWith(o)));
@@ -381,7 +381,7 @@ async function capture(page, cfg, state, extra = {}) {
 /* ------------------------------------------------------------------ */
 
 // States whose controls are hovered one by one (desktop: phones do not hover).
-const HOVER_STATES = ['3d-idle', 'panel-views', 'panel-levels', 'panel-sun', 'project-menu', 'plan-L2', 'plan-levels-panel', 'pinned-turn', 'pinned-menu', 'pinned-picker', 'chat-recent', 'site-location', 'signin-email', 'sheets'];
+const HOVER_STATES = ['3d-idle', 'account-signed-in', 'account-menu', 'panel-views', 'panel-levels', 'panel-sun', 'project-menu', 'plan-L2', 'plan-levels-panel', 'pinned-turn', 'pinned-menu', 'pinned-picker', 'chat-recent', 'site-location', 'signin-email', 'sheets'];
 
 /** Hovers every control: tooltip contrast on rendered pixels, one hover plate shape and height per row. */
 async function hoverPass(page, cfg, state) {
@@ -940,6 +940,15 @@ async function runConfig(cfg) {
     await pin(false);
   }
   // Sign-in, each step and its errors.
+  // Task 026: the account button signed out, the sign-in surface at it.
+  if (wants(cfg, 'account-signin')) {
+    await S(page, 'account-signin', async () => {
+      await page.getByTestId('account-button').first().click();
+      await page.waitForSelector('[data-testid=signin-email-input]');
+      await settle(page, 1200);
+    });
+    await esc(page);
+  }
   if (wants(cfg, 'signin-')) {
     const email = `audit-${cfg.name}@example.com`;
     await S(page, 'signin-email', async () => {
@@ -1009,6 +1018,33 @@ async function runConfig(cfg) {
       await esc(page);
       await pin(false);
     } else await esc(page);
+  }
+  // Task 026: signed in, the account button (an avatar) and its menu.
+  if (wants(cfg, 'account-signed-in') || wants(cfg, 'account-menu')) {
+    if (!(await page.evaluate(() => !!window.__studio.chat.getState().server?.user))) {
+      const email = `account-${cfg.name}@example.com`;
+      await page.getByTestId('account-button').first().click();
+      await page.getByTestId('signin-email-input').fill(email);
+      await page.getByTestId('signin-email-input').press('Enter');
+      await page.waitForSelector('[data-testid=otp-0]', { timeout: 15000 });
+      const code = (await (await fetch(`${preview.base}/api/auth-test/code?email=${encodeURIComponent(email)}`)).json()).code;
+      await page.getByTestId('otp-0').focus();
+      await page.keyboard.type(code);
+      await page.waitForFunction(() => !!window.__studio.chat.getState().server?.user, null, { timeout: 20000 });
+      await page.waitForSelector('[data-testid=signin-sheet]', { state: 'detached', timeout: 10000 }).catch(() => {});
+    }
+    // The confirmation leaves by itself.
+    await page.waitForSelector('[data-testid=account-toast]', { state: 'detached', timeout: 8000 }).catch(() => {});
+    await settle(page, 600);
+    if (wants(cfg, 'account-signed-in')) await S(page, 'account-signed-in', () => settle(page, 300));
+    if (wants(cfg, 'account-menu')) {
+      await S(page, 'account-menu', async () => {
+        await page.getByTestId('account-button').first().click();
+        await page.waitForSelector('[data-testid=account-menu]');
+        await settle(page, 1000);
+      });
+      await esc(page);
+    }
   }
   await ctx.close();
 
