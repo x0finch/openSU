@@ -24,8 +24,8 @@ The avatar and the account menu stay on `/projects`; the landing keeps its
   name block and `ShareButton`), the toolbar alone in `top-trailing`, the
   phone header back to one row. The walking paper fade measures the name
   block alone, so it stops short of the share capsule's glass.
-- `src/studio/Share.tsx`: `ShareButton` (36 px capsule, or a round icon;
-  no reserved copy); `ShareHost` places the surface under the title row
+- `src/studio/Share.tsx`: `ShareButton` (a 36 px glass capsule, passed to
+  `TitleMenu` as `trailing` so it sits on the name's line; no reserved copy); `ShareHost` places the surface under the title row
   (`below-start`, the module's gap), grown out of the share button; on
   `/projects` it stays under the card's button (`below-end`). Signed out,
   its "登录" opens sign-in under the house name (origin `menu`), and focus
@@ -39,7 +39,7 @@ The avatar and the account menu stay on `/projects`; the landing keeps its
 - `src/chat/SignInInvite.tsx` (new): the invitation and its rules.
 - `src/chat/SignIn.tsx`: origin `menu` returns into the control that opened
   it when that control is still there (the share button), else the name.
-- `src/glass/anchor.ts`: `floatingOpen()` (some floating surface is open),
+- `src/ui/anchor.ts` (then `src/glass/`): `floatingOpen()` (some floating surface is open),
   exported with `subscribeFloating`, for the invitation's rule.
 
 ### Deleted
@@ -91,7 +91,7 @@ Copy (`account.invite`):
 Actions: "登录" / "Sign in" and a close button ("关闭" / "Close").
 
 Form: a 48 px glass capsule in the toast's place above the input (one line
-on desktop, up to two on phones; the view-only bar's measure). Precedent:
+on desktop, up to three on phones, where it grows past 48 px with the text tint and keeps a 24 px radius; the view-only bar's measure). Precedent:
 Apple's HIG on accounts (let people use the app before asking them to
 sign in) and on alerts (do not interrupt for something that is not
 urgent): a non-blocking notice, not a dialog.
@@ -324,3 +324,19 @@ left over the paper, so at 1440 x 900 nothing dark lies behind it
 (checked in the new screenshots); over a dark part of the drawing the
 same bend would show. Damping the bend over dark areas is the "adaptive
 density" open question in UI_STYLE, not changed here.
+
+### Found on the way (phones, 360 x 800, English)
+
+- The invitation needed three lines at 360 px in English; it was cut at
+  two (e2e: "its text whole"). The phone Notice now grows to three lines.
+- The prompt's English placeholder "Say a sentence to change the house"
+  wrapped to a second, clipped line at 360 px, which also changed the
+  input's height after the first turn and so moved the house (the e2e
+  "the house does not move" checks failed only there). Shorter copy:
+  "Change the house in a sentence". Not checked whether 028's tree had the
+  same wrap at 360 (the 360 x 800 English configuration was not in earlier
+  runs).
+- A regression of this task, fixed before the final screenshots: the
+  history button lost its circle when it moved to `Button` (its unseen
+  dot made it a "button with children"); a button given a diameter is now
+  always a circle.

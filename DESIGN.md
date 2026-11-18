@@ -223,7 +223,7 @@ paper pages compose these and do not style them (`scripts/ui-check.mjs`).
   itself.
 - **Notice** (`Notice`): the sign-in invitation and the view-only bar.
 - **Sign-in invitation** (`SignInInvite`, task 029): the toast's place, a
-  48 px capsule with one line (two on phones), "登录" and close; shown
+  48 px capsule with one line (up to three on phones), "登录" and close; shown
   once a signed-out visitor's first change has landed, never over another
   surface.
 

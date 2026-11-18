@@ -102,7 +102,7 @@ export function useInviteVisible(): boolean {
   return up && !viewOnly && signedOut && !running && !quotaNote && !settings && !studioBusy && !account && !keySheet && !share && !floating;
 }
 
-/** The notice itself: one line on desktop, up to two on phones; "登录" and close at the end. */
+/** The notice itself: one line on desktop, up to three on phones; "登录" and close at the end. */
 export function SignInInvite({ phone }: { phone?: boolean }) {
   const t = useT();
   return (
