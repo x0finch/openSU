@@ -35,8 +35,6 @@ interface Tone {
   rowHover: string;
   rowActive: string;
   separator: string;
-  /** A destructive action's label (Apple's system red for the tone; task 027). */
-  danger: string;
 }
 
 export const TONES: Record<GlassTone, Tone> = {
@@ -60,7 +58,6 @@ export const TONES: Record<GlassTone, Tone> = {
     rowHover: 'rgba(0, 0, 0, 0.05)',
     rowActive: 'rgba(0, 0, 0, 0.09)',
     separator: 'rgba(60, 60, 67, 0.16)',
-    danger: 'rgb(215, 0, 21)',
   },
   dark: {
     tint: [30 / 255, 30 / 255, 34 / 255],
@@ -85,8 +82,6 @@ export const TONES: Record<GlassTone, Tone> = {
     rowHover: 'rgba(255, 255, 255, 0.08)',
     rowActive: 'rgba(255, 255, 255, 0.14)',
     separator: 'rgba(235, 235, 245, 0.18)',
-    // systemRed, dark, increased contrast: a label on the smoky glass.
-    danger: 'rgb(255, 105, 97)',
   },
 };
 
@@ -185,6 +180,5 @@ export function cssVars(tone: GlassTone): Record<string, string> {
     '--lg-row-hover': t.rowHover,
     '--lg-row-active': t.rowActive,
     '--lg-separator': t.separator,
-    '--lg-danger': t.danger,
   };
 }

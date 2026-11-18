@@ -105,3 +105,48 @@ shape, where the name lives, the open questions and how you answered
 them. Small local commits; do not push (a push to `main` deploys; the
 lead pushes after review). Report honestly what was skipped or not
 verified.
+
+## Amendment (owner, 2026-11-18): follow mature products, not invention
+
+The owner asked that this follow what established tools do (Figma, Canva,
+Google Docs, tldraw). Where this section conflicts with the text above,
+this section wins.
+
+What those products share, and what we therefore do:
+
+1. A file browser is a page of its own, a grid of thumbnails with the
+   name and "edited ... ago" under each, "New" first. It is not a menu.
+   So "My projects" is a page (`/projects`), not a popover or sheet:
+   responsive grid (phone: two columns), thumbnail, name, last changed.
+   Per-card menu (the "..." button, also on right click): open, rename,
+   duplicate, delete. The landing page's "open studio" link for a
+   signed-in user goes there. Signed out, `/projects` shows the local
+   project as one card plus one line inviting sign-in.
+2. Thumbnails are required. Render in the browser (server stays
+   trivial): a small image of the house's default view, captured when a
+   project is saved after a change (throttled), stored with the project
+   (WebP or JPEG, about 480 px wide, target under 30 KB, its own column,
+   not read with the JSON; served with a cache header). A project with
+   no thumbnail yet shows a quiet placeholder.
+3. Every file has its own address. The open project is in the URL
+   (`/studio?p=<id>`, since `/studio` is prerendered); reload and the
+   back button work; opening an address the user does not own shows a
+   plain "not found or no access" state with a way home. Task 028 will
+   reuse the address shape.
+4. In the editor: the file name in the top bar is the way back and the
+   way to rename. The project menu (click the house name) gets "Rename"
+   (inline edit of the title in place, Enter saves, Esc cancels),
+   "Duplicate", "All projects" (goes to `/projects`), "New project".
+   The account menu's "My projects" row goes to `/projects`. No list of
+   projects inside a menu.
+5. Autosave with no "saved" indicator while it works; a visible notice
+   only when offline or failing (already specified above).
+6. Delete: these products move files to a trash that can be restored.
+   We keep it smaller: delete asks once in place and then shows a toast
+   with "Undo" for a few seconds (the delete is sent when the toast
+   ends). No trash page in this task.
+7. New project: from the page's first card; it offers the templates as
+   cards (thumbnail of each if cheap, otherwise name and plot size).
+
+Screenshots and tests above apply to the page instead of the popover:
+add `/projects` to the UI audit states and to the e2e section.

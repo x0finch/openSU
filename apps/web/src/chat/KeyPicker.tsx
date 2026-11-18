@@ -352,7 +352,7 @@ function SheetBody({ sheet, phone }: { sheet: KeySheetMode; phone?: boolean }) {
         <button
           type="button"
           onClick={() => (confirm ? void run(() => deleteKey(provider)) : setConfirm(true))}
-          className={cx('hit lg-plate -mt-2 h-10 rounded-full text-[14px] font-medium', confirm ? 'text-[var(--lg-danger)]' : 'text-ink')}
+          className={cx('hit lg-plate -mt-2 h-10 rounded-full text-[14px] font-medium', confirm ? 'text-[#c0392b]' : 'text-ink')}
           data-testid="keys-delete"
         >
           {confirm ? t('keys.deleteConfirm') : t('keys.delete')}
