@@ -1200,6 +1200,8 @@ try {
   await browser.close();
   for (const p of previews) p.stop();
   stub.close?.();
+  // Its variables must not reach a later preview (shots.mjs reads the same file).
+  rmSync(devVars, { force: true });
 }
 raw.push(...crossState());
 
