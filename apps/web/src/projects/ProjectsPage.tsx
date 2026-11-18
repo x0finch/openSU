@@ -115,7 +115,7 @@ function ProjectCard({ p, onDelete, menuOpen, onMenu, renaming, onRenamed, askin
     if (!renaming) return;
     setDraft(name);
     field.current?.focus();
-    field.current?.select();
+    requestAnimationFrame(() => field.current?.select());
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [renaming]);
   const commit = () => {
@@ -318,7 +318,7 @@ export function ProjectsPage() {
           </Link>
           <nav className="flex min-w-0 items-center gap-1">
             {server?.user && <span className="hidden max-w-[240px] truncate px-2 text-sm text-ink-2 sm:inline" data-testid="projects-user">{server.user.name || server.user.email}</span>}
-            <LangToggle />
+            <LangToggle size="lg" />
           </nav>
         </header>
         <main className="mx-auto w-full max-w-[1200px] px-4 pb-24 md:px-10">

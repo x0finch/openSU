@@ -692,8 +692,9 @@ Signed out, the studio keeps one house in this browser (localStorage), as
 before. Signed in on a server with sign-in and D1, the house is a project
 kept with the account: it saves itself 3 s after the last change and when
 the page is hidden, the browser copy stays as the cache and the offline
-fallback, and "我的项目" / "My projects" (the project menu and the account
-menu) lists, opens, creates, renames, duplicates and deletes projects.
+fallback, and `/projects` ("我的项目" / "My projects", from the project
+menu and the account menu) shows them as cards with thumbnails; each
+project has its own address, `/studio?p=<id>`.
 
 - **Table** `project` (`migrations/0005_projects.sql`): id (128 random
   bits), user (cascade delete), the user's name ('' = the house's own
@@ -708,7 +709,11 @@ menu) lists, opens, creates, renames, duplicates and deletes projects.
   names the revision it was based on; a newer one on the server answers
   409, and the browser keeps both (the local version becomes a copy).
   Writes are limited to 600 per user per hour.
-- **Browser** (`src/lib/project-sync.ts`, `src/studio/Projects.tsx`): the
+- **Thumbnails**: rendered in the browser (default view, 480 x 360, WebP),
+  stored in their own columns by `PUT /api/projects/:id/thumb` (96 KB at
+  most), served by `GET` with a private one-year cache (the list's
+  `thumbAt` is the version in the address).
+- **Browser** (`src/lib/project-sync.ts`, `src/projects/ProjectsPage.tsx`): the
   conversation is uploaded bounded (the newest items up to 160 KB, without
   the tool-call records used only by the export); undo history stays in
   this browser.

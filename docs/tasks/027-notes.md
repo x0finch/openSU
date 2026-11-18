@@ -110,7 +110,7 @@ uploaded.
 - Sign-out: the pending save is sent first; then the link is dropped and
   the open house stays as the local project.
 
-### "My projects"
+### "My projects" (superseded by the amendment, below)
 
 One component, `src/studio/Projects.tsx` (`ProjectsHost`, `openProjects`):
 a `GlassPopover` at its opener on desktop (under the house name from the
@@ -148,3 +148,91 @@ and the reserved slot in the account menu.
 Share links (028), thumbnails, several tabs editing one project at once
 (the last tab to save wins inside one browser; across devices the revision
 check holds).
+
+## After the amendment (owner, 2026-11-18)
+
+The popover / sheet list was built first (commit e4479e4) and removed when
+the spec was amended; the server and the sync logic stood and were
+extended.
+
+### Decisions, each after a precedent
+
+| Question | What we do | Precedent |
+|---|---|---|
+| Where the file browser lives | `/projects`, a page of its own (paper, like the landing page): a grid of cards, 2 columns on phones, up to 5 at 1440 | Figma "Recents", Canva "Projects", Google Docs home |
+| Card | 4:3 thumbnail, the name, "edited ... ago" (only that: the facts line was dropped from the card) | Figma ("Edited 3 minutes ago"), Google Docs ("Opened ...") |
+| Card actions | a "..." button beside the text, the same menu on right click: Open, Rename, Duplicate, Delete | Google Docs (⋮ beside the date), Figma (right click / "...") |
+| Rename on the page | the name becomes a field in place; Enter or leaving the field saves, Escape cancels | Figma, Google Drive inline rename |
+| New project | the first card; it opens the templates as cards above the grid (rendered in this browser the first time, cached for the page); a template opens the studio at `/studio?new=<t>`, which makes the project and replaces the address with `?p=` | Google Docs' "Start a new document" template strip; Canva's template chooser |
+| New project in the studio | "新建项目" in the project menu makes a project from the default template at once and opens it (no chooser) | Figma "New design file", Google Docs File > New |
+| Duplicate in the studio | makes "<name> 副本" and opens it, in the same tab (a new tab is blocked after an async request) | Google Docs "Make a copy" (opens the copy; it uses a new tab) |
+| Delete | asks once in place on the card ("删除这个项目？" / 删除 / 取消), then the card goes and a toast "已删除「…」 撤销" stays 6 s; the DELETE is sent when it ends (or when the page is left) | Figma / Google Drive "moved to trash · Undo" (no trash page here, by the spec) |
+| The open project in the address | `/studio?p=<id>`; the first open replaces the entry, a switch (new, duplicate) pushes one; back / forward open the project named | Figma and Google Docs file URLs |
+| An address the account cannot open | a plain page "找不到这个项目" with "回到我的项目" (and "登录" when signed out); nothing else is opened | Google Docs "You need access" / Figma "File not found" |
+| Rename in the studio | "重命名" in the project menu turns the title into a field in place | Figma (double click on the file name), Google Docs (title field) |
+| Way back | "所有项目" in the project menu, "我的项目" in the account menu, both to `/projects` (the pending save is sent first) | Figma "Back to files" |
+| Signed-in landing link | "打开工作台" goes to `/projects` | Figma / Canva open on the file browser |
+| Thumbnail | the default view (`axo-se`), 480 x 360, WebP (JPEG where WebP cannot be encoded), quality 0.82; rendered with its own offscreen WebGL context when the browser is idle, after a save that followed a change, at most once a minute; a project without one gets one when opened | Figma / Canva thumbnails update after edits, not live |
+| Thumbnail storage | its own column (`thumb`, `thumb_type`, `thumb_at`), never read with the JSON; `GET /api/projects/:id/thumb?v=<thumbAt>` with `private, max-age=31536000, immutable`; the list carries `thumbAt` | |
+
+### What was built (final)
+
+- Server: `migrations/0005_projects.sql` (with the thumbnail columns; not
+  deployed yet, so edited in place), `src/server/projects.ts`
+  (`projectsRoute`, `thumbRoute`), routes `/api/projects`,
+  `/api/projects/$id`, `/api/projects/$id/thumb`; `GET /api/chat` reports
+  `projects: {max, maxKb}` or null. `PROJECTS_ENABLED`, `PROJECTS_MAX`,
+  `PROJECT_MAX_KB` (README, deploy workflow).
+- Sync: `src/lib/project-sync.ts` (one module, injected I/O),
+  `src/lib/projects.ts` (the app's side: API, browser-copy link, the swap of
+  house + conversation + undo history, the address, thumbnails),
+  `src/studio/thumb.ts` (lazy: the offscreen render), `src/lib/autosave.ts`
+  (the one place that tells an edit from a load), `src/lib/toast.ts`.
+- UI: `src/projects/ProjectsPage.tsx` + `src/routes/projects.tsx`
+  (prerendered like `/studio`; `/projects` added to the Worker's page list
+  and `assets.run_worker_first`), `src/studio/ProjectMissing.tsx`, the
+  project menu (`src/studio/chrome.tsx`), the account menu slot
+  (`src/chat/AccountEntry.tsx`, its toast generalised as `StudioToast`).
+- Signed in, the project menu no longer has "换一个模板" and "恢复为模板"
+  (both replaced the open house); templates are on the page's "新建项目".
+  Signed out (or projects off) the menu is as before plus "所有项目".
+
+### Tests
+
+- `scripts/projects-test.ts` (server, 7 tests), `scripts/project-sync-test.ts`
+  (sync, 17 tests: debounce, conflict with and without local edits, first
+  sign-in adoption, untouched template not adopted, sign-out and back, another
+  account, failures and back-off, switch / create / rename / duplicate /
+  delete, thumbnails and their throttle, the address, deleting from the page).
+- `scripts/auth-check.ts`: CPU of the routes at 414 KB (README).
+- account-e2e `projects` (in `--smoke`): see the header of the script.
+- ui-audit states `account-project-menu`, `account-projects-page`,
+  `account-projects-menu`, `account-projects-new` (the first two in
+  `--smoke`).
+
+### Audit of the new states (d1440-zh in smoke; d1440-en, d1280-zh, p390-zh, p390-en and the CSS twins with `--only account-project --no-motion`)
+
+- Fixed on the way: the logo link's hit area on the page, the language
+  toggle 44 px on phones, the delete question cut on phones, the limit line
+  cut.
+- Open: `hit-target` on menu rows on phones (40 px, `GlassMenuItem`'s
+  height, shared with every menu: the open item from task 026, now also on
+  the new project-menu rows and the card menu); `text-truncated` of long
+  emails and "Near Hangzhou (default)" in the menus (P2, existing);
+  `text-size` of the 11 px "文" glyph (existing); `row-align` 1.3 px in the
+  prompt (existing).
+
+### Not done, not verified
+
+- Thumbnail cost on real hardware: under SwiftShader one render takes about
+  3.6 s of main-thread time (16 KB WebP). It runs when the browser is idle and
+  at most once a minute, but on a slow phone it may still be a visible hitch;
+  not measured on a real GPU.
+- No trash page; a delete is final once its toast has gone.
+- Several tabs on one browser editing the same project: the last to save
+  wins inside the browser (the revision check holds across devices).
+- Template names are data in Chinese (`TEMPLATE_META`); the English pages show
+  them in Chinese, as the project menu did before.
+- The projects page has no pagination (20 projects by default).
+- Opening `/studio?p=<id>` shows the browser's cached house for a moment
+  before the named project arrives.

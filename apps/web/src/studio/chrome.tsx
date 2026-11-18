@@ -108,7 +108,8 @@ export function TitleMenu({ derived, onRect, compact }: { derived: Derived | nul
     if (!renaming) return;
     setDraft(name);
     field.current?.focus();
-    field.current?.select();
+    // The whole name selected, once it is in the field (typing replaces it, as in Figma).
+    requestAnimationFrame(() => field.current?.select());
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [renaming]);
   const commit = (save: boolean) => {
@@ -140,7 +141,7 @@ export function TitleMenu({ derived, onRect, compact }: { derived: Derived | nul
                 commit(false);
               }
             }}
-            className={cx('-mx-1.5 h-[30px] w-[min(320px,calc(100vw-120px))] min-w-0 rounded-[8px] bg-page px-1.5 font-semibold tracking-[-0.01em] text-canvas-ink outline outline-1 outline-ink-3 focus:outline-2 focus:outline-ink', titleText)}
+            className={cx('-mr-1.5 h-[30px] w-[min(320px,calc(100vw-140px))] min-w-0 rounded-[8px] bg-page px-1.5 font-semibold tracking-[-0.01em] text-canvas-ink outline outline-1 outline-ink-3 focus:outline-2 focus:outline-ink', titleText)}
             data-testid="title-rename-input"
           />
         </div>
