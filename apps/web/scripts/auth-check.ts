@@ -10,7 +10,8 @@ import { accountRoute, startAuth } from '../src/server/accounts.ts';
 import { authTesting, lastTestCode, loadAuth, sessionUser, warmUp } from '../src/server/auth.ts';
 import { relayChat, relayStatus } from '../src/server/chat-relay.ts';
 import { keysRoute } from '../src/server/keys.ts';
-import { PROJECT_TYPE, projectsRoute } from '../src/server/projects.ts';
+import { PROJECT_TYPE, projectsRoute, shareRoute, thumbRoute } from '../src/server/projects.ts';
+import { sharedRoute, sharePreview, sharePreviewHtml } from '../src/server/share.ts';
 import { flagTurn, MAX_RECORD, saveTurn } from '../src/server/turns.ts';
 import { migratedD1 } from './d1-shim.ts';
 import { fixtureRecords } from './turn-fixtures.ts';
@@ -252,6 +253,56 @@ console.log('projects (/api/projects)');
   const node = median(plumbing.slice(5));
   console.log(`  Node's own request body read (${bodyKb.toFixed(0)} KB, not the Worker's): median ${node.toFixed(2)} ms`);
   check(worst < 8 && worst - node < 5, `projects paths under 10 ms in this approximation (worst median ${worst.toFixed(2)} ms, ${(worst - node).toFixed(2)} ms without Node's body read)`);
+}
+
+// Share links (task 028): the owner's switch, the public read of a shared
+// house at the size limit (200, and 304 when unchanged), the thumbnail by
+// token, and the link preview of the prerendered studio page.
+console.log('share links (/api/projects/:id/share, /api/share/:token, /studio?s=)');
+{
+  const senv = { ...env };
+  const { starterHouse } = await import('@opensu/agent/starter');
+  const { existsSync, readFileSync } = await import('node:fs');
+  const h = starterHouse();
+  const house = JSON.stringify({ ...h, levels: Array.from({ length: 130 }, (_, i) => ({ ...h.levels[i % h.levels.length]!, id: `L${i}` })) });
+  const summary = JSON.stringify({ title: h.name, style: h.style, w: 12000, d: 14000, area: 186.4, storeys: 2, attic: false });
+  const made = (await (await projectsRoute(new Request(`${SITE}/api/projects`, { method: 'POST', headers: { 'content-type': PROJECT_TYPE, origin: SITE, cookie }, body: `${JSON.stringify({ summary })}\n${house}\n{}` }), senv)).json()) as { project: { id: string } };
+  const id = made.project.id;
+  await thumbRoute(new Request(`${SITE}/api/projects/${id}/thumb`, { method: 'PUT', headers: { 'content-type': 'image/webp', origin: SITE, cookie }, body: new Uint8Array(24 * 1024) }), senv, id);
+  const toggle = (method: string) => shareRoute(new Request(`${SITE}/api/projects/${id}/share`, { method, headers: { origin: SITE, cookie } }), senv, id);
+  const page = existsSync(new URL('../dist/client/studio.html', import.meta.url)) ? readFileSync(new URL('../dist/client/studio.html', import.meta.url), 'utf8') : `<html><head><title>工作室 · openSU</title><meta name="description" content="x"/></head><body>${'<div></div>'.repeat(300)}</body></html>`;
+  const ms = { on: [] as number[], off: [] as number[], read: [] as number[], fresh: [] as number[], thumb: [] as number[], preview: [] as number[] };
+  let token = '';
+  for (let i = 0; i < 40; i++) {
+    const ip = `198.18.6.${i}`;
+    const off = await cpu(async () => (await toggle('DELETE')).text());
+    const on = await cpu(async () => (await toggle('POST')).json() as Promise<{ project: { share: string } }>);
+    token = on.value.project.share;
+    const rd = await cpu(async () => {
+      const r = await sharedRoute(new Request(`${SITE}/api/share/${token}`, { headers: { 'cf-connecting-ip': ip } }), senv, token, 'house');
+      return { etag: r.headers.get('etag') ?? '', text: await r.text() };
+    });
+    if (i === 0) check(rd.value.text.endsWith(`"house":${house}}`), `the public read carries the ${(house.length / 1024).toFixed(0)} KB house as stored`);
+    const nm = await cpu(async () => (await sharedRoute(new Request(`${SITE}/api/share/${token}`, { headers: { 'cf-connecting-ip': ip, 'if-none-match': rd.value.etag } }), senv, token, 'house')).status);
+    if (i === 0) check(nm.value === 304, 'unchanged: 304 without the house');
+    const th = await cpu(async () => (await sharedRoute(new Request(`${SITE}/api/share/${token}/thumb`, { headers: { 'cf-connecting-ip': ip } }), senv, token, 'thumb')).arrayBuffer());
+    const pv = await cpu(async () => {
+      const u = new URL(`${SITE}/studio?s=${token}`);
+      const p = await sharePreview(senv, u, 'zh');
+      return sharePreviewHtml(page, p!, u.origin);
+    });
+    if (i === 0) check(pv.value.includes('og:image') && pv.value.includes(`${h.name} · openSU`), 'the preview sets the title and og:image');
+    ms.off.push(off.ms);
+    ms.on.push(on.ms);
+    ms.read.push(rd.ms);
+    ms.fresh.push(nm.ms);
+    ms.thumb.push(th.ms);
+    ms.preview.push(pv.ms);
+  }
+  const names: Record<string, string> = { on: 'POST share (on)', off: 'DELETE share (off)', read: `GET /api/share/:token (${(house.length / 1024).toFixed(0)} KB house)`, fresh: 'GET /api/share/:token, 304', thumb: 'GET /api/share/:token/thumb (24 KB)', preview: `/studio?s= preview (read + rewrite of the ${(page.length / 1024).toFixed(1)} KB page)` };
+  for (const [k, v] of Object.entries(ms)) console.log(`  ${names[k]}: median ${median(v.slice(5)).toFixed(2)} ms, p90 ${pct(v.slice(5), 0.9).toFixed(2)} ms, max ${Math.max(...v.slice(5)).toFixed(2)} ms`);
+  const worst = Math.max(...Object.values(ms).map((v) => median(v.slice(5))));
+  check(worst < 5, `share paths well under 10 ms in this approximation (worst median ${worst.toFixed(2)} ms)`);
 }
 
 // The relay's log line (task 020): one per POST, no content, keys or email.

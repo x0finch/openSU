@@ -22,6 +22,8 @@
 //   DELETE /api/projects/:id                                       -> {ok: true}
 //   PUT    /api/projects/:id/thumb  image/webp or image/jpeg, raw   -> {project: meta}
 //   GET    /api/projects/:id/thumb  the image; cached privately for a year (the list's `thumbAt` is its version)
+//   POST   /api/projects/:id/share   turn sharing on (task 028): a new token, or the current one -> {project: meta}
+//   DELETE /api/projects/:id/share   turn it off: the token is cleared, the address stops working -> {project: meta}
 //
 // Off (404 `projects_off`) without sign-in, without D1 or with
 // PROJECTS_ENABLED=false; the browser then keeps its one local house.
@@ -51,24 +53,26 @@ export interface ProjectMeta {
   updatedAt: number;
   /** When the thumbnail was stored (0: none yet); also the version in its address. */
   thumbAt: number;
+  /** The share token while anyone with the link can view (task 028), else null. */
+  share: string | null;
 }
 
 const noStore = { 'cache-control': 'no-store' };
 const jsonError = (status: number, code: string, message: string, extra: Record<string, unknown> = {}) => Response.json({ error: { code, message, ...extra } }, { status, headers: noStore });
 const ok = (body: unknown, status = 200) => Response.json(body, { status, headers: noStore });
 
-const META = 'id, name, summary, revision, created_at, updated_at, thumb_at';
-type Row = { id: string; name: string; summary: string; revision: number; created_at: number; updated_at: number; thumb_at: number };
-const meta = (r: Row): ProjectMeta => ({ id: r.id, name: r.name, summary: r.summary, revision: r.revision, createdAt: r.created_at, updatedAt: r.updated_at, thumbAt: r.thumb_at });
+const META = 'id, name, summary, revision, created_at, updated_at, thumb_at, share_token';
+type Row = { id: string; name: string; summary: string; revision: number; created_at: number; updated_at: number; thumb_at: number; share_token: string | null };
+const meta = (r: Row): ProjectMeta => ({ id: r.id, name: r.name, summary: r.summary, revision: r.revision, createdAt: r.created_at, updatedAt: r.updated_at, thumbAt: r.thumb_at, share: r.share_token ?? null });
 
-/** A new project id: 16 random bytes, base64url (22 characters). */
+/** A new project id (and a share token, task 028): 16 random bytes, base64url (22 characters). */
 export function newProjectId(): string {
   const b = crypto.getRandomValues(new Uint8Array(16));
   return btoa(String.fromCharCode(...b)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
 }
 
 /** "2026-11-15T07": the UTC hour, the prefix of the write counter (the quota's cleanup removes old ones). */
-const hourKey = (now = Date.now()) => new Date(now).toISOString().slice(0, 13);
+export const hourKey = (now = Date.now()) => new Date(now).toISOString().slice(0, 13);
 
 /** The signed-in user (Better Auth loads only when sign-in is configured). */
 const userOf = (req: Request, env: AccountEnv) => import('./auth.ts').then((m) => m.sessionUser(req, env), () => null);
@@ -149,6 +153,40 @@ export async function thumbRoute(req: Request, env: AccountEnv, id: string): Pro
     const [n] = await bump(db, [`${hourKey()}|projects:${user.id}`]);
     if ((n ?? 0) > PROJECT_WRITES_PER_HOUR) return jsonError(429, 'too_many', 'Too many changes. Try again later.');
     const row = await db.prepare(`UPDATE project SET thumb = ?3, thumb_type = ?4, thumb_at = ?5 WHERE id = ?1 AND user_id = ?2 RETURNING ${META}`).bind(id, user.id, buf, type, Date.now()).first<Row>();
+    return row ? ok({ project: meta(row) }) : jsonError(404, 'not_found', 'No such project.');
+  } catch (e) {
+    console.error('projects: database error', e instanceof Error ? e.message.slice(0, 160) : 'error');
+    return jsonError(503, 'unavailable', 'Projects are not available right now.');
+  }
+}
+
+/**
+ * /api/projects/:id/share (task 028): POST turns sharing on, DELETE turns it
+ * off. On: a new random token when there is none, the current one while it
+ * is on (the address stays stable). Off: the token is cleared, so the
+ * address stops working at once; turning it on again makes a new one.
+ * Same rules as the other writes: signed in, this site's origin, scoped by
+ * user, the hourly write counter.
+ */
+export async function shareRoute(req: Request, env: AccountEnv, id: string): Promise<Response> {
+  const cfg = projectsConfig(env);
+  if (!cfg.enabled || !env.DB) return jsonError(404, 'projects_off', 'Projects are not kept with accounts on this server.');
+  if (!PROJECT_ID.test(id)) return jsonError(404, 'not_found', 'No such project.');
+  if (req.method !== 'POST' && req.method !== 'DELETE') return jsonError(405, 'bad_method', 'Method not allowed.');
+  if (req.headers.get('origin') !== authConfig(env).siteUrl) return jsonError(403, 'bad_origin', 'Not allowed from this origin.');
+  try {
+    const user = await userOf(req, env);
+    if (!user) return jsonError(401, 'signed_out', 'Sign in to keep projects with your account.');
+    const db = env.DB;
+    const [n] = await bump(db, [`${hourKey()}|projects:${user.id}`]);
+    if ((n ?? 0) > PROJECT_WRITES_PER_HOUR) return jsonError(429, 'too_many', 'Too many changes. Try again later.');
+    const row =
+      req.method === 'POST'
+        ? await db
+            .prepare(`UPDATE project SET share_token = coalesce(share_token, ?3), shared_at = CASE WHEN share_token IS NULL THEN ?4 ELSE shared_at END WHERE id = ?1 AND user_id = ?2 RETURNING ${META}`)
+            .bind(id, user.id, newProjectId(), Date.now())
+            .first<Row>()
+        : await db.prepare(`UPDATE project SET share_token = NULL, shared_at = 0 WHERE id = ?1 AND user_id = ?2 RETURNING ${META}`).bind(id, user.id).first<Row>();
     return row ? ok({ project: meta(row) }) : jsonError(404, 'not_found', 'No such project.');
   } catch (e) {
     console.error('projects: database error', e instanceof Error ? e.message.slice(0, 160) : 'error');

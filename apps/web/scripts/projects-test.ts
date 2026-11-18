@@ -6,7 +6,8 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { lastTestCode, loadAuth } from '../src/server/auth.ts';
 import { relayStatus } from '../src/server/chat-relay.ts';
-import { PROJECT_TYPE, PROJECT_WRITES_PER_HOUR, projectsRoute, THUMB_MAX, thumbRoute } from '../src/server/projects.ts';
+import { PROJECT_TYPE, PROJECT_WRITES_PER_HOUR, projectsRoute, shareRoute, THUMB_MAX, thumbRoute } from '../src/server/projects.ts';
+import { SHARE_READS_PER_HOUR, sharedRoute, sharePreview, sharePreviewHtml } from '../src/server/share.ts';
 import { migratedD1, type ShimD1 } from './d1-shim.ts';
 
 const SITE = 'http://localhost:8787';
@@ -97,7 +98,7 @@ test('create, list (no large columns), read, save with the revision, rename, dup
 
   // The list query never reads the house or the conversation.
   const list = await call(env, 'GET', cookie);
-  assert.deepEqual(Object.keys(list.data.projects[0]).sort(), ['createdAt', 'id', 'name', 'revision', 'summary', 'thumbAt', 'updatedAt']);
+  assert.deepEqual(Object.keys(list.data.projects[0]).sort(), ['createdAt', 'id', 'name', 'revision', 'share', 'summary', 'thumbAt', 'updatedAt']);
 
   const read = await call(env, 'GET', cookie, p.id);
   assert.equal(read.data.house, HOUSE);
@@ -236,4 +237,147 @@ test('thumbnails: stored as sent, own column, versioned in the list, cached priv
   const dup = (await call(env, 'POST', a, undefined, { from: p.id, name: 'copy' })).data.project;
   assert.ok(dup.thumbAt > 0);
   assert.deepEqual(new Uint8Array(await (await get(a, dup.id)).arrayBuffer()), img);
+});
+
+/* ---- Share links (task 028) ---- */
+
+const share = async (env: Env, method: 'POST' | 'DELETE', cookie: string, id: string, headers: Record<string, string> = {}) => {
+  const res = await shareRoute(new Request(`${SITE}/api/projects/${id}/share`, { method, headers: { origin: SITE, cookie, ...headers } }), env, id);
+  return { status: res.status, data: (await res.json()) as Record<string, any> };
+};
+let viewerIp = 0;
+/** A public read by token: no cookie, its own IP unless given. */
+const view = async (env: Env, token: string, headers: Record<string, string> = {}, what: 'house' | 'thumb' = 'house') => {
+  const res = await sharedRoute(new Request(`${SITE}/api/share/${token}${what === 'thumb' ? '/thumb' : ''}`, { headers: { 'cf-connecting-ip': `192.0.2.${++viewerIp % 250}`, ...headers } }), env, token, what);
+  const text = res.status === 304 ? '' : what === 'thumb' && res.ok ? '' : await res.text();
+  return { res, status: res.status, data: text ? (JSON.parse(text) as Record<string, any>) : null, text };
+};
+
+test('share: on makes a random token (not the id), stable while on; the token reads only that house, no conversation or owner', async () => {
+  const env = envOf(shared);
+  const a = await signIn(env, 'share-a@example.com');
+  const p = (await call(env, 'POST', a, undefined, framed({ summary: SUMMARY }, HOUSE, CHAT))).data.project;
+  const other = (await call(env, 'POST', a, undefined, framed({ summary: SUMMARY }, HOUSE.replace('白墙坡顶小院', '另一座'), CHAT))).data.project;
+  assert.equal(p.share, null, 'off by default');
+  const on = await share(env, 'POST', a, p.id);
+  assert.equal(on.status, 200);
+  const token = on.data.project.share as string;
+  assert.match(token, /^[A-Za-z0-9_-]{22}$/, '128 random bits, base64url');
+  assert.notEqual(token, p.id);
+  assert.equal((await share(env, 'POST', a, p.id)).data.project.share, token, 'on again while on: the same address');
+  assert.equal((await call(env, 'GET', a)).data.projects.find((x: { id: string }) => x.id === p.id).share, token, 'the owner\'s list knows');
+  assert.equal((await call(env, 'GET', a)).data.projects.find((x: { id: string }) => x.id === other.id).share, null);
+
+  const r = await view(env, token);
+  assert.equal(r.status, 200);
+  assert.deepEqual(Object.keys(r.data!).sort(), ['house', 'name', 'updatedAt']);
+  assert.deepEqual(r.data!.house, JSON.parse(HOUSE), 'the house as stored');
+  assert.ok(!r.text.includes('conv-0001') && !r.text.includes('你好') && !r.text.includes('share-a@') && !r.text.includes(p.id), 'no conversation, owner or project id in the public payload');
+  assert.equal(r.res.headers.get('cache-control'), 'no-cache');
+  // Revalidation: the same revision and name answer 304 without the house; a save or a rename changes it.
+  const etag = r.res.headers.get('etag')!;
+  assert.equal((await view(env, token, { 'if-none-match': etag })).status, 304);
+  await call(env, 'PUT', a, p.id, framed({ base: 1, summary: SUMMARY }, HOUSE.replace('白墙坡顶小院', '新版本'), CHAT));
+  const v2 = await view(env, token, { 'if-none-match': etag });
+  assert.equal(v2.status, 200, 'the viewer always gets the owner\'s current version');
+  assert.equal(v2.data!.house.name, '新版本');
+  await call(env, 'PATCH', a, p.id, { name: '给爸妈看的' });
+  const v3 = await view(env, token, { 'if-none-match': v2.res.headers.get('etag')! });
+  assert.equal(v3.status, 200, 'a rename alone is not a 304');
+  assert.equal(v3.data!.name, '给爸妈看的');
+  assert.equal(v3.data!.house.name, '新版本');
+  // A duplicate is never shared; unknown and malformed tokens read nothing.
+  assert.equal((await call(env, 'POST', a, undefined, { from: p.id, name: 'copy' })).data.project.share, null);
+  assert.equal((await view(env, 'A'.repeat(22))).status, 404);
+  assert.equal((await view(env, p.id)).status, 404, 'the project id is not a token');
+  assert.equal((await view(env, '../x')).data!.error.code, 'not_shared');
+});
+
+test('share: off kills the address at once; on again makes a new one', async () => {
+  const env = envOf(shared);
+  const a = await signIn(env, 'share-off@example.com');
+  const p = (await call(env, 'POST', a, undefined, framed({ summary: SUMMARY }, HOUSE, CHAT))).data.project;
+  const t1 = (await share(env, 'POST', a, p.id)).data.project.share as string;
+  assert.equal((await view(env, t1)).status, 200);
+  const off = await share(env, 'DELETE', a, p.id);
+  assert.equal(off.status, 200);
+  assert.equal(off.data.project.share, null);
+  const dead = await view(env, t1);
+  assert.equal(dead.status, 404);
+  assert.equal(dead.data!.error.code, 'not_shared');
+  assert.equal((await view(env, t1, {}, 'thumb')).status, 404);
+  const t2 = (await share(env, 'POST', a, p.id)).data.project.share as string;
+  assert.notEqual(t2, t1);
+  assert.equal((await view(env, t1)).status, 404, 'the old address stays dead');
+  assert.equal((await view(env, t2)).status, 200);
+  // Deleting the project ends the link too.
+  await call(env, 'DELETE', a, p.id);
+  assert.equal((await view(env, t2)).status, 404);
+});
+
+test('share: other users cannot turn it on or off; signed out, other origins and projects off are refused', async () => {
+  const env = envOf(shared);
+  const a = await signIn(env, 'share-owner@example.com');
+  const b = await signIn(env, 'share-intruder@example.com');
+  const p = (await call(env, 'POST', a, undefined, framed({ summary: SUMMARY }, HOUSE, CHAT))).data.project;
+  assert.equal((await share(env, 'POST', b, p.id)).status, 404);
+  assert.equal((await call(env, 'GET', a, p.id)).data.project.share, null);
+  const token = (await share(env, 'POST', a, p.id)).data.project.share as string;
+  assert.equal((await share(env, 'DELETE', b, p.id)).status, 404);
+  assert.equal((await view(env, token)).status, 200, 'still shared');
+  assert.equal((await share(env, 'POST', '', p.id)).status, 401);
+  assert.equal((await share(env, 'DELETE', a, p.id, { origin: 'https://evil.example' })).status, 403);
+  assert.equal((await view(env, token)).status, 200);
+  const offEnv = envOf(shared, { PROJECTS_ENABLED: 'false' });
+  assert.equal((await share(offEnv, 'POST', a, p.id)).data.error.code, 'projects_off');
+  assert.equal((await view(offEnv, token)).data!.error.code, 'projects_off', 'sharing is absent when projects are off');
+  assert.equal(await sharePreview(offEnv, new URL(`${SITE}/studio?s=${token}`), 'zh'), null);
+});
+
+test('share: the thumbnail by token, public reads rate-limited per IP', async () => {
+  const env = envOf(shared);
+  const a = await signIn(env, 'share-thumb@example.com');
+  const p = (await call(env, 'POST', a, undefined, framed({ summary: SUMMARY }, HOUSE, CHAT))).data.project;
+  const token = (await share(env, 'POST', a, p.id)).data.project.share as string;
+  assert.equal((await view(env, token, {}, 'thumb')).status, 404, 'no picture yet');
+  const img = new Uint8Array(1500).map((_, i) => i % 13);
+  await thumbRoute(new Request(`${SITE}/api/projects/${p.id}/thumb`, { method: 'PUT', headers: { 'content-type': 'image/webp', origin: SITE, cookie: a }, body: img }), env, p.id);
+  const t = await view(env, token, {}, 'thumb');
+  assert.equal(t.status, 200);
+  assert.equal(t.res.headers.get('content-type'), 'image/webp');
+  assert.match(t.res.headers.get('cache-control') ?? '', /public, max-age=300/);
+  assert.deepEqual(new Uint8Array(await t.res.arrayBuffer()), img);
+  // One IP over the hour's limit is refused; another IP is not.
+  let last = 0;
+  for (let i = 0; i < SHARE_READS_PER_HOUR; i++) last = (await view(env, token, { 'cf-connecting-ip': '203.0.113.99' })).status;
+  assert.equal(last, 200);
+  assert.equal((await view(env, token, { 'cf-connecting-ip': '203.0.113.99' })).status, 429);
+  assert.equal((await view(env, token, { 'cf-connecting-ip': '203.0.113.98' })).status, 200);
+});
+
+test('share: the link preview (title, description, image) for the prerendered page', async () => {
+  const env = envOf(shared);
+  const a = await signIn(env, 'share-preview@example.com');
+  const p = (await call(env, 'POST', a, undefined, framed({ summary: SUMMARY }, HOUSE, CHAT))).data.project;
+  const token = (await share(env, 'POST', a, p.id)).data.project.share as string;
+  const url = new URL(`${SITE}/studio?s=${token}`);
+  const zh = (await sharePreview(env, url, 'zh'))!;
+  assert.equal(zh.title, '白墙坡顶小院 · openSU', 'the house title until the owner renames');
+  assert.match(zh.description, /12 × 14 m 宅基地，186\.4 m²，2 层。/);
+  assert.equal(zh.image, null, 'no thumbnail: the default image');
+  await call(env, 'PATCH', a, p.id, { name: '给"爸妈" <看>' });
+  await thumbRoute(new Request(`${SITE}/api/projects/${p.id}/thumb`, { method: 'PUT', headers: { 'content-type': 'image/webp', origin: SITE, cookie: a }, body: new Uint8Array(10) }), env, p.id);
+  const en = (await sharePreview(env, url, 'en'))!;
+  assert.equal(en.title, '给"爸妈" <看> · openSU');
+  assert.match(en.description, /^12 × 14 m plot · 186\.4 m² · 2 storeys\. /);
+  assert.match(en.image!, new RegExp(`^${SITE}/api/share/${token}/thumb\\?v=\\d+$`));
+  const page = '<!DOCTYPE html><html><head><meta charSet="utf-8"/><title>工作室 · openSU</title><meta name="description" content="描述你想要的房子"/><meta name="robots" content="noindex"/></head><body></body></html>';
+  const html = sharePreviewHtml(page, en, SITE);
+  assert.ok(html.includes('<title>给&quot;爸妈&quot; &lt;看&gt; · openSU</title>'), 'the title, escaped');
+  assert.ok(html.includes(`<meta property="og:image" content="${en.image}"/>`));
+  assert.ok(html.includes('<meta name="description" content="12 × 14 m plot'), 'the description replaced');
+  assert.equal(html.match(/<title>/g)!.length, 1);
+  assert.ok(html.indexOf('og:title') < html.indexOf('</head>'));
+  const gone = (await sharePreview(env, new URL(`${SITE}/studio?s=${'B'.repeat(22)}`), 'zh'))!;
+  assert.equal(gone.title, '这个链接已不再分享 · openSU');
 });

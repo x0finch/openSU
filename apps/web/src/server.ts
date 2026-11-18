@@ -14,6 +14,7 @@ import handler, { createServerEntry } from '@tanstack/react-start/server-entry';
 import { env } from 'cloudflare:workers';
 import { accountRoute, startAuth } from './server/accounts';
 import { type AccountEnv, canonicalRedirect } from './server/config';
+import { sharePreview, sharePreviewHtml } from './server/share';
 
 const accountEnv = env as AccountEnv;
 /** The static assets (wrangler.jsonc `assets.binding`). */
@@ -22,19 +23,43 @@ const assets = (env as { ASSETS?: { fetch(req: Request): Promise<Response> } }).
 const PAGES = new Set(['/', '/index.html', '/studio', '/studio.html', '/projects', '/projects.html', '/auth-done', '/auth-done.html']);
 await startAuth(accountEnv);
 
+/** The studio page of a shared address, with its link preview (src/server/share.ts); the page as it is when that fails. */
+async function sharedPage(request: Request, url: URL, res: Response): Promise<Response> {
+  try {
+    const lang = /^en\b/i.test(request.headers.get('accept-language') ?? '') ? 'en' : 'zh';
+    const preview = await sharePreview(accountEnv, url, lang);
+    if (!preview) return res;
+    const html = sharePreviewHtml(await res.text(), preview, url.origin);
+    const headers = new Headers(res.headers);
+    // The page now depends on the token and the project: no validator of the static file, no stored copy.
+    headers.delete('etag');
+    headers.delete('content-length');
+    headers.set('cache-control', 'no-cache');
+    return new Response(html, { status: res.status, headers });
+  } catch {
+    return res;
+  }
+}
+
 export default createServerEntry({
   async fetch(request, opts) {
     // One canonical host (task 026), before anything else runs.
     const canonical = canonicalRedirect(request.url, accountEnv);
     if (canonical) return new Response(null, { status: 308, headers: { location: canonical } });
-    const path = new URL(request.url).pathname;
+    const url = new URL(request.url);
+    const path = url.pathname;
     // On the canonical host a page is the static asset, as it was before it came through here
     // (while prerendering builds it there is none yet: Start renders it).
     if (assets && PAGES.has(path)) {
       const res = await assets.fetch(request);
-      if (res.status !== 404) return res;
+      if (res.status !== 404) {
+        // A shared address (task 028, `/studio?s=<token>`): the same page with the shared project's
+        // title, description and preview image, from one indexed read.
+        if (res.ok && (path === '/studio' || path === '/studio.html') && url.searchParams.has('s')) return sharedPage(request, url, res);
+        return res;
+      }
     }
-    if (new URL(request.url).pathname.startsWith('/api/auth')) {
+    if (path.startsWith('/api/auth')) {
       const res = await accountRoute(request, accountEnv);
       if (res) return res;
     }
