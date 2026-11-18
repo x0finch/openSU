@@ -25,6 +25,8 @@ function appVersion(): string {
 
 export default defineConfig({
   server: { port: 5173 },
+  // Tests of the canonical host (scripts/account-e2e.mjs `canonical`) send other Host headers to `vite preview`.
+  preview: process.env.OPENSU_ANY_HOST ? { allowedHosts: true } : {},
   define: { __APP_VERSION__: JSON.stringify(appVersion()) },
   resolve: {
     // Workspace packages resolve to their TypeScript sources: no prior build

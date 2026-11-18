@@ -16,6 +16,10 @@ import { accountRoute, startAuth } from './server/accounts';
 import { type AccountEnv, canonicalRedirect } from './server/config';
 
 const accountEnv = env as AccountEnv;
+/** The static assets (wrangler.jsonc `assets.binding`). */
+const assets = (env as { ASSETS?: { fetch(req: Request): Promise<Response> } }).ASSETS;
+/** The prerendered pages wrangler.jsonc sends through the Worker first (`assets.run_worker_first`). */
+const PAGES = new Set(['/', '/index.html', '/studio', '/studio.html', '/auth-done', '/auth-done.html']);
 await startAuth(accountEnv);
 
 export default createServerEntry({
@@ -23,6 +27,13 @@ export default createServerEntry({
     // One canonical host (task 026), before anything else runs.
     const canonical = canonicalRedirect(request.url, accountEnv);
     if (canonical) return new Response(null, { status: 308, headers: { location: canonical } });
+    const path = new URL(request.url).pathname;
+    // On the canonical host a page is the static asset, as it was before it came through here
+    // (while prerendering builds it there is none yet: Start renders it).
+    if (assets && PAGES.has(path)) {
+      const res = await assets.fetch(request);
+      if (res.status !== 404) return res;
+    }
     if (new URL(request.url).pathname.startsWith('/api/auth')) {
       const res = await accountRoute(request, accountEnv);
       if (res) return res;

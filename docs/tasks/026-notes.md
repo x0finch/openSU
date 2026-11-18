@@ -132,3 +132,36 @@ Cloud projects (027) and share links (028): only the menu slot.
   Treated as a timing flake under load, not fixed.
 - Second run: `shots.mjs` saw sign-in turned on because `ui-audit.mjs` (run
   by hand before) never deleted its `dist/server/.dev.vars`; it now does.
+
+## Part 2 follow-up: the pages (live defect, 2026-11-18)
+
+On the deployed Worker the old host got 308 for `/api/chat` and unknown paths
+but 200 for `/` and `/studio`: the prerendered pages are static assets, and
+Cloudflare serves an asset before the Worker's fetch handler runs.
+
+Fix (no inline-script fallback needed): `wrangler.jsonc` `assets` gets
+`binding: "ASSETS"` and `run_worker_first` for the page routes only (`/`,
+`/index.html`, `/studio`, `/studio.html`, `/auth-done`, `/auth-done.html`).
+The Worker answers the 308 for another host; on the canonical host (and
+localhost, and with CANONICAL_REDIRECT=false) it returns `ASSETS.fetch` of
+the same request, so the same file with the same headers. A 404 from ASSETS
+falls through to Start (the prerender step fetches `/` and `/studio` before
+the files exist). Scripts, styles and images are still served as assets
+without a Worker request.
+
+Test: account-e2e `canonical` (in `--smoke`): the built app in `vite preview`
+(workerd with the same assets config, asset-first serving) with
+`SITE_URL=https://opensu.example.com` and requests carrying another Host
+header (`OPENSU_ANY_HOST=1` lets `vite preview` accept them). The local run
+reproduces the defect: on the pre-fix build `/` and `/studio` answered 200 on
+the other host and the test failed 4 checks; on the fix all pass. The page
+body on the canonical host is byte-identical to `dist/client/index.html` /
+`studio.html` with the same content type, ETag and cache headers; local
+timing of `/studio` 6-7 ms vs 4-6 ms for an asset-only file (workerd, not
+the edge).
+
+Not verifiable before deploy: how Cloudflare's edge applies
+`run_worker_first` (local workerd behaves the same, but the edge was not
+tried), and the edge cost: each page view on the canonical host is now one
+Worker request (free tier: 100,000 a day) with negligible CPU (a string
+compare and an `ASSETS.fetch`).

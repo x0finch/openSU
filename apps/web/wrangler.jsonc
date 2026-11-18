@@ -7,6 +7,15 @@
   "observability": {
     "enabled": true
   },
+  // Task 026: the prerendered pages are static assets, served before the
+  // Worker runs; these paths go through the Worker first so that a request
+  // on another host (the workers.dev address) gets the 308 to SITE_URL.
+  // On the canonical host the Worker hands them straight to ASSETS. Scripts,
+  // styles and images stay asset-only (no Worker request, no CPU).
+  "assets": {
+    "binding": "ASSETS",
+    "run_worker_first": ["/", "/index.html", "/studio", "/studio.html", "/auth-done", "/auth-done.html"]
+  },
   // Accounts and the daily quota (task 019; migrations in ./migrations).
   // `database_id` is a placeholder for local runs; the deploy workflow
   // (scripts/d1-ensure.mjs) finds or creates the database by name and

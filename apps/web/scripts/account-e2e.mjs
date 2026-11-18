@@ -10,7 +10,11 @@
 //
 //   node scripts/account-e2e.mjs            checks + screenshots -> artifacts/task019/*.png, artifacts/task020/*.png, artifacts/task022/*.png, artifacts/task026/*.png
 //   node scripts/account-e2e.mjs --smoke    checks only
-//   node scripts/account-e2e.mjs --only desktop,phone,limits,turns,keys,entry
+//   node scripts/account-e2e.mjs --only desktop,phone,limits,turns,keys,entry,canonical
+//
+// `canonical` (task 026): the built app as production serves it (static
+// pages first, `assets.run_worker_first` for the page routes) answers a
+// request on another host with a 308 to SITE_URL, pages included.
 //
 // And of the account entry (task 026, `entry`): the account button signed
 // out and signed in, the account menu, `?signin=1`, the landing's links,
@@ -20,6 +24,7 @@
 import { execFileSync, spawn } from 'node:child_process';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
+import { request as httpRequest } from 'node:http';
 import { createServer } from 'node:net';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
@@ -83,7 +88,7 @@ async function startPreview(extra = {}) {
   const proc = spawn(process.execPath, [resolve(appRoot, 'node_modules/vite/bin/vite.js'), 'preview', '--port', String(port), '--strictPort'], {
     cwd: appRoot,
     stdio: ['ignore', 'pipe', 'pipe'],
-    env: { ...process.env, CI: '1', OPENSU_STATE: state },
+    env: { ...process.env, CI: '1', OPENSU_STATE: state, OPENSU_ANY_HOST: '1' },
   });
   const p = { base, state, log: '', stop: () => (proc.kill('SIGTERM'), rmSync(state, { recursive: true, force: true })) };
   proc.stdout.on('data', (d) => (p.log += d));
@@ -305,6 +310,47 @@ try {
     check((await quota(page))?.kind === 'anon', 'signed out: anonymous again');
     await ctx.close();
     preview.stop();
+  }
+
+  // --- One canonical host (task 026) -----------------------------------------
+  if (wanted('canonical')) {
+    /** A request to the preview with another Host header (as the workers.dev address would arrive). */
+    const get = (base, path, host) =>
+      new Promise((ok, fail) => {
+        const u = new URL(base);
+        const req = httpRequest({ hostname: '127.0.0.1', port: u.port, path, method: 'GET', headers: host ? { host, accept: 'text/html' } : { accept: 'text/html' } }, (res) => {
+          let body = '';
+          res.on('data', (d) => (body += d));
+          res.on('end', () => ok({ status: res.statusCode, location: res.headers.location ?? null, body }));
+        });
+        req.on('error', fail);
+        req.end();
+      });
+    const SITE = 'https://opensu.example.com';
+    const OTHER = 'opensu-web.someone.workers.dev';
+    const on = await startPreview({ SITE_URL: SITE });
+    console.log(`canonical: preview on ${on.base}`);
+    for (const path of ['/', '/studio', '/studio?mode=plan&lang=en', '/auth-done', '/api/chat', '/s/abc?x=1', '/nope']) {
+      const r = await get(on.base, path, OTHER);
+      check(r.status === 308 && r.location === `${SITE}${path}`, `canonical: ${path} on another host -> 308 ${r.location}`);
+    }
+    // Scripts, styles and images stay static assets (no Worker request for them).
+    const fav = await get(on.base, '/favicon.svg', OTHER);
+    check(fav.status === 200, `canonical: a static file is still served as an asset (${fav.status})`);
+    // The canonical host and localhost: the pages as before (the prerendered files).
+    for (const [label, host] of [['canonical host', 'opensu.example.com'], ['localhost', null]]) {
+      for (const path of ['/', '/studio']) {
+        const r = await get(on.base, path, host);
+        check(r.status === 200 && /<html/i.test(r.body) && /\/assets\//.test(r.body), `canonical: ${label} ${path} -> ${r.status}, the page`);
+      }
+    }
+    on.stop();
+    const offSwitch = await startPreview({ SITE_URL: SITE, CANONICAL_REDIRECT: 'false' });
+    for (const path of ['/', '/studio', '/api/chat']) {
+      const r = await get(offSwitch.base, path, OTHER);
+      check(r.status === 200, `canonical: CANONICAL_REDIRECT=false: ${path} on another host is served (${r.status})`);
+    }
+    offSwitch.stop();
   }
 
   // --- The account entry (task 026) -----------------------------------------
