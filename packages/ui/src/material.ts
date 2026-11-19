@@ -89,9 +89,14 @@ export const TONES: Record<GlassTone, Tone> = {
 
 /** Shape, refraction and motion (same for both tones). */
 export const GLASS = {
-  /** Frost radius, px: capsules, and panels (a panel morph goes up to this). */
+  /**
+   * Frost radius, px: capsules, and surfaces that hold text (panels, menus, sheets, the conversation). Task 034
+   * (iOS 26's regular glass): a text surface is frosted enough to look the same over any content, 6 -> 24.
+   */
   frostControl: 2,
-  frostPanel: 6,
+  frostPanel: 24,
+  /** A text surface bends the scene at its rim this much of a control's (iOS: lensing belongs to controls). */
+  bendText: 0.35,
   rimMax: 40,
   rimDivisor: 3.5,
   edgeOffset: 1.1,

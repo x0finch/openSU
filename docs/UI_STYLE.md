@@ -102,7 +102,7 @@ Material:
 | tint colour | white | rgb(30 30 34) |
 | tint, capsule | 14% (glasswork range 6-22%) | 60% (30% and 45% failed 4.5:1 for labels over white) |
 | tint, text surface | 60% (task 034: 42% left the phone sun sheet's text at 4.2:1 over its scrim) | 60% |
-| blur | 2 px (panel morph up to 6 px) | same |
+| blur | 2 px controls; 24 px surfaces that hold text (task 034, iOS 26's regular glass: the same look over any content) | same |
 | saturation | 1.8 | 1.6 |
 | brightness | 1.06 | 0.80 |
 | ink | rgba(0,0,0,.86), secondary rgba(60,60,67,.8) (task 034: .7 measured 4.49:1 on white) | rgba(255,255,255,.94), secondary rgba(235,235,245,.64) |

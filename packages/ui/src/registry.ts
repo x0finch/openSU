@@ -253,7 +253,7 @@ class Registry {
         alpha: (o.alpha ?? 1) * seen,
         layer: s.layer ?? 0,
         magnify: o.magnify ?? 1,
-        bend: o.bend ?? 1,
+        bend: o.bend ?? (s.role === 'text' ? GLASS.bendText : 1),
         lift: o.lift ?? 1,
         light: o.light ? { x: o.light.x - base.left, y: o.light.y - base.top, strength: o.light.strength } : undefined,
       });
