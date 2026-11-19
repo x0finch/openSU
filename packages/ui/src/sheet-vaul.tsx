@@ -103,6 +103,13 @@ export default function SheetVaul({ open, large, fixed, onClose, onClosed, modal
         <Drawer.Content
           asChild
           aria-describedby={undefined}
+          // Radix dismisses on any press or focus outside. A docked (non-modal) sheet never closes that way: the
+          // controls around it work while it stays (the phone tool bar opens a tool's sheet in its place, and the
+          // press that did so must not close the sheet it just became). A modal sheet closes on its scrim only.
+          onInteractOutside={(e) => {
+            const t = e.target;
+            if (!modal || !(t instanceof Element && t.closest('.lg-scrim'))) e.preventDefault();
+          }}
           onPointerDown={(e) => {
             if (fixed === undefined) drag.current = { y: e.clientY };
           }}
