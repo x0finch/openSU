@@ -5,6 +5,7 @@ import { useEffect, useState } from 'react';
 import type { WalkState } from '@opensu/render';
 import type { Engine } from './engine';
 import { useStudio } from '../lib/store';
+import { floatingOpen } from '@opensu/ui';
 
 type Listener = (s: WalkState | null) => void;
 
@@ -59,7 +60,7 @@ export function useWalkLevel(): string | null {
 export function useEscapeExitsWalk(): void {
   useEffect(() => {
     const on = (e: KeyboardEvent) => {
-      if (e.key !== 'Escape' || e.defaultPrevented) return;
+      if (e.key !== 'Escape' || (e.defaultPrevented && floatingOpen())) return;
       const t = e.target as HTMLElement | null;
       if (t && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName))) return;
       const s = useStudio.getState();

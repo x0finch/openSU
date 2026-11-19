@@ -17,6 +17,9 @@ export default function TooltipBase({ label, children, side = 'bottom' }: Toolti
   return (
     <BaseTooltip.Root
       onOpenChange={(open, details) => {
+        // Escape closes a tooltip and goes on to the studio's own rule (close a panel, leave walk mode): a tooltip
+        // is not a surface that should take the key for itself (task 033).
+        if (!open && details.reason === 'escape-key') details.allowPropagation();
         if (!open) return;
         if (details.reason === 'trigger-focus' && performance.now() - lastNavKey() > 400) return details.cancel();
         const t = details.trigger as HTMLElement | undefined;

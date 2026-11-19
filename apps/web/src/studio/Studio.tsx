@@ -32,7 +32,7 @@ import { ProjectMissing } from './ProjectMissing';
 import { shareBody, ShareHost } from './Share';
 import { useSharedProject } from '../lib/share';
 import { DesktopTools, PanelCard, TRAY_ID } from './tools';
-import { GlassLayer, type GlassTone } from '@opensu/ui';
+import { floatingOpen, GlassLayer, type GlassTone } from '@opensu/ui';
 import { useDerived } from './useDerived';
 import { Viewer3D } from './Viewer3D';
 import { useEscapeExitsWalk } from './walk-bridge';
@@ -197,7 +197,8 @@ function useUndoKeys(): void {
 function useEscapeCloses(): void {
   useEffect(() => {
     const on = (e: KeyboardEvent) => {
-      if (e.key !== 'Escape' || e.defaultPrevented) return;
+      // Taken by an open menu or panel (Base UI closed it); a tooltip that closed lets the key through (task 033).
+      if (e.key !== 'Escape' || (e.defaultPrevented && floatingOpen())) return;
       const s = useStudio.getState();
       if (useAccount.getState().open) {
         closeSignIn();
