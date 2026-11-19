@@ -1,14 +1,14 @@
 // Phone bottom (task 015, restyled in task 017 as iOS 26). From the bottom
 // up: the tools as a tab-bar glass capsule, the input capsule directly
 // above it (like Music's mini player above its tab bar), the house.
-// Operating a tool opens an inset glass sheet that grows from the bottom;
-// the tool bar rides on top of it, so another tool can be picked while it
-// is open; tapping the open tool or dragging the sheet down (or flicking
-// it) closes it; it has a fit and a large detent. While a sheet is open the
-// input is hidden (owner's decision) and returns when it closes. Pinned,
-// the conversation is a half-height sheet with the input inside it. Held
-// sideways the tool bar and the input share one row and the sheet stands
-// above the tool bar on the left.
+// Operating a tool opens an inset glass sheet (Sheet, on Vaul) that rises
+// from the bottom over the bars and a scrim, as iOS sheets do (task 031:
+// nothing rides on top of it; the bars stay where they are, under it);
+// its close button, a tap on the scrim, Escape, or dragging the sheet down
+// (or flicking it) closes it; it has a fit and a large detent. Pinned, the
+// conversation is a half-height sheet above the tool bar with the input
+// inside it. Held sideways the tool bar and the input share one row and
+// the sheet stands above the tool bar on the left.
 import { type ReactNode, useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { cx } from '../components/ui';
 import { ChatInput, PinnedChat, RecentStrip } from '../chat/ChatPanel';
@@ -24,7 +24,7 @@ import { PanelBody, PhoneTools, useFocusOnOpen, useOpenPanel } from './tools';
 
 /** About how long the sheet takes to settle, ms; the house re-frames in step. */
 export const SHEET_MS = 420;
-/** Gap between the sheet's top edge and the tool bar riding on it, px. */
+/** Gap between the pinned conversation's sheet and the tool bar under it, px. */
 const RIDE_GAP = 8;
 /** Gap of the inset sheet from the screen edges, px. */
 const SHEET_GAP = 8;
@@ -60,6 +60,9 @@ export function PhoneDock({ derived, landscape, onExtent }: { derived: Derived |
   // ...and the share sheet (task 028).
   const shareOpen = useShareUi((s) => s.open);
   const signing = signInOpen || keySheetOpen || shareOpen;
+  // A tool's sheet rises over the bars (task 031): they stay where they are, under it, and step aside (faded and out
+  // of reach). On the canvas backend a glass surface is drawn in the 3D canvas and its element is transparent, so
+  // whatever DOM lies under a sheet would show through it.
   const walk = useStudio((s) => s.walk);
   const pinned = useStudio((s) => s.pinned);
   const recent = useStudio((s) => s.recent);
@@ -109,8 +112,10 @@ export function PhoneDock({ derived, landscape, onExtent }: { derived: Derived |
     }
     // The column: hints (gone while a sheet is open), the input, the tool bar; flex gap 8.
     // The pinned conversation's sheet stays, so it is persistent layout too (a tool sheet over it is not).
-    const restBottom = pinned && !walk ? SHEET_GAP + Math.round(vh * CHAT_SHARE) + RIDE_GAP + toolbarH() : foot + toolbarH() + 8 + inputH.current;
-    if (want) onExtent({ bottom: SHEET_GAP + settled.current + RIDE_GAP + toolbarH(), left: 0, restBottom, restLeft: 0 });
+    const restBottom = pinned && !walk ? foot + toolbarH() + RIDE_GAP + Math.round(vh * CHAT_SHARE) : foot + toolbarH() + 8 + inputH.current;
+    // The tool sheet stands over the bars; the pinned conversation's above the tool bar.
+    if (want === 'tool') onExtent({ bottom: Math.max(h - g.offsetTop, SHEET_GAP + settled.current), left: 0, restBottom, restLeft: 0 });
+    else if (want === 'chat') onExtent({ bottom: foot + toolbarH() + RIDE_GAP + settled.current, left: 0, restBottom, restLeft: 0 });
     else onExtent({ bottom: h - g.offsetTop, left: 0, restBottom, restLeft: 0 });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [landscape, want, onExtent, pinned, walk, vh]);
@@ -123,17 +128,13 @@ export function PhoneDock({ derived, landscape, onExtent }: { derived: Derived |
     return () => ro.disconnect();
   }, [report]);
 
-  /** The tool bar rides on the sheet, frame by frame. */
+  /** The open sheet's height (settled): what the house keeps clear of. */
   const onHeight = useCallback(
-    (h: number, target: number) => {
-      const g = ride.current;
-      if (g && !landscape) g.style.transform = h > 0.5 ? `translateY(${-(SHEET_GAP + h + RIDE_GAP - 12)}px)` : '';
-      if (Math.abs(target - settled.current) > 0.5) {
-        settled.current = target;
-        report();
-      }
+    (h: number | null) => {
+      settled.current = h ?? 0;
+      report();
     },
-    [landscape, report],
+    [report],
   );
   const close = () => {
     const s = useStudio.getState();
@@ -141,23 +142,30 @@ export function PhoneDock({ derived, landscape, onExtent }: { derived: Derived |
     else if (s.pinned) s.setPinned(false);
   };
 
-  const hideInput = !!want;
+  // The pinned conversation hides the input (it has its own).
+  const hideInput = want === 'chat';
+  const covered = signing || want === 'tool';
+  const chat = shown === 'chat';
   const sheet = shown && (
     <Sheet
       open={!!want}
       large={large}
-      fixed={shown === 'chat' ? Math.round(vh * CHAT_SHARE) : undefined}
+      fixed={chat ? Math.round(vh * CHAT_SHARE) : undefined}
+      // A tool's sheet is modal (a scrim over the bars); the pinned conversation is docked above the tool bar.
+      modal={!chat}
       onClose={close}
       onClosed={() => setShown(null)}
       onHeight={onHeight}
-      ariaLabel={shown === 'chat' ? undefined : (panel ?? undefined)}
+      ariaLabel={chat ? undefined : (panel ?? undefined)}
+      role={chat ? undefined : 'dialog'}
       testId="phone-sheet"
       dataKind={shown}
-      className={landscape ? 'z-30' : 'z-10'}
       style={
         landscape
           ? { left: 'max(12px, env(safe-area-inset-left))', width: LAND_SHEET, bottom: `calc(max(12px, env(safe-area-inset-bottom)) + ${toolbarH() + RIDE_GAP}px)` }
-          : { left: SHEET_GAP, right: SHEET_GAP, bottom: `max(${SHEET_GAP}px, env(safe-area-inset-bottom))` }
+          : chat
+            ? { left: 12, right: 12, bottom: `calc(max(12px, env(safe-area-inset-bottom)) + ${toolbarH() + RIDE_GAP}px)` }
+            : { left: SHEET_GAP, right: SHEET_GAP, bottom: `max(${SHEET_GAP}px, env(safe-area-inset-bottom))` }
       }
     >
       {shown === 'chat' ? (
@@ -176,8 +184,13 @@ export function PhoneDock({ derived, landscape, onExtent }: { derived: Derived |
 
   return (
     // The sign-in sheet (task 019) takes the bottom: the dock steps aside, as the input does for a tool sheet.
-    <div ref={root} className={cx('pointer-events-none absolute inset-0 z-20 transition-opacity duration-200', signing && 'opacity-0')} inert={signing || undefined} data-testid="phone-dock">
+    <div ref={root} className="pointer-events-none absolute inset-0 z-20" data-testid="phone-dock">
       {sheet}
+      <div
+        className={cx('transition-opacity duration-200', covered && 'opacity-0')}
+        inert={covered || undefined}
+        data-covered={covered ? '' : undefined}
+      >
       <div
         ref={ride}
         className={cx('absolute z-20 flex gap-2', landscape ? 'items-end' : 'flex-col')}
@@ -212,13 +225,14 @@ export function PhoneDock({ derived, landscape, onExtent }: { derived: Derived |
             )}
             <div ref={inputWrap} className={cx('relative transition-opacity duration-200', hideInput && 'pointer-events-none opacity-0')} inert={hideInput || undefined} data-testid="input-wrap">
               {above ?? <StudioToast invite="phone" className="absolute inset-x-0 bottom-full mb-2" />}
-              {!pinned || walk ? <ChatInput phone pinned={pinned} /> : <div className="h-12" aria-hidden="true" />}
+              {(!pinned || walk) && <ChatInput phone pinned={pinned} />}
             </div>
             <div ref={toolbar}>
               <PhoneTools derived={derived} />
             </div>
           </>
         )}
+      </div>
       </div>
     </div>
   );

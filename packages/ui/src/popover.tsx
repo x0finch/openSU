@@ -73,15 +73,23 @@ export function Popover({ open, anchor, placement = 'below-start', size = 'dialo
   const host = usePortalHost();
   const boxRef = useFloatingBox(open && !phone, anchor, false, onBox);
   if (phone) {
+    // The phone form (task 031: on Vaul): a sheet that rises over the bars and a scrim; nothing rides on it.
     return (
-      <>
-        <div className={cx('pointer-events-auto absolute inset-0 z-40 bg-black/10 transition-opacity duration-300', open ? 'opacity-100' : 'pointer-events-none opacity-0')} onClick={() => onClose('sheet')} aria-hidden="true" />
-        <Sheet open={open} large={Math.round(vh * 0.92)} onClose={() => onClose('sheet')} onClosed={onClosed} ariaLabel={label} testId={testId} className="z-50" style={{ left: 8, right: 8, bottom: 'max(8px, env(safe-area-inset-bottom))' }}>
-          <div role={role} id={id} aria-modal={role === 'dialog' && open ? 'true' : undefined} aria-labelledby={labelledBy} aria-label={label} ref={ref as Ref<HTMLDivElement>}>
-            <SheetContent>{children}</SheetContent>
-          </div>
-        </Sheet>
-      </>
+      <Sheet
+        ref={ref}
+        open={open}
+        large={Math.round(vh * 0.92)}
+        onClose={() => onClose('sheet')}
+        onClosed={onClosed}
+        role={role}
+        id={id}
+        ariaLabel={label}
+        ariaLabelledBy={labelledBy}
+        testId={testId}
+        style={{ left: 8, right: 8, bottom: 'max(8px, env(safe-area-inset-bottom))' }}
+      >
+        <SheetContent>{children}</SheetContent>
+      </Sheet>
     );
   }
   const { side, align } = sideAlign(placement);
