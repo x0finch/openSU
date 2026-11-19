@@ -1571,7 +1571,12 @@ try {
     check(await a.page.getByTestId('menu-export').isDisabled(), 'export is disabled while the conversation is empty');
     await closeMenu(a.page);
     await turn(a.page, '北侧房间加深一点');
-    await a.page.getByRole('button', { name: '撤销' }).first().click();
+    // The note leaves after 5 s unless hovered. Point at its undo first, as a person does: the click's own
+    // stability wait took longer than that on a runner with second-long frames.
+    const undoBtn = a.page.getByRole('button', { name: '撤销' }).first();
+    const ub = await undoBtn.boundingBox();
+    if (ub) await a.page.mouse.move(ub.x + ub.width / 2, ub.y + ub.height / 2);
+    await undoBtn.click();
     await a.page.waitForFunction(() => window.__studio.chat.getState().items.some((i) => i.undo === 'can-redo'));
     await turn(a.page, '你好');
     await settle(a.page);
