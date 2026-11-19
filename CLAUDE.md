@@ -14,11 +14,13 @@ Read `docs/DECISIONS.md` before changing architecture and
   reference images and generated screenshots). Never embed those images in
   the repo in any form.
 - Do not open GitHub issues, PRs or comments. Only the lead does, sparingly.
-- Commit on your own working branch and push it there. A push to `main`
-  deploys. Development stage (owner's decision, 2026-11-19): once the full
-  CI matrix is green on your branch (run `ci.yml` by hand on it), merge it
-  into `main` and push to deploy, without asking first. Never push to
-  `main` what CI has not passed.
+- Development stage (owner's decision, 2026-11-19): iterate fast. Push to
+  `main` freely and without asking; a push to `main` deploys to the live
+  site. Deploying to check something there (screenshots, debugging on the
+  real Worker, real devices) is fine. Run `pnpm test:fast` before pushing;
+  the full CI matrix (`ci.yml`, run by hand on any branch) is for larger
+  changes, not a gate on every push. If a deploy breaks the site, fix
+  forward or revert at once.
 - Visual tokens have two homes. The scene's (drawing colours, line widths,
   light values) live in `packages/render/src/style/tokens.ts`. The UI's
   (glass material numbers, radii, spacing, type sizes, motion, colours of
