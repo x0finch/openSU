@@ -1106,6 +1106,19 @@ try {
     const preview = await startPreview({ QUOTA_ANON_TRIAL: '40', QUOTA_IP_DAILY: '1000' });
     console.log(`entry: preview on ${preview.base}`);
     const box = (page, sel) => page.locator(sel).first().evaluate((e) => { const r = e.getBoundingClientRect(); return { l: r.left, t: r.top, r: r.right, b: r.bottom, w: r.width, h: r.height }; });
+    /**
+     * Waits until the surface holding `sel` rests: no starting or ending style and no running transition (task 031:
+     * surfaces open by a CSS transition from the anchor's edge). A fixed pause is not enough on a machine whose
+     * frames come late (CI: a frame of over a second).
+     */
+    const rest = (page, sel) =>
+      page.waitForFunction((s) => {
+        const e = document.querySelector(s);
+        const pop = e?.closest('.lg-pop') ?? e;
+        if (!pop) return false;
+        if (pop.hasAttribute('data-starting-style') || pop.hasAttribute('data-ending-style')) return false;
+        return pop.getAnimations({ subtree: true }).every((a) => a.playState !== 'running');
+      }, sel, { timeout: tmo(10000) });
     const glassBox = (page, testId) => page.getByTestId(testId).first().evaluate((e) => { const r = (e.closest('.lg') ?? e).getBoundingClientRect(); return { l: r.left, t: r.top, r: r.right, b: r.bottom, w: r.width, h: r.height }; });
     const framing = (page) => page.evaluate(() => JSON.stringify(window.__studio.engine?.viewer.framedInsets ?? null));
     const known = (page) => page.waitForFunction(() => !!window.__studio?.chat?.getState().server, null, { timeout: tmo(20000) });
@@ -1209,6 +1222,7 @@ try {
         await settle(page, 1200);
         if (!phone) {
           const row = await box(page, '[data-title-row]');
+          await rest(page, '[data-testid=share-surface]');
           const sf = await box(page, '[data-testid=share-surface]');
           check(Math.abs(sf.t - row.b - 8) <= 1.5 && Math.abs(sf.l - row.l) <= 1.5, `${tag}: the share surface stands under the name's row, the module's gap (gap ${(sf.t - row.b).toFixed(1)}, left ${(sf.l - row.l).toFixed(1)})`);
         }
@@ -1239,6 +1253,7 @@ try {
         await settle(page, 900);
         if (!phone) {
           const nm = await box(page, '[data-house-name]');
+          await rest(page, '[data-testid=signin-sheet]');
           const sp = await box(page, '[data-testid=signin-sheet]');
           check(Math.abs(sp.t - nm.b - 8) <= 1.5 && Math.abs(sp.l - nm.l) <= 1.5, `${tag}: sign-in stands under the house name (gap ${(sp.t - nm.b).toFixed(1)})`);
         }
@@ -1261,6 +1276,7 @@ try {
         check(allowance.length > 0 && (await page.getByTestId('account-keys').count()) === 1 && (await page.getByTestId('account-projects').count()) === 0, `${tag}: the account menu: allowance, my keys, sign out (${allowance})`);
         if (!phone) {
           const nm = await box(page, '[data-house-name]');
+          await rest(page, '[data-testid=account-menu]');
           const am = await box(page, '[data-testid=account-menu]');
           check(Math.abs(am.t - nm.b - 8) <= 1.5 && Math.abs(am.l - nm.l) <= 1.5, `${tag}: the account menu stands under the house name (gap ${(am.t - nm.b).toFixed(1)})`);
         }
