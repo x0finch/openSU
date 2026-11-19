@@ -222,10 +222,10 @@ function ProjectMenu({ open, anchor, onClose, compact, onRename, ref }: { open: 
     >
       {edit && (
         <>
-          <MenuItem icon={<UndoIcon width={16} height={16} />} detail={UNDO_KEYS} disabled={!steps.undo} className="disabled:text-ink-3" onClick={() => undoLast()} data-testid="menu-undo">
+          <MenuItem icon={<UndoIcon width={16} height={16} />} detail={UNDO_KEYS} disabled={!steps.undo} className="disabled:text-ink-3" onClick={() => { onClose(false); undoLast(); }} data-testid="menu-undo">
             <span className="block truncate">{steps.undo ? t('menu.undoStep', { s: steps.undo }) : t('menu.undo')}</span>
           </MenuItem>
-          <MenuItem icon={<RedoIcon width={16} height={16} />} detail={REDO_KEYS} disabled={!steps.redo} className="disabled:text-ink-3" onClick={() => redoNext()} data-testid="menu-redo">
+          <MenuItem icon={<RedoIcon width={16} height={16} />} detail={REDO_KEYS} disabled={!steps.redo} className="disabled:text-ink-3" onClick={() => { onClose(false); redoNext(); }} data-testid="menu-redo">
             <span className="block truncate">{steps.redo ? t('menu.redoStep', { s: steps.redo }) : t('menu.redo')}</span>
           </MenuItem>
           <Sep />

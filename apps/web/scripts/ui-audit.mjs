@@ -1079,16 +1079,7 @@ async function runConfig(cfg) {
     await page.waitForSelector('[data-testid=account-toast]', { state: 'detached', timeout: tmo(8000) }).catch(() => {});
     await settle(page, 600);
     if (wants(cfg, 'account-signed-in')) await S(page, 'account-signed-in', () => settle(page, 300));
-    if (wants(cfg, 'account-menu')) {
-      await S(page, 'account-menu', async () => {
-        await page.getByTestId('project-menu').first().click();
-        await settle(page, 700);
-        await page.getByTestId('menu-account').first().click();
-        await page.waitForSelector('[data-testid=account-menu]');
-        await settle(page, 1000);
-      });
-      await esc(page);
-    }
+    // Task 032: the studio has no account entry; the account menu is the projects page's (its account button).
     // Task 028: the share surface (on, with its link) and the studio as a signed-out viewer of that link sees it.
     if (wants(cfg, 'account-share')) {
       await page.waitForFunction(() => !!window.__studio.projects?.store.getState().openId && !window.__studio.projects.store.getState().busy, null, { timeout: tmo(30000) });
@@ -1097,14 +1088,12 @@ async function runConfig(cfg) {
         const m = await p.share(p.store.getState().openId, true);
         return m?.share ?? null;
       });
-      // Task 029: desktop, the button beside the house name; phones, the project menu's first row.
-      const openShareUi = cfg.phone
-        ? async () => {
-            await page.getByTestId('project-menu').first().click();
-            await settle(page, 700);
-            await page.getByTestId('menu-share').first().click();
-          }
-        : () => page.getByTestId('share-button').first().click();
+      // Task 032: from the project menu's "分享" row, desktop and phones.
+      const openShareUi = async () => {
+        await page.getByTestId('project-menu').first().click();
+        await settle(page, 700);
+        await page.getByTestId('menu-share').first().click();
+      };
       await M(page, 'account-share', { open: openShareUi, close: () => page.keyboard.press('Escape'), find: byTestId(page, 'share-surface') });
       if (token && wants(cfg, 'account-share-viewer')) {
         const { ctx: vc, page: vp } = await newPage(cfg);

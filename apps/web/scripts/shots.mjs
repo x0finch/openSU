@@ -395,19 +395,20 @@ async function siteChecks() {
   check(Math.abs(gz.elevation - 43.4) < 0.3, `Guangzhou (searched in pinyin): noon sun ${gz.elevation.toFixed(1)} deg (~43.4)`);
   check((await page.getByTestId('sun-place').textContent())?.includes('广州'), 'the sun tray names the chosen place');
   await page.keyboard.press('Escape');
-  // Undo from the recent strip (the last studio edits with undo).
-  await page.getByTestId('chat-history').click();
-  await page.getByTestId('recent-strip').getByRole('button', { name: '撤销' }).last().click();
+  // Undo from the project menu (task 032: undo and redo of the house live there, and on Cmd/Ctrl+Z).
+  await page.getByTestId('project-menu').click();
+  await page.getByTestId('menu-undo').click();
   await page.waitForFunction(() => window.__studio.store.getState().house.site.placeName === '哈尔滨市', null, { timeout: tmo(10000) });
-  check(true, 'undo in the recent strip restores the previous place');
+  check(true, 'undo in the project menu restores the previous place');
   await page.keyboard.press('Escape');
   // Orientation: the front facing due east = north turned by 90 deg; the sun and the shadows turn with it.
   await page.evaluate(() => window.__studio.store.getState().setSun({ on: true, dateId: 'winter', minutes: 600 }));
   await settle(page);
   const az0 = await page.evaluate(() => window.__studio.engine.viewer.sunStudy.azimuthDeg);
   const px0 = await canvasPixels(page);
-  await page.getByTestId('project-menu').click();
-  await page.getByTestId('menu-orientation').click();
+  // Task 032: orientation is a row of the sun panel (no longer in the project menu).
+  if (!(await page.getByTestId('tray-sun').count())) await page.getByTestId('bar-sun').click();
+  await page.getByTestId('sun-orientation').click();
   await page.getByRole('button', { name: '东（90°）' }).click();
   await page.waitForFunction(() => window.__studio.store.getState().house.site.northDeg === 90, null, { timeout: tmo(10000) });
   await page.waitForTimeout(400);
@@ -446,8 +447,11 @@ async function siteChecks() {
   });
   await page.waitForTimeout(800);
   await page.getByTestId('project-menu').click();
-  await page.getByRole('menuitem', { name: /换一个模板/ }).click();
+  await page.getByRole('menuitem', { name: /从模板重新开始/ }).click();
   await page.getByRole('menuitem', { name: /三合院/ }).click();
+  // The house was edited (place, orientation): the menu asks before replacing it (task 032).
+  check((await page.getByTestId('menu-template-confirm').count()) === 1, 'over an edited house the menu asks before replacing it');
+  await page.getByTestId('menu-template-replace').click();
   await page.waitForSelector('[data-testid=loc-skip]', { timeout: tmo(60000) });
   await page.waitForFunction(() => !window.__studio?.growing, null, { timeout: tmo(60000) });
   // Wait for the state, not a fixed time (software GL can be slow to finish the view change).

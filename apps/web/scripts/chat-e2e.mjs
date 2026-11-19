@@ -152,6 +152,33 @@ const waitDone = (page, n) =>
   }, n, { timeout: tmo(60000) });
 const waitGrown = (page) => page.waitForFunction(() => !window.__studio?.growing, null, { timeout: tmo(30000) });
 
+/**
+ * Undo or redo of the house from the project menu (task 032: the conversation has no undo buttons). Returns false
+ * when the row is disabled (nothing to undo or redo).
+ */
+async function menuStep(page, kind) {
+  await page.getByTestId('project-menu').click();
+  const row = page.getByTestId(kind === 'undo' ? 'menu-undo' : 'menu-redo');
+  await row.waitFor({ timeout: tmo(10000) });
+  if (await row.isDisabled()) {
+    await page.keyboard.press('Escape');
+    return false;
+  }
+  await row.click();
+  return true;
+}
+
+/** Whether the project menu's undo or redo row is enabled (the menu is opened and closed). */
+async function menuOffers(page, kind) {
+  await page.getByTestId('project-menu').click();
+  const row = page.getByTestId(kind === 'undo' ? 'menu-undo' : 'menu-redo');
+  await row.waitFor({ timeout: tmo(10000) });
+  const on = !(await row.isDisabled());
+  await page.keyboard.press('Escape');
+  await page.waitForTimeout(300);
+  return on;
+}
+
 async function sendMessage(page, text) {
   const input = page.getByTestId('prompt-bar');
   await input.fill(text);
@@ -239,8 +266,8 @@ try {
     await page.waitForTimeout(200);
     await shot(page, 'chat-changes-desktop');
 
-    // 2. Undo restores the house.
-    await card.getByRole('button', { name: '撤销' }).click();
+    // 2. Undo restores the house (task 032: from the project menu).
+    check(await menuStep(page, 'undo'), 'the project menu offers undo of the edit');
     await waitGrown(page);
     await page.waitForTimeout(300);
     await settle(page);
@@ -249,7 +276,7 @@ try {
     const d02 = pixelDiff(px0, px2);
     check(area2 === area0, `undo restores the area (${area2} m²)`);
     check(d02 < 0.002, `undo restores the 3D view (${(d02 * 100).toFixed(2)}% pixels differ from before)`);
-    check((await card.getByRole('button', { name: '恢复' }).count()) === 1, 'undone card offers redo');
+    check(await menuOffers(page, 'redo'), 'after undo the project menu offers redo');
 
     // 3. A bad edit followed by a repair round.
     await sendMessage(page, '二楼起居室改成卧室');
@@ -388,20 +415,16 @@ try {
     await page.reload({ waitUntil: 'networkidle' });
     await page.waitForFunction(() => window.__studio?.ready3d === true, null, { timeout: tmo(180000) });
     const area1 = await shownArea(page);
-    await page.getByTestId('chat-history').click();
-    const undo = page.getByTestId('recent-strip').getByRole('button', { name: '撤销' });
-    check(Math.abs(area1 - area0 - 13.3) < 0.15 && (await undo.count()) === 1, `after a reload the recent strip still offers undo (${area0} -> ${area1} m²)`);
+    check(Math.abs(area1 - area0 - 13.3) < 0.15 && (await menuOffers(page, 'undo')), `after a reload the project menu still offers undo (${area0} -> ${area1} m²)`);
     await shot(page, 'chat-reload-undo-desktop');
-    await undo.click();
+    await menuStep(page, 'undo');
     await page.waitForFunction((a) => document.querySelector('[data-testid=fact-area]')?.textContent?.startsWith(String(a)), area0, { timeout: tmo(30000) });
     check(true, `undo after the reload restores the house (${area0} m²)`);
-    const redo = page.getByTestId('recent-strip').getByRole('button', { name: '恢复' });
-    check((await redo.count()) === 1, 'and offers redo');
+    check(await menuOffers(page, 'redo'), 'and offers redo');
     await page.waitForTimeout(1200);
     await page.reload({ waitUntil: 'networkidle' });
     await page.waitForFunction(() => window.__studio?.ready3d === true, null, { timeout: tmo(180000) });
-    await page.getByTestId('chat-history').click();
-    await page.getByTestId('recent-strip').getByRole('button', { name: '恢复' }).click();
+    await menuStep(page, 'redo');
     await page.waitForFunction((a) => !document.querySelector('[data-testid=fact-area]')?.textContent?.startsWith(String(a)), area0, { timeout: tmo(30000) });
     check(Math.abs((await shownArea(page)) - area1) < 0.05, 'redo survives a reload too');
     // A save made before task 018 (no turn structure) still loads and reads as plain text.
@@ -452,7 +475,7 @@ try {
       check((await toggle.textContent()) === '做了 3 步修改' && (await toggle.getAttribute('aria-expanded')) === 'false' && (await msg.getByTestId('turn-change').count()) === 0,
         `${name}: compact, done: one collapsed line "做了 3 步修改"`);
       check(doneText.includes('三处都改好了') && doneText.includes('我假设卧室暂不加门') && !/先把|接着|最后把/.test(doneText), `${name}: compact, done: only the final text, no intermediate sentences`);
-      check((await msg.getByRole('button', { name: '撤销' }).count()) === 1, `${name}: compact: undo stays on the changes line`);
+      check((await msg.getByRole('button', { name: '撤销' }).count()) === 0, `${name}: compact: no undo on the changes line (task 032: undo is in the project menu)`);
       await page.waitForTimeout(300);
       await shot(page, `${name}-compact-done`, dir);
       // Expand (keyboard on desktop): the change summaries, still no sentences.
@@ -543,8 +566,10 @@ try {
     await page.waitForTimeout(1500);
     await shot(page, 'chat-phone-error');
     await page.keyboard.press('Escape');
-    await page.getByTestId('project-menu').click();
-    await page.getByRole('menuitem', { name: 'AI 连接设置' }).click();
+    // Task 032: the browser key's settings open from the key picker (no longer from the project menu).
+    if (!(await page.getByTestId('recent-strip').count())) await page.getByTestId('chat-history').click();
+    await page.getByTestId('recent-strip').getByTestId('key-picker').click();
+    await page.getByTestId('key-own').click();
     await page.waitForSelector('[data-testid=settings-sheet]');
     await page.waitForTimeout(250);
     await shot(page, 'chat-phone-settings');

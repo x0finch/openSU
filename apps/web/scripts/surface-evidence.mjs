@@ -175,13 +175,7 @@ async function comparison(opts, phone) {
       else await page.getByTestId(`bar-${t}`).click();
       await page.waitForTimeout(800);
     }
-    if (phone) {
-      await page.getByTestId('project-menu').click();
-      await page.waitForTimeout(700);
-      await page.getByTestId('menu-share').click();
-    } else await page.locator('[data-share-button]').click();
-    await add(page, 'share-out', '分享 share (signed out)');
-    await esc(page);
+    // Task 032: signed out there is no share; the surface is shown signed in only.
     await page.getByTestId('project-menu').click();
     await add(page, 'project-menu', '项目菜单 project menu');
     await page.getByTestId('menu-signin').click();
@@ -192,18 +186,12 @@ async function comparison(opts, phone) {
   // Signed in.
   {
     const { ctx, page } = await studio(opts, `evidence-${phone ? 'p' : 'd'}@example.com`);
-    if (phone) {
-      await page.getByTestId('project-menu').click();
-      await page.waitForTimeout(700);
-      await page.getByTestId('menu-share').click();
-    } else await page.locator('[data-share-button]').click();
-    await add(page, 'share-in', '分享 share (signed in)');
-    await esc(page);
     await page.getByTestId('project-menu').click();
     await page.waitForTimeout(700);
-    await page.getByTestId('menu-account').click();
-    await add(page, 'account-menu', '账户菜单 account menu');
+    await page.getByTestId('menu-share').click();
+    await add(page, 'share-in', '分享 share (signed in)');
     await esc(page);
+    // Task 032: the account menu is on /projects (no account row in the studio's project menu).
     await page.evaluate(() => window.__studio.keys.setState({ sheet: { mode: 'add' }, anchor: null, picker: null }));
     await add(page, 'keys', '密钥 keys');
     await esc(page);
@@ -304,8 +292,6 @@ async function strips() {
     await strip(page, 'views', () => page.getByTestId('bar-views').click(), () => page.getByTestId('bar-views').click());
     await page.waitForTimeout(800);
     await strip(page, 'sun', () => page.getByTestId('bar-sun').click(), () => page.getByTestId('bar-sun').click());
-    await page.waitForTimeout(800);
-    await strip(page, 'share', () => page.locator('[data-share-button]').click(), () => page.keyboard.press('Escape'));
     await page.waitForTimeout(800);
     await strip(page, 'project-menu', () => page.getByTestId('project-menu').click(), () => page.keyboard.press('Escape'));
     await ctx.close();

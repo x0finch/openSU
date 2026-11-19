@@ -239,6 +239,31 @@ async function openMenu(page) {
   await page.waitForTimeout(500);
 }
 
+/**
+ * Task 032: the account lives on /projects (its account button and menu); the studio's project menu has no account
+ * row. Opens the account menu there.
+ */
+async function accountMenuOnProjects(page, base) {
+  await page.goto(`${base}/projects`, { waitUntil: 'networkidle' });
+  await page.getByTestId('account-button').click();
+  await page.waitForSelector('[data-testid=account-menu] [data-testid=account-signout]', { timeout: tmo(10000) });
+}
+
+/** Opens the share surface from the project menu (task 032: its only entry in the studio, signed in). */
+async function openShare(page) {
+  await openMenu(page);
+  await page.getByTestId('menu-share').click();
+}
+
+/** Signs out on /projects and comes back to the studio, ready. */
+async function signOutViaProjects(page, base) {
+  await accountMenuOnProjects(page, base);
+  await page.getByTestId('account-signout').click();
+  await page.waitForSelector('[data-testid=account-button][data-state=signed-out]', { timeout: tmo(10000) });
+  await page.goto(`${base}/studio`, { waitUntil: 'networkidle' });
+  await page.waitForFunction(() => window.__studio?.ready3d === true && !!window.__studio.chat.getState().server, null, { timeout: tmo(180000) });
+}
+
 /** Signs in through the sheet: email, a wrong code (shake), then the right one pasted. */
 async function signInFlow(page, base, email, { shots, prefix }) {
   await page.waitForSelector('[data-testid=signin-email-input]');
@@ -334,14 +359,9 @@ try {
     const q1 = await quota(page);
     check(q1?.kind === 'user' && q1.remaining === 10, `signed in: 10 credits (${JSON.stringify(q1)})`);
     await openMenu(page);
-    check(((await page.getByTestId('menu-account').textContent()) ?? '').includes('reader@example.com'), 'the project menu shows the account (its email) as its first row');
+    check((await page.getByTestId('menu-account').count()) === 0 && (await page.getByTestId('menu-signin').count()) === 0, 'signed in: the project menu has no account row and no sign-in link (task 032: the account is on /projects)');
     await shot(page, 'desktop-menu-account');
-    // Task 026: the row opens the account menu (the same surface as the account button).
-    await page.getByTestId('menu-account').click();
-    await page.waitForSelector('[data-testid=account-menu] [data-testid=account-signout]');
-    check(true, 'the project menu row opens the account menu with sign out');
-    await page.keyboard.press('Escape');
-    await page.waitForSelector('[data-testid=account-menu]', { state: 'detached', timeout: tmo(5000) });
+    await closeMenu(page);
     await page.getByTestId('prompt-bar').fill('');
     for (let i = 1; i <= 10; i++) {
       await turn(page, `你好 ${i}`);
@@ -365,10 +385,8 @@ try {
       return r.status;
     });
     check(own !== 429, `own key: not limited (relay answered ${own}, not 429)`);
-    // Sign out: back to the anonymous trial, which is used up today.
-    await openMenu(page);
-    await page.getByTestId('menu-account').click();
-    await page.getByTestId('account-signout').click();
+    // Sign out (task 032: on /projects): back to the anonymous trial, which is used up today.
+    await signOutViaProjects(page, preview.base);
     await page.waitForFunction(() => window.__studio.chat.getState().server?.user === null, null, { timeout: tmo(10000) });
     check((await quota(page))?.kind === 'anon', 'signed out: anonymous again');
     await ctx.close();
@@ -492,7 +510,7 @@ try {
     check(/image\/(webp|jpeg)/.test(thumb.type) && thumb.kb < 60 && /private/.test(thumb.cache), `a thumbnail was drawn by the studio's viewer and stored (${thumb.type}, ${thumb.kb.toFixed(1)} KB, ${thumb.cache}${thumb.text}; ${JSON.stringify(await a.evaluate(() => globalThis.__thumb ?? null))})`);
     await openMenu(a);
     check(((await a.getByTestId('menu-saved').textContent()) ?? '') === '修改自动保存到账户', 'the menu line: saved with the account');
-    check((await a.getByText('换一个模板').count()) === 0 && (await a.getByTestId('reset-house').count()) === 0 && (await a.getByTestId('menu-new-project').count()) === 1 && (await a.getByTestId('menu-rename').count()) === 1 && (await a.getByTestId('menu-duplicate').count()) === 1, 'signed in: new, rename, duplicate in the project menu; the rows that replaced the open house are gone');
+    check((await a.getByTestId('menu-templates').count()) === 0 && (await a.getByTestId('menu-share').count()) === 1 && (await a.getByTestId('menu-new-project').count()) === 1 && (await a.getByTestId('menu-rename').count()) === 1 && (await a.getByTestId('menu-duplicate').count()) === 1, 'signed in: new, rename, duplicate in the project menu; the rows that replaced the open house are gone');
     await closeMenu(a);
     await turn(a, '你好 项目一');
     const chat1 = await a.evaluate(() => window.__studio.chat.getState().items.length);
@@ -634,12 +652,7 @@ try {
     await studio(a, `/studio?p=${p4}`);
     await waitOpen(a);
     await openMenu(a);
-    await a.getByTestId('menu-account').click();
-    await a.waitForSelector('[data-testid=account-menu] [data-testid=account-signout]');
-    check((await a.getByTestId('account-projects').count()) === 0, 'the account menu in the studio has no row to the projects page (the project menu has it)');
-    await a.keyboard.press('Escape');
-    await a.waitForSelector('[data-testid=account-menu]', { state: 'detached', timeout: tmo(5000) });
-    await openMenu(a);
+    check((await a.getByTestId('menu-account').count()) === 0, 'the studio\'s project menu has no account row (task 032: the account is on /projects)');
     await a.getByTestId('menu-all-projects').click();
     await a.waitForURL('**/projects');
     check(true, 'the project menu\'s "所有项目" goes to /projects');
@@ -647,14 +660,10 @@ try {
     await studio(a, `/studio?p=${p4}`);
     await waitOpen(a);
     const kept = await houseName(a);
-    await openMenu(a);
-    await a.getByTestId('menu-account').click();
-    await a.getByTestId('account-signout').click();
-    await a.waitForFunction(() => !window.__studio.chat.getState().server?.user);
+    // Task 032: signing out is on /projects; back in the studio, the house last open is this browser's.
+    await signOutViaProjects(a, base);
     await a.waitForTimeout(500);
-    check((await houseName(a)) === kept && !(await P(a)).on, `sign-out: the open house stays on screen as the local project (${kept})`);
-    await studio(a, '/studio');
-    check((await houseName(a)) === kept, 'and after a reload, signed out');
+    check((await houseName(a)) === kept && !(await P(a)).on, `sign-out (on /projects): the house last open is this browser's (${kept})`);
     await A.ctx.close();
 
     // ---- Screenshots: 1440 x 900 and 390 x 844, zh and en ----
@@ -767,15 +776,13 @@ try {
     // ---- Owner, desktop zh: signed out, the button explains and offers sign-in ----
     const A = await open(base, OWNER);
     const a = A.page;
-    // Task 029: "分享" beside the house name (its placement is checked in the `entry` section).
-    check((await a.getByTestId('share-button').count()) === 1 && (await a.locator('[data-title-row] [data-testid=share-button]').count()) === 1, 'signed out: "分享" stands beside the house name (projects are kept with accounts here)');
+    // Task 032: share is a row of the project menu, signed in only; nothing beside the house name.
     await edit(a, '东边的小院');
     await settle(a);
-    await a.getByTestId('share-button').click();
-    await surfaceOpen(a);
-    check((await a.getByTestId('share-need-account').count()) === 1 && (await a.getByTestId('share-switch').count()) === 0, 'signed out: one line that sharing needs the account, and "登录"; no switch');
+    await openMenu(a);
+    check((await a.getByTestId('share-button').count()) === 0 && (await a.getByTestId('menu-share').count()) === 0 && (await a.getByTestId('menu-signin').count()) === 1, 'signed out: no share anywhere; the project menu links to sign-in');
     await shot(a, 'd-zh-signed-out', outDir28);
-    await a.getByTestId('share-signin').click();
+    await a.getByTestId('menu-signin').click();
     await a.waitForSelector('[data-testid=signin-email-input]');
     await a.getByTestId('signin-email-input').fill('owner@example.com');
     await a.getByTestId('signin-email-input').press('Enter');
@@ -785,10 +792,11 @@ try {
     await a.keyboard.type(await code(base, 'owner@example.com'));
     await a.waitForFunction(() => !!window.__studio.chat.getState().server?.user, null, { timeout: tmo(20000) });
     await waitOpen(a);
+    await openShare(a);
     await a.waitForSelector('[data-testid=share-surface-body]', { timeout: tmo(20000) });
     await settle(a);
     const pid = await openId(a);
-    check(!!pid && (await a.getByTestId('title-name').textContent()) === '东边的小院', 'after sign-in the local house is the account\'s project and the share surface opens again by itself');
+    check(!!pid && (await a.getByTestId('title-name').textContent()) === '东边的小院', 'after sign-in the local house is the account\'s project; the project menu\'s "分享" opens the surface');
     check((await a.getByTestId('share-switch').getAttribute('aria-checked')) === 'false' && (await a.getByTestId('share-link').count()) === 0, 'off by default: no link');
     await shot(a, 'd-zh-off', outDir28);
     await a.getByTestId('share-switch').click();
@@ -803,7 +811,7 @@ try {
     check((await a.evaluate(() => navigator.clipboard.readText())) === link, '"复制链接" puts the link on the clipboard; the toast says "已复制链接"');
     await shot(a, 'd-zh-copied', outDir28);
     await closeSurface(a);
-    await a.getByTestId('share-button').click();
+    await openShare(a);
     await surfaceOpen(a);
     check((await a.getByTestId('share-link').inputValue()) === link, 'the address is stable while sharing is on');
     await closeSurface(a);
@@ -834,7 +842,7 @@ try {
     await v.waitForSelector('[data-testid=project-menu-list]');
     await settle(v, 500);
     const rows = await v.evaluate(() => [...document.querySelectorAll('[data-testid=project-menu-list] [role=menuitem]')].map((e) => e.getAttribute('data-testid') ?? e.textContent.trim()));
-    check(!rows.some((r) => ['menu-location', 'menu-orientation', 'reset-house', 'menu-export', 'menu-rename', 'menu-new-project', 'menu-duplicate'].includes(r)) && (await v.getByTestId('menu-saved').count()) === 0, `the project menu has nothing that edits (${rows.join(', ')})`);
+    check(!rows.some((r) => ['menu-undo', 'menu-redo', 'menu-share', 'menu-templates', 'menu-export', 'menu-rename', 'menu-new-project', 'menu-duplicate'].includes(r)) && (await v.getByTestId('menu-saved').count()) === 0, `the project menu has nothing that edits (${rows.join(', ')})`);
     await shot(v, 'd-zh-viewer-menu', outDir28);
     await v.keyboard.press('Escape');
     await settle(v, 500);
@@ -948,7 +956,7 @@ try {
     check(goneHtml.includes('<title>这个链接已不再分享 · openSU</title>'), 'off: the preview says so too');
     await studio(a, `/studio?p=${pid}`);
     await waitOpen(a);
-    await a.getByTestId('share-button').click();
+    await openShare(a);
     await surfaceOpen(a);
     await a.getByTestId('share-switch').click();
     await a.waitForSelector('[data-testid=share-link]', { timeout: tmo(15000) });
@@ -965,7 +973,7 @@ try {
         const o = O.page;
         // Task 029: phones open it from the project menu's first row.
         const openShareUi = async () => {
-          if (!phone) return o.getByTestId('share-button').click();
+          // Task 032: desktop too, from the project menu.
           await o.getByTestId('project-menu').click();
           await o.waitForSelector('[data-testid=menu-share]');
           await o.waitForTimeout(500);
@@ -1153,8 +1161,7 @@ try {
       await settle(page, 700);
       return page.evaluate(() => window.__inviteWhileRunning);
     };
-    const openShareUi = async (page, phone) => {
-      if (!phone) return page.getByTestId('share-button').click();
+    const openShareUi = async (page) => {
       await openMenu(page);
       await page.getByTestId('menu-share').click();
     };
@@ -1200,36 +1207,17 @@ try {
         } else {
           const tl = await toolbarLast(page);
           check(Math.abs(w - 18 - tl.right) <= 1 && tl.others.length === 0, `${tag}: the toolbar is the right-most control, 18 px from the edge (${tl.right.toFixed(1)}; others: ${tl.others.join(', ') || 'none'})`);
-          const name = await box(page, '[data-testid=project-menu]');
-          const sh = await glassBox(page, 'share-button');
-          const gap = sh.l - name.r;
-          const dc = (sh.t + sh.b) / 2 - (name.t + name.b) / 2;
-          check(Math.abs(gap - 12) <= 1 && Math.abs(dc) <= 1 && Math.abs(sh.h - 36) <= 0.5, `${tag}: "分享" right of the name on its centre line, 36 px high (gap ${gap.toFixed(1)}, centre ${dc.toFixed(1)})`);
-          const fits = await page.getByTestId('share-button').evaluate((e) => e.scrollWidth <= e.clientWidth + 0.5);
-          check(fits, `${tag}: the share label is not cut`);
+          check((await page.locator('[data-title-row] button').count()) === 1, `${tag}: nothing beside the house name (task 032: share is in the project menu)`);
         }
         await shot(page, `${tag}-signed-out`, outDir29);
         const f0 = await framing(page);
 
-        // Share, signed out: the same surface, explaining and offering sign-in.
-        if (phone) {
-          await openMenu(page);
-          const first = await page.locator('[data-testid=project-menu-list] [role=menuitem]').first().getAttribute('data-testid');
-          const second = await page.locator('[data-testid=project-menu-list] [role=menuitem]').nth(1).getAttribute('data-testid');
-          check(first === 'menu-share' && second === 'menu-signin', `${tag}: "分享" is the project menu's first row, the account row next (${first}, ${second})`);
-          await page.getByTestId('menu-share').click();
-        } else await page.getByTestId('share-button').click();
-        await page.waitForSelector('[data-testid=share-need-account] [data-testid=share-signin]', { timeout: tmo(10000) });
-        await settle(page, 1200);
-        if (!phone) {
-          const row = await box(page, '[data-title-row]');
-          await rest(page, '[data-testid=share-surface]');
-          const sf = await box(page, '[data-testid=share-surface]');
-          check(Math.abs(sf.t - row.b - 8) <= 1.5 && Math.abs(sf.l - row.l) <= 1.5, `${tag}: the share surface stands under the name's row, the module's gap (gap ${(sf.t - row.b).toFixed(1)}, left ${(sf.l - row.l).toFixed(1)})`);
-        }
-        check((await framing(page)) === f0, `${tag}: the house does not move when share opens`);
-        await shot(page, `${tag}-share-signed-out`, outDir29);
-        await closeShareUi(page);
+        // Task 032: signed out, the project menu starts with undo and redo; no share, a link to sign in at its foot.
+        await openMenu(page);
+        const rows = await page.locator('[data-testid=project-menu-list] [role=menuitem]').evaluateAll((els) => els.map((e) => e.getAttribute('data-testid')));
+        check(rows[0] === 'menu-undo' && rows[1] === 'menu-redo' && !rows.includes('menu-share') && !rows.includes('menu-account') && (await page.getByTestId('menu-signin').count()) === 1, `${tag}: signed out: undo, redo first; no share, no account row; a sign-in link (${rows.join(', ')})`);
+        await shot(page, `${tag}-menu-signed-out`, outDir29);
+        await closeMenu(page);
 
         // The invitation: not on arrival, after the first change (never while the reply runs).
         check((await invites(page)) === 0, `${tag}: no invitation on arrival`);
@@ -1266,30 +1254,23 @@ try {
         check((await framing(page)) === f0 && (await page.getByTestId('account-button').count()) === 0 && (await invites(page)) === 0, `${tag}: signed in: no avatar appears, no invitation, the house stays`);
         await shot(page, `${tag}-signed-in`, outDir29);
 
-        // The account menu from the project menu: who, allowance, keys, sign out; nothing else.
+        // Task 032: signed in, the project menu shares, renames, duplicates and makes new; no account row.
         await openMenu(page);
-        const rowText = ((await page.getByTestId('menu-account').textContent()) ?? '').trim();
-        check(rowText === email, `${tag}: the account row shows the account (${rowText})`);
-        await page.getByTestId('menu-account').click();
-        await page.waitForSelector('[data-testid=account-menu] [data-testid=account-signout]');
-        await settle(page, 1000);
-        const allowance = ((await page.getByTestId('account-allowance').textContent().catch(() => '')) ?? '').trim();
-        check(allowance.length > 0 && (await page.getByTestId('account-keys').count()) === 1 && (await page.getByTestId('account-projects').count()) === 0, `${tag}: the account menu: allowance, my keys, sign out (${allowance})`);
-        if (!phone) {
-          const nm = await box(page, '[data-house-name]');
-          await rest(page, '[data-testid=account-menu]');
-          const am = await box(page, '[data-testid=account-menu]');
-          check(Math.abs(am.t - nm.b - 8) <= 1.5 && Math.abs(am.l - nm.l) <= 1.5, `${tag}: the account menu stands under the house name (gap ${(am.t - nm.b).toFixed(1)})`);
-        }
-        check((await framing(page)) === f0, `${tag}: the house does not move when the account menu opens`);
-        await shot(page, `${tag}-account-menu`, outDir29);
-        await page.keyboard.press('Escape');
-        await page.waitForSelector('[data-testid=account-menu]', { state: 'detached', timeout: tmo(5000) });
-        await settle(page, 400);
+        const inRows = await page.locator('[data-testid=project-menu-list] [role=menuitem]').evaluateAll((els) => els.map((e) => e.getAttribute('data-testid')));
+        check(inRows.slice(0, 6).join(',') === 'menu-undo,menu-redo,menu-share,menu-rename,menu-duplicate,menu-new-project' && !inRows.includes('menu-account') && (await page.getByTestId('menu-signin').count()) === 0, `${tag}: signed in: undo, redo, share, rename, duplicate, new; no account row (${inRows.join(', ')})`);
+        check((await framing(page)) === f0, `${tag}: the house does not move when the project menu opens`);
+        await shot(page, `${tag}-menu-signed-in`, outDir29);
+        await closeMenu(page);
 
         // Share, signed in: the switch; the first configuration makes the link the view-only shots use.
-        await openShareUi(page, phone);
+        await openShareUi(page);
         await page.waitForSelector('[data-testid=share-surface-body]', { timeout: tmo(15000) });
+        if (!phone) {
+          const row = await box(page, '[data-title-row]');
+          await rest(page, '[data-testid=share-surface]');
+          const sf = await box(page, '[data-testid=share-surface]');
+          check(Math.abs(sf.t - row.b - 8) <= 1.5 && Math.abs(sf.l - row.l) <= 1.5, `${tag}: the share surface stands under the name's row, the module's gap (gap ${(sf.t - row.b).toFixed(1)}, left ${(sf.l - row.l).toFixed(1)})`);
+        }
         if (!link) {
           await page.getByTestId('share-switch').click();
           await page.waitForSelector('[data-testid=share-link]', { timeout: tmo(15000) });
@@ -1329,7 +1310,6 @@ try {
           await page.waitForSelector('[data-testid=toolbar]', { timeout: tmo(60000) });
           const early = await page.evaluate(() => ({ status: !!window.__studio?.chat?.getState().server, bar: document.querySelector('[data-testid=toolbar]').closest('.lg').getBoundingClientRect().toJSON(), name: document.querySelector('[data-testid=project-menu]').getBoundingClientRect().toJSON() }));
           await known(page);
-          await page.waitForSelector('[data-testid=share-button]', { timeout: tmo(10000) });
           await settle(page, 400);
           const late = await page.evaluate(() => ({ bar: document.querySelector('[data-testid=toolbar]').closest('.lg').getBoundingClientRect().toJSON(), name: document.querySelector('[data-testid=project-menu]').getBoundingClientRect().toJSON() }));
           const same = (a, b) => ['left', 'top', 'right', 'bottom'].every((k) => Math.abs(a[k] - b[k]) <= 0.5);
@@ -1394,9 +1374,7 @@ try {
         await quickSignIn(page, `rules${++n}@example.com`);
         await settle(page, 600);
         check((await invites(page)) === 0 && (await seen(page))?.done === true, 'rules: signed in, it ends for this browser');
-        await openMenu(page);
-        await page.getByTestId('menu-account').click();
-        await page.getByTestId('account-signout').click();
+        await signOutViaProjects(page, preview.base);
         await page.waitForFunction(() => !window.__studio.chat.getState().server?.user, null, { timeout: tmo(10000) });
         await settle(page, 600);
         await change(page, 'zh');
