@@ -1,7 +1,6 @@
-// Tooltip: the one tooltip, on Base UI's Tooltip (task 031).
-import { Tooltip as BaseTooltip } from '@base-ui/react/tooltip';
-import { type ReactElement, type ReactNode } from 'react';
-import { usePortalHost } from './surface';
+// Tooltip: the one tooltip (task 025), on Base UI's Tooltip (task 031). Its Base UI tree is in tooltip-base.tsx and
+// loads when the page is idle (task 032: the first paint does not need it); until then a control shows no tooltip.
+import { type ComponentType, type ReactElement, type ReactNode, useEffect, useSyncExternalStore } from 'react';
 
 /**
  * Focus that the code moves (a surface closing gives focus back to its
@@ -16,9 +15,30 @@ if (typeof document !== 'undefined') {
     if (e.key === 'Tab' || e.key.startsWith('Arrow')) navKeyAt = performance.now();
   }, true);
 }
+export const lastNavKey = (): number => navKeyAt;
 
 /** One delay for every tooltip; moving from one to the next shows it at once (Base UI's group timeout). */
 export const TOOLTIP_DELAY = 350;
+
+export type TooltipProps = { label: ReactNode; children: ReactElement; side?: 'top' | 'bottom' };
+
+let Impl: ComponentType<TooltipProps> | null = null;
+let loading: Promise<void> | null = null;
+const listeners = new Set<() => void>();
+
+/** Fetches the tooltip's Base UI tree (the glass layer calls it when the page is idle). */
+export function preloadTooltip(): Promise<void> {
+  loading ??= import('./tooltip-base').then((m) => {
+    Impl = m.default;
+    for (const f of listeners) f();
+  });
+  return loading;
+}
+
+const subscribe = (f: () => void) => {
+  listeners.add(f);
+  return () => listeners.delete(f);
+};
 
 /**
  * The one tooltip (task 025): the name of a control, below it, after one
@@ -29,27 +49,10 @@ export const TOOLTIP_DELAY = 350;
  * is open (it would lie under the panel). `children`: one element that
  * takes props and a ref (a button).
  */
-export function Tooltip({ label, children, side = 'bottom' }: { label: ReactNode; children: ReactElement; side?: 'top' | 'bottom' }) {
-  const host = usePortalHost();
-  return (
-    <BaseTooltip.Root
-      onOpenChange={(open, details) => {
-        if (!open) return;
-        if (details.reason === 'trigger-focus' && performance.now() - navKeyAt > 400) return details.cancel();
-        const t = details.trigger as HTMLElement | undefined;
-        const own = !!t && (t.matches('[aria-expanded=true], [data-on]') || !!t.querySelector('[aria-expanded=true], [data-on]'));
-        const bar = t?.closest('[role=toolbar]');
-        if (own || bar?.querySelector('[aria-expanded=true]')) details.cancel();
-      }}
-    >
-      <BaseTooltip.Trigger delay={TOOLTIP_DELAY} render={children} />
-      <BaseTooltip.Portal container={host ?? undefined}>
-        <BaseTooltip.Positioner side={side} sideOffset={10} collisionPadding={8} positionMethod="fixed" className="z-[60]">
-          <BaseTooltip.Popup className="lg-tip" data-slot="tooltip-content" aria-hidden="true">
-            {label}
-          </BaseTooltip.Popup>
-        </BaseTooltip.Positioner>
-      </BaseTooltip.Portal>
-    </BaseTooltip.Root>
-  );
+export function Tooltip(props: TooltipProps) {
+  const ready = useSyncExternalStore(subscribe, () => Impl !== null, () => false);
+  // Pages outside the glass layer (which preloads it when idle) fetch it once something with a tooltip is shown.
+  useEffect(() => void (ready || preloadTooltip()), [ready]);
+  if (!ready || !Impl) return props.children;
+  return <Impl {...props} />;
 }

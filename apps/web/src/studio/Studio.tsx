@@ -11,14 +11,15 @@
 import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { FrameInsets } from '@opensu/render';
 import { useT } from '../lib/i18n';
-import { ChatInput, PinnedColumn, RecentStrip, SettingsHost } from '../chat/ChatPanel';
+import { ChatInput, PinnedColumn, preloadConversation, RecentStrip, SettingsHost } from '../chat/ChatPanel';
 import { closeSignIn, restoreDraftAfterRedirect, useAccount } from '../chat/account';
 import { SignInHost } from '../chat/SignIn';
 import { AccountMenuHost, StudioToast, useSignInParam } from '../chat/AccountEntry';
 import { useSignInInvite } from '../chat/SignInInvite';
 import { KeySheetHost } from '../chat/KeyPicker';
 import { closeKeySheet, useKeys } from '../chat/keys';
-import { useChat } from '../chat/chat-store';
+import { redoNext, undoLast, useChat } from '../chat/chat-store';
+import { isViewOnly } from '../lib/view-only';
 import { useAutosave } from '../lib/autosave';
 import { useProjectSync } from '../lib/projects';
 import { restoreLang, useStudio } from '../lib/store';
@@ -29,13 +30,19 @@ import { Loading } from './Loading';
 import { type DockExtent, PhoneDock, SHEET_MS } from './PhoneDock';
 import { PlanView } from './PlanView';
 import { ProjectMissing } from './ProjectMissing';
-import { ShareButton, ShareHost } from './Share';
+import { ShareHost } from './Share';
 import { useSharedProject } from '../lib/share';
 import { DesktopTools, PanelCard, TRAY_ID } from './tools';
 import { GlassLayer, type GlassTone } from '@opensu/ui';
 import { useDerived } from './useDerived';
 import { Viewer3D } from './Viewer3D';
-import { LandscapeWalkHUD, MobileWalkHUD, useEscapeExitsWalk, WalkHUD } from './WalkHUD';
+import { useEscapeExitsWalk } from './walk-bridge';
+import { preloadPanels } from './tools';
+
+// The walk HUD and the tool panels load when needed (task 032: not part of the first paint).
+const WalkHUD = lazy(() => import('./WalkHUD').then((m) => ({ default: m.WalkHUD })));
+const MobileWalkHUD = lazy(() => import('./WalkHUD').then((m) => ({ default: m.MobileWalkHUD })));
+const LandscapeWalkHUD = lazy(() => import('./WalkHUD').then((m) => ({ default: m.LandscapeWalkHUD })));
 
 // The gallery pulls in @opensu/sheet (and with it three.js): its own lazy chunk.
 const SheetGallery = lazy(() => (import.meta.env.SSR ? new Promise<never>(() => {}) : import('./SheetGallery')));
@@ -156,6 +163,29 @@ function useInitialParams(): void {
     if (q.get('panel') === 'pin') useStudio.setState({ pinned: true, recent: false });
     const lang = q.get('lang');
     if (lang === 'en' || lang === 'zh') useStudio.getState().setLang(lang);
+  }, []);
+}
+
+/**
+ * ⌘Z / ⇧⌘Z (Ctrl on other systems; Ctrl+Y too): undo and redo of the house, as the project menu's rows do (task
+ * 032). Text fields keep their own undo; nothing happens while viewing a shared project.
+ */
+function useUndoKeys(): void {
+  useEffect(() => {
+    const on = (e: KeyboardEvent) => {
+      if (e.defaultPrevented || e.altKey || !(e.metaKey || e.ctrlKey)) return;
+      const k = e.key.toLowerCase();
+      const redo = (k === 'z' && e.shiftKey) || (k === 'y' && !e.shiftKey && e.ctrlKey && !e.metaKey);
+      if (k !== 'z' && !redo) return;
+      const el = e.target as HTMLElement | null;
+      if (el?.closest('input, textarea, select, [contenteditable=""], [contenteditable=true]')) return;
+      if (isViewOnly()) return;
+      e.preventDefault();
+      if (redo) redoNext();
+      else undoLast();
+    };
+    window.addEventListener('keydown', on);
+    return () => window.removeEventListener('keydown', on);
   }, []);
 }
 
@@ -319,6 +349,24 @@ export function Studio() {
   useSharedProject();
   useSunPlayer();
   useEscapeCloses();
+  useUndoKeys();
+  // The tool panels, the walk HUD and the surfaces' contents: fetched once the page is idle, so a first open does not
+  // wait for them.
+  useEffect(() => {
+    const go = () => {
+      preloadPanels();
+      void import('./WalkHUD');
+      void import('./share-body');
+      void import('../chat/signin-body');
+      void import('../chat/SettingsSheet');
+      void import('../chat/key-sheet-body');
+      void import('../chat/key-menu-body');
+      preloadConversation();
+    };
+    const idle = (window as Window & { requestIdleCallback?: (f: () => void, o?: { timeout: number }) => number }).requestIdleCallback;
+    if (idle) idle(go, { timeout: 2500 });
+    else window.setTimeout(go, 1500);
+  }, []);
   useEscapeExitsWalk();
   const t = useT();
   const derived = useDerived();
@@ -436,10 +484,10 @@ export function Studio() {
           {walk && <WalkEdge box={title} />}
           {/* A menu or panel opened over it makes it step aside (the glass module's rule, `stepAside`). */}
           {column && <PinnedColumn style={{ top: (title?.bottom ?? 72) + PIN_HANG, left: PIN_LEFT, bottom: PIN_BOTTOM, width: PIN_COLUMN }} />}
-          {/* The name stays put, plain ink on the drawing, pinned or not; the sidebar hangs under it. Task 029: "分享"
-              on the name's line, with the document it shares (Apple's document title menu, Notion's title row). */}
+          {/* The name stays put, plain ink on the drawing, pinned or not; the sidebar hangs under it. Task 032: share is a
+              row of the project menu (signed in only); nothing else stands on the name's line. */}
           <div ref={titleRef} className="absolute top-[18px] left-6 w-max max-w-[min(360px,calc(50vw-200px))]" data-testid="title-block" data-title-row="">
-            <TitleMenu derived={derived} trailing={<ShareButton className="shrink-0" />} />
+            <TitleMenu derived={derived} />
           </div>
           <div
             ref={modeRef}
@@ -458,7 +506,7 @@ export function Studio() {
             </div>
           )}
           {mode !== 'sheet' && <PanelCard derived={derived} onRect={onPanel} />}
-          {walk && <WalkHUD derived={derived} left={sideRight} />}
+          {walk && <Suspense fallback={null}><WalkHUD derived={derived} left={sideRight} /></Suspense>}
           {/* The input stays in the sheets view too (the column is not shown there). */}
           {!column && <DesktopDock onBox={setDockBox} onInput={setInputBox} />}
           {column && (
@@ -473,7 +521,7 @@ export function Studio() {
           <KeySheetHost />
         </div>
       ) : walkLandscape ? (
-        <LandscapeWalkHUD derived={derived} />
+        <Suspense fallback={null}><LandscapeWalkHUD derived={derived} /></Suspense>
       ) : (
         <>
           <header
@@ -488,7 +536,7 @@ export function Studio() {
             <ModeSwitch size="sm" className="shrink-0" />
           </header>
           {walk && <WalkEdge box={phoneTitle} />}
-          {walk && <MobileWalkHUD derived={derived} top={`${header?.bottom ?? 58}px`} bottom={extent?.bottom ?? 130} />}
+          {walk && <Suspense fallback={null}><MobileWalkHUD derived={derived} top={`${header?.bottom ?? 58}px`} bottom={extent?.bottom ?? 130} /></Suspense>}
           {mode !== 'sheet' ? <PhoneDock derived={derived} landscape={landscape} onExtent={onExtent} /> : <SheetInput />}
           <SettingsHost phone />
           <SignInHost />

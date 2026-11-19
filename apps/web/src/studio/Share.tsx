@@ -1,152 +1,28 @@
-// Share links (task 028; placed by task 029). The owner's side: the
-// "分享" button right of the house name, with the document it shares
-// (Apple's document title menu, Notion's title row), and the one share
-// surface it opens (a glass popover under the name's row on desktop, a
+// Share links (task 028; task 032: opened from the project menu, signed in
+// only). The owner's side: the one share surface (a glass popover under the name's row on desktop, a
 // sheet on phones; the projects page's card menu opens the same surface).
 // The viewer's side: the quiet bar that takes the prompt's place, with
 // "make my own copy" (Figma's "View only" and "Duplicate to your drafts").
-import { useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { Button, cx, Input, Notice, NoticeAction, Popover, PopoverAction, PopoverBody, PopoverDescription, PopoverFooter, PopoverHeader, PopoverTitle, Switch, usePhone } from '@opensu/ui';
+import { lazy, Suspense, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { Notice, NoticeAction, Popover, usePhone } from '@opensu/ui';
 import { useT } from '../lib/i18n';
-import { projectName, projectSync, useHouseName, useProjects, useProjectsOffered } from '../lib/projects';
-import { closeShare, copyLink, makeCopy, openShare, setShared, shareUrl, useShareUi } from '../lib/share';
-import { useStudio } from '../lib/store';
+import { projectSync, useHouseName } from '../lib/projects';
+import { closeShare, makeCopy, openShare, useShareUi } from '../lib/share';
 import { toast } from '../lib/toast';
-import { useShared, useViewOnly } from '../lib/view-only';
-import { openSignIn, useAccount } from '../chat/account';
+import { useShared } from '../lib/view-only';
+import { useAccount } from '../chat/account';
 import { useChat } from '../chat/chat-store';
 
-const SHARE_BUTTON = '[data-share-button]';
-/** The row of the house name and the share button: the share surface (and the sign-in it offers) stands under it. */
+/** What opens the surface in the studio (task 032): the project menu's trigger, the house name. */
+export const SHARE_OPENER = '[data-testid=project-menu]';
+/** The row of the house name: the share surface (and the sign-in it offers) stands under it. */
 export const TITLE_ROW = '[data-title-row]';
-
-/* ------------------------------------------------------------------ */
-/* The button                                                          */
-/* ------------------------------------------------------------------ */
-
-/**
- * "分享": a glass capsule on the house name's line, as high as the name
- * (desktop; phones have the project menu's row). There whenever projects
- * are kept with accounts here (signed out it explains and offers sign-in);
- * absent while viewing a shared project.
- */
-export function ShareButton({ className }: { className?: string }) {
-  const t = useT();
-  const offered = useProjectsOffered();
-  const viewOnly = useViewOnly();
-  const open = useShareUi((s) => s.open && !s.project);
-  const ref = useRef<HTMLButtonElement>(null);
-  if (viewOnly || !offered) return null;
-  return (
-    <span className={cx('inline-flex', className)}>
-      <Button
-        variant="glass"
-        height={36}
-        ref={ref}
-        onClick={() => (open ? closeShare() : openShare(ref.current, null))}
-        aria-haspopup="dialog"
-        aria-expanded={open}
-        data-share-button=""
-        data-testid="share-button"
-      >
-        {t('share.button')}
-      </Button>
-    </span>
-  );
-}
 
 /* ------------------------------------------------------------------ */
 /* The surface                                                         */
 /* ------------------------------------------------------------------ */
 
-function ShareBody() {
-  const t = useT();
-  const phone = usePhone();
-  const lang = useStudio((s) => s.lang);
-  const ui = useShareUi();
-  const user = useChat((s) => s.server?.user ?? null);
-  const openId = useProjects((s) => s.openId);
-  const id = ui.project ?? openId;
-  const meta = useProjects((s) => s.projects.find((p) => p.id === id) ?? null);
-  const studioName = useHouseName();
-  const name = meta ? projectName(lang, meta) : studioName;
-  const field = useRef<HTMLInputElement>(null);
-  const shared = !!meta?.share;
-  // While the switch is on its way, it shows where it is going.
-  const [want, setWant] = useState<boolean | null>(null);
-  useEffect(() => {
-    if (!ui.busy) setWant(null);
-  }, [ui.busy]);
-  const on = want ?? shared;
-  const url = meta?.share ? shareUrl(meta.share) : '';
-  const canSend = phone && typeof navigator !== 'undefined' && typeof navigator.share === 'function';
-
-  const head = (
-    <PopoverHeader onClose={closeShare} closeLabel={t('account.close')} closeTestId="share-close">
-      <PopoverTitle id="share-title">{meta ? t('share.titleOf', { name }) : t('share.button')}</PopoverTitle>
-    </PopoverHeader>
-  );
-
-  if (!user || !meta) {
-    // Signed out, or this house is not (yet) a project of the account.
-    return (
-      <div className="contents" data-testid="share-need-account">
-          {head}
-          <PopoverDescription>{user ? t('share.notKept') : t('share.needAccount')}</PopoverDescription>
-          {!user && (
-            <PopoverFooter>
-              <PopoverAction
-                onClick={() => {
-                  // Under the name's row, as the share surface was (it grows out of and back into the share button).
-                  useShareUi.setState({ open: false, afterSignIn: true });
-                  openSignIn(document.querySelector<HTMLElement>(SHARE_BUTTON), 'menu');
-                }}
-                data-testid="share-signin"
-              >
-                {t('account.signIn')}
-              </PopoverAction>
-            </PopoverFooter>
-          )}
-      </div>
-    );
-  }
-
-  return (
-    <div className="contents" data-testid="share-surface-body" data-shared={shared ? '' : undefined}>
-      {head}
-      <PopoverBody>
-        <div className="flex items-center gap-3">
-          <label htmlFor="share-switch" className="min-w-0 flex-1 cursor-pointer text-[14.5px] leading-5 font-medium">
-            {t('share.anyone')}
-          </label>
-          <Switch
-            id="share-switch"
-            checked={on}
-            disabled={ui.busy}
-            onChange={(v) => {
-              setWant(v);
-              void setShared(meta.id, v);
-            }}
-            data-testid="share-switch"
-          />
-        </div>
-        {ui.failed && (
-          <p className="text-[13.5px] leading-5 text-ink" role="alert" data-testid="share-failed">
-            {t('share.failed')}
-          </p>
-        )}
-        {shared && !ui.busy && <Input ref={field} readOnly mono size="md" aria-label={t('share.link')} value={url} onFocus={(e) => e.target.select()} data-testid="share-link" />}
-      </PopoverBody>
-      <PopoverFooter note={<span data-testid="share-note">{t('share.viewersCannot')}</span>}>
-        {shared && !ui.busy && (
-          <PopoverAction onClick={() => void copyLink(url, t('share.copied'), { title: name, send: canSend, field: field.current })} data-testid="share-copy">
-            {canSend ? t('share.send') : t('share.copy')}
-          </PopoverAction>
-        )}
-      </PopoverFooter>
-    </div>
-  );
-}
+const ShareBody = lazy(() => import('./share-body'));
 
 /**
  * The one share surface: on desktop under the house name's row (the
@@ -177,7 +53,7 @@ export function ShareHost() {
         if (!useAccount.getState().open) useShareUi.setState({ afterSignIn: false });
         return;
       }
-      if (p.on && p.openId && !p.busy) openShare(document.querySelector<HTMLElement>(SHARE_BUTTON), null);
+      if (p.on && p.openId && !p.busy) openShare(document.querySelector<HTMLElement>(SHARE_OPENER), null);
     };
     const a = useChat.subscribe(check);
     const b = projectSync.store.subscribe(check);
@@ -191,7 +67,7 @@ export function ShareHost() {
   if (!shown) return null;
   // The studio: under the row of the house name it shares (as the project menu stands under the name). The projects
   // page: under the card's "more" button. Base UI closes it (Escape: focus back to its opener; a press outside).
-  const opener = () => (anchorEl?.isConnected ? anchorEl : document.querySelector<HTMLElement>(SHARE_BUTTON));
+  const opener = () => (anchorEl?.isConnected ? anchorEl : document.querySelector<HTMLElement>(SHARE_OPENER));
   const row = () => opener()?.closest<HTMLElement>(TITLE_ROW) ?? null;
   const anchor = () => row() ?? opener();
   return (
@@ -208,7 +84,9 @@ export function ShareHost() {
       label={t('share.button')}
       testId="share-surface"
     >
-      <ShareBody />
+      <Suspense fallback={null}>
+        <ShareBody />
+      </Suspense>
     </Popover>
   );
 }

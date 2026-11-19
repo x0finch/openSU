@@ -1,23 +1,19 @@
 // Studio chrome around the drawing: the house name (with a quiet project
 // menu), the mode switch, the first-visit hints and the day player. The
 // toolbar and its panels live in tools.tsx, the conversation in chat/.
-import { useNavigate } from '@tanstack/react-router';
 import { type ReactNode, type RefObject, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { TEMPLATE_META } from '@opensu/agent/templates-meta';
-import { ChevronDownSmallIcon, CloseIcon, CompassIcon, CopyIcon, DownloadIcon, FolderIcon, LayersIcon, Mark, PencilIcon, PersonIcon, PinIcon, PlusIcon, ResetViewIcon, ShareIcon } from '../components/icons';
+import { ChevronDownSmallIcon, CloseIcon, CopyIcon, DownloadIcon, FolderIcon, LayersIcon, Mark, PencilIcon, PersonIcon, PlusIcon, ShareIcon } from '../components/icons';
 import { cx } from '../components/ui';
 import { Button, Dot, Menu, MenuItem, MenuLabel, MenuSeparator, NameInput, Segmented, Skeleton } from '@opensu/ui';
 import { type MessageKey, useT } from '../lib/i18n';
 import { freshView, type Mode, useStudio } from '../lib/store';
-import { resetToTemplate } from '../lib/autosave';
 import { fmtArea, fmtLen, goToProjects, projectSync, useHouseName, useProjects, useProjectsOffered } from '../lib/projects';
-import { bearingText, frontBearing, placeText } from '../lib/site';
 import { useViewOnly } from '../lib/view-only';
 import { openShare } from '../lib/share';
-import { exportConversation, replaceHouse, useChat } from '../chat/chat-store';
-import { accountName, openAccount } from '../chat/AccountEntry';
-import { useKeys } from '../chat/keys';
-import { showKeyChoices } from '../chat/KeyPicker';
+import { exportConversation, redoNext, replaceHouse, undoLast, useChat, useUndoRedo } from '../chat/chat-store';
+import { openAccount } from '../chat/AccountEntry';
+import { RedoIcon, UndoIcon } from '../chat/icons';
 import type { Derived } from './house-data';
 import { loadHouseData } from './useDerived';
 
@@ -167,32 +163,39 @@ function Item({ children, onSelect, value, icon, danger, testId }: { children: R
 
 const Sep = () => <MenuSeparator />;
 
+/** ⌘ on Apple keyboards, Ctrl elsewhere (the shortcut shown beside undo and redo). */
+const isMac = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent);
+export const UNDO_KEYS = isMac ? '⌘Z' : 'Ctrl+Z';
+export const REDO_KEYS = isMac ? '⇧⌘Z' : 'Ctrl+Shift+Z';
+
+/**
+ * The project menu (task 032, the owner's plan A): only what acts on the open project, as a file's menu has it
+ * (Figma, macOS). Undo and redo of the house; share, rename, duplicate and new (signed in) or a fresh start from a
+ * template (this browser's one house); all projects; the conversation's export; where edits are kept. Account,
+ * language and "about" live on /projects; the AI key on the conversation's own key picker.
+ */
 function ProjectMenu({ open, anchor, onClose, compact, onRename, ref }: { open: boolean; anchor: () => HTMLElement | null; onClose: (focus: boolean) => void; compact?: boolean; onRename: () => void; ref: RefObject<HTMLElement | null> }) {
   const t = useT();
-  const navigate = useNavigate();
-  const lang = useStudio((s) => s.lang);
-  const site = useStudio((s) => s.house?.site);
-  const setLang = useStudio((s) => s.setLang);
   const setSitePanel = useStudio((s) => s.setSitePanel);
-  const setSettingsOpen = useChat((s) => s.setSettingsOpen);
   const authOn = useChat((s) => !!(s.server?.auth?.email || s.server?.auth?.google));
-  const user = useChat((s) => s.server?.user ?? null);
   const hasChat = useChat((s) => s.items.length > 0);
-  // Task 027: signed in where projects are kept with the account, a template is a new project ("My projects"),
-  // so the rows that replace the open house go; the line at the bottom says where edits are kept.
+  // A house someone has changed (a step of the assistant's or an edit in the studio, kept with the conversation).
+  const edited = useChat((s) => s.items.some((i) => i.changes?.length));
+  const steps = useUndoRedo();
   const projectsOffered = useProjectsOffered();
   const cloud = useProjects((s) => s.on);
   const openId = useProjects((s) => s.openId);
   const failed = useProjects((s) => s.failed);
-  // Viewing a shared project (task 028): only the account, the language and "about"; nothing that edits.
+  // Viewing a shared project (task 028): nothing that edits.
   const edit = !useViewOnly();
   const [templates, setTemplates] = useState(false);
-  const [confirm, setConfirm] = useState(false);
-  // Closed: the templates and the reset confirmation fold back.
+  /** A template picked over an edited house: the menu asks first. */
+  const [pending, setPending] = useState<string | null>(null);
+  // Closed: the templates and the question fold back.
   useLayoutEffect(() => {
     if (open) return;
     setTemplates(false);
-    setConfirm(false);
+    setPending(null);
   }, [open]);
   const pick = async (id: string) => {
     onClose(false);
@@ -204,6 +207,8 @@ function ProjectMenu({ open, anchor, onClose, compact, onRename, ref }: { open: 
     // A new house: say where it stands (or skip).
     setSitePanel({ kind: 'location', intro: true });
   };
+  const local = edit && !(cloud && openId);
+  const pendingMeta = pending ? TEMPLATE_META.find((m) => m.id === pending) : null;
   return (
     <Menu
       ref={ref}
@@ -215,50 +220,22 @@ function ProjectMenu({ open, anchor, onClose, compact, onRename, ref }: { open: 
       style={{ width: compact ? 'min(300px, calc(100vw - 24px))' : 300 }}
       testId={open ? 'project-menu-list' : undefined}
     >
-      {/* Phones (task 029): "分享" first. The top row has no room for a button beside the name (measured at 390 and
-          360 px wide); the same share surface opens, as a sheet. Desktop has the button beside the name. */}
-      {compact && edit && projectsOffered && (
-        <Item icon={<ShareIcon width={16} height={16} />} onSelect={() => { onClose(false); openShare(null, null); }} testId="menu-share">
-          {t('share.button')}
-        </Item>
-      )}
-      {/* The account (task 019; task 029: the studio's only account entry, the same surfaces as the account button on
-          /projects): hidden when this server offers no sign-in. */}
-      {authOn && (
+      {edit && (
         <>
-          <MenuItem
-            icon={<PersonIcon width={17} height={17} />}
-            onClick={(e) => {
-              openAccount(e.currentTarget, 'menu');
-              onClose(false);
-            }}
-            aria-haspopup={user ? 'menu' : 'dialog'}
-            data-testid={user ? 'menu-account' : 'menu-signin'}
-          >
-            {user ? accountName(user) : t('account.signIn')}
+          <MenuItem icon={<UndoIcon width={16} height={16} />} detail={UNDO_KEYS} disabled={!steps.undo} className="disabled:text-ink-3" onClick={() => undoLast()} data-testid="menu-undo">
+            <span className="block truncate">{steps.undo ? t('menu.undoStep', { s: steps.undo }) : t('menu.undo')}</span>
           </MenuItem>
+          <MenuItem icon={<RedoIcon width={16} height={16} />} detail={REDO_KEYS} disabled={!steps.redo} className="disabled:text-ink-3" onClick={() => redoNext()} data-testid="menu-redo">
+            <span className="block truncate">{steps.redo ? t('menu.redoStep', { s: steps.redo }) : t('menu.redo')}</span>
+          </MenuItem>
+          <Sep />
         </>
       )}
-      {/* Task 027: the file browser (Figma's "Back to files"); signed out it shows this browser's project and invites sign-in. */}
-      {projectsOffered && (
-        <Item icon={<FolderIcon width={17} height={17} />} onSelect={() => { onClose(false); void goToProjects(); }} testId="menu-all-projects">
-          {t('projects.all')}
-        </Item>
-      )}
-      {(authOn || projectsOffered) && <Sep />}
-      {/* The open project, as a file menu has it (Figma, Google Docs): new, rename, duplicate. */}
-      {cloud && openId && (
+      {/* Signed in, the project kept with the account: share (task 032: only here, only then), rename, duplicate, new. */}
+      {edit && cloud && openId && (
         <>
-          <Item
-            icon={<PlusIcon width={17} height={17} />}
-            testId="menu-new-project"
-            onSelect={async () => {
-              onClose(false);
-              const r = await projectSync.create();
-              if (r === null) setSitePanel({ kind: 'location', intro: true });
-            }}
-          >
-            {t('projects.new')}
+          <Item icon={<ShareIcon width={16} height={16} />} onSelect={() => { onClose(false); openShare(null, null); }} testId="menu-share">
+            {t('share.button')}
           </Item>
           <Item icon={<PencilIcon width={16} height={16} />} testId="menu-rename" onSelect={() => { onClose(false); onRename(); }}>
             {t('projects.rename')}
@@ -274,97 +251,113 @@ function ProjectMenu({ open, anchor, onClose, compact, onRename, ref }: { open: 
           >
             {t('projects.copy')}
           </Item>
+          <Item
+            icon={<PlusIcon width={17} height={17} />}
+            testId="menu-new-project"
+            onSelect={async () => {
+              onClose(false);
+              const r = await projectSync.create();
+              if (r === null) setSitePanel({ kind: 'location', intro: true });
+            }}
+          >
+            {t('projects.new')}
+          </Item>
           <Sep />
         </>
       )}
-      {edit && (
-        <>
-          <Item icon={<PinIcon width={17} height={17} />} value={site ? placeText(site, lang) : ''} onSelect={() => { onClose(false); setSitePanel({ kind: 'location' }); }} testId="menu-location">
-            {t('more.location')}
-          </Item>
-          <Item icon={<CompassIcon width={17} height={17} />} value={site ? bearingText(frontBearing(site.northDeg), lang) : ''} onSelect={() => { onClose(false); setSitePanel({ kind: 'orientation' }); }} testId="menu-orientation">
-            {t('more.orientation')}
-          </Item>
-        </>
+      {/* This browser's one house: a fresh start from a template replaces it (undoable); an edited house asks first. */}
+      {local && !pending && (
+        <Item icon={<LayersIcon width={17} height={17} />} onSelect={() => setTemplates(!templates)} value={<ChevronDownSmallIcon width={15} height={15} className={cx('transition-transform', templates && 'rotate-180')} />} testId="menu-templates">
+          {t('tpl.restart')}
+        </Item>
       )}
-      {edit && !cloud && <Sep />}
-      {edit && !cloud && (
-      <Item icon={<LayersIcon width={17} height={17} />} onSelect={() => setTemplates(!templates)} value={<ChevronDownSmallIcon width={15} height={15} className={cx('transition-transform', templates && 'rotate-180')} />}>
-        {t('more.templates')}
-      </Item>
-      )}
-      {edit && !cloud && templates && (
+      {local && templates && !pending && (
         <div className="mb-1 ml-9">
           {TEMPLATE_META.map((m) => (
-            <Item key={m.id} onSelect={() => void pick(m.id)} value={`${m.plot.width / 1000} × ${m.plot.depth / 1000} m`}>
+            <Item key={m.id} onSelect={() => (edited ? setPending(m.id) : void pick(m.id))} value={`${m.plot.width / 1000} × ${m.plot.depth / 1000} m`} testId={`menu-template-${m.id}`}>
               {m.name}
             </Item>
           ))}
-          <MenuLabel small={t('tpl.note')} />
         </div>
       )}
-      {edit && !cloud && (
-      <Item
-        icon={<ResetViewIcon width={16} height={16} />}
-        danger={confirm}
-        testId="reset-house"
-        onSelect={() => {
-          if (!confirm) setConfirm(true);
-          else {
-            onClose(false);
-            void resetToTemplate();
-          }
-        }}
-      >
-        {confirm ? t('house.resetConfirm') : t('house.reset')}
-      </Item>
+      {local && pending && (
+        <div data-testid="menu-template-confirm">
+          <MenuLabel title={t('tpl.confirmTitle', { name: pendingMeta?.name ?? '' })} />
+          <MenuLabel small={t('tpl.confirm')} />
+          {authOn && (
+            <MenuItem
+              icon={<PersonIcon width={17} height={17} />}
+              onClick={(e) => {
+                openAccount(e.currentTarget, 'menu');
+                onClose(false);
+              }}
+              data-testid="menu-template-signin"
+            >
+              {t('account.signIn')}
+            </MenuItem>
+          )}
+          <Item icon={<LayersIcon width={17} height={17} />} danger onSelect={() => void pick(pending)} testId="menu-template-replace">
+            {t('tpl.replace')}
+          </Item>
+        </div>
       )}
-      {edit && <Sep />}
-      <Item value={t('lang.switch')} onSelect={() => setLang(lang === 'zh' ? 'en' : 'zh')} icon={<span className="text-[11px] font-semibold">{lang === 'zh' ? '文' : 'A'}</span>}>
-        {t('more.lang')}
-      </Item>
-      {edit && (
-      <Item
-        icon={<SparkDot />}
-        onSelect={() => {
-          onClose(false);
-          // Signed in where keys live with the account (task 022): the key picker; else the browser's key settings.
-          if (useKeys.getState().ready) showKeyChoices();
-          else setSettingsOpen(true);
-        }}
-      >
-        {t('chat.settings')}
-      </Item>
+      {local && <Sep />}
+      {/* Task 027: the file browser (Figma's "Back to files"); signed out it shows this browser's project and invites sign-in. */}
+      {projectsOffered && (
+        <Item icon={<FolderIcon width={17} height={17} />} onSelect={() => { onClose(false); void goToProjects(); }} testId="menu-all-projects">
+          {t('projects.all')}
+        </Item>
       )}
       {/* Task 020: the conversation as one JSON file, built here (no server call). */}
       {edit && (
-      <MenuItem
-        icon={<DownloadIcon width={16} height={16} />}
-        disabled={!hasChat}
-        className="disabled:text-ink-3"
-        onClick={() => {
-          onClose(false);
-          exportConversation();
-        }}
-        data-testid="menu-export"
-      >
-        {t('more.export')}
-      </MenuItem>
+        <MenuItem
+          icon={<DownloadIcon width={16} height={16} />}
+          disabled={!hasChat}
+          className="disabled:text-ink-3"
+          onClick={() => {
+            onClose(false);
+            exportConversation();
+          }}
+          data-testid="menu-export"
+        >
+          {t('more.export')}
+        </MenuItem>
       )}
-      <MenuItem icon={<Mark width={15} height={15} />} onClick={() => void navigate({ to: '/' })}>
-        {t('more.about')}
-      </MenuItem>
-      {/* No status while saving works; one quiet line when it does not (task 027). */}
+      {/* Where edits are kept; signed out, a link to sign in. One quiet line when saving fails (task 027). */}
       {edit && (
-      <MenuLabel testId="menu-saved" flag={failed ?? undefined} small={failed === 'retry' ? t('projects.notSynced') : failed === 'too-large' ? t('projects.tooLarge') : failed === 'full' ? t('projects.notAdded') : cloud ? t('house.autosavedAccount') : t('house.autosaved')} />
+        <MenuLabel
+          testId="menu-saved"
+          flag={failed ?? undefined}
+          small={
+            failed === 'retry' ? t('projects.notSynced') : failed === 'too-large' ? t('projects.tooLarge') : failed === 'full' ? t('projects.notAdded') : cloud ? t('house.autosavedAccount') : (
+              <>
+                {t('house.autosaved')}
+                {authOn && (
+                  <>
+                    {' · '}
+                    <Button
+                      variant="link"
+                      className="h-auto px-0 align-baseline text-[12px] font-semibold text-ink underline underline-offset-2"
+                      onClick={(e) => {
+                        openAccount(e.currentTarget, 'menu');
+                        onClose(false);
+                      }}
+                      data-testid="menu-signin"
+                    >
+                      {t('menu.signInLink')}
+                    </Button>
+                    {t('menu.signInRest')}
+                  </>
+                )}
+              </>
+            )
+          }
+        />
       )}
     </Menu>
   );
 }
 
-function SparkDot() {
-  return <svg viewBox="0 0 24 24" width={16} height={16} aria-hidden="true"><path d="M12 3.5c.5 4.3 2.7 6.9 7 8-4.3 1.1-6.5 3.7-7 8-.5-4.3-2.7-6.9-7-8 4.3-1.1 6.5-3.7 7-8Z" fill="none" stroke="currentColor" strokeWidth={1.4} strokeLinejoin="round" /></svg>;
-}
 
 export function ModeSwitch({ size = 'md', className }: { size?: 'md' | 'lg' | 'sm'; className?: string }) {
   const t = useT();

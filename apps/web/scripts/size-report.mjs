@@ -9,8 +9,8 @@ const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const client = join(root, 'dist/client');
 const assets = join(client, 'assets');
 // Task 031: /studio's initial JS went from 199.2 KB to 243.4 KB with Base UI (Tooltip, Radio, Switch, Slider, Field on
-// first paint; Popover, Menu and the Vaul sheet load on first use). Budget raised from 200 to 250 KB: the lead decides.
-const BUDGET = { studioInitial: 250 * 1024, viewer: 300 * 1024, assistant: 150 * 1024, places: 400 * 1024 };
+// first paint; Popover, Menu and the Vaul sheet load on first use). Task 032: the tooltip, the tool panels, the walk HUD and the sign-in, share and settings contents load when idle; back to 200 KB (owner).
+const BUDGET = { studioInitial: 200 * 1024, viewer: 300 * 1024, assistant: 150 * 1024, places: 400 * 1024 };
 
 const gz = new Map();
 const deps = new Map();

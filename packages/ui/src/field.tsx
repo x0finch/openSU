@@ -35,7 +35,3 @@ export function Field({ label, hint, children }: { label: ReactNode; hint?: Reac
   );
 }
 
-/** A name typed in place on paper (the house name in the studio, a card's name on /projects). */
-export function NameInput({ className, ref, ...rest }: InputHTMLAttributes<HTMLInputElement> & { ref?: Ref<HTMLInputElement> }) {
-  return <BaseInput ref={ref} {...(rest as object)} className={cx('min-w-0 rounded-[8px] bg-page px-1.5 font-semibold outline outline-1 outline-ink-3 focus:outline-2 focus:outline-ink', className)} />;
-}

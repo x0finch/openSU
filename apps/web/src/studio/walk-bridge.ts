@@ -4,6 +4,7 @@
 import { useEffect, useState } from 'react';
 import type { WalkState } from '@opensu/render';
 import type { Engine } from './engine';
+import { useStudio } from '../lib/store';
 
 type Listener = (s: WalkState | null) => void;
 
@@ -52,4 +53,19 @@ export function useWalkLevel(): string | null {
   const [level, setLevel] = useState<string | null>(() => walkBridge.state?.level ?? null);
   useEffect(() => walkBridge.subscribe((s) => setLevel(s?.level ?? null)), []);
   return level;
+}
+
+/** Escape leaves walk mode (desktop keyboards), unless typing in a field. */
+export function useEscapeExitsWalk(): void {
+  useEffect(() => {
+    const on = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape' || e.defaultPrevented) return;
+      const t = e.target as HTMLElement | null;
+      if (t && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName))) return;
+      const s = useStudio.getState();
+      if (s.walk) s.setWalk(false);
+    };
+    window.addEventListener('keydown', on);
+    return () => window.removeEventListener('keydown', on);
+  }, []);
 }

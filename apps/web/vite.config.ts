@@ -54,7 +54,10 @@ export default defineConfig({
   build: {
     // Size budgets are enforced by scripts/size-report.mjs instead.
     chunkSizeWarningLimit: 1500,
+    // OPENSU_SOURCEMAP=1: source maps of the client build, to see what a chunk is made of.
+    sourcemap: process.env.OPENSU_SOURCEMAP ? true : false,
   },
+
   plugins: [
     // OPENSU_STATE: a separate local state folder (D1 etc.) for test runs
     // (scripts/account-e2e.mjs), so they never touch the dev database.

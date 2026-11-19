@@ -1,0 +1,438 @@
+// The tool panels' contents (views, levels, sun, the site panels): loaded when the page is idle or on first open
+// (task 032: the first paint does not need them). tools.tsx keeps the toolbar and where a panel stands.
+import { Fragment, type KeyboardEvent as RKeyboardEvent, type ReactNode, useLayoutEffect, useRef, useState } from 'react';
+import { ChevronRightIcon, CheckIcon, CloseIcon, PauseIcon, PinIcon, PlayIcon, ResetViewIcon, ViewIcon } from '../components/icons';
+import { cx } from '../components/ui';
+import { Button, Choice, PopoverHeader, PopoverTitle, Row, Separator, Slider, Tooltip } from '@opensu/ui';
+import { levelName, type MessageKey, useT } from '../lib/i18n';
+import { bearingText, bearingWords, frontBearing, placeText, utcText } from '../lib/site';
+import { useViewOnly } from '../lib/view-only';
+import { SUN_DATES, type SunDateId, type Tray, useStudio } from '../lib/store';
+import { clock, compass, dayText, hourTicks, sunDate } from '../lib/sun';
+import { presetById, type ViewId } from '../lib/views';
+import type { Derived } from './house-data';
+import { LocationPanel, OrientationPanel } from './SitePanels';
+import { useOpenPanel } from './tools';
+
+/** Height of a level cutaway above its floor, m (the kernel's CUT_HEIGHT, 1250 mm). */
+const CUT_HEIGHT_M = 1.25;
+
+/* ------------------------------------------------------------------ */
+/* Panel contents                                                      */
+/* ------------------------------------------------------------------ */
+
+/** A tool panel's header: its title and the close button (the base header, one for every surface). */
+function PanelHead({ title, onClose }: { title: string; onClose: () => void }) {
+  const t = useT();
+  return (
+    <PopoverHeader onClose={onClose} closeLabel={t('tools.close')} closeTestId="panel-close">
+      <PopoverTitle>{title}</PopoverTitle>
+    </PopoverHeader>
+  );
+}
+
+/** The nine presets as a small plan diagram: corners = axonometric, sides = elevations; eye level and reset below. */
+function ViewsPanel({ onClose }: { onClose: () => void }) {
+  const t = useT();
+  const walk = useStudio((s) => s.walk);
+  const view = useStudio((s) => (walk || s.viewMoved ? null : s.view));
+  const setView = useStudio((s) => s.setView);
+  const resetView = useStudio((s) => s.resetView);
+  const label = (id: ViewId) => (presetById(id).kind === 'elevation' ? t(`view.${id}`) : t(`viewShort.${id}` as MessageKey));
+  const cell = (id: ViewId) => (
+    <Tooltip key={id} label={t(`view.${id}`)}>
+      <Button
+        variant={view === id ? 'plain' : 'quiet'}
+        tile
+        inverted={view === id}
+        aria-label={t(`view.${id}`)}
+        aria-pressed={view === id}
+        onClick={() => setView(id)}
+        className="h-[50px] w-full min-w-0 flex-1 flex-col gap-[3px] px-1 text-[11.5px] leading-[14px] font-normal"
+      >
+        <ViewIcon id={id} width={20} height={20} className={view === id ? 'text-on-ink' : 'text-ink'} />
+        <span className="max-w-full truncate">{label(id)}</span>
+      </Button>
+    </Tooltip>
+  );
+  return (
+    <>
+      <PanelHead title={t('views.title')} onClose={onClose} />
+      <div className="grid grid-cols-3 gap-1">
+        {cell('axo-nw')}
+        {cell('elev-north')}
+        {cell('axo-ne')}
+        {cell('elev-west')}
+        <div className="grid place-items-center text-[11.5px] text-ink-3" aria-hidden="true">N ↑</div>
+        {cell('elev-east')}
+        {cell('axo-sw')}
+        {cell('elev-south')}
+        {cell('axo-se')}
+      </div>
+      <div className="flex gap-1.5">
+        <Button variant="tinted" size="sm" inverted={view === 'eye-sw'} aria-label={t('view.eye-sw')} aria-pressed={view === 'eye-sw'} onClick={() => setView('eye-sw')} icon={<ViewIcon id="eye-sw" width={15} height={15} />} className="flex-1 text-[12.5px]">
+          {t('views.eye')}
+        </Button>
+        <Button variant="tinted" size="sm" aria-label={t('view.reset')} onClick={resetView} icon={<ResetViewIcon width={14} height={14} />} className="flex-1 text-[12.5px]">
+          {t('view.resetShort')}
+        </Button>
+      </div>
+    </>
+  );
+}
+
+/** A list of radio rows (arrow keys move the choice). */
+function RadioRows<T extends string>({ label, value, onChange, rows }: { label: string; value: T; onChange: (v: T) => void; rows: { value: T; label: string; meta?: string }[] }) {
+  const ref = useRef<HTMLDivElement>(null);
+  const onKey = (e: RKeyboardEvent) => {
+    const d = e.key === 'ArrowDown' || e.key === 'ArrowRight' ? 1 : e.key === 'ArrowUp' || e.key === 'ArrowLeft' ? -1 : 0;
+    if (!d) return;
+    e.preventDefault();
+    const i = Math.max(0, rows.findIndex((r) => r.value === value));
+    const next = rows[(i + d + rows.length) % rows.length]!;
+    onChange(next.value);
+    ref.current?.querySelector<HTMLElement>(`[data-value="${next.value}"]`)?.focus();
+  };
+  return (
+    <div ref={ref} role="radiogroup" aria-label={label} onKeyDown={onKey} className="flex flex-col gap-0.5">
+      {rows.map((r) => {
+        const on = r.value === value;
+        return (
+          <Button
+            key={r.value}
+            variant="plain"
+            row
+            selected={on}
+            role="radio"
+            aria-checked={on}
+            tabIndex={on ? 0 : -1}
+            data-value={r.value}
+            onClick={() => onChange(r.value)}
+            className={cx('gap-2.5 px-3 text-[13px]', !on && 'font-normal')}
+          >
+            {on ? <CheckIcon width={16} height={16} className="shrink-0" /> : <span className="w-4 shrink-0" />}
+            <span className="min-w-0 flex-1 truncate">{r.label}</span>
+            {r.meta && <span className="tnum shrink-0 text-[11.5px] font-normal text-ink-3">{r.meta}</span>}
+          </Button>
+        );
+      })}
+    </div>
+  );
+}
+
+const elevText = (mm: number) => (Math.abs(mm) < 1 ? '±0.00' : `${mm > 0 ? '+' : '−'}${(Math.abs(mm) / 1000).toFixed(2)} m`);
+
+function LevelsPanel({ derived, onClose }: { derived: Derived; onClose: () => void }) {
+  const t = useT();
+  const lang = useStudio((s) => s.lang);
+  const mode = useStudio((s) => s.mode);
+  const cut = useStudio((s) => s.cut);
+  const setCut = useStudio((s) => s.setCut);
+  const level = useStudio((s) => s.level);
+  const setLevel = useStudio((s) => s.setLevel);
+  const paused = useStudio((s) => !!s.cut && presetById(s.view).kind !== 'axo');
+  // Top floor first, as in a section.
+  const rows = [...derived.levels].reverse().map((l) => ({
+    value: l.id,
+    label: levelName(lang, l.name, l.index, l.isAttic),
+    meta: elevText(derived.resolved.levels.find((x) => x.id === l.id)?.elevation ?? 0),
+  }));
+  return (
+    <>
+      <PanelHead title={t('levels.label')} onClose={onClose} />
+      {mode === 'plan' ? (
+        <RadioRows label={t('levels.label')} value={level ?? derived.levels[0]!.id} onChange={setLevel} rows={rows} />
+      ) : (
+        <>
+          <RadioRows<string> label={t('cut.label')} value={cut ?? 'all'} onChange={(v) => setCut(v === 'all' ? null : v)} rows={[{ value: 'all', label: t('cut.all'), meta: t('levels.whole') }, ...rows]} />
+          <p className="text-[11.5px] leading-4 text-ink-3">{paused ? t('cut.paused') : t('levels.cutHeight', { h: CUT_HEIGHT_M.toFixed(2) })}</p>
+        </>
+      )}
+    </>
+  );
+}
+
+/** Time of day on a sunrise..sunset track: a glass-thumb slider and its hour ticks (never colliding). */
+export function SunSlider({ className }: { className?: string }) {
+  const t = useT();
+  const lang = useStudio((s) => s.lang);
+  const sun = useStudio((s) => s.sun);
+  const info = useStudio((s) => s.sunInfo);
+  const setSun = useStudio((s) => s.setSun);
+  const lo = info?.sunrise ?? 360;
+  const hi = info?.sunset ?? 1080;
+  const value = Math.min(hi, Math.max(lo, Math.round(sun.minutes)));
+  const ref = useRef<HTMLDivElement>(null);
+  const [width, setWidth] = useState(260);
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const on = () => setWidth(el.clientWidth || 260);
+    on();
+    const ro = new ResizeObserver(on);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+  const loText = clock(lo, lang);
+  const hiText = clock(hi, lang);
+  // End labels take ~6 px per character (half of it beside the end), hour labels two digits.
+  const endGap = Math.max(loText.length, hiText.length) * 6.2 + 4;
+  return (
+    <div className={cx('relative min-w-0 pb-3.5', className)}>
+      <Slider
+        min={lo}
+        max={hi}
+        value={value}
+        idle={!sun.on}
+        onChange={(v) => setSun({ on: true, playing: false, minutes: v })}
+        ariaLabel={t('sun.time')}
+        ariaValueText={clock(value, lang)}
+      />
+      <div ref={ref} className="tnum pointer-events-none absolute inset-x-[19px] bottom-0 h-3 text-[11px] leading-none whitespace-nowrap text-ink-2" aria-hidden="true" data-testid="sun-ticks">
+        <span className="absolute top-0 left-[-19px]">{loText}</span>
+        {hourTicks(lo, hi, width, endGap).map((h) => (
+          <span key={h} className="absolute top-0 -translate-x-1/2" style={{ left: `${((h * 60 - lo) / (hi - lo)) * 100}%` }}>
+            {h % 24}
+          </span>
+        ))}
+        <span className="absolute top-0 right-[-19px]">{hiText}</span>
+      </div>
+    </div>
+  );
+}
+
+function PlayButton({ size = 36 }: { size?: number }) {
+  const t = useT();
+  const sun = useStudio((s) => s.sun);
+  const info = useStudio((s) => s.sunInfo);
+  const setSun = useStudio((s) => s.setSun);
+  const lo = info?.sunrise ?? 360;
+  const hi = info?.sunset ?? 1080;
+  const value = Math.min(hi, Math.max(lo, sun.minutes));
+  const play = () => {
+    if (sun.playing) setSun({ playing: false });
+    else setSun({ on: true, playing: true, minutes: value >= hi - 5 ? lo : value });
+  };
+  return (
+    <Button
+      variant="accent"
+      size={size >= 44 ? 'lg' : 'md'}
+      onClick={play}
+      label={sun.playing ? t('sun.pause') : t('sun.play')}
+      aria-pressed={sun.playing}
+      style={{ width: size, height: size }}
+      className={sun.on ? undefined : 'opacity-70'}
+      icon={sun.playing ? <PauseIcon width={16} height={16} /> : <PlayIcon width={16} height={16} className="translate-x-px" />}
+    />
+  );
+}
+
+/** Play, slider and a time readout in one row (the landscape walk HUD). */
+export function SunTime({ className }: { className?: string }) {
+  const lang = useStudio((s) => s.lang);
+  const sun = useStudio((s) => s.sun);
+  const info = useStudio((s) => s.sunInfo);
+  const t = useT();
+  return (
+    <div className={cx('flex items-center gap-3', className)}>
+      <PlayButton />
+      <SunSlider className="flex-1" />
+      <div className="w-[52px] shrink-0 text-right">
+        <p className="tnum text-[15px] leading-5 font-medium tracking-tight">{info?.polar === 'night' ? t('sun.polarNight') : clock(sun.minutes, lang)}</p>
+        <p className="tnum truncate text-2xs text-ink-2">{info && sun.on ? `${compass(info.azimuth, lang)} ${Math.max(0, Math.round(info.elevation))}°` : t('sun.offShort')}</p>
+      </div>
+    </div>
+  );
+}
+
+/** The five dates as choice chips inside the panel. */
+function DateRow() {
+  const t = useT();
+  const lang = useStudio((s) => s.lang);
+  const dateId = useStudio((s) => s.sun.dateId);
+  const setSun = useStudio((s) => s.setSun);
+  const lat = useStudio((s) => s.house?.site.latitude ?? 30);
+  return (
+    <Choice<SunDateId>
+      label={t('sun.dates')}
+      value={dateId}
+      onChange={(id) => setSun({ dateId: id, on: true })}
+      testId="sun-date"
+      className="-mx-1"
+      options={SUN_DATES.map((id) => {
+        const day = dayText(sunDate(id, lat), lang);
+        return { value: id, title: day, ariaLabel: `${t(`sun.date.${id}`)} ${day}`, label: lang === 'zh' ? t(`sun.date.${id}`) : t(`sun.date.${id}`).split(' ')[0] };
+      })}
+    />
+  );
+}
+
+/** A compass dial in a circle: the front of the house faces down on the plan. */
+function MiniDial({ northDeg }: { northDeg: number }) {
+  return (
+    <svg viewBox="0 0 40 40" width={30} height={30} className="shrink-0" aria-hidden="true">
+      <circle cx={20} cy={20} r={18} fill="white" stroke="#d6d6d6" />
+      <g transform={`rotate(${northDeg} 20 20)`}>
+        <path d="M20 8l3.5 12h-7z" fill="var(--color-accent)" stroke="var(--color-ink)" strokeWidth={1} strokeLinejoin="round" />
+        <path d="M20 32l3.5-12h-7z" fill="var(--color-ink)" />
+      </g>
+    </svg>
+  );
+}
+
+function SiteRow({ icon, text, meta, onClick, label, testId }: { icon: ReactNode; text: ReactNode; meta: string; onClick: () => void; label: string; testId: string }) {
+  // Viewing a shared project (task 028): the place and orientation are facts, not a way to change them.
+  if (useViewOnly()) {
+    return (
+      <div aria-label={label} data-testid={testId} className="flex min-h-11 items-center gap-2.5 py-1.5 text-[14px] font-medium">
+        {icon}
+        <span className="min-w-0 flex-1 leading-[18px] [overflow-wrap:anywhere]">{text}</span>
+        <span className="tnum shrink-0 text-[13px] font-normal text-ink-2">{meta}</span>
+      </div>
+    );
+  }
+  return (
+    <Row onClick={onClick} aria-label={label} data-testid={testId} className="-mx-3 w-[calc(100%+24px)] py-1.5 text-[14px]">
+      {icon}
+      <span className="min-w-0 flex-1 leading-[18px] [overflow-wrap:anywhere]">{text}</span>
+      <span className="tnum shrink-0 text-[13px] font-normal text-ink-2">{meta}</span>
+      <ChevronRightIcon width={14} height={14} className="shrink-0 text-ink-2" />
+    </Row>
+  );
+}
+
+/** The sun study: play, time, sun position; dates; location and orientation; sunrise, noon, sunset; off. */
+function SunPanel({ onClose, phone }: { onClose: () => void; phone?: boolean }) {
+  const t = useT();
+  const lang = useStudio((s) => s.lang);
+  const sun = useStudio((s) => s.sun);
+  const info = useStudio((s) => s.sunInfo);
+  const site = useStudio((s) => s.house?.site);
+  const tz = !!site?.timeZone;
+  const setSun = useStudio((s) => s.setSun);
+  const setTray = useStudio((s) => s.setTray);
+  const setSitePanel = useStudio((s) => s.setSitePanel);
+  const lo = info?.sunrise ?? 360;
+  const hi = info?.sunset ?? 1080;
+  const value = Math.min(hi, Math.max(lo, sun.minutes));
+  const date = t(`sun.date.${sun.dateId}`);
+  const polar = info?.polar ?? null;
+  const dir = info ? compass(info.azimuth, lang) : '';
+  // At the ends of the slider the sun sits on the horizon (sunrise / sunset), as drawn.
+  const sub = !info
+    ? date
+    : polar === 'night'
+      ? t('sun.subNight', { date })
+      : polar === 'day' || info.elevation >= 1
+        ? t(polar === 'day' ? 'sun.subDay' : 'sun.sub', { date, dir, el: Math.max(0, Math.round(info.elevation)) })
+        : t(value <= (lo + hi) / 2 ? 'sun.subRise' : 'sun.subSet', { date, dir });
+  const noon = info ? t('sun.noon', { t: clock(info.solarNoon, lang) }) : '';
+  const utc = info && (tz || info.utcOffsetHours !== 8) ? utcText(info.utcOffsetHours) : '';
+  // Facts that wrap between, never inside ("日落 17:03" stays on one line).
+  const span = (
+    !info
+      ? []
+      : polar === 'day'
+        ? [t('sun.polarDay'), noon]
+        : polar === 'night'
+          ? [t('sun.polarNight')]
+          : !phone
+            ? [t('sun.rise', { t: clock(info.sunrise, lang) }), noon, t('sun.set', { t: clock(info.sunset, lang) })]
+            : [noon]
+  ).concat(utc ? [utc] : []);
+  const placeTxt = site ? placeText(site, lang) : '';
+  const [placeMain, placeNote] = placeTxt.includes('（') ? [placeTxt.slice(0, placeTxt.indexOf('（')), placeTxt.slice(placeTxt.indexOf('（'))] : placeTxt.includes(' (') ? [placeTxt.slice(0, placeTxt.indexOf(' (')), placeTxt.slice(placeTxt.indexOf(' ('))] : [placeTxt, ''];
+  return (
+    <>
+      {/* Task 031 (defect 1): the same header as every surface; the clock is body content under it. */}
+      <PanelHead title={t('sun.label')} onClose={onClose} />
+      <div className="flex items-start gap-3">
+        <div className="min-w-0 flex-1">
+          <p className="tnum text-[40px] leading-10 font-bold tracking-[-0.02em]" data-testid="sun-clock">{polar === 'night' ? t('sun.polarNight') : clock(value, lang)}</p>
+          <p className="tnum mt-1.5 text-[13px] leading-[18px] font-medium text-ink-2" data-testid="sun-sub">{sub}</p>
+        </div>
+        {polar !== 'night' && <PlayButton size={44} />}
+      </div>
+      {polar === 'night' ? (
+        <p className="text-[13px] leading-[18px] text-ink-2" data-testid="sun-polar-note">
+          {t('sun.polarNightNote')}
+        </p>
+      ) : (
+        <SunSlider />
+      )}
+      <DateRow />
+      {site && (
+        <div className="-my-1 flex flex-col">
+          <SiteRow
+            icon={<PinIcon width={16} height={16} className="shrink-0" />}
+            text={<>{placeMain}<span className="text-ink-3">{placeNote}</span></>}
+            meta={`${Math.abs(site.latitude).toFixed(1)}°${site.latitude >= 0 ? 'N' : 'S'}`}
+            onClick={() => setSitePanel({ kind: 'location', fromSun: true })}
+            label={`${t('more.location')}: ${placeTxt}`}
+            testId="sun-place"
+          />
+          <Separator className="mx-0 my-0" />
+          <SiteRow
+            icon={<MiniDial northDeg={site.northDeg} />}
+            text={t('sun.front', { dir: bearingWords(frontBearing(site.northDeg), lang) })}
+            meta={`${Math.round(frontBearing(site.northDeg))}°`}
+            onClick={() => setSitePanel({ kind: 'orientation', fromSun: true })}
+            label={`${t('more.orientation')}: ${bearingText(frontBearing(site.northDeg), lang)}`}
+            testId="sun-orientation"
+          />
+        </div>
+      )}
+      <div className="flex items-center justify-between gap-2">
+        <span className="tnum min-w-0 text-[12px] leading-4 font-medium text-ink-2" data-testid="sun-noon">
+          {span.map((x, i) => (
+            <Fragment key={i}>
+              {i > 0 && ' · '}
+              <span className="whitespace-nowrap">{x}</span>
+            </Fragment>
+          ))}
+        </span>
+        <Button
+          variant="plain"
+          size="sm"
+          onClick={() => {
+            setSun({ on: false, playing: false });
+            setTray(null);
+          }}
+          icon={<CloseIcon width={14} height={14} />}
+          className="-mr-2 gap-1 px-2.5"
+        >
+          {t('sun.exit')}
+        </Button>
+      </div>
+    </>
+  );
+}
+
+/** A site panel shown in the tool panel's place; from the sun panel it has a way back. */
+function SitePanelBody({ phone }: { phone?: boolean }) {
+  const t = useT();
+  const panel = useStudio((s) => s.sitePanel);
+  const setSitePanel = useStudio((s) => s.setSitePanel);
+  const setTray = useStudio((s) => s.setTray);
+  if (!panel) return null;
+  const back = panel.fromSun ? { label: t('sun.label'), onClick: () => setSitePanel(null), testId: 'panel-back' } : undefined;
+  const close = () => setTray(null);
+  return (
+    <div className="contents" role="dialog" aria-label={panel.kind === 'location' ? t('loc.title') : t('ori.title')} data-testid={`panel-${panel.kind}`}>
+      {panel.kind === 'location' ? <LocationPanel panel={panel} desktop={!phone} onClose={close} back={back} /> : <OrientationPanel onClose={close} back={back} />}
+    </div>
+  );
+}
+
+/** The content of the open panel (header included); null when none is open. */
+export function PanelBody({ derived, phone, kind }: { derived: Derived | null; phone?: boolean; kind?: Tray | 'site' }) {
+  const current = useOpenPanel();
+  const open = kind ?? current;
+  const setTray = useStudio((s) => s.setTray);
+  const close = () => setTray(null);
+  if (!open) return null;
+  if (open === 'site') return <SitePanelBody phone={phone} />;
+  if (open === 'views') return <ViewsPanel onClose={close} />;
+  if (open === 'levels') return derived ? <LevelsPanel derived={derived} onClose={close} /> : null;
+  return <SunPanel onClose={close} phone={phone} />;
+}

@@ -12,7 +12,7 @@ import { useStudio } from '../lib/store';
 import type { Derived } from './house-data';
 import type { PlanDrawing } from './plan-data';
 import { useWalkLevel, walkBridge } from './walk-bridge';
-import { SunTime } from './tools';
+import { SunTime } from './panels';
 export { WalkIcon } from './walk-icon';
 
 let planMod: Promise<typeof import('./plan-data')> | null = null;
@@ -262,19 +262,4 @@ export function LandscapeWalkHUD({ derived }: { derived: Derived | null }) {
       </HudPanel>
     </div>
   );
-}
-
-/** Escape leaves walk mode (desktop keyboards), unless typing in a field. */
-export function useEscapeExitsWalk(): void {
-  useEffect(() => {
-    const on = (e: KeyboardEvent) => {
-      if (e.key !== 'Escape' || e.defaultPrevented) return;
-      const t = e.target as HTMLElement | null;
-      if (t && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName))) return;
-      const s = useStudio.getState();
-      if (s.walk) s.setWalk(false);
-    };
-    window.addEventListener('keydown', on);
-    return () => window.removeEventListener('keydown', on);
-  }, []);
 }

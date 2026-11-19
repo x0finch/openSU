@@ -324,7 +324,39 @@ try {
     writeFileSync(resolve(out, 'surfaces.json'), JSON.stringify(rows, null, 1));
   }
   if (want('strips')) await strips();
-  if (only?.includes('probe-share')) {
+  if (only?.includes('probe-menu')) {
+    // Task 032: the project menu signed out (fresh, after an edit, the template question) and signed in.
+    const shot = async (page, name) => {
+      await page.waitForTimeout(700);
+      const b = await page.getByTestId('project-menu-list').boundingBox();
+      await page.screenshot({ path: resolve(out, `menu-${name}.png`), clip: { x: 0, y: 0, width: Math.min(1440, (b?.x ?? 0) + (b?.width ?? 400) + 40), height: Math.min(900, (b?.y ?? 0) + (b?.height ?? 500) + 30) } });
+      console.log(`  -> menu-${name}.png`);
+    };
+    const { ctx, page } = await studio(DESKTOP);
+    await page.getByTestId('project-menu').click();
+    await shot(page, 'out-fresh');
+    await page.keyboard.press('Escape');
+    await page.evaluate(() => {
+      const s = window.__studio.store.getState();
+      s.setSun({ on: false });
+    });
+    await page.getByTestId('project-menu').click();
+    await page.getByTestId('menu-templates').click();
+    await page.locator('[data-testid^=menu-template-]').nth(1).click();
+    await page.waitForTimeout(1500);
+    await page.keyboard.press('Escape');
+    await page.keyboard.press('Escape');
+    await page.getByTestId('project-menu').click();
+    await shot(page, 'out-edited');
+    await page.getByTestId('menu-templates').click();
+    await page.locator('[data-testid^=menu-template-]').nth(0).click();
+    await shot(page, 'out-confirm');
+    await ctx.close();
+    const b = await studio(DESKTOP, 'probe-menu@example.com');
+    await b.page.getByTestId('project-menu').click();
+    await shot(b.page, 'in');
+    await b.ctx.close();
+  } else if (only?.includes('probe-share')) {
     // The phone share sheet, signed in, opened from the project menu: where the sheet and its glass are over time.
     const { ctx, page } = await studio(PHONE, 'probe-share@example.com');
     await page.getByTestId('project-menu').click();

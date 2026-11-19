@@ -5,6 +5,7 @@ import type { AgentEvent, AppliedBatch, HouseSession, PastTurn, TurnError } from
 import type { House } from '@opensu/model';
 import { countryName, loadPlaces } from '../lib/site';
 import { create } from 'zustand';
+import { useShallow } from 'zustand/react/shallow';
 import { useStudio } from '../lib/store';
 import { accountKeyInUse, DEFAULT_MODELS, syncKeys, useKeys } from './keys';
 import { type AiSettings, loadSettings, relayHeaders, requestModel, saveSettings, usesOwnKey } from './settings';
@@ -437,6 +438,33 @@ export function redoTurn(id: string): void {
   patch(id, { undo: 'can-undo' });
   flagUndo(id, false);
   useStudio.getState().setHouse(house, growFrom(before, house));
+}
+
+/** Undoes the latest kept step, whichever turn or studio edit it came from (the project menu, ⌘Z). */
+export function undoLast(): void {
+  const id = committed[committed.length - 1];
+  if (id && !useChat.getState().running) undoTurn(id);
+}
+
+/** Redoes the step undone last (the project menu, ⇧⌘Z). */
+export function redoNext(): void {
+  const id = redoable[redoable.length - 1];
+  if (id && !useChat.getState().running) redoTurn(id);
+}
+
+/** What undo and redo would act on now: the step's summary, or null. Re-read whenever the items change. */
+export function useUndoRedo(): { undo: string | null; redo: string | null } {
+  return useChat(
+    useShallow((s) => {
+      const summary = (id: string | undefined) => {
+        if (!id || s.running) return null;
+        const it = s.items.find((i) => i.id === id);
+        const c = it?.changes;
+        return c?.length ? c[c.length - 1]!.summary : null;
+      };
+      return { undo: summary(committed[committed.length - 1]), redo: summary(redoable[redoable.length - 1]) };
+    }),
+  );
 }
 
 /** Tells the server a recorded turn was undone or redone (task 020; the strongest sign of a mismatch). */
