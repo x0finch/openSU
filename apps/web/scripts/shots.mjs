@@ -693,6 +693,12 @@ async function stillHouseChecks() {
     await still(page, '3D pinned: views panel', () => page.getByTestId('bar-views').click(), esc(page));
     await page.getByTestId('bar-views').click();
     await page.waitForTimeout(600);
+    // Measured at rest: the panel opens by a CSS transition (task 031); a runner's late frames can still be in it.
+    await page.waitForFunction(() => {
+      const e = document.querySelector('[data-testid=tray-views]');
+      const pop = e?.closest('.lg-pop') ?? e;
+      return !!pop && !pop.hasAttribute('data-starting-style') && pop.getAnimations({ subtree: true }).every((a) => a.playState !== 'running');
+    }, null, { timeout: tmo(10000) });
     const geo = await page.evaluate(() => {
       const r = (q) => document.querySelector(q).getBoundingClientRect();
       return { side: r('[data-testid=chat-panel]'), name: r('[data-testid=title-block]'), panel: r('[data-testid=tray-views]'), bar: r('[role=toolbar]'), mode: r('[data-testid=mode-switch]') };

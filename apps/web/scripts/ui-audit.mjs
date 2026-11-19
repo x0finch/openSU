@@ -1379,8 +1379,12 @@ if (smoke) {
     process.exit(0);
   }
   const allow = new Set(JSON.parse(readFileSync(allowFile, 'utf8')).smoke);
-  const added = keys.filter((k) => !allow.has(k));
-  const fixed = [...allow].filter((k) => !keys.includes(k));
+  // An allowed key whose element carries no quoted text stands for that element whatever text it shows at the moment
+  // (the prompt's status line comes and goes with the reply's timing). Keys with quoted text match exactly.
+  const bare = (k) => k.replace(/ "[^"]*"(?=\|)/, '');
+  const allowedBy = (k) => allow.has(k) || (allow.has(bare(k)) && bare(k) !== k);
+  const added = keys.filter((k) => !allowedBy(k));
+  const fixed = [...allow].filter((a) => !keys.some((k) => k === a || (bare(k) === a && !a.includes('"'))));
   for (const k of added) console.log(`  NEW   ${k}`);
   for (const k of fixed) console.log(`  FIXED ${k} (remove it from ui-audit-allow.json)`);
   const fail = added.length || fixed.length || errors.length;

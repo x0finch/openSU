@@ -818,7 +818,8 @@ try {
     const V = await open(base, DESKTOP);
     const v = V.page;
     await edit(v, '我自己的房子');
-    await settle(v, 1200);
+    // The autosave is debounced; on a slow runner 1.2 s was not always enough. Wait for the write itself.
+    await v.waitForFunction(() => JSON.parse(localStorage.getItem('opensu.autosave.v1') ?? 'null')?.house?.name === '我自己的房子', null, { timeout: tmo(15000) }).catch(() => null);
     const mine = await savedHouse(v);
     const myLink = await v.evaluate(() => localStorage.getItem('opensu.project.v1'));
     check(!!mine && JSON.parse(mine).house.name === '我自己的房子', 'the viewer has a house of their own in this browser');
