@@ -1088,11 +1088,13 @@ async function runConfig(cfg) {
         const m = await p.share(p.store.getState().openId, true);
         return m?.share ?? null;
       });
-      // Task 032: from the project menu's "分享" row, desktop and phones.
+      // Task 032: from the project menu's "分享" row, desktop and phones. The surface opens once the menu has left;
+      // the motion recorded is the surface's own (from the moment the menu is gone).
       const openShareUi = async () => {
         await page.getByTestId('project-menu').first().click();
         await settle(page, 700);
         await page.getByTestId('menu-share').first().click();
+        await page.waitForSelector('[data-testid=project-menu-list]', { state: 'detached', timeout: tmo(5000) }).catch(() => {});
       };
       await M(page, 'account-share', { open: openShareUi, close: () => page.keyboard.press('Escape'), find: byTestId(page, 'share-surface') });
       if (token && wants(cfg, 'account-share-viewer')) {

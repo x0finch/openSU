@@ -167,7 +167,7 @@ const Sep = () => <MenuSeparator />;
  * A surface opened from a row of the project menu opens once the menu has left (its close motion), so the two glass
  * surfaces never stand on each other at the house name.
  */
-const afterMenu = (f: () => void) => window.setTimeout(f, GLASS.popCloseMs);
+const afterMenu = (f: () => void) => window.setTimeout(f, GLASS.popCloseMs + 150);
 
 /** ⌘ on Apple keyboards, Ctrl elsewhere (the shortcut shown beside undo and redo). */
 const isMac = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent);
