@@ -15,6 +15,8 @@ const SHEET_GRAB = 22;
 const SHEET_INSET = 8;
 /** An upward drag on the sheet of this many px takes it to the large detent; a downward one of this many brings it back. */
 const DETENT_DRAG = 48;
+/** Vaul's slide, ms (its TRANSITIONS.DURATION). */
+const SLIDE_MS = 500;
 
 import type { SheetProps } from './sheet';
 
@@ -68,6 +70,21 @@ export default function SheetVaul({ open, large, fixed, onClose, onClosed, modal
     cb.current.onHeight?.(open && height > 0 ? height : null);
   }, [open, height]);
   const kick = () => glassRegistry.kick();
+  // It has left once Vaul's slide is over. Vaul reports that only for changes it made itself (a drag, the scrim,
+  // Escape), not for the caller's `open`; a timer of the slide's length covers both and needs no frames.
+  const closedCb = useRef(onClosed);
+  closedCb.current = onClosed;
+  const wasOpen = useRef(open);
+  useEffect(() => {
+    if (open) {
+      wasOpen.current = true;
+      return;
+    }
+    if (!wasOpen.current) return;
+    wasOpen.current = false;
+    const t = window.setTimeout(() => closedCb.current?.(), SLIDE_MS);
+    return () => clearTimeout(t);
+  }, [open]);
   return (
     <Drawer.Root
       open={open && entered}
@@ -75,10 +92,7 @@ export default function SheetVaul({ open, large, fixed, onClose, onClosed, modal
         if (!o) onClose();
       }}
       modal={modal}
-      onAnimationEnd={(o) => {
-        kick();
-        if (!o) onClosed?.();
-      }}
+      onAnimationEnd={kick}
       onDrag={kick}
       onRelease={kick}
       noBodyStyles

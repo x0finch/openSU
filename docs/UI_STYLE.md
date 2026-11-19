@@ -153,10 +153,14 @@ Type (Inter with the system CJK face; digits tabular):
 | Row value, chip | 13 / 18 | 500 |
 | Caption | 12 / 16 | 500 |
 
-Motion: a capsule flows into its panel with a critically damped spring
-(stiffness about 170, roughly 300 ms); the shape, radius, blur and tint
-all follow the spring, and the panel's content fades in over the last
-half. With `prefers-reduced-motion` it fades instead. The working state
+Motion (task 031): a surface opens from the edge of its anchor that faces
+it (Base UI's `--transform-origin`), growing away from the anchor in
+about 380 ms (`cubic-bezier(0.32, 0.72, 0, 1)`), fading in as it grows,
+and leaves the same way in about 220 ms; it is never drawn over its
+anchor or the bar the anchor sits in. Phone sheets rise from the bottom
+over the bars and a scrim (Vaul). The numbers are `GLASS.pop*` in
+`packages/ui/src/material.ts`. With `prefers-reduced-motion` a surface
+fades in place. The working state
 is the yellow glow on the input capsule's edge; nothing else moves.
 
 ## Components

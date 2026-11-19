@@ -4,7 +4,7 @@ description: Smoky liquid-glass chrome floating over a white architectural illus
 ---
 
 <!--
-Written from the shipped code (apps/web/src/ui/, apps/web/src/styles.css,
+Written from the shipped code (packages/ui, apps/web/src/styles.css,
 packages/render/src/style/tokens.ts, packages/plan) and the owner's specs.
 Deliberately carries no token values: the values live in the files named
 below and would drift if copied here. When this file and those sources
@@ -16,9 +16,9 @@ Sources of truth:
 - docs/VISUAL_SPEC.md: the drawing (3D illustration, floor plans, sheets).
 - packages/render/src/style/tokens.ts: every colour, line width, light and
   shadow value of the drawing (3D renderer).
-- apps/web/src/ui/material.ts: every number of the glass material (tint,
+- packages/ui/src/material.ts: every number of the glass material (tint,
   saturation, brightness, rim, ink per tone, radii, motion).
-- apps/web/src/styles.css (@theme): the app's UI tokens (ink levels, accent,
+- packages/ui/src/styles.css (@theme): the UI tokens (ink levels, accent,
   hairline, type sizes, radii, font stack).
 - packages/plan: plan colours and line weights (see VISUAL_SPEC "Floor plans").
 -->
@@ -165,9 +165,10 @@ surface's tint, never by making the glass milky.
 
 ## Components
 
-Every control and surface comes from `apps/web/src/ui/` (the base
-components, organised like shadcn/ui; see its README.md); screens and
-paper pages compose these and do not style them (`scripts/ui-check.mjs`).
+Every control and surface comes from `@opensu/ui` (`packages/ui`: the
+base components on Base UI, organised like shadcn/ui; see its README.md);
+screens and paper pages compose these and do not style them
+(`apps/web/scripts/ui-check.mjs`).
 
 ### Buttons
 - **Button** (`Button`, variants glass, plain, tinted, quiet, accent, ink,
