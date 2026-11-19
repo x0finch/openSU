@@ -267,6 +267,20 @@ Locally after the fixes: `shots --smoke` (all sections), `account-e2e
 The other account shards, chat and glass passed on CI run 44447300691 and
 were not touched.
 
+Then CI was run by hand (`workflow_dispatch`) on the working branch
+`claude/blissful-faraday-mz18x8` until it passed. All further failures
+were waits that a slow runner outlasted (frames of up to 1.85 s); no
+assertion changed:
+
+| Run | Job | Fix |
+|---|---|---|
+| 44451024160 | shots-still: pinned views panel 5.0 px below the toolbar (8) | measured once the panel rests |
+| 44451024160 | account-share: the viewer's own house read before the debounced autosave wrote it | waits for the write |
+| 44451024160 | audit: the prompt `row-align` key has the reply's text on some runs, not on others | an allowed key without quoted text matches that element whatever text it shows; keys with text still match exactly (`ui-audit.mjs`) |
+| 44453527931, 44455011575 | account-turns: the after-turn note (5 s unless hovered) was gone before its undo could be clicked | undo from the note if it is still shown, else from the turn in the recent strip; both paths run locally |
+
+Run 44456515894 (head efcb3c6): all 16 jobs pass, `ci-ok` success.
+
 Defect 2 (toolbar labels collapse on opening a panel) is the first-use
 rule of task 017, as found in step 5's first pass; a tool's own width does
 not change when its panel opens (`w-11`, its value or its icon). Left as
