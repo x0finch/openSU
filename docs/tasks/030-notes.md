@@ -127,7 +127,7 @@ Job wall times (start to end; suite step in brackets):
    is not split: its smoke run compares the whole set of findings with
    `ui-audit-allow.json`, which a subset of states would not match.
 
-### Shards (from run 1 times; to be checked on run 2)
+### Shards (from run 1 times; run 2 confirmed them, see below)
 
 | job | sections | run 1 suite time (est.) |
 |---|---|---|
@@ -148,6 +148,102 @@ Job wall times (start to end; suite step in brackets):
 Set-up per job was about 50 s (install, cached Chromium, build) when apt
 was fast. `web` jobs now have a 20 min timeout. Expect the longest jobs
 (audit, account-projects, shots-still) at 6 to 7 minutes.
+
+## CI run 2 (run 44429497929, head 15d660c)
+
+Job wall times; the suite step and the browser/fonts step in brackets.
+On this run the font cache was empty (first run of the composite action)
+and every job downloaded the fonts itself from a mirror that again ran at
+~60 kB/s in about half the jobs; later runs restore them from the cache.
+
+| job | result | time (suite; browser+fonts) |
+|---|---|---|
+| fast | ok | 1:41 (`test:fast` 1:23) |
+| packages | ok | 4:24 (3:30; 0:30) |
+| glass | ok | 5:19 (0:56; 3:50) |
+| audit | ok | 6:29 (5:40; 0:18) |
+| shots-still | ok | 5:44 (4:52; 0:21) |
+| shots-views | ok | 9:41 (2:34; 6:26) |
+| shots-site | ok | 3:12 (2:23; 0:22) |
+| chat-desktop | ok | 9:43 (2:43; 6:16) |
+| chat-more | ok | 8:52 (3:21; 4:54) |
+| account-projects | crashed | 8:55 (4:35; 3:50) |
+| account-share | crashed | 9:12 (4:51; 3:37) |
+| account-keys | crashed | 3:35 (2:42; 0:19) |
+| account-entry-views | ok | 9:11 (3:40; 4:53) |
+| account-entry-rules | ok | 4:36 (3:44; 0:19) |
+| account-turns | ok | 4:07 (3:21; 0:22) |
+
+Without the font download every suite is under 6 minutes and every job
+about 1 minute more, so no shard is re-split. Chromium started on every
+runner without `playwright install-deps` (the fallback never ran).
+
+### Failures and causes
+
+1. **account-keys**, `sheetGone` (`:1646`): 10 s for the key sheet to
+   leave the DOM after closing. The log shows it still visible for about
+   8 s, then hidden, then still attached. **account-projects**, `:590`:
+   15 s for the failed save's `retry` state. Both are wait limits too short
+   for this machine.
+2. **account-share**, canonical: `ECONNREFUSED 127.0.0.1:<port>`. Not
+   timing: the check sent its requests to `127.0.0.1`, while `vite preview`
+   listens on `localhost`, which resolves to `::1` on the runner (the
+   health check's `fetch` reached it; Node's `http.request` to 127.0.0.1
+   did not). Fix: the request goes to the preview URL's own host name; the
+   Host header the check is about is unchanged.
+
+### Fix: one timeout scale (`tools/e2e-timeouts.mjs`)
+
+Instead of raising limits one by one, every browser suite (account-e2e,
+chat-e2e, shots, glass-contrast, ui-audit, render and sheet shots; plan
+shots reads the same variable) now:
+
+- calls `scaleBrowser(browser)` right after launch: every context and page
+  gets Playwright's 30 s defaults (actions, waits, navigations) times
+  `E2E_TIMEOUT_SCALE`;
+- writes every explicit limit as `timeout: tmo(N)` (all 175 of them, plus
+  account-e2e's `until()` default and the preview health loops), so none
+  is left unscaled;
+- `ci.yml` sets `E2E_TIMEOUT_SCALE: '4'`; the default is 1, so local runs
+  are as before.
+
+Fixed pauses (`waitForTimeout`, the `settle` helpers) are not scaled: they
+are not limits, and scaling them would only make every run slower. The
+round-2 one-off changes (a 120 s navigation default, `NAV_MS`) are folded
+into this; the `waitUntil: 'commit'` + `ready3d` waits stay.
+
+### Why a closed sheet stays in the DOM, and the thumbnail
+
+- A closing surface (`AnchoredSurface`, `ui/anchored.tsx`) is unmounted
+  when its springs settle; the springs advance only on animation frames
+  (`ui/spring.ts`, one shared `requestAnimationFrame` loop, a step of at
+  most 0.5 s per frame). It turns `visibility: hidden` at 2% and unmounts
+  once the spring is at rest (|x| < 1e-4), about 0.8 s of spring time,
+  i.e. at least two frames. So the removal waits on frames; it does not
+  wait on a frame that never comes. On the runner the sheet was still
+  visible ~8 s after the close, which means the page got very few frames
+  in that time (locally the same close produces about 40 frames per
+  second: the new diagnostic below measured a 17 ms median, 0.5 s max).
+  For a user on a device that slow, the closed dialog is hidden (so out of
+  the accessibility tree and not clickable) but stays mounted, with
+  `aria-modal`, for a few of those slow frames. Not changed here (UI code,
+  out of this task's scope); worth a look if real devices are that slow:
+  unmounting at "hidden and closing" instead of "spring at rest" would
+  not change any visible frame (the overshoot after 2% is about 0.02 of
+  the way and stays below zero).
+- The thumbnail (`viewer.renderView` -> three.js
+  `readRenderTargetPixelsAsync`) draws once, then polls a WebGL fence with
+  `setTimeout(4 ms)` and `clientWaitSync(..., 0)`. Chromium reports a
+  fence as signalled only after the GPU process has run the commands,
+  which in practice happens with frame production; the 18.7 s on the
+  runner vs 0.3 s here fits the same picture as the sheet: the page gets
+  frames (and GPU work) far less often on the runner. **The cause of the
+  slow frames themselves was not found.** Rendering alone is only ~1.7x
+  slower there (render package shots). To get a number instead of a guess,
+  account-e2e now logs once per run, without checking anything:
+  `(diagnostic) animation frames in 6 s while a menu opens and closes:
+  N, median X ms, max Y ms` (here: 241 frames, 17 ms median, 550 ms max).
+  Run 3 will show the runner's figure.
 
 ## Risks on the runner (not verified)
 

@@ -33,6 +33,10 @@ defaults:
 env:
   # Browsers are installed (and cached) by the browser jobs themselves.
   PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: '1'
+  # Every wait limit in the browser suites x4 (tools/e2e-timeouts.mjs): a
+  # runner draws the studio's WebGL several times slower than the dev
+  # container. Only how long a wait may take; no check changes.
+  E2E_TIMEOUT_SCALE: '4'
 
 jobs:
   fast:

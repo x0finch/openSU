@@ -99,6 +99,11 @@ in shards that way, and `scripts/ci-shards-check.mjs` (part of
 `.github/workflows/ci.yml`. account-e2e's `entry` has two parts,
 `entry-views` and `entry-rules`.
 
+Every wait limit in the browser suites goes through `tools/e2e-timeouts.mjs`:
+`E2E_TIMEOUT_SCALE=4` multiplies all of them (Playwright's defaults and each
+explicit `timeout: tmo(N)`); CI sets 4, locally it is 1. Write new limits
+as `tmo(N)`, never as a bare number.
+
 ## Routes
 
 | Route | Rendering | Served by |

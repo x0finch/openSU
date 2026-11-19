@@ -27,6 +27,7 @@ import { dirname, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { STUB_KEY, STUB_MODEL, startStub } from './chat-stub.mjs';
 import { analysePixels, anchoredSurfaces, hoverRead, hoverTargets, inkStrength, joinFill, measureDom, motionFrame, shapeMask, tipContrast } from './ui-audit-rules.mjs';
+import { scaleBrowser, tmo } from '../../../tools/e2e-timeouts.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const appRoot = resolve(here, '..');
@@ -101,7 +102,7 @@ async function startPreview(extra = {}) {
   const p = { base, stop: () => (proc.kill('SIGTERM'), rmSync(state, { recursive: true, force: true })) };
   previews.push(p);
   process.on('exit', () => proc.kill('SIGTERM'));
-  for (let i = 0; i < 160; i++) {
+  for (let i = 0; i < tmo(160); i++) {
     try {
       if ((await fetch(`${base}/api/health`)).ok) return p;
     } catch {
@@ -114,6 +115,7 @@ async function startPreview(extra = {}) {
 const preview = await startPreview();
 console.log(`audit: preview ${preview.base}, chat stub ${stub.url} (scripted, not a model)`);
 const browser = await playwright.chromium.launch({ args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist', '--enable-webgl'] });
+scaleBrowser(browser);
 // The pixel work happens here, never in the page under test.
 const lab = await (await browser.newContext()).newPage();
 await lab.setContent('<!doctype html><title>lab</title>');
@@ -249,10 +251,10 @@ async function capture(page, cfg, state, extra = {}) {
     return;
   }
   if (!tokenColours?.length || !tokenColours.some(([n]) => n.endsWith('(glass)'))) tokenColours = await page.evaluate(readTokenColours).catch(() => null);
-  const normal = await page.screenshot({ scale: 'css', timeout: 120000 });
+  const normal = await page.screenshot({ scale: 'css', timeout: tmo(120000) });
   const hide = await page.addStyleTag({ content: HIDE_TEXT });
   await settle(page, 120);
-  const bare = await page.screenshot({ scale: 'css', timeout: 120000 });
+  const bare = await page.screenshot({ scale: 'css', timeout: tmo(120000) });
   await hide.evaluate((n) => n.remove());
   const shotName = `${cfg.name}--${state}`;
   writeFileSync(resolve(outDir, 'shots', `${shotName}.png`), normal);
@@ -468,7 +470,7 @@ async function motionPass(page, cfg, state, { open, close, find, between }) {
       await page.evaluate(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))));
       if (!el) el = await find();
       const f = el ? await page.evaluate(motionFrame, el).catch(() => ({ gone: true })) : { gone: true };
-      const png = await page.screenshot({ scale: 'css', timeout: 120000 });
+      const png = await page.screenshot({ scale: 'css', timeout: tmo(120000) });
       const file = `${state}-${label}-${String(k).padStart(2, '0')}.png`;
       writeFileSync(resolve(dir, file), png);
       frames.push({ k, f, png, file });
@@ -672,7 +674,7 @@ async function cropState(page, cfg, state, dom, found) {
       const x = Math.max(0, it.rect.x - pad), y = Math.max(0, it.rect.y - pad);
       const w = Math.min(cfg.w - x, it.rect.w + 2 * pad), h = Math.min(cfg.h - y, it.rect.h + 2 * pad);
       if (w < 4 || h < 4) continue;
-      const buf = await page.screenshot({ clip: { x, y, width: w, height: h }, scale: 'device', timeout: 60000 });
+      const buf = await page.screenshot({ clip: { x, y, width: w, height: h }, scale: 'device', timeout: tmo(60000) });
       const hash = createHash('sha1').update(buf).digest('hex');
       const dir = resolve(outDir, 'crops', cfg.name, state);
       mkdirSync(dir, { recursive: true });
@@ -710,7 +712,7 @@ async function newPage(cfg, { hints = false, init } = {}) {
 const q = (cfg, extra = '') => `?dpr=1${cfg.css ? '&glass=css' : ''}${extra}`;
 async function openStudio(page, cfg, extra = '') {
   await page.goto(`${preview.base}/studio${q(cfg, extra)}`, { waitUntil: 'networkidle' });
-  await page.waitForFunction(() => window.__studio?.ready3d === true, null, { timeout: 180000 });
+  await page.waitForFunction(() => window.__studio?.ready3d === true, null, { timeout: tmo(180000) });
   await settle(page, 1200);
 }
 const store = (page, fn, arg) => page.evaluate(fn, arg);
@@ -733,14 +735,14 @@ async function turn(page, text, { hold = 0, onWorking } = {}) {
   await input.fill(text);
   await input.press('Enter');
   if (hold) {
-    await page.waitForFunction(() => window.__studio.chat.getState().running, null, { timeout: 10000 }).catch(() => {});
+    await page.waitForFunction(() => window.__studio.chat.getState().running, null, { timeout: tmo(10000) }).catch(() => {});
     if (onWorking) await onWorking();
     release();
   }
   await page.waitForFunction((k) => {
     const s = window.__studio.chat.getState();
     return s.items.filter((i) => i.role === 'assistant').length > k && !s.running;
-  }, n, { timeout: 90000 }).catch(() => errors.push(`turn "${text}" did not finish`));
+  }, n, { timeout: tmo(90000) }).catch(() => errors.push(`turn "${text}" did not finish`));
   if (hold) await page.unroute('**/api/chat');
 }
 const T = {
@@ -859,7 +861,7 @@ async function runConfig(cfg) {
   }
   if (wants(cfg, 'plan-')) {
     await store(page, () => window.__studio.store.getState().setMode('plan'));
-    await page.waitForSelector('[data-testid=plan] svg', { timeout: 90000 });
+    await page.waitForSelector('[data-testid=plan] svg', { timeout: tmo(90000) });
     await settle(page, 1500);
     const levels = await page.evaluate(() => window.__studio.store.getState().house.levels.map((l) => l.id));
     await S(page, 'plan-L1', null, { layout: 'plain' });
@@ -884,7 +886,7 @@ async function runConfig(cfg) {
     await S(page, 'sheets', async () => {
       await store(page, () => window.__studio.store.getState().setMode('sheet'));
       await page.waitForTimeout(4000);
-      await page.waitForFunction(() => !/正在生成|Generating/.test(document.body.innerText), null, { timeout: 120000 }).catch(() => {});
+      await page.waitForFunction(() => !/正在生成|Generating/.test(document.body.innerText), null, { timeout: tmo(120000) }).catch(() => {});
       await settle(page, 1200);
     });
     await store(page, () => window.__studio.store.getState().setMode('3d'));
@@ -937,7 +939,7 @@ async function runConfig(cfg) {
     if (wants(cfg, 'plan-pinned')) {
       await S(page, 'plan-pinned', async () => {
         await store(page, () => window.__studio.store.getState().setMode('plan'));
-        await page.waitForSelector('[data-testid=plan] svg', { timeout: 90000 });
+        await page.waitForSelector('[data-testid=plan] svg', { timeout: tmo(90000) });
         await settle(page, 1800);
       }, { pinned: true });
       await store(page, () => window.__studio.store.getState().setMode('3d'));
@@ -1003,12 +1005,12 @@ async function runConfig(cfg) {
       });
       await page.getByTestId('signin-email-input').fill(email);
       await page.getByTestId('signin-email-input').press('Enter');
-      await page.waitForSelector('[data-testid=otp-0]', { timeout: 15000 });
+      await page.waitForSelector('[data-testid=otp-0]', { timeout: tmo(15000) });
       await S(page, 'signin-code', () => settle(page, 1000));
       const code = (await (await fetch(`${preview.base}/api/auth-test/code?email=${encodeURIComponent(email)}`)).json()).code;
       await S(page, 'signin-code-error', async () => {
         await page.keyboard.type(code === '000000' ? '111111' : '000000');
-        await page.waitForSelector('[data-testid=signin-error]', { timeout: 10000 });
+        await page.waitForSelector('[data-testid=signin-error]', { timeout: tmo(10000) });
         await settle(page, 900);
       });
       await page.getByTestId('otp-0').focus();
@@ -1017,8 +1019,8 @@ async function runConfig(cfg) {
         dt.setData('text/plain', c);
         document.querySelector('[data-testid=otp-0]').dispatchEvent(new ClipboardEvent('paste', { clipboardData: dt, bubbles: true, cancelable: true }));
       }, code);
-      await page.waitForFunction(() => !!window.__studio.chat.getState().server?.user, null, { timeout: 20000 });
-      await page.waitForSelector('[data-testid=signin-sheet]', { state: 'detached', timeout: 10000 }).catch(() => {});
+      await page.waitForFunction(() => !!window.__studio.chat.getState().server?.user, null, { timeout: tmo(20000) });
+      await page.waitForSelector('[data-testid=signin-sheet]', { state: 'detached', timeout: tmo(10000) }).catch(() => {});
       await settle(page, 1200);
       await S(page, 'signed-in-menu', async () => {
         await page.getByTestId('project-menu').first().click();
@@ -1041,7 +1043,7 @@ async function runConfig(cfg) {
         await settle(page, 500);
       });
       await page.getByTestId('keys-save').click();
-      await page.waitForSelector('[data-testid=keys-sheet]', { state: 'detached', timeout: 10000 }).catch(() => {});
+      await page.waitForSelector('[data-testid=keys-sheet]', { state: 'detached', timeout: tmo(10000) }).catch(() => {});
       await settle(page, 900);
       await S(page, 'key-saved-picker', async () => {
         await page.getByTestId('key-picker').first().click();
@@ -1066,15 +1068,15 @@ async function runConfig(cfg) {
       await page.getByTestId('menu-signin').first().click();
       await page.getByTestId('signin-email-input').fill(email);
       await page.getByTestId('signin-email-input').press('Enter');
-      await page.waitForSelector('[data-testid=otp-0]', { timeout: 15000 });
+      await page.waitForSelector('[data-testid=otp-0]', { timeout: tmo(15000) });
       const code = (await (await fetch(`${preview.base}/api/auth-test/code?email=${encodeURIComponent(email)}`)).json()).code;
       await page.getByTestId('otp-0').focus();
       await page.keyboard.type(code);
-      await page.waitForFunction(() => !!window.__studio.chat.getState().server?.user, null, { timeout: 20000 });
-      await page.waitForSelector('[data-testid=signin-sheet]', { state: 'detached', timeout: 10000 }).catch(() => {});
+      await page.waitForFunction(() => !!window.__studio.chat.getState().server?.user, null, { timeout: tmo(20000) });
+      await page.waitForSelector('[data-testid=signin-sheet]', { state: 'detached', timeout: tmo(10000) }).catch(() => {});
     }
     // The confirmation leaves by itself.
-    await page.waitForSelector('[data-testid=account-toast]', { state: 'detached', timeout: 8000 }).catch(() => {});
+    await page.waitForSelector('[data-testid=account-toast]', { state: 'detached', timeout: tmo(8000) }).catch(() => {});
     await settle(page, 600);
     if (wants(cfg, 'account-signed-in')) await S(page, 'account-signed-in', () => settle(page, 300));
     if (wants(cfg, 'account-menu')) {
@@ -1089,7 +1091,7 @@ async function runConfig(cfg) {
     }
     // Task 028: the share surface (on, with its link) and the studio as a signed-out viewer of that link sees it.
     if (wants(cfg, 'account-share')) {
-      await page.waitForFunction(() => !!window.__studio.projects?.store.getState().openId && !window.__studio.projects.store.getState().busy, null, { timeout: 30000 });
+      await page.waitForFunction(() => !!window.__studio.projects?.store.getState().openId && !window.__studio.projects.store.getState().busy, null, { timeout: tmo(30000) });
       const token = await page.evaluate(async () => {
         const p = window.__studio.projects;
         const m = await p.share(p.store.getState().openId, true);
@@ -1113,7 +1115,7 @@ async function runConfig(cfg) {
           return s.on ? `&sun=${s.dateId}&time=${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}` : '';
         });
         await vp.goto(`${preview.base}/studio${q(cfg, `${sun}&s=${token}`)}`, { waitUntil: 'networkidle' });
-        await vp.waitForFunction(() => window.__studio?.ready3d === true && window.__studio.shared?.getState().status === 'ready', null, { timeout: 180000 });
+        await vp.waitForFunction(() => window.__studio?.ready3d === true && window.__studio.shared?.getState().status === 'ready', null, { timeout: tmo(180000) });
         await settle(vp, 1500);
         await S(vp, 'account-share-viewer');
         await vc.close();
@@ -1121,11 +1123,11 @@ async function runConfig(cfg) {
     }
     // Task 027: the projects page (signed in, a few projects), its card menu and the template cards; the studio's project menu signed in.
     if (wants(cfg, 'account-project-menu')) {
-      await page.waitForFunction(() => !!window.__studio.projects?.store.getState().openId && !window.__studio.projects.store.getState().busy, null, { timeout: 30000 });
+      await page.waitForFunction(() => !!window.__studio.projects?.store.getState().openId && !window.__studio.projects.store.getState().busy, null, { timeout: tmo(30000) });
       await M(page, 'account-project-menu', { open: () => page.getByTestId('project-menu').first().click(), close: () => page.keyboard.press('Escape'), find: () => page.$('[role=menu]') });
     }
     if (wants(cfg, 'account-projects')) {
-      await page.waitForFunction(() => !!window.__studio.projects?.store.getState().openId && !window.__studio.projects.store.getState().busy, null, { timeout: 30000 });
+      await page.waitForFunction(() => !!window.__studio.projects?.store.getState().openId && !window.__studio.projects.store.getState().busy, null, { timeout: tmo(30000) });
       await page.evaluate(async (names) => {
         const h = window.__studio.store.getState().house;
         for (const n of names) {
@@ -1135,7 +1137,7 @@ async function runConfig(cfg) {
         }
       }, cfg.lang === 'zh' ? ['王家老宅翻建', '河边的小院'] : ['Riverside cottage', 'Grandparents’ house']);
       await page.goto(`${preview.base}/projects${q(cfg)}`, { waitUntil: 'load' });
-      await page.waitForFunction(() => window.__studio?.projects?.store.getState().projects.length >= 3, null, { timeout: 30000 });
+      await page.waitForFunction(() => window.__studio?.projects?.store.getState().projects.length >= 3, null, { timeout: tmo(30000) });
       await settle(page, 1500);
       await S(page, 'account-projects-page');
       if (wants(cfg, 'account-projects-menu')) {
@@ -1177,11 +1179,11 @@ async function runConfig(cfg) {
     await p2.getByTestId('menu-signin').first().click();
     await p2.getByTestId('signin-email-input').fill(email);
     await p2.getByTestId('signin-email-input').press('Enter');
-    await p2.waitForSelector('[data-testid=otp-0]', { timeout: 15000 });
+    await p2.waitForSelector('[data-testid=otp-0]', { timeout: tmo(15000) });
     const code = (await (await fetch(`${preview.base}/api/auth-test/code?email=${encodeURIComponent(email)}`)).json()).code;
     await p2.getByTestId('otp-0').focus();
     await p2.keyboard.type(code);
-    await p2.waitForSelector('[data-testid=keys-offer]', { timeout: 15000 }).catch(() => errors.push(`${cfg.name}: the offer did not appear`));
+    await p2.waitForSelector('[data-testid=keys-offer]', { timeout: tmo(15000) }).catch(() => errors.push(`${cfg.name}: the offer did not appear`));
     await S(p2, 'keys-offer', () => settle(p2, 1000));
     await c2.close();
   }

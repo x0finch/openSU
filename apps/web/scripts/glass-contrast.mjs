@@ -14,6 +14,7 @@ import { createRequire } from 'node:module';
 import { createServer } from 'node:net';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { scaleBrowser, tmo } from '../../../tools/e2e-timeouts.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const appRoot = resolve(here, '..');
@@ -37,13 +38,14 @@ const port = await new Promise((ok) => {
 const base = `http://localhost:${port}`;
 const server = spawn(process.execPath, [resolve(appRoot, 'node_modules/vite/bin/vite.js'), 'preview', '--port', String(port), '--strictPort'], { cwd: appRoot, stdio: 'ignore', env: { ...process.env, CI: '1' } });
 process.on('exit', () => server.kill('SIGTERM'));
-for (let i = 0; i < 120; i++) {
+for (let i = 0; i < tmo(120); i++) {
   try {
     if ((await fetch(`${base}/api/health`)).ok) break;
   } catch {}
   await new Promise((r) => setTimeout(r, 250));
 }
 const browser = await playwright.chromium.launch({ args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist', '--enable-webgl'] });
+scaleBrowser(browser);
 
 /** Text boxes inside glass, with their ink: [{ name, rects: [x,y,w,h][], color: [r,g,b,a] }]. */
 async function textBoxes(page, selectors) {
@@ -137,7 +139,7 @@ async function open(path, viewport, opts = {}) {
   const ctx = await browser.newContext({ viewport, deviceScaleFactor: 1, ...opts });
   const page = await ctx.newPage();
   await page.goto(`${base}${path}`);
-  await page.waitForFunction(() => window.__studio?.ready3d === true, null, { timeout: 180000 });
+  await page.waitForFunction(() => window.__studio?.ready3d === true, null, { timeout: tmo(180000) });
   await page.waitForTimeout(1500);
   return { ctx, page };
 }
