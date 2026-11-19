@@ -395,7 +395,13 @@ export function Studio() {
     const q = typeof location !== 'undefined' ? new URLSearchParams(location.search).get('glass') : null;
     return q === 'dark' || q === 'light' ? q : null;
   });
-  const glassTone: GlassTone = fixedTone ?? (walk ? 'dark' : 'light');
+  // The UI audit measures a surface's shape in motion by its dark glass (white glass on white paper has no edge to
+  // measure): it sets a tone for its recordings only.
+  const [testTone, setTestTone] = useState<GlassTone | null>(null);
+  useEffect(() => {
+    window.__studio = { ...window.__studio, setGlassTone: setTestTone };
+  }, []);
+  const glassTone: GlassTone = testTone ?? fixedTone ?? (walk ? 'dark' : 'light');
 
   const main = useRef<HTMLElement>(null);
   useClickAwayFromDrawing(main);

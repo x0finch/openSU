@@ -15,7 +15,7 @@ import { glassRegistry, type GlassTarget } from '@opensu/ui';
 declare global {
   interface Window {
     /** Test hooks for the smoke test / screenshot script. */
-    __studio?: { ready3d?: boolean; engine?: Engine; planReady?: boolean; growing?: boolean; store?: unknown; chat?: unknown; account?: unknown; keys?: unknown; projects?: unknown; toast?: unknown; shared?: unknown; reloadShared?: () => Promise<void>; glass?: typeof glassRegistry };
+    __studio?: { ready3d?: boolean; engine?: Engine; planReady?: boolean; growing?: boolean; store?: unknown; chat?: unknown; account?: unknown; keys?: unknown; projects?: unknown; toast?: unknown; shared?: unknown; reloadShared?: () => Promise<void>; glass?: typeof glassRegistry; setGlassTone?: (t: "light" | "dark" | null) => void };
   }
 }
 

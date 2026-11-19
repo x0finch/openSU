@@ -460,6 +460,8 @@ async function motionPass(page, cfg, state, { open, close, find, between }) {
   mkdirSync(dir, { recursive: true });
   const run = async (label, act, handle) => {
     const frames = [];
+    // Task 034: the shape is measured on dark glass (the light default has no edge over white paper).
+    await page.evaluate(() => window.__studio?.setGlassTone?.('dark')).catch(() => {});
     hide = await page.addStyleTag({ content: HIDE_TEXT });
     await page.evaluate(() => window.__auditClock.freeze());
     await cdp.send('Animation.setPlaybackRate', { playbackRate: 0.03 });
@@ -480,6 +482,7 @@ async function motionPass(page, cfg, state, { open, close, find, between }) {
     await settle(page, 900);
     return { frames, el };
   };
+  const toneBack = () => page.evaluate(() => window.__studio?.setGlassTone?.(null)).catch(() => {});
   const unhide = async () => {
     await hide?.evaluate((n) => n.remove()).catch(() => {});
     hide = null;
@@ -509,9 +512,11 @@ async function motionPass(page, cfg, state, { open, close, find, between }) {
       return { a: box, bar: b ? { x: b.left, y: b.top, w: b.width, h: b.height } : null };
     }).catch(() => null) : null;
     await unhide();
+    await toneBack();
     if (between) await between();
     const c = close ? await run('close', close, el) : { frames: [] };
     await unhide();
+    await toneBack();
     const area = fin && !fin.gone ? fin.b.w * fin.b.h : 0;
     for (const [label, seq] of [['open', o.frames], ['close', c.frames]]) {
       let worst = null, empty = null;
