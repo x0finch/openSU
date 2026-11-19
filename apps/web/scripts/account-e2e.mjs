@@ -863,6 +863,8 @@ try {
     await v.getByTestId('bar-levels').click();
     await settle(v, 700);
     await v.getByTestId('bar-levels').click();
+    // Closed before walking: Escape closes an open panel first (one thing at a time), then leaves walk mode.
+    await v.waitForFunction(() => !window.__studio.store.getState().tray, null, { timeout: tmo(10000) });
     await v.getByTestId('bar-walk').click();
     await v.waitForFunction(() => window.__studio.store.getState().walk === true, null, { timeout: tmo(10000) });
     await settle(v, 1500);
