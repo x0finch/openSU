@@ -150,8 +150,6 @@ function measureInPage(gap) {
   const v = window.__studio?.engine?.viewer;
   let house = null, inkUnder = [];
   if (v) {
-    // The drawing alone: the glass drawn in the same canvas is taken out for the reading.
-    window.__studio.glass?.setPaused(true);
     v.renderNow();
     const src = v.renderer.domElement;
     const cr = src.getBoundingClientRect();
@@ -182,7 +180,6 @@ function measureInPage(gap) {
       const neutralLight = Math.max(r, gg, bb) - Math.min(r, gg, bb) < 8 && Math.min(r, gg, bb) > 150;
       return ink(x, y) && !neutralLight;
     };
-    window.__studio.glass?.setPaused(false);
     for (const [l, t, r, b, name] of obs) {
       let n = 0, m = 0;
       for (let y = Math.max(0, Math.floor((t - cr.top) * k)); y < Math.min(c.height, Math.ceil((b - cr.top) * k)); y++) {
@@ -502,13 +499,12 @@ if (wanted('checks')) {
     check(await page.getByTestId('hints').count() === 0 && (await page.evaluate(() => localStorage.getItem('opensu.hints.v1'))) === 'done', `${n}: the first interaction dismisses the hints for good`);
     await ctx.close();
   }
-  // backdrop-filter only in the glass module's CSS backend (task 017), never
-  // in a rule that could apply over the WebGL canvas.
+  // backdrop-filter only in the glass module's material (task 017; one CSS material since task 035).
   {
     const dir = resolve(appRoot, 'dist/client/assets');
     const css = readdirSync(dir).filter((f) => f.endsWith('.css')).map((f) => readFileSync(resolve(dir, f), 'utf8')).join('\n');
     const rules = [...css.matchAll(/([^{}]*)\{[^{}]*backdrop-filter:(?!\s*none)[^{}]*\}/g)].map((m) => m[1].trim());
-    check(css.length > 1000 && rules.every((sel) => sel.split(',').every((x) => x.includes('[data-backend=css]'))), `backdrop-filter only in the CSS glass backend (${rules.length} rules)`);
+    check(css.length > 1000 && rules.every((sel) => sel.split(',').every((x) => /^\.lg(\[[\w-]+\])*$/.test(x.trim()))), `backdrop-filter only in the glass material (${rules.length} rules: ${rules.join(' | ')})`);
   }
 }
 

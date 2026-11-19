@@ -10,7 +10,7 @@ import { cutawayPreset, presetById, shownCut } from '../lib/views';
 import type { Engine } from './engine';
 import { Loading } from './Loading';
 import { walkBridge } from './walk-bridge';
-import { glassRegistry, type GlassTarget } from '@opensu/ui';
+import { glassRegistry } from '@opensu/ui';
 
 declare global {
   interface Window {
@@ -147,9 +147,6 @@ export function Viewer3D({ resolved, active, insets, layoutKey, insetMs, compact
         walkBridge.attach(e);
         if (st.walk) e.enterWalk();
         window.__studio = { ...window.__studio, engine: e, ready3d: true, glass: glassRegistry };
-        // The tests read the shape the canvas drew for an element (motion frames, task 025).
-        (window as unknown as { __glass?: unknown }).__glass = { shapeOf: (el: HTMLElement) => glassRegistry.shapeOf(el) };
-        glassTarget.current = { canvas: e.viewer.renderer.domElement, setGlass: (shapes, m) => e.viewer.setGlass(shapes, m) };
         setStatus('ready');
       } catch (err) {
         console.error(err);
@@ -158,8 +155,6 @@ export function Viewer3D({ resolved, active, insets, layoutKey, insetMs, compact
     });
     return () => {
       alive = false;
-      glassRegistry.attachCanvas(null);
-      glassTarget.current = null;
       walkBridge.attach(null);
       thumbSource.set(null);
       engine.current?.dispose();
@@ -167,14 +162,6 @@ export function Viewer3D({ resolved, active, insets, layoutKey, insetMs, compact
       if (window.__studio) window.__studio.ready3d = false;
     };
   }, []);
-
-  // Liquid glass over the 3D view: the viewer's composite pass draws it
-  // (?glass=css keeps the CSS backend, for comparison).
-  const glassTarget = useRef<GlassTarget | null>(null);
-  useEffect(() => {
-    const forceCss = new URLSearchParams(location.search).get('glass') === 'css';
-    glassRegistry.attachCanvas(status === 'ready' && active && !forceCss ? glassTarget.current : null);
-  }, [status, active]);
 
   // A changed house: swap it in and play the grow transition when asked.
   useEffect(() => {

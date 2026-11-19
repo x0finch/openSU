@@ -93,8 +93,8 @@ lower than 520 px, `use-phone.ts`) a Popover is a Sheet.
 | small marks | `Spinner`, `Dot`, `Badge`, `Skeleton`, `Avatar`, `CloseGlyph`, `BackGlyph` | | |
 
 Internals: `surface.tsx` (`Glass`, `GlassLayer`, `GlassLens`, the press
-light), `registry.ts`, `material.ts` and `glass-types.ts` (the glass, its
-numbers, its two data types), `floating.ts` (placements, the bar-edge
+light), `registry.ts`, `refract.ts` and `material.ts` (the glass, its
+Chromium rim refraction, its numbers), `floating.ts` (placements, the bar-edge
 anchor, what lies under an open surface), `use-floating-box.ts`,
 `spring.ts` (the press, the segment lens, the slider thumb), `util.ts`,
 `use-phone.ts`, `glass.css` and `styles.css`.
@@ -111,16 +111,12 @@ measured from the bar's edge (`floating.ts` `anchorBox`). Reduced motion:
 a fade in place. A closed surface is inert at once and drops
 `aria-modal`; it leaves the DOM when its closing transition ends.
 
-## The glass: two backends
+## The glass: one CSS material
 
-- **CSS** (the default, needs nothing): each glass element draws itself
-  with `backdrop-filter` and the material's tint, rim light, bevel and
-  shadow (`glass.css`, after glasswork, MIT).
-- **Canvas** (optional): an app that renders its own canvas (openSU's 3D
-  viewer) plugs in with `glassRegistry.attachCanvas({ canvas, setGlass })`.
-  The registry measures every glass element (every frame while a
-  transition runs) and hands `setGlass` the shapes (`GlassShape[]`) and the
-  material (`GlassMaterial`); the elements turn transparent and only carry
-  their content. `attachCanvas(null)` goes back to CSS. Because the
-  elements are transparent there, nothing in the DOM should lie under a
-  glass surface on that backend (it would show through).
+Each glass element draws itself with `backdrop-filter` and the material's
+tint, rim light, bevel and shadow (`glass.css`, after glasswork, MIT); the
+numbers are in `material.ts`. Every surface is the same material (task
+035). On Chromium the registry also gives each surface a rim refraction
+(`refract.ts`): an SVG displacement map in its `backdrop-filter`, sized to
+the element, marked `[data-refract]`. WebKit and Gecko show the same glass
+without the bend. `?refract=off` turns it off.

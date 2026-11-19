@@ -61,8 +61,7 @@ export function PhoneDock({ derived, landscape, onExtent }: { derived: Derived |
   const shareOpen = useShareUi((s) => s.open);
   const signing = signInOpen || keySheetOpen || shareOpen;
   // A tool's sheet rises over the bars (task 031): they stay where they are, under it, and step aside (faded and out
-  // of reach). On the canvas backend a glass surface is drawn in the 3D canvas and its element is transparent, so
-  // whatever DOM lies under a sheet would show through it.
+  // of reach).
   const walk = useStudio((s) => s.walk);
   const pinned = useStudio((s) => s.pinned);
   const recent = useStudio((s) => s.recent);

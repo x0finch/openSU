@@ -6,7 +6,6 @@
 // and focus (through Radix Dialog, which Vaul is built on).
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { Drawer } from 'vaul';
-import { glassRegistry } from './registry';
 import { cx, Glass, useMergedRef, usePortalHost } from './surface';
 
 /** The grabber's strip, px. */
@@ -69,7 +68,6 @@ export default function SheetVaul({ open, large, fixed, onClose, onClosed, modal
   useLayoutEffect(() => {
     cb.current.onHeight?.(open && height > 0 ? height : null);
   }, [open, height]);
-  const kick = () => glassRegistry.kick();
   // It has left once Vaul's slide is over. Vaul reports that only for changes it made itself (a drag, the scrim,
   // Escape), not for the caller's `open`; a timer of the slide's length covers both and needs no frames.
   const closedCb = useRef(onClosed);
@@ -92,9 +90,6 @@ export default function SheetVaul({ open, large, fixed, onClose, onClosed, modal
         if (!o) onClose();
       }}
       modal={modal}
-      onAnimationEnd={kick}
-      onDrag={kick}
-      onRelease={kick}
       noBodyStyles
       repositionInputs={false}
     >

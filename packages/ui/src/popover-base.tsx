@@ -58,7 +58,6 @@ export default function PopoverBase({ open, anchor, placement = 'below-start', s
                   }}
                   kind="text"
                   radius={GLASS.radiusPanel}
-                  layer={1}
                   ariaRole={role}
                   id={id}
                   aria-label={label}

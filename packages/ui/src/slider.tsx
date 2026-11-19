@@ -3,11 +3,9 @@
 // the range input screen readers use; the lens is drawn here).
 import { Slider as BaseSlider } from '@base-ui/react/slider';
 import { type CSSProperties, type ReactNode, useCallback, useLayoutEffect, useRef } from 'react';
-import { cx, GlassLens, useGlass } from './surface';
-import { TONES } from './material';
-import { glassRegistry, type ShapeOverride } from './registry';
+import { cx, GlassLens } from './surface';
 import { Spring, SPRINGS } from './spring';
-import { lerp, clamp } from './util';
+import { clamp } from './util';
 
 const THUMB_W = 40;
 const THUMB_H = 26;
@@ -28,7 +26,6 @@ export function Slider({ min, max, value, onChange, ariaLabel, ariaValueText, id
   const progress = clamp((value - min) / Math.max(1e-6, max - min), 0, 1);
   const progRef = useRef(progress);
   progRef.current = progress;
-  const tone = useGlass().tone;
   const paint = useCallback(() => {
     const W = wrap.current, L = lens.current, C = copy.current, R = rail.current;
     if (!W || !L || !C || !R) return;
@@ -58,7 +55,6 @@ export function Slider({ min, max, value, onChange, ariaLabel, ariaValueText, id
   if (!lifted.current) lifted.current = new Spring(0, SPRINGS.lift, () => paint());
   useLayoutEffect(() => {
     paint();
-    glassRegistry.kick();
   });
   useLayoutEffect(() => {
     const W = wrap.current;
@@ -68,23 +64,6 @@ export function Slider({ min, max, value, onChange, ariaLabel, ariaValueText, id
     return () => ro.disconnect();
   }, [paint]);
   const lift = (on: boolean) => lifted.current!.set(on ? 1 : 0, { preset: SPRINGS.lift });
-  const lensShape = (): ShapeOverride | null => {
-    const W = wrap.current;
-    if (!W) return null;
-    const r = W.getBoundingClientRect();
-    const l = clamp(lifted.current!.value, 0, 1.2), l01 = clamp(l, 0, 1);
-    const cxp = r.left + THUMB_W / 2 + progRef.current * (r.width - THUMB_W);
-    const tw = THUMB_W * (1 + THUMB_GROW * l), th = THUMB_H * (1 + THUMB_GROW * l);
-    return {
-      rect: { x: cxp - tw / 2, y: r.top + r.height / 2 - th / 2, width: tw, height: th },
-      // At rest the thumb's solid face (DOM) covers it; lifted it is clear glass.
-      tint: lerp(TONES[tone].tintControl, 0.06, l01),
-      frost: lerp(1, 0.4, l01),
-      magnify: 1 + 0.5 * l01,
-      bend: 1 + 1.2 * l01,
-      lift: 1 + 0.4 * l01,
-    };
-  };
   const fill = `${progress * 100}%`;
   const railInner = (
     <div className="lg-slider-fill" style={{ width: `calc(${THUMB_W / 2}px + (100% - ${THUMB_W}px) * ${progress})`, ...(idle ? { background: 'var(--lg-ink-2)' } : {}) }} />
@@ -119,7 +98,7 @@ export function Slider({ min, max, value, onChange, ariaLabel, ariaValueText, id
         <div ref={rail} className="lg-slider-rail">
           {railInner}
         </div>
-        <GlassLens ref={lens} shape={lensShape}>
+        <GlassLens ref={lens}>
           <span className="lg-lens-face" />
           <div ref={copy} className="lg-lens-copy">
             <div className="lg-slider-rail" style={{ maskImage: 'none' }}>

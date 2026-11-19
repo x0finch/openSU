@@ -40,20 +40,29 @@ Written guidance (read these before changing the rules):
 
 ## How it is rendered
 
-The house is already drawn into our own WebGL canvas, so the glass is
-drawn there too, in the same pass, the way glasswork's `refract.js` does
-it for Safari and iOS:
+One implementation everywhere (task 035, the owner's decision of
+2026-11-19): every glass surface on every page (3D, plan, gallery, the
+projects page) is the same CSS material, drawn by the element itself with
+`backdrop-filter` (`packages/ui/src/glass.css`, after glasswork's
+`glass.css`). The WebGL glass pass in the 3D canvas is gone: it could only
+draw over the canvas, so the same control looked different in 3D and in
+plan.
 
-1. The canvas draws the scene. Inside each glass shape it draws the scene
-   again, bent at the rim, blurred, saturated and lifted.
-2. The DOM element on top holds the text and icons. It has a transparent
-   background and no `backdrop-filter`.
-3. Shapes are rounded rectangles. Each stands alone: surfaces float at a
+1. The element draws the tint, `blur() saturate() brightness()`, rim
+   light, bevel, hairline and shadow.
+2. On Chromium (Chrome, Edge, Android's browsers) the rim also bends what
+   lies under it: an SVG displacement map in `backdrop-filter`, drawn per
+   surface size (`refract.ts`), with a little dispersion. WebKit and
+   Gecko drop an SVG filter in `backdrop-filter`, so there the glass is the
+   same material without the bend. The check is on the engine, not
+   `@supports` (Safari claims support). `?refract=off` turns it off for
+   comparison.
+3. Consistency is per device: on one device every glass surface looks the
+   same (all bend on Chrome, none on Safari). If the bend costs too much
+   on some device, it is lowered or turned off for every surface at once,
+   never for some.
+4. Shapes are rounded rectangles. Each stands alone: surfaces float at a
    gap from their control (task 029), so nothing merges.
-
-No CSS `backdrop-filter: url()` (Chromium only) and no SVG displacement
-maps. If WebGL2 is missing, fall back to a plain CSS frosted surface with
-the same tint, blur and rim (no refraction).
 
 ## Rules
 
@@ -66,12 +75,12 @@ the same tint, blur and rim (no refraction).
 3. **One level of glass.** Glass never sits on glass. Nothing inside a
    panel gets its own box, border or shadow (Geist; HIG: Liquid Glass is
    the navigation layer only, never the content layer).
-4. **Clear glass, not milky.** The tint is thin; the glass looks bright
-   because it saturates and lifts what is behind it. Only the rim bends;
-   the middle shows the drawing undistorted.
-5. **Readable first.** A surface that holds body text (panel, chat) gets a
-   higher tint floor than a capsule, so text reaches 4.5:1 over the line
-   drawing. Raise the tint before adding blur.
+4. **One material.** Capsules, panels, menus, sheets and the conversation
+   are the same glass (task 035: the look of the conversation strip, the
+   owner's choice). Only the rim bends; the middle shows the drawing
+   lightly frosted.
+5. **Readable first.** The tint is high enough that text reaches 4.5:1
+   over the line drawing. Raise the tint before adding blur.
 6. **Concentric shapes, even margins.** Inner rounded shapes follow the
    outer radius minus the padding; capsules are fully round.
 7. **Separate with space.** Group with spacing first. Where a divider is
@@ -100,19 +109,19 @@ Material:
 | | Light glass | Dark glass |
 |---|---|---|
 | tint colour | white | rgb(30 30 34) |
-| tint, capsule | 14% (glasswork range 6-22%) | 60% (30% and 45% failed 4.5:1 for labels over white) |
-| tint, text surface | 60% (task 034: 42% left the phone sun sheet's text at 4.2:1 over its scrim) | 60% |
-| blur | 2 px controls; 24 px surfaces that hold text (task 034, iOS 26's regular glass: the same look over any content) | same |
+| tint, every surface | 60% (task 035: one material; 42% left the phone sun sheet's text at 4.2:1 over its scrim) | 60% (30% and 45% failed 4.5:1 for labels over white) |
+| blur | 3 px (the conversation strip's frost of the WebGL glass, matched by eye) | same |
 | saturation | 1.8 | 1.6 |
 | brightness | 1.06 | 0.80 |
 | ink | rgba(0,0,0,.86), secondary rgba(60,60,67,.8) (task 034: .7 measured 4.49:1 on white) | rgba(255,255,255,.94), secondary rgba(235,235,245,.64) |
 
-Rim refraction (same for both):
+Rim refraction (same for both; Chromium only):
 
 | | Value |
 |---|---|
 | rim width | 40 px, or a 3.5th of the short side if smaller |
-| edge offset | 1.1 rim widths, sampled inward |
+| edge offset | 1.1 rim widths, sampled inward, falloff exponent 2.6 |
+| dispersion | red 15% more, blue 15% less |
 | falloff | (1 - depth / rim) ^ 2.6 |
 | dispersion | red +15%, blue -15% |
 
@@ -196,17 +205,16 @@ its control and none opens beside the toolbar.
 - Do keep the idle screen to two capsules plus the name text.
 - Do let the rim bend the drawing; that bend is what makes it glass.
 - Don't stack glass on glass, or put a box inside a panel.
-- Don't make the glass milky to fix readability; raise the text
-  surface's tint floor instead.
-- Don't use CSS `backdrop-filter` for the glass in the studio; it differs
-  across browsers and the canvas already has the scene.
+- Don't make the glass milky to fix readability; raise the tint instead.
+- Don't give one surface a look of its own: one material, one blur, one
+  tint per tone.
 - Don't show more than one exchange of chat at a time without a tap.
 
 ## Open questions
 
-- Frame rate on real phones (one iPhone, one Android). The prototype has
-  an automatic test; until we have numbers, plan a fallback that keeps the
-  glass static (or switches to plain frosted) while the camera moves.
+- Frame rate of the Chromium rim refraction on real devices (a mid-range
+  Android phone, an older laptop). If it drops frames, lower it or turn it
+  off for every surface (rule above), never for some.
 - Adaptive density: glasswork thickens the tint where the background is
   busy and switches to dark glass over dark areas. Worth adding once the
   basic material ships.

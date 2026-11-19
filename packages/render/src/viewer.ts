@@ -13,7 +13,6 @@ import {
   Plane,
   Scene,
   SRGBColorSpace,
-  Vector2,
   Vector3,
   WebGLRenderer,
   WebGLRenderTarget,
@@ -44,7 +43,6 @@ export interface WalkOptions {
   pitchDeg?: number;
 }
 import { GROW_DURATION, growHeight, type GrowOptions } from './grow.js';
-import { GlassCompositor, type GlassMaterial, type GlassShape } from './glass.js';
 
 /**
  * Shadow framing (`setFrameShadows`): a sun lower than `minElevationDeg`
@@ -146,11 +144,8 @@ export class IllustrationViewer {
   private growZ: number | null = null;
   private growFrame = 0;
   private growDone: (() => void) | null = null;
-  /** The glass composite pass (null: the scene renders straight to the canvas). */
-  private glass: GlassCompositor | null = null;
-  private glassPending = false;
-  /** Frames drawn: scene renders and composite-only (glass) frames. Tests and the debug overlay read them. */
-  readonly frameCounts = { scene: 0, glass: 0 };
+  /** Scene frames drawn (tests read it). */
+  readonly frameCounts = { scene: 0 };
   /** Called after every frame (stats, UI). */
   onAfterRender: ((stats: SceneStats) => void) | null = null;
   lastStats: SceneStats = { triangles: 0, drawCalls: 0, drawCallsWithShadows: 0, trianglesWithShadows: 0 };
@@ -758,31 +753,6 @@ export class IllustrationViewer {
     return { withShadows: median(a), withoutShadows: median(b) };
   }
 
-  /**
-   * Software-independent cost of a frame (GPU-synchronised by a pixel
-   * read, median of `frames`): a scene frame (scene into the target plus
-   * the composite) and a glass-only frame (the composite alone).
-   */
-  measureGlass(frames = 8): { scene: number; composite: number } | null {
-    if (!this.glass) return null;
-    const gl = this.renderer.getContext();
-    const px = new Uint8Array(4);
-    const time = (f: () => void) => {
-      const t0 = performance.now();
-      f();
-      gl.readPixels(0, 0, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, px);
-      return performance.now() - t0;
-    };
-    const a: number[] = [], b: number[] = [];
-    time(() => this.renderNow());
-    for (let i = 0; i < frames; i++) {
-      a.push(time(() => this.renderNow()));
-      b.push(time(() => this.glass!.composite(this.renderer)));
-    }
-    const median = (v: number[]) => v.sort((x, y) => x - y)[Math.floor(v.length / 2)]!;
-    return { scene: median(a), composite: median(b) };
-  }
-
   get currentView(): ViewPreset | null {
     return this.preset;
   }
@@ -796,10 +766,6 @@ export class IllustrationViewer {
     const pr = this.fixedPixelRatio ?? Math.min(window.devicePixelRatio || 1, stage.maxPixelRatio);
     this.renderer.setPixelRatio(pr);
     this.renderer.setSize(width, height, true);
-    if (this.glass) {
-      const buf = this.renderer.getDrawingBufferSize(new Vector2());
-      this.glass.setSize(buf.x, buf.y, pr);
-    }
     this.edgeMaterial.resolution.set(width, height);
     this.floorMaterial.resolution.set(width, height);
     for (const m of this.clipLineMaterials) m.resolution.set(width, height);
@@ -819,69 +785,12 @@ export class IllustrationViewer {
     this.requestRender();
   }
 
-  /**
-   * Liquid glass chrome (task 017): `shapes` are drawn over the scene by a
-   * composite pass, in CSS px relative to the canvas. The scene itself then
-   * renders into a multisampled target, only when it changes; a change of
-   * the glass alone re-runs the composite pass. `null` switches the pass
-   * off (the scene renders straight to the canvas again).
-   */
-  setGlass(shapes: readonly GlassShape[] | null, material?: GlassMaterial): void {
-    if (!shapes || !material) {
-      if (!this.glass) return;
-      this.glass.dispose();
-      this.glass = null;
-      this.setSceneFade(this.sceneFade);
-      this.requestRender();
-      return;
-    }
-    if (!this.glass) {
-      const buf = this.renderer.getDrawingBufferSize(new Vector2());
-      this.glass = new GlassCompositor(buf.x, buf.y);
-      this.glass.setSize(buf.x, buf.y, this.renderer.getPixelRatio());
-      this.glass.setGlass(shapes, material);
-      this.setSceneFade(this.sceneFade);
-      // The target is empty: the scene must be drawn into it once.
-      this.requestRender();
-      return;
-    }
-    this.glass.setGlass(shapes, material);
-    this.requestGlassRender();
-  }
-
   private sceneFade = 0;
 
-  /**
-   * A dissolve of the scene into the page background (0 = scene, 1 = page).
-   * With glass on, the composite pass fades the scene only, so the chrome
-   * drawn in the canvas stays; otherwise the canvas itself fades.
-   */
+  /** A dissolve of the scene into the page background (0 = scene, 1 = page): the canvas fades. */
   setSceneFade(amount: number): void {
     this.sceneFade = Math.min(1, Math.max(0, amount));
-    const bg = { r: 1, g: 1, b: 1 };
-    new Color(stage.background).getRGB(bg, SRGBColorSpace);
-    if (this.glass) {
-      this.renderer.domElement.style.opacity = '';
-      this.glass.setSceneFade(this.sceneFade, [bg.r, bg.g, bg.b]);
-      this.requestGlassRender();
-    } else this.renderer.domElement.style.opacity = this.sceneFade ? String(1 - this.sceneFade) : '';
-  }
-
-  /** Whether the glass composite pass is on. */
-  get glassOn(): boolean {
-    return !!this.glass;
-  }
-
-  /** Schedule a composite-only frame (the scene is unchanged). */
-  requestGlassRender(): void {
-    if (this.glassPending || this.pending) return;
-    this.glassPending = true;
-    requestAnimationFrame(() => {
-      this.glassPending = false;
-      if (this.pending || !this.glass) return;
-      this.glass.composite(this.renderer);
-      this.frameCounts.glass++;
-    });
+    this.renderer.domElement.style.opacity = this.sceneFade ? String(1 - this.sceneFade) : '';
   }
 
   /** Schedule one frame. Nothing renders unless something asked for it. */
@@ -889,8 +798,7 @@ export class IllustrationViewer {
    * One frame of `preset` at `width` x `height` CSS px into an offscreen
    * target, read back as RGBA rows (top row first), with the scene, the
    * renderer and its compiled programs as they are: no second context, no
-   * shader compile (the target is encoded like the canvas, as the glass
-   * target is). The canvas, the user's camera and the view state are left
+   * shader compile (the target is encoded like the canvas). The canvas, the user's camera and the view state are left
    * untouched; when the preset needs another presentation sun, the shadow
    * map is redrawn for the capture and again for the next visible frame
    * (which looks the same). Null while the scene is not the plain house:
@@ -991,11 +899,7 @@ export class IllustrationViewer {
       this.renderer.shadowMap.needsUpdate = true;
       this.shadowsDirty = false;
     }
-    if (this.glass) {
-      this.renderer.setRenderTarget(this.glass.target);
-      this.renderer.render(this.scene, this.camera);
-      this.renderer.setRenderTarget(null);
-    } else this.renderer.render(this.scene, this.camera);
+    this.renderer.render(this.scene, this.camera);
     this.frameCounts.scene++;
     const info = this.renderer.info.render;
     let triangles = 0;
@@ -1014,7 +918,6 @@ export class IllustrationViewer {
       }
     });
     this.lastStats = { triangles: Math.round(triangles), drawCalls, drawCallsWithShadows: info.calls, trianglesWithShadows: info.triangles };
-    this.glass?.composite(this.renderer);
     this.onAfterRender?.(this.lastStats);
     return this.lastStats;
   }
@@ -1023,8 +926,6 @@ export class IllustrationViewer {
     this.walker?.dispose();
     this.walker = null;
     this.stopGrow();
-    this.glass?.dispose();
-    this.glass = null;
     this.renderer.dispose();
     this.renderer.domElement.remove();
   }

@@ -1,16 +1,20 @@
 // The glass material: every number of the studio's liquid glass, and the
-// only place they exist (docs/UI_STYLE.md, "Tokens"). They feed the WebGL
-// composite pass (`shaderMaterial`) and the CSS backend (`cssVars`).
-import type { GlassMaterial } from './glass-types';
+// only place they exist (docs/UI_STYLE.md, "Tokens"). Task 035: one CSS
+// material for every glass surface on every page (`cssVars`), with rim
+// refraction on Chromium (refract.ts).
 
 export type GlassTone = 'light' | 'dark';
-/** A surface's role: a control (thin tint) or a surface holding body text (denser). */
+/**
+ * What a surface is: a control (a bar, a capsule) or a surface holding body
+ * text (a panel, a menu, a sheet). Task 035: both are the same material; the
+ * role only names the surface (tests and the audit read it).
+ */
 export type GlassRole = 'control' | 'text';
 
 interface Tone {
   tint: [number, number, number];
-  tintControl: number;
-  tintText: number;
+  /** The tint's share over the backdrop: one for every surface (task 035). */
+  tintAlpha: number;
   /** The selected segment's lens adds this much tint over the capsule. */
   tintLens: number;
   /**
@@ -40,10 +44,9 @@ interface Tone {
 export const TONES: Record<GlassTone, Tone> = {
   light: {
     tint: [1, 1, 1],
-    tintControl: 0.14,
-    // Task 034 (iOS 26): surfaces holding text (panels, menus, sheets, the conversation) are frosted white enough
-    // for dark ink over any content, also over a sheet's scrim (glass-contrast: 4.5:1 for every role).
-    tintText: 0.6,
+    // Task 034/035 (iOS 26): white enough for dark ink over any content, also over a sheet's scrim
+    // (glass-contrast: 4.5:1 for every role); the look of the conversation strip the owner chose for every surface.
+    tintAlpha: 0.6,
     tintLens: 0.55,
     lensFace: 'rgba(255, 255, 255, 0)',
     thumbFace: '#ffffff',
@@ -66,8 +69,7 @@ export const TONES: Record<GlassTone, Tone> = {
     // Measured by scripts/glass-contrast.mjs over the white drawing: 0.45
     // (UI_STYLE) gives 3.8:1 for labels; 0.6 lifts primary ink to about 5.2:1
     // and the 90% secondary ink to about 4.7:1.
-    tintControl: 0.6,
-    tintText: 0.6,
+    tintAlpha: 0.6,
     tintLens: 0.25,
     lensFace: 'rgba(255, 255, 255, 0)',
     thumbFace: '#ffffff',
@@ -89,36 +91,30 @@ export const TONES: Record<GlassTone, Tone> = {
 
 /** Shape, refraction and motion (same for both tones). */
 export const GLASS = {
+  /** Frost (backdrop blur) radius, px: one for every surface (task 035, the conversation strip's). */
+  frost: 3,
   /**
-   * Frost radius, px: capsules, and surfaces that hold text (panels, menus, sheets, the conversation). Task 034
-   * (iOS 26's regular glass): a text surface is frosted enough to look the same over any content, 6 -> 24.
+   * Rim refraction (Chromium only, refract.ts): a band along the edge, this
+   * share of the short side up to `rimMax` px wide, pulls the backdrop in
+   * from up to `rimPull` of the band's width, easing off inwards by `falloff`
+   * (the numbers of the WebGL glass it replaces).
    */
-  frostControl: 2,
-  frostPanel: 24,
-  /** A text surface bends the scene at its rim this much of a control's (iOS: lensing belongs to controls). */
-  bendText: 0.35,
   rimMax: 40,
   rimDivisor: 3.5,
-  edgeOffset: 1.1,
+  rimPull: 1.1,
   falloff: 2.6,
+  /** Red bends this much more than green, blue this much less (the rim's colour fringe). */
   dispersion: 0.15,
-  shadowOffset: 4,
-  /** The press light (a soft glow under the pointer). */
-  pressLight: 0.22,
   /** Press: the surface grows by this many px on its long side (glisse: 6 pointer, 15 touch). */
   pressGrow: 6,
   pressGrowTouch: 15,
-  /** A lifted lens (dragged segment, slider thumb): growth in px, magnification, extra bend and shadow. */
+  /** A lifted lens (dragged segment, slider thumb): growth in px and magnification. */
   lensGrowX: 24,
   lensGrowY: 16,
   lensMagnify: 1.18,
-  lensBend: 1.8,
-  lensLift: 1.4,
   /** A sliding lens stretches by its speed (px per px/s), up to a cap. */
   lensStretch: 0.035,
   lensStretchMax: 26,
-  /** A lifted lens is clear: its tint falls to this share. */
-  lensClear: 0.12,
   /** Anchored surfaces (task 025): a floating menu or panel stands this far from its anchor, and this far inside the screen edge. */
   anchorGap: 8,
   screenInset: 12,
@@ -144,44 +140,14 @@ export const GLASS = {
   popFromY: 0.4,
 } as const;
 
-/** The CSS backend: glasswork's material (tint, `blur() saturate() brightness()`, rim light and bevel). */
-export const CSS_BLUR_PX = 2;
-
-export function shaderMaterial(tone: GlassTone, opaque: boolean): GlassMaterial {
-  const t = TONES[tone];
-  return {
-    tint: t.tint,
-    saturation: t.saturation,
-    brightness: t.brightness,
-    catchLight: t.catchLight,
-    bevel: t.bevel,
-    shadow: t.shadow,
-    shadowOffset: GLASS.shadowOffset,
-    shadowBlur: t.shadowBlur,
-    hairline: t.hairline,
-    rimMax: GLASS.rimMax,
-    rimDivisor: GLASS.rimDivisor,
-    edgeOffset: GLASS.edgeOffset,
-    falloff: GLASS.falloff,
-    dispersion: GLASS.dispersion,
-    pressLight: GLASS.pressLight,
-    opaque,
-  };
-}
-
-export function tintOf(tone: GlassTone, role: GlassRole): number {
-  return role === 'text' ? TONES[tone].tintText : TONES[tone].tintControl;
-}
-
 const rgb = (c: [number, number, number]) => c.map((x) => Math.round(x * 255)).join(' ');
 
-/** Custom properties of the glass layer (ink for both backends, the material for the CSS one). */
+/** Custom properties of the glass layer: the material and its ink. */
 export function cssVars(tone: GlassTone): Record<string, string> {
   const t = TONES[tone];
   return {
     '--lg-tint': `rgb(${rgb(t.tint)})`,
-    '--lg-tint-control': String(t.tintControl),
-    '--lg-tint-text': String(t.tintText),
+    '--lg-t': String(t.tintAlpha),
     '--lg-tint-lens': String(t.tintLens),
     '--lg-lens-face': t.lensFace,
     '--lg-thumb-face': t.thumbFace,
@@ -191,7 +157,7 @@ export function cssVars(tone: GlassTone): Record<string, string> {
     '--lg-on-ink': t.tipInk,
     '--lg-sat': String(t.saturation),
     '--lg-bri': String(t.brightness),
-    '--lg-blur': `${CSS_BLUR_PX}px`,
+    '--lg-blur': `${GLASS.frost}px`,
     '--lg-catch': String(t.catchLight),
     '--lg-bevel': String(t.bevel),
     '--lg-shadow': String(t.shadow),

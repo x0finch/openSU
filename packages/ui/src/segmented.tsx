@@ -7,11 +7,10 @@ import { Radio } from '@base-ui/react/radio';
 import { RadioGroup } from '@base-ui/react/radio-group';
 import { Toolbar } from '@base-ui/react/toolbar';
 import { type ReactNode, type Ref, useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { cx, Glass, GlassLens, useGlass } from './surface';
-import { GLASS, TONES } from './material';
-import { type ShapeOverride } from './registry';
+import { cx, Glass, GlassLens } from './surface';
+import { GLASS } from './material';
 import { Spring, SPRINGS } from './spring';
-import { lerp, clamp } from './util';
+import { clamp } from './util';
 
 export interface Segment<T extends string> {
   value: T;
@@ -184,29 +183,6 @@ export function Segmented<T extends string>({ value, onChange, segments, label, 
   };
   useEffect(() => () => clearTimeout(settleTimer.current), []);
 
-  const tone = useGlass().tone;
-  const lensShape = (): ShapeOverride | null => {
-    const el = box.current, L = lens.current;
-    if (!el || !L || !geo.current.ready) return null;
-    const r = el.getBoundingClientRect();
-    const s = springs.current!;
-    const lift = clamp(s.lift.value, 0, 1.2);
-    if (valueRef.current === null && lift < 0.01) return null;
-    const w = s.w.value + Math.min(GLASS.lensStretchMax, Math.abs(s.x.velocity) * GLASS.lensStretch), h = geo.current.h;
-    const W = w + GLASS.lensGrowX * lift, H = h + GLASS.lensGrowY * lift;
-    const cxv = r.left + s.x.value + s.w.value / 2, cyv = r.top + pad + h / 2;
-    const l01 = clamp(lift, 0, 1);
-    return {
-      rect: { x: cxv - W / 2, y: cyv - H / 2, width: W, height: H },
-      tint: TONES[tone].tintLens * (1 - l01 * (1 - GLASS.lensClear)),
-      frost: lerp(GLASS.frostControl, 0.5, l01),
-      magnify: 1 + (GLASS.lensMagnify - 1) * l01,
-      bend: 1 + (GLASS.lensBend - 1) * l01,
-      lift: 1 + (GLASS.lensLift - 1) * l01,
-      alpha: valueRef.current === null ? l01 : 1,
-    };
-  };
-
   const face = (s: Segment<T>, sel: boolean) =>
     tabs ? (
       <>
@@ -254,7 +230,7 @@ export function Segmented<T extends string>({ value, onChange, segments, label, 
       <div ref={row} className={cx('relative flex', tabs && 'flex-1')}>
         {items}
       </div>
-      <GlassLens ref={lens} shape={lensShape}>
+      <GlassLens ref={lens}>
         <span className="lg-lens-face" />
         <div ref={copy} className="lg-lens-copy" style={{ width: 1, height: 1 }}>
           <div className="absolute left-0" style={{ top: pad, height: height - 2 * pad }}>

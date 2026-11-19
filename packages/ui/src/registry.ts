@@ -1,105 +1,23 @@
-// The glass registry: every glass surface registers its element and its
-// shape here. The registry measures the elements (ResizeObserver, layout
-// events, and every frame while something animates) and hands the list of
-// shapes to the active backend:
-// - canvas ('webgl'): an app's renderer plugged in with `attachCanvas` draws
-//   the glass into its canvas; the DOM elements stay transparent;
-// - CSS: each element draws itself with the CSS material (glass.css).
-// Components never talk to a backend directly.
-import type { GlassMaterial, GlassShape } from './glass-types';
-import { GLASS, type GlassRole, type GlassTone, shaderMaterial, tintOf } from './material';
-import { onSpringFrame } from './spring';
-
-export type GlassBackend = 'webgl' | 'css';
-
-/** The canvas backend an app plugs in: its canvas and a function that receives the shapes. */
-export interface GlassTarget {
-  canvas: HTMLElement;
-  setGlass(shapes: readonly GlassShape[] | null, material?: GlassMaterial): void;
-}
-
-export interface Rect {
-  x: number;
-  y: number;
-  width: number;
-  height: number;
-}
-
-/** What a surface draws this frame (viewport CSS px). Fields left out come from the spec and the element. */
-export interface ShapeOverride {
-  rect?: Rect;
-  radius?: number;
-  tint?: number;
-  frost?: number;
-  alpha?: number;
-  magnify?: number;
-  bend?: number;
-  lift?: number;
-  light?: { x: number; y: number; strength: number };
-}
+// The glass registry: every glass surface registers its element here. Task
+// 035: the glass is one CSS material everywhere (glass.css); the registry
+// holds the layer's tone and transparency setting and, on Chromium, gives
+// each surface its rim refraction (refract.ts) and keeps it sized to the
+// element.
+import type { GlassRole, GlassTone } from './material';
+import { Refraction, refractionOn } from './refract';
 
 export interface SurfaceSpec {
   el: HTMLElement;
   role: GlassRole;
-  /** Corner radius, px; 'capsule' = half the short side. */
-  radius: number | 'capsule';
-  /** 1 = a lens on top of the chrome layer. */
-  layer?: 0 | 1;
-  /** Per-frame shape (morphs, lenses, press); null hides the surface. */
-  shape?: () => ShapeOverride | null;
 }
-
-let nextGroup = 1000;
-/**
- * How visible an element is through its own and its ancestors' opacity
- * and visibility (a surface faded or hidden by a parent, e.g. the phone
- * input while a sheet is open, must not stay drawn in the canvas).
- */
-function visibleAlpha(el: HTMLElement): number {
-  let a = 1;
-  for (let e: HTMLElement | null = el; e && e !== document.body; e = e.parentElement) {
-    const cs = getComputedStyle(e);
-    if (cs.visibility === 'hidden' || cs.display === 'none') return 0;
-    const o = parseFloat(cs.opacity);
-    if (o < 1) a *= o;
-    if (a <= 0.005) return 0;
-  }
-  return a;
-}
-
-const rectOf = (el: Element): Rect => {
-  const r = el.getBoundingClientRect();
-  return { x: r.left, y: r.top, width: r.width, height: r.height };
-};
-
-/** How long measuring continues every frame after a layout change (transitions, entry animations). */
-const HOT_MS = 450;
 
 class Registry {
-  private surfaces = new Map<number, SurfaceSpec>();
-  private nextId = 1;
-  private target: GlassTarget | null = null;
+  private surfaces = new Map<HTMLElement, Refraction | null>();
   private tone: GlassTone = 'dark';
   private opaque = false;
-  private raf = 0;
-  private hotUntil = 0;
-  private last = '';
   private listeners = new Set<() => void>();
   private ro: ResizeObserver | null = null;
   private wired = false;
-  /** Glass pushes to the viewer (tests count them while a panel animates). */
-  pushes = 0;
-  /** The last shape drawn per element, viewport px (an app's tests may read it). */
-  private drawn = new WeakMap<HTMLElement, Rect & { radius: number; alpha: number }>();
-
-  /** The shape the WebGL backend drew last for `el` (null on the CSS backend or when not drawn). */
-  shapeOf(el: HTMLElement): (Rect & { radius: number; alpha: number }) | null {
-    return this.target ? (this.drawn.get(el) ?? null) : null;
-  }
-
-  get backend(): GlassBackend {
-    return this.target ? 'webgl' : 'css';
-  }
 
   get glassTone(): GlassTone {
     return this.tone;
@@ -107,6 +25,16 @@ class Registry {
 
   get reducedTransparency(): boolean {
     return this.opaque;
+  }
+
+  /** Whether the surfaces bend the backdrop at their rim (Chromium). */
+  get refraction(): boolean {
+    return refractionOn();
+  }
+
+  /** The surfaces registered now (tests count them). */
+  get count(): number {
+    return this.surfaces.size;
   }
 
   subscribe = (fn: () => void): (() => void) => {
@@ -121,23 +49,11 @@ class Registry {
   private wire(): void {
     if (this.wired || typeof window === 'undefined') return;
     this.wired = true;
-    this.ro = new ResizeObserver(() => this.kick());
-    const kick = () => this.kick();
-    window.addEventListener('resize', kick);
-    window.addEventListener('scroll', kick, true);
-    // CSS motion (task 031: surfaces open and close with transitions Base UI and Vaul drive): measure every frame for
-    // as long as any transition or animation runs, whatever its length or the frame rate.
-    const start = (e: Event) => {
-      this.running.add(`${(e as TransitionEvent).propertyName ?? (e as AnimationEvent).animationName}|${this.idOf(e.target)}`);
-      this.kick();
-    };
-    const end = (e: Event) => {
-      this.running.delete(`${(e as TransitionEvent).propertyName ?? (e as AnimationEvent).animationName}|${this.idOf(e.target)}`);
-      this.kick();
-    };
-    for (const ev of ['transitionrun', 'animationstart']) document.addEventListener(ev, start, true);
-    for (const ev of ['transitionend', 'transitioncancel', 'animationend', 'animationcancel']) document.addEventListener(ev, end, true);
-    onSpringFrame(() => this.collect());
+    if (refractionOn()) {
+      this.ro = new ResizeObserver((entries) => {
+        for (const e of entries) this.surfaces.get(e.target as HTMLElement)?.update();
+      });
+    }
     const mq = matchMedia('(prefers-reduced-transparency: reduce)');
     const onMq = () => this.setOpaque(mq.matches);
     mq.addEventListener?.('change', onMq);
@@ -146,123 +62,30 @@ class Registry {
 
   register(spec: SurfaceSpec): () => void {
     this.wire();
-    const id = this.nextId++;
-    this.surfaces.set(id, { ...spec });
-    this.ro?.observe(spec.el);
-    this.kick();
+    const { el } = spec;
+    const r = this.ro ? new Refraction(el) : null;
+    this.surfaces.set(el, r);
+    if (r) {
+      r.update();
+      this.ro!.observe(el);
+    }
     return () => {
-      this.surfaces.delete(id);
-      this.ro?.unobserve(spec.el);
-      this.kick();
+      this.ro?.unobserve(el);
+      r?.dispose();
+      this.surfaces.delete(el);
     };
-  }
-
-  /**
-   * The optional canvas backend: an app's renderer that draws the glass into
-   * its own canvas plugs in here (it receives every surface's shape and the
-   * material). `null`: back to the CSS backend.
-   */
-  attachCanvas(target: GlassTarget | null): void {
-    if (this.target === target) return;
-    this.target?.setGlass(null);
-    this.target = target;
-    this.last = '';
-    this.emit();
-    this.kick();
   }
 
   setTone(tone: GlassTone): void {
     if (tone === this.tone) return;
     this.tone = tone;
-    this.last = '';
     this.emit();
-    this.kick();
   }
 
   setOpaque(on: boolean): void {
     if (on === this.opaque) return;
     this.opaque = on;
-    this.last = '';
     this.emit();
-    this.kick();
-  }
-
-  private paused = false;
-
-  /**
-   * Tests that read the drawing's pixels from the canvas: take the glass out
-   * of the canvas (`true`) and put it back (`false`).
-   */
-  setPaused(on: boolean): void {
-    this.paused = on;
-    this.last = '';
-    if (on) this.target?.setGlass(null);
-    else this.kick();
-  }
-
-  /** Something may have moved: measure on the next frames. */
-  kick(): void {
-    this.hotUntil = performance.now() + HOT_MS;
-    if (!this.raf && typeof requestAnimationFrame === 'function') this.raf = requestAnimationFrame(this.frame);
-  }
-
-  /** Transitions and animations running now (property or name, and the element's id). */
-  private running = new Set<string>();
-  private ids = new WeakMap<object, number>();
-  private nextEl = 1;
-  private idOf(t: EventTarget | null): number {
-    if (!t) return 0;
-    let id = this.ids.get(t);
-    if (!id) this.ids.set(t, (id = this.nextEl++));
-    return id;
-  }
-
-  private frame = (): void => {
-    this.raf = 0;
-    this.collect();
-    // A transition that never ends (its element removed) stops counting after a while.
-    if (this.running.size && performance.now() - this.hotUntil > 4000) this.running.clear();
-    if (this.running.size || performance.now() < this.hotUntil) this.raf = requestAnimationFrame(this.frame);
-  };
-
-  /** Measures every surface and pushes the shapes to the WebGL backend when they changed. */
-  collect(): void {
-    const target = this.target;
-    if (!target || this.paused) return;
-    const base = target.canvas.getBoundingClientRect();
-    const shapes: GlassShape[] = [];
-    for (const s of this.surfaces.values()) {
-      this.drawn.delete(s.el);
-      if (!s.el.isConnected) continue;
-      const o = s.shape ? s.shape() : {};
-      if (o === null) continue;
-      const r = o.rect ?? rectOf(s.el);
-      if (r.width < 1 || r.height < 1) continue;
-      const seen = visibleAlpha(s.el);
-      if (seen <= 0) continue;
-      const radius = o.radius ?? (s.radius === 'capsule' ? Math.min(r.width, r.height) / 2 : s.radius);
-      this.drawn.set(s.el, { ...r, radius: Math.min(radius, r.width / 2, r.height / 2), alpha: o.alpha ?? 1 });
-      shapes.push({
-        x: r.x - base.left,
-        y: r.y - base.top,
-        width: r.width,
-        height: r.height,
-        radius,
-        tint: o.tint ?? tintOf(this.tone, s.role),
-        frost: o.frost ?? (s.role === 'text' ? GLASS.frostPanel : GLASS.frostControl),
-        alpha: (o.alpha ?? 1) * seen,
-        layer: s.layer ?? 0,
-        magnify: o.magnify ?? 1,
-        bend: o.bend ?? (s.role === 'text' ? GLASS.bendText : 1),
-        lift: o.lift ?? 1,
-        light: o.light ? { x: o.light.x - base.left, y: o.light.y - base.top, strength: o.light.strength } : undefined,
-      });
-    }
-    const key = JSON.stringify(shapes) + this.tone + this.opaque;
-    if (key === this.last) return;
-    this.last = key;
-    this.pushes++;
-    target.setGlass(shapes, shaderMaterial(this.tone, this.opaque));
   }
 }
 

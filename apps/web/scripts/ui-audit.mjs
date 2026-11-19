@@ -125,8 +125,8 @@ await lab.setContent('<!doctype html><title>lab</title>');
 /* ------------------------------------------------------------------ */
 
 // Full: every state. Layout: the states whose layout depends on width and
-// language. Glass: the states whose pixels depend on the glass backend.
-const FULL = 'full', LAYOUT = 'layout', GLASS = 'glass', SMOKE = 'smoke';
+// language.
+const FULL = 'full', LAYOUT = 'layout', SMOKE = 'smoke';
 const CONFIGS = [
   { name: 'd1440-zh', w: 1440, h: 900, lang: 'zh', set: FULL },
   { name: 'p390-zh', w: 390, h: 844, phone: true, lang: 'zh', set: FULL },
@@ -137,12 +137,9 @@ const CONFIGS = [
   { name: 'd2000-en', w: 2000, h: 1100, lang: 'en', set: LAYOUT },
   { name: 'p390-en', w: 390, h: 844, phone: true, lang: 'en', set: LAYOUT },
   { name: 'p844x390-zh', w: 844, h: 390, phone: true, lang: 'zh', set: LAYOUT },
-  { name: 'd1440-zh-css', w: 1440, h: 900, lang: 'zh', css: true, set: GLASS },
-  { name: 'p390-zh-css', w: 390, h: 844, phone: true, lang: 'zh', css: true, set: GLASS },
 ];
 const SETS = {
   [LAYOUT]: ['landing', '3d-idle', 'panel-', 'project-menu', 'site-location', 'plan-', 'sheets', 'chat-text', 'chat-long-text', 'chat-done', 'chat-recent', 'pinned-', 'signin-email', 'account-'],
-  [GLASS]: ['3d-idle', 'panel-', 'project-menu', 'chat-text', 'chat-done', 'chat-recent', 'pinned-', 'plan-pinned', 'signin-email', 'key-own-sheet', 'account-'],
   [SMOKE]: ['3d-idle', 'project-menu', 'pinned-idle', 'plan-pinned', 'account-invite', 'account-project', 'account-projects', 'account-share'],
 };
 const configs = smoke ? [{ ...CONFIGS[0], set: SMOKE }] : CONFIGS.filter((c) => !onlyConfigs || onlyConfigs.some((o) => c.name.startsWith(o)));
@@ -375,12 +372,12 @@ async function capture(page, cfg, state, extra = {}) {
   }
   if (crops) await cropState(page, cfg, state, dom, found);
   // record
-  for (const f of found) raw.push({ ...f, config: cfg.name, state, phone: !!cfg.phone, lang: cfg.lang, backend: cfg.css ? 'css' : 'webgl', shot: `shots/${shotName}.png` });
+  for (const f of found) raw.push({ ...f, config: cfg.name, state, phone: !!cfg.phone, lang: cfg.lang, shot: `shots/${shotName}.png` });
   for (const s of dom.strings) {
     const m = strings[cfg.lang];
     if (!m.has(s)) m.set(s, `${cfg.name} ${state}`);
   }
-  for (const s of dom.selected) selectedSigs.push({ config: cfg.name, state, backend: cfg.css ? 'css' : 'webgl', ...s });
+  for (const s of dom.selected) selectedSigs.push({ config: cfg.name, state, ...s });
   for (const [k, v] of dom.colours) if (!colourUse.has(k)) colourUse.set(k, `${v} (${cfg.name} ${state})`);
   for (const [k, v] of dom.radii) if (!radiusUse.has(k)) radiusUse.set(k, `${v} (${cfg.name} ${state})`);
   if (dom.toolbar) toolbars.push({ config: cfg.name, state, mode: dom.subject?.mode ?? null, ...dom.toolbar });
@@ -559,7 +556,7 @@ async function motionPass(page, cfg, state, { open, close, find, between }) {
     await page.evaluate(() => window.__auditClock.release()).catch(() => {});
     await cdp.detach().catch(() => {});
   }
-  for (const f of found) raw.push({ ...f, config: cfg.name, state, phone: !!cfg.phone, lang: cfg.lang, backend: cfg.css ? 'css' : 'webgl', shot: `shots/${cfg.name}--${state}.png` });
+  for (const f of found) raw.push({ ...f, config: cfg.name, state, phone: !!cfg.phone, lang: cfg.lang, shot: `shots/${cfg.name}--${state}.png` });
   console.log(`  ${cfg.name} ${state}: motion, ${found.length} findings`);
   return found;
 }
@@ -714,7 +711,7 @@ async function newPage(cfg, { hints = false, init } = {}) {
   page.on('pageerror', (e) => errors.push(`${cfg.name}: page error ${e.message}`));
   return { ctx, page };
 }
-const q = (cfg, extra = '') => `?dpr=1${cfg.css ? '&glass=css' : ''}${extra}`;
+const q = (cfg, extra = '') => `?dpr=1${extra}`;
 async function openStudio(page, cfg, extra = '') {
   await page.goto(`${preview.base}/studio${q(cfg, extra)}`, { waitUntil: 'networkidle' });
   await page.waitForFunction(() => window.__studio?.ready3d === true, null, { timeout: tmo(180000) });
@@ -762,7 +759,7 @@ function wants(cfg, name) {
 }
 
 async function runConfig(cfg) {
-  console.log(`\n${cfg.name} (${cfg.w}x${cfg.h}, ${cfg.lang}, ${cfg.css ? 'CSS glass' : 'WebGL glass'}, ${cfg.set})`);
+  console.log(`\n${cfg.name} (${cfg.w}x${cfg.h}, ${cfg.lang}, ${cfg.set})`);
   const S = async (page, name, fn, extra) => {
     if (!wants(cfg, name)) return false;
     try {
@@ -770,7 +767,7 @@ async function runConfig(cfg) {
       await capture(page, cfg, name, extra);
       if (!cfg.phone && HOVER_STATES.includes(name) && !noHover) {
         const hf = await hoverPass(page, cfg, name);
-        for (const f of hf) raw.push({ ...f, config: cfg.name, state: name, phone: !!cfg.phone, lang: cfg.lang, backend: cfg.css ? 'css' : 'webgl', shot: `shots/${cfg.name}--${name}.png` });
+        for (const f of hf) raw.push({ ...f, config: cfg.name, state: name, phone: !!cfg.phone, lang: cfg.lang, shot: `shots/${cfg.name}--${name}.png` });
         console.log(`  ${cfg.name} ${name}: hover, ${hf.length} findings`);
       }
     } catch (e) {
@@ -1225,18 +1222,15 @@ function crossState() {
     const dist = Math.abs(d.mean[0] - e.mean[0]) + Math.abs(d.mean[1] - e.mean[1]) + Math.abs(d.mean[2] - e.mean[2]);
     if (dist < 24) out.push({ rule: 'disabled-same', config: d.config, state: `${d.state} vs ${e.state}`, el: d.id, comp: d.comp, msg: `disabled and enabled look alike (mean colour ${d.mean.join(' ')} vs ${e.mean.join(' ')})`, evidence: { disabled: d.mean, enabled: e.mean, distance: dist }, rect: d.rect, shot: `shots/${d.config}--${d.state}.png` });
   }
-  // One treatment for selected states (per backend).
-  const byBackend = new Map();
-  for (const s of selectedSigs) {
-    const sig = `${s.sig.bg} / weight ${s.sig.weight}${s.sig.lens ? ' / lens' : ''}${s.sig.check ? ' / check' : ''}`;
-    const k = s.backend;
-    if (!byBackend.has(k)) byBackend.set(k, new Map());
-    const m = byBackend.get(k);
-    if (!m.has(sig)) m.set(sig, []);
-    m.get(sig).push(`${s.id} (${s.config} ${s.state})`);
-  }
-  for (const [backend, m] of byBackend) {
-    if (m.size > 1) out.push({ rule: 'selected-treatment', config: backend, state: 'all', el: 'selected controls', comp: 'consistency', msg: `${m.size} different treatments of "selected"`, evidence: Object.fromEntries([...m].map(([k, v]) => [k, [...new Set(v.map((x) => x.replace(/ \(.*\)$/, '')))].slice(0, 8)])) });
+  // One treatment for selected states.
+  {
+    const m = new Map();
+    for (const s of selectedSigs) {
+      const sig = `${s.sig.bg} / weight ${s.sig.weight}${s.sig.lens ? ' / lens' : ''}${s.sig.check ? ' / check' : ''}`;
+      if (!m.has(sig)) m.set(sig, []);
+      m.get(sig).push(`${s.id} (${s.config} ${s.state})`);
+    }
+    if (m.size > 1) out.push({ rule: 'selected-treatment', config: 'all', state: 'all', el: 'selected controls', comp: 'consistency', msg: `${m.size} different treatments of "selected"`, evidence: Object.fromEntries([...m].map(([k, v]) => [k, [...new Set(v.map((x) => x.replace(/ \(.*\)$/, '')))].slice(0, 8)])) });
   }
   // One concept, one label: near-duplicate strings per language.
   const norm = (s) => s.toLowerCase().replace(/[\s\p{P}\p{S}]+/gu, '');
@@ -1450,7 +1444,7 @@ figure{margin:0;max-width:100%}figure img{display:block;max-width:100%;height:au
 figcaption{font-size:12px;color:var(--ink2)}
 .legend span{display:inline-block;margin-right:12px}
 </style><main><h1>UI audit: contact sheet</h1>
-<p class="legend">Crops at ${DPR}x device pixels. Guides: <span style="color:#00beff">blue: box</span><span style="color:#ff00c8">magenta: centre line</span><span style="color:#3cdc3c">green: content insets</span><span style="color:#ff9600">orange: children's centres</span><span style="color:#ff2828">red: a finding</span>. The WebGL canvas (drawing and glass in the WebGL backend) renders at 1x and is upscaled in crops.</p>
+<p class="legend">Crops at ${DPR}x device pixels. Guides: <span style="color:#00beff">blue: box</span><span style="color:#ff00c8">magenta: centre line</span><span style="color:#3cdc3c">green: content insets</span><span style="color:#ff9600">orange: children's centres</span><span style="color:#ff2828">red: a finding</span>. The WebGL canvas (the drawing) renders at 1x and is upscaled in crops.</p>
 <p>${list.length} findings over ${states.length} states. Self-test: ${selfTest.filter((s) => s.found).length}/${selfTest.length} known defects found.</p>
 <nav>${comps.map((c) => `<a href="#${esc(c)}">${esc(c)}</a>`).join('')}</nav>`;
   for (const c of comps) {

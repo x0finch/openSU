@@ -3,13 +3,12 @@
  * chrome surface its background, border, shadow or blur. The numbers come
  * from material.ts as custom properties on the glass layer (GlassLayer).
  *
- * Two backends behind the same elements:
- * - [data-backend="webgl"]: the 3D viewer draws the glass into its canvas;
- *   the element is transparent and only carries text and icons.
- * - [data-backend="css"]: glasswork's CSS material (MIT, THIRD_PARTY_NOTICES.md):
- *   a thin tint, `blur() saturate() brightness()`, rim light, bevel and a
- *   soft shadow. backdrop-filter is used here and nowhere else, and never
- *   over the WebGL canvas (that surface is on the webgl backend there).
+ * One material for every glass surface on every page (task 035), after
+ * glasswork's CSS material (MIT, THIRD_PARTY_NOTICES.md): a tint,
+ * `blur() saturate() brightness()`, rim light, bevel and a soft shadow. On
+ * Chromium every surface also bends the backdrop at its rim (refract.ts puts
+ * its SVG filter in `--lg-refract` and marks it `[data-refract]`).
+ * backdrop-filter is used here and nowhere else.
  */
 
 @layer components {
@@ -27,18 +26,7 @@
   --color-on-ink: var(--lg-on-ink);
   -webkit-tap-highlight-color: transparent;
 }
-.lg[data-kind="control"] {
-  --lg-t: var(--lg-tint-control);
-}
-.lg[data-kind="text"] {
-  --lg-t: var(--lg-tint-text);
-}
-
-.lg[data-backend="webgl"] {
-  background: transparent;
-}
-
-.lg[data-backend="css"] {
+.lg {
   background: color-mix(in srgb, var(--lg-tint) calc(var(--lg-t) * 100%), transparent);
   -webkit-backdrop-filter: blur(var(--lg-blur)) saturate(var(--lg-sat)) brightness(var(--lg-bri));
   backdrop-filter: blur(var(--lg-blur)) saturate(var(--lg-sat)) brightness(var(--lg-bri));
@@ -53,14 +41,18 @@
     inset -4px 0 8px -6px rgb(255 255 255 / calc(0.12 * var(--lg-bevel))),
     inset 0 -6px 8px -6px rgb(0 0 0 / calc(0.06 * var(--lg-bevel)));
 }
+/* Chromium: the rim bends the backdrop first, then the frost (refract.ts). */
+.lg[data-refract] {
+  -webkit-backdrop-filter: var(--lg-refract) blur(var(--lg-blur)) saturate(var(--lg-sat)) brightness(var(--lg-bri));
+  backdrop-filter: var(--lg-refract) blur(var(--lg-blur)) saturate(var(--lg-sat)) brightness(var(--lg-bri));
+}
 /*
  * An anchored surface (Popover, Menu; task 031): Base UI marks its first
  * frame `data-starting-style` and its leaving `data-ending-style`, and puts
  * `--transform-origin` on the edge of the anchor that faces it (minus the
  * module's gap). It grows from there, away from the anchor, and goes back
  * the same way: it is never drawn over its anchor or the bar the anchor sits
- * in. Mirrored by side for free (the origin follows `data-side`). The canvas
- * backend reads the transformed box every frame (registry.ts).
+ * in. Mirrored by side for free (the origin follows `data-side`).
  */
 .lg-pop {
   transform-origin: var(--transform-origin);
@@ -88,15 +80,15 @@
   }
 }
 
-/* Reduced transparency: an opaque surface in the tint colour (both backends draw it). */
-.lg[data-backend="css"][data-opaque] {
+/* Reduced transparency: an opaque surface in the tint colour. */
+.lg[data-opaque] {
   background: var(--lg-tint);
   -webkit-backdrop-filter: none;
   backdrop-filter: none;
 }
 
-/* Press: a soft light under the pointer (the WebGL backend draws its own). */
-.lg[data-backend="css"]::after {
+/* Press: a soft light under the pointer. */
+.lg::after {
   content: "";
   position: absolute;
   inset: 0;
@@ -117,7 +109,7 @@
   border-radius: 9999px;
   isolation: isolate;
 }
-.lg-lens[data-backend="css"] {
+.lg-lens {
   /* Rest: a denser lens; lifted: clear glass with a deeper shadow. */
   background: color-mix(in srgb, var(--lg-tint) calc((1 - var(--lg-lift, 0) * 0.85) * var(--lg-tint-lens) * 100%), transparent);
   box-shadow:
@@ -125,9 +117,6 @@
     inset 1px 1.5px 1px -1px rgb(255 255 255 / var(--lg-catch)),
     0 0 0 0.5px rgb(0 0 0 / calc(var(--lg-hair) * 0.6)),
     0 calc(2px + 5px * var(--lg-lift, 0)) calc(6px + 12px * var(--lg-lift, 0)) rgb(0 0 0 / calc(0.06 + 0.1 * var(--lg-lift, 0)));
-}
-.lg-lens[data-backend="webgl"] {
-  background: transparent;
 }
 /* The resting face of a lens (fades out as the lens lifts). */
 .lg-lens-face {
@@ -283,7 +272,7 @@
   outline: 2px solid var(--lg-ink);
   outline-offset: 2px;
 }
-.lg-slider .lg-lens[data-backend="css"] {
+.lg-slider .lg-lens {
   background: transparent;
 }
 

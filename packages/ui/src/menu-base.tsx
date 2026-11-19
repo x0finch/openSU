@@ -127,7 +127,6 @@ export default function MenuBase({ open, anchor, onClose, label, placement = 'be
                   }}
                   kind="text"
                   radius={GLASS.radiusMenu}
-                  layer={1}
                   ariaRole="menu"
                   aria-label={label}
                   inert={!state.open || undefined}
