@@ -167,7 +167,19 @@ const Sep = () => <MenuSeparator />;
  * A surface opened from a row of the project menu opens once the menu has left (its close motion), so the two glass
  * surfaces never stand on each other at the house name.
  */
-const afterMenu = (f: () => void) => window.setTimeout(f, GLASS.popCloseMs + 150);
+const afterMenu = (menu: () => HTMLElement | null, f: () => void) => {
+  // Not a fixed time: the glass layer follows the menu by frames, and a slow machine gives few of them. Once the menu
+  // has left the page, two more frames: one for the glass layer to drop its shape, one for the drawing.
+  const until = performance.now() + Math.max(1500, GLASS.popCloseMs * 4);
+  let after = -1;
+  const tick = () => {
+    if (after < 0 && !menu()?.isConnected) after = 2;
+    if (after === 0 || performance.now() > until) return f();
+    if (after > 0) after--;
+    requestAnimationFrame(tick);
+  };
+  requestAnimationFrame(tick);
+};
 
 /** ⌘ on Apple keyboards, Ctrl elsewhere (the shortcut shown beside undo and redo). */
 const isMac = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent);
@@ -240,7 +252,7 @@ function ProjectMenu({ open, anchor, onClose, compact, onRename, ref }: { open: 
       {/* Signed in, the project kept with the account: share (task 032: only here, only then), rename, duplicate, new. */}
       {edit && cloud && openId && (
         <>
-          <Item icon={<ShareIcon width={16} height={16} />} onSelect={() => { onClose(false); afterMenu(() => openShare(null, null)); }} testId="menu-share">
+          <Item icon={<ShareIcon width={16} height={16} />} onSelect={() => { onClose(false); afterMenu(() => ref.current, () => openShare(null, null)); }} testId="menu-share">
             {t('share.button')}
           </Item>
           <Item icon={<PencilIcon width={16} height={16} />} testId="menu-rename" onSelect={() => { onClose(false); onRename(); }}>
@@ -295,7 +307,7 @@ function ProjectMenu({ open, anchor, onClose, compact, onRename, ref }: { open: 
               icon={<PersonIcon width={17} height={17} />}
               onClick={(e) => {
                 onClose(false);
-                afterMenu(() => openAccount(document.querySelector<HTMLElement>('[data-testid=project-menu]'), 'menu'));
+                afterMenu(() => ref.current, () => openAccount(document.querySelector<HTMLElement>('[data-testid=project-menu]'), 'menu'));
               }}
               data-testid="menu-template-signin"
             >
@@ -346,7 +358,7 @@ function ProjectMenu({ open, anchor, onClose, compact, onRename, ref }: { open: 
                       className="h-auto px-0 align-baseline text-[12px] font-semibold text-ink underline underline-offset-2"
                       onClick={(e) => {
                         onClose(false);
-                        afterMenu(() => openAccount(document.querySelector<HTMLElement>('[data-testid=project-menu]'), 'menu'));
+                        afterMenu(() => ref.current, () => openAccount(document.querySelector<HTMLElement>('[data-testid=project-menu]'), 'menu'));
                       }}
                       data-testid="menu-signin"
                     >
