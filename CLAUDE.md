@@ -14,7 +14,9 @@ Read `docs/DECISIONS.md` before changing architecture and
   reference images and generated screenshots). Never embed those images in
   the repo in any form.
 - Do not open GitHub issues, PRs or comments. Only the lead does, sparingly.
-- Do not push. Commit locally on the current branch; the lead pushes.
+- Commit on your own working branch and push it there. Never push to
+  `main`: a push to `main` deploys, and `main` only takes merged pull
+  requests whose checks passed.
 - Visual tokens have two homes. The scene's (drawing colours, line widths,
   light values) live in `packages/render/src/style/tokens.ts`. The UI's
   (glass material numbers, radii, spacing, type sizes, motion, colours of
@@ -38,6 +40,6 @@ Read `docs/DECISIONS.md` before changing architecture and
   touches (`pnpm --filter @opensu/web test:shots|test:glass|test:chat|
   test:account|test:audit`, after `pnpm --filter @opensu/web build`). The
   full matrix runs on GitHub Actions for each pull request (`ci.yml`; the
-  check to pass is `ci-ok`). Agents still do not push or open pull
-  requests; the lead does. Script list: `apps/web/README.md`, "Tests".
+  check to pass is `ci-ok`). Agents do not open pull requests; the lead
+  does. Script list: `apps/web/README.md`, "Tests".
 - Report honestly: list what does not work or was skipped.
