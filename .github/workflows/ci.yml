@@ -5,12 +5,12 @@
 #             package, node unit tests, static checks. No browser.
 #   packages  browser renders of the packages (render, sheet, plan shots).
 #   web       one job per apps/web browser suite (`pnpm --filter @opensu/web
-#             test:<suite>`); account-e2e is sharded by its sections.
+#             test:<suite>`); the long suites are sharded by their sections.
 #   ci-ok     needs all of the above; the one check to make required.
 #
 # No secrets are used: the suites run against the built app in workerd
 # (`vite preview`) with a local chat stub, a local D1 and the email test
-# hook. Screenshots and logs of a failed job are uploaded as an artifact.
+# hook. Logs of a failed job are uploaded as an artifact.
 name: CI
 
 on:
@@ -46,20 +46,8 @@ jobs:
           node-version: 22
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-
-      # The account shards in the `web` matrix name account-e2e's sections
-      # by hand; a section that no shard names would silently stop running.
-      - name: Account shards cover every section
-        run: |
-          want=$(grep -o "wanted('[a-z0-9-]*')" apps/web/scripts/account-e2e.mjs | sed "s/wanted('\(.*\)')/\1/" | sort -u)
-          have=$(grep -o "account-sections: [a-z0-9,-]*" .github/workflows/ci.yml | sed 's/account-sections: //' | tr ',' '\n' | sort -u)
-          missing=$(comm -23 <(echo "$want") <(echo "$have"))
-          if [ -n "$missing" ]; then
-            echo "::error::account-e2e sections not in any CI shard: $missing"
-            exit 1
-          fi
-          echo "all account-e2e sections are covered: $(echo $want)"
-
+      # Includes apps/web scripts/ci-shards-check.mjs: every section of a
+      # sharded suite is named by a shard below.
       - run: pnpm test:fast
 
   packages:
@@ -73,20 +61,7 @@ jobs:
           node-version: 22
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      - name: Playwright version
-        id: pw
-        run: echo "version=$(node -p "require('playwright/package.json').version")" >> "$GITHUB_OUTPUT"
-      - uses: actions/cache@v4
-        id: pw-cache
-        with:
-          path: ~/.cache/ms-playwright
-          key: playwright-${{ runner.os }}-${{ steps.pw.outputs.version }}-chromium
-      - name: Chromium
-        if: steps.pw-cache.outputs.cache-hit != 'true'
-        run: pnpm exec playwright install --with-deps chromium
-      - name: Chromium system libraries
-        if: steps.pw-cache.outputs.cache-hit == 'true'
-        run: pnpm exec playwright install-deps chromium
+      - uses: ./.github/actions/browser
 
       - name: Package shots
         run: |
@@ -103,34 +78,53 @@ jobs:
 
   web:
     runs-on: ubuntu-24.04
-    timeout-minutes: 15
+    # The longest shard took about 5.5 minutes of suite time on run 1;
+    # the rest is set-up. Room for a slow runner, not for a hang.
+    timeout-minutes: 20
     strategy:
       fail-fast: false
       matrix:
+        # `only`: the shard's sections (name prefixes, the suite's --only).
+        # Sized from run 1 of PR #3 (docs/tasks/030-notes.md); the `fast`
+        # job checks that every section is in some shard.
         include:
-          - suite: shots
-            run: test:shots
           - suite: glass
             run: test:glass
-          - suite: chat
-            run: test:chat
           - suite: audit
             run: test:audit
-          # account-e2e alone takes well over 5 minutes; shards by section.
-          # Every section of account-e2e.mjs must appear in one line below
-          # (the `fast` job checks that).
-          - suite: account-1
+          - suite: shots-still
+            run: test:shots
+            only: check-still
+          - suite: shots-views
+            run: test:shots
+            only: landing,studio-3d,studio-plan,check-controls,check-walk,check-sun
+          - suite: shots-site
+            run: test:shots
+            only: check-site,check-eye,studio-sheets
+          - suite: chat-desktop
+            run: test:chat
+            only: chat-desktop,chat-repair,chat-error,chat-settings,chat-giveup,chat-new
+          - suite: chat-more
+            run: test:chat
+            only: chat-reload,chat-steps,chat-phone,chat-nokey
+          - suite: account-projects
             run: test:account
-            account-sections: desktop,projects
-          - suite: account-2
+            only: projects
+          - suite: account-share
             run: test:account
-            account-sections: share,canonical,google,limits
-          - suite: account-3
+            only: share,canonical
+          - suite: account-entry-views
             run: test:account
-            account-sections: entry
-          - suite: account-4
+            only: entry-views
+          - suite: account-entry-rules
             run: test:account
-            account-sections: phone,turns,keys
+            only: entry-rules
+          - suite: account-keys
+            run: test:account
+            only: keys,desktop
+          - suite: account-turns
+            run: test:account
+            only: turns,phone,limits,google
     name: web (${{ matrix.suite }})
     steps:
       - uses: actions/checkout@v4
@@ -140,39 +134,19 @@ jobs:
           node-version: 22
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      - name: Playwright version
-        id: pw
-        run: echo "version=$(node -p "require('playwright/package.json').version")" >> "$GITHUB_OUTPUT"
-      - uses: actions/cache@v4
-        id: pw-cache
-        with:
-          path: ~/.cache/ms-playwright
-          key: playwright-${{ runner.os }}-${{ steps.pw.outputs.version }}-chromium
-      - name: Chromium
-        if: steps.pw-cache.outputs.cache-hit != 'true'
-        run: pnpm exec playwright install --with-deps chromium
-      - name: Chromium system libraries
-        if: steps.pw-cache.outputs.cache-hit == 'true'
-        run: pnpm exec playwright install-deps chromium
+      - uses: ./.github/actions/browser
 
       # One build per job; the suites use dist/ and never build themselves.
       - name: Build
         run: pnpm --filter @opensu/web build
 
-      # shots.mjs compares the app's 3D view with the renderer demo pixel for
-      # pixel when artifacts/shots/<view>.png exist (they do on a dev
-      # machine after `pnpm shots`); render those four views first.
-      - name: Renderer reference shots
-        if: matrix.suite == 'shots'
-        run: pnpm --filter @opensu/render shots axo-se,axo-ne,eye-sw,elev-south
-
       - name: Suite
         env:
-          SECTIONS: ${{ matrix.account-sections }}
+          ONLY: ${{ matrix.only }}
         run: |
           mkdir -p artifacts
-          if [ -n "$SECTIONS" ]; then
-            pnpm --filter @opensu/web ${{ matrix.run }} --only "$SECTIONS" 2>&1 | tee artifacts/${{ matrix.suite }}.log
+          if [ -n "$ONLY" ]; then
+            pnpm --filter @opensu/web ${{ matrix.run }} --only "$ONLY" 2>&1 | tee artifacts/${{ matrix.suite }}.log
           else
             pnpm --filter @opensu/web ${{ matrix.run }} 2>&1 | tee artifacts/${{ matrix.suite }}.log
           fi

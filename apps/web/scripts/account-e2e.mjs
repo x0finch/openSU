@@ -133,9 +133,20 @@ const WHERE = { timezoneId: 'Asia/Shanghai', locale: 'zh-CN' };
 const DESKTOP = { viewport: { width: 1440, height: 900 }, deviceScaleFactor: 1, ...WHERE };
 const PHONE = { viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, isMobile: true, hasTouch: true, ...WHERE };
 const browser = await playwright.chromium.launch({ args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist', '--enable-webgl'] });
+// Every navigation may take up to 120 s (Playwright's default is 30 s). Leaving
+// or reloading a studio page waits for its WebGL work, and on a CI runner a
+// SwiftShader thumbnail took 18.7 s where it takes 0.3 s in the dev container
+// (task 030). What a step needs is then awaited on the app's own signals
+// (ready3d, the stores), each with its own timeout.
+const NAV_MS = 120000;
+async function newContext(opts) {
+  const ctx = await browser.newContext(opts);
+  ctx.setDefaultNavigationTimeout(NAV_MS);
+  return ctx;
+}
 
 async function open(base, ctxOpts, path = '/studio') {
-  const ctx = await browser.newContext(ctxOpts);
+  const ctx = await newContext(ctxOpts);
   await ctx.addInitScript(() => localStorage.setItem('opensu.hints.v1', 'done'));
   const page = await ctx.newPage();
   page.on('pageerror', (e) => failures.push(`page error ${e.message}`));
@@ -348,7 +359,7 @@ try {
     const title = (page) => page.getByTestId('title-name').first().textContent();
     /** An edit the way the studio makes one (the house in the store changes). */
     const edit = (page, name) => page.evaluate((n) => { const s = window.__studio.store.getState(); s.setHouse({ ...s.house, name: n }); }, name);
-    const waitOpen = (page) => page.waitForFunction(() => !!window.__studio.projects?.store.getState().openId && !window.__studio.projects.store.getState().busy, null, { timeout: 30000 });
+    const waitOpen = (page) => page.waitForFunction(() => !!window.__studio.projects?.store.getState().openId && !window.__studio.projects.store.getState().busy, null, { timeout: NAV_MS });
     // `load`, not `networkidle`: a thumbnail being rendered (SwiftShader takes seconds) may still hold the page that is left.
     const studio = async (page, path) => {
       await page.goto(`${preview.base}${path}`, { waitUntil: 'load', timeout: 120000 });
@@ -535,7 +546,7 @@ try {
     await a.getByTestId('project-template-t2').click();
     await a.waitForURL('**/studio?**');
     await a.waitForFunction(() => window.__studio?.ready3d === true, null, { timeout: 180000 });
-    await a.waitForFunction(() => new URL(location.href).searchParams.has('p') && !new URL(location.href).searchParams.has('new'), null, { timeout: 20000 });
+    await a.waitForFunction(() => new URL(location.href).searchParams.has('p') && !new URL(location.href).searchParams.has('new'), null, { timeout: NAV_MS });
     await waitOpen(a);
     check((await houseName(a)) === '平顶现代' && (await server(a)).length === 4, 'a template card makes a new project and opens it at its address');
     const p4 = urlP(a);
@@ -702,7 +713,7 @@ try {
     const base = preview.base;
     const edit = (page, name) => page.evaluate((n) => { const s = window.__studio.store.getState(); s.setHouse({ ...s.house, name: n }); }, name);
     const openId = (page) => page.evaluate(() => window.__studio.projects.store.getState().openId);
-    const waitOpen = (page) => page.waitForFunction(() => !!window.__studio.projects?.store.getState().openId && !window.__studio.projects.store.getState().busy, null, { timeout: 30000 });
+    const waitOpen = (page) => page.waitForFunction(() => !!window.__studio.projects?.store.getState().openId && !window.__studio.projects.store.getState().busy, null, { timeout: NAV_MS });
     const studio = async (page, path) => {
       await page.goto(`${base}${path}`, { waitUntil: 'load', timeout: 120000 });
       await page.waitForFunction(() => window.__studio?.ready3d === true, null, { timeout: 180000 });
@@ -851,7 +862,7 @@ try {
     check((await savedHouse(v)) === mine && (await v.getByTestId('view-only-copy').count()) === 1, 'cancel: nothing replaced');
     await v.getByTestId('view-only-copy').click();
     await v.waitForSelector('[data-testid=view-only-ask]');
-    await Promise.all([v.waitForURL((u) => u.pathname === '/studio' && !u.searchParams.has('s'), { timeout: 30000 }), v.getByTestId('view-only-replace').click()]);
+    await Promise.all([v.waitForURL((u) => u.pathname === '/studio' && !u.searchParams.has('s'), { waitUntil: 'commit', timeout: NAV_MS }), v.getByTestId('view-only-replace').click()]);
     await v.waitForFunction(() => window.__studio?.ready3d === true, null, { timeout: 180000 });
     await settle(v, 1200);
     check((await v.getByTestId('title-name').textContent()) === '东边的小院 改' && (await v.getByTestId('prompt-bar').count()) === 1, 'the copy opens as this browser\'s project, editable');
@@ -864,7 +875,7 @@ try {
     await studio(w, `/studio?s=${token}`);
     await w.waitForFunction(() => window.__studio.shared?.getState().status === 'ready' && !!window.__studio.chat.getState().server?.user, null, { timeout: 30000 });
     check((await w.evaluate(() => window.__studio.projects.store.getState().on)) === false, 'signed in, viewing: the viewer\'s project sync does not start (nothing adopted)');
-    await Promise.all([w.waitForURL((u) => u.searchParams.has('p'), { timeout: 30000 }), w.getByTestId('view-only-copy').click()]);
+    await Promise.all([w.waitForURL((u) => u.searchParams.has('p'), { waitUntil: 'commit', timeout: NAV_MS }), w.getByTestId('view-only-copy').click()]);
     await w.waitForFunction(() => window.__studio?.ready3d === true, null, { timeout: 180000 });
     await waitOpen(w);
     const theirs = await w.evaluate(async () => (await (await fetch('/api/projects')).json()).projects.map((p) => p.name));
@@ -895,7 +906,7 @@ try {
     const G = await open(base, DESKTOP, `/studio?s=${token}`).catch(async () => null);
     let gonePage = G?.page;
     if (!gonePage) {
-      const ctx = await browser.newContext(DESKTOP);
+      const ctx = await newContext(DESKTOP);
       gonePage = await ctx.newPage();
       await gonePage.goto(`${base}/studio?s=${token}`, { waitUntil: 'load' });
     }
@@ -989,7 +1000,7 @@ try {
         await surfaceOpen(o);
         await o.getByTestId('share-switch').click();
         await o.waitForFunction(() => !document.querySelector('[data-testid=share-link]'), null, { timeout: 15000 });
-        const gctx = await browser.newContext(opts);
+        const gctx = await newContext(opts);
         const gp = await gctx.newPage();
         await gp.goto(`${base}/studio?s=${tk}&lang=${lang}`, { waitUntil: 'load' });
         await gp.waitForSelector('[data-testid=project-missing][data-share=gone]', { timeout: 30000 });
@@ -1060,7 +1071,9 @@ try {
   // The top right holds the toolbar only; "分享" stands beside the house name
   // (desktop) or is the project menu's first row (phones); the account is the
   // project menu's account row; the sign-in invitation after the first change.
-  if (wanted('entry')) {
+  // Two parts, so CI can run them on separate runners (task 030): `--only entry`
+  // runs both, `--only entry-views` or `--only entry-rules` one.
+  if (wanted('entry') || wanted('entry-views') || wanted('entry-rules')) {
     const preview = await startPreview({ QUOTA_ANON_TRIAL: '40', QUOTA_IP_DAILY: '1000' });
     console.log(`entry: preview on ${preview.base}`);
     const box = (page, sel) => page.locator(sel).first().evaluate((e) => { const r = e.getBoundingClientRect(); return { l: r.left, t: r.top, r: r.right, b: r.bottom, w: r.width, h: r.height }; });
@@ -1123,286 +1136,294 @@ try {
     const configs = smoke
       ? [[1440, 900, 'zh'], [390, 844, 'zh']]
       : [[1440, 900], [1280, 720], [390, 844], [360, 800], [844, 390]].flatMap(([w, h]) => ['zh', 'en'].map((lang) => [w, h, lang]));
-    for (const [w, h, lang] of configs) {
-      const phone = w < 768 || h < 520;
-      const tag = `${w}x${h}-${lang}`;
-      const { ctx, page } = await open(preview.base, phone ? { ...PHONE, viewport: { width: w, height: h } } : { ...DESKTOP, viewport: { width: w, height: h } }, `/studio?lang=${lang}`);
-      await known(page);
-      await settle(page, 800);
-      check((await page.getByTestId('account-button').count()) === 0 && (await page.getByTestId('account-avatar').count()) === 0, `${tag}: no account button or avatar in the studio`);
-      if (phone) {
-        const hb = await box(page, 'header');
-        const want = w > h ? 56 : 60;
-        check(Math.abs(hb.b - want) <= 0.5, `${tag}: the header is back to ${want} px (${hb.b.toFixed(1)})`);
-        const name = await box(page, '[data-testid=project-menu]');
-        const sw = await box(page, '[data-testid=mode-switch]');
-        check((await page.locator('header [data-testid=share-button]').count()) === 0 && name.r < sw.l && Math.abs(w - 12 - sw.r) <= 1, `${tag}: the top row is the name left and the mode switch right, nothing else`);
-        const sc = await page.evaluate(() => [document.documentElement.scrollWidth, window.innerWidth]);
-        check(sc[0] <= sc[1], `${tag}: no horizontal scroll`);
-      } else {
-        const tl = await toolbarLast(page);
-        check(Math.abs(w - 18 - tl.right) <= 1 && tl.others.length === 0, `${tag}: the toolbar is the right-most control, 18 px from the edge (${tl.right.toFixed(1)}; others: ${tl.others.join(', ') || 'none'})`);
-        const name = await box(page, '[data-testid=project-menu]');
-        const sh = await glassBox(page, 'share-button');
-        const gap = sh.l - name.r;
-        const dc = (sh.t + sh.b) / 2 - (name.t + name.b) / 2;
-        check(Math.abs(gap - 12) <= 1 && Math.abs(dc) <= 1 && Math.abs(sh.h - 36) <= 0.5, `${tag}: "分享" right of the name on its centre line, 36 px high (gap ${gap.toFixed(1)}, centre ${dc.toFixed(1)})`);
-        const fits = await page.getByTestId('share-button').evaluate((e) => e.scrollWidth <= e.clientWidth + 0.5);
-        check(fits, `${tag}: the share label is not cut`);
-      }
-      await shot(page, `${tag}-signed-out`, outDir29);
-      const f0 = await framing(page);
-
-      // Share, signed out: the same surface, explaining and offering sign-in.
-      if (phone) {
-        await openMenu(page);
-        const first = await page.locator('[data-testid=project-menu-list] [role=menuitem]').first().getAttribute('data-testid');
-        const second = await page.locator('[data-testid=project-menu-list] [role=menuitem]').nth(1).getAttribute('data-testid');
-        check(first === 'menu-share' && second === 'menu-signin', `${tag}: "分享" is the project menu's first row, the account row next (${first}, ${second})`);
-        await page.getByTestId('menu-share').click();
-      } else await page.getByTestId('share-button').click();
-      await page.waitForSelector('[data-testid=share-need-account] [data-testid=share-signin]', { timeout: 10000 });
-      await settle(page, 1200);
-      if (!phone) {
-        const row = await box(page, '[data-title-row]');
-        const sf = await box(page, '[data-testid=share-surface]');
-        check(Math.abs(sf.t - row.b - 8) <= 1.5 && Math.abs(sf.l - row.l) <= 1.5, `${tag}: the share surface stands under the name's row, the module's gap (gap ${(sf.t - row.b).toFixed(1)}, left ${(sf.l - row.l).toFixed(1)})`);
-      }
-      check((await framing(page)) === f0, `${tag}: the house does not move when share opens`);
-      await shot(page, `${tag}-share-signed-out`, outDir29);
-      await closeShareUi(page);
-
-      // The invitation: not on arrival, after the first change (never while the reply runs).
-      check((await invites(page)) === 0, `${tag}: no invitation on arrival`);
-      const during = await change(page, lang);
-      await page.waitForSelector('[data-testid=signin-invite]', { timeout: 5000 }).catch(() => null);
-      const text = ((await page.getByTestId('signin-invite-text').textContent().catch(() => '')) ?? '').trim();
-      check(!during && text === (lang === 'zh' ? '登录后，项目随账户保存，可在其他设备打开，也能分享。' : 'Sign in to keep this project, open it on other devices and share it.'), `${tag}: after the first change the invitation shows, not while the reply ran (${text})`);
-      check((await framing(page)) === f0, `${tag}: the invitation does not move the house`);
-      const inv = await box(page, '[data-testid=signin-invite]');
-      const prompt = await box(page, '[data-testid=prompt]');
-      const clipped = await page.getByTestId('signin-invite-text').evaluate((e) => e.scrollHeight > e.clientHeight + 0.5 || e.scrollWidth > e.clientWidth + 0.5);
-      check(inv.b <= prompt.t - 6 && !clipped && (phone ? inv.h >= 47.5 && inv.h <= 64.5 : Math.abs(inv.h - 48) <= 0.5), `${tag}: above the prompt, ${phone ? '48 px or more (up to three lines)' : '48 px'}, its text whole (${inv.h.toFixed(1)} px high, ${(prompt.t - inv.b).toFixed(1)} px above)`);
-      await shot(page, `${tag}-invite`, outDir29);
-      await page.getByTestId('signin-invite-close').click();
-      await settle(page, 400);
-      check((await invites(page)) === 0, `${tag}: closed, it leaves`);
-
-      // Sign in from the project menu's account row.
-      await openMenu(page);
-      await page.getByTestId('menu-signin').click();
-      await page.waitForSelector('[data-testid=signin-email-input]');
-      await settle(page, 900);
-      if (!phone) {
-        const nm = await box(page, '[data-house-name]');
-        const sp = await box(page, '[data-testid=signin-sheet]');
-        check(Math.abs(sp.t - nm.b - 8) <= 1.5 && Math.abs(sp.l - nm.l) <= 1.5, `${tag}: sign-in stands under the house name (gap ${(sp.t - nm.b).toFixed(1)})`);
-      }
-      const email = `head${++n}@example.com`;
-      await quickSignIn(page, email);
-      await page.waitForSelector('[data-testid=account-toast]', { state: 'detached', timeout: 8000 }).catch(() => null);
-      await page.waitForFunction(() => !!window.__studio.projects?.store.getState().openId && !window.__studio.projects.store.getState().busy, null, { timeout: 30000 });
-      await settle(page, 600);
-      check((await framing(page)) === f0 && (await page.getByTestId('account-button').count()) === 0 && (await invites(page)) === 0, `${tag}: signed in: no avatar appears, no invitation, the house stays`);
-      await shot(page, `${tag}-signed-in`, outDir29);
-
-      // The account menu from the project menu: who, allowance, keys, sign out; nothing else.
-      await openMenu(page);
-      const rowText = ((await page.getByTestId('menu-account').textContent()) ?? '').trim();
-      check(rowText === email, `${tag}: the account row shows the account (${rowText})`);
-      await page.getByTestId('menu-account').click();
-      await page.waitForSelector('[data-testid=account-menu] [data-testid=account-signout]');
-      await settle(page, 1000);
-      const allowance = ((await page.getByTestId('account-allowance').textContent().catch(() => '')) ?? '').trim();
-      check(allowance.length > 0 && (await page.getByTestId('account-keys').count()) === 1 && (await page.getByTestId('account-projects').count()) === 0, `${tag}: the account menu: allowance, my keys, sign out (${allowance})`);
-      if (!phone) {
-        const nm = await box(page, '[data-house-name]');
-        const am = await box(page, '[data-testid=account-menu]');
-        check(Math.abs(am.t - nm.b - 8) <= 1.5 && Math.abs(am.l - nm.l) <= 1.5, `${tag}: the account menu stands under the house name (gap ${(am.t - nm.b).toFixed(1)})`);
-      }
-      check((await framing(page)) === f0, `${tag}: the house does not move when the account menu opens`);
-      await shot(page, `${tag}-account-menu`, outDir29);
-      await page.keyboard.press('Escape');
-      await page.waitForSelector('[data-testid=account-menu]', { state: 'detached', timeout: 5000 });
-      await settle(page, 400);
-
-      // Share, signed in: the switch; the first configuration makes the link the view-only shots use.
-      await openShareUi(page, phone);
-      await page.waitForSelector('[data-testid=share-surface-body]', { timeout: 15000 });
-      if (!link) {
-        await page.getByTestId('share-switch').click();
-        await page.waitForSelector('[data-testid=share-link]', { timeout: 15000 });
-        link = await page.getByTestId('share-link').inputValue();
-      }
-      await settle(page, 1200);
-      await shot(page, `${tag}-share-open`, outDir29);
-      await closeShareUi(page);
-      await ctx.close();
-
-      // View only: no share, no invitation, no prompt.
-      const V = await open(preview.base, phone ? { ...PHONE, viewport: { width: w, height: h } } : { ...DESKTOP, viewport: { width: w, height: h } }, `${new URL(link).pathname}${new URL(link).search}&lang=${lang}`);
-      await V.page.waitForFunction(() => window.__studio.shared?.getState().status === 'ready', null, { timeout: 30000 });
-      await settle(V.page, 1200);
-      check((await V.page.getByTestId('share-button').count()) === 0 && (await invites(V.page)) === 0 && (await V.page.getByTestId('view-only-bar').count()) === 1, `${tag}: view only: no share button, no invitation`);
-      await openMenu(V.page);
-      check((await V.page.getByTestId('menu-share').count()) === 0, `${tag}: view only: no share row in the project menu`);
-      await closeMenu(V.page);
-      if (!phone) {
-        const tl = await toolbarLast(V.page);
-        check(tl.others.length === 0, `${tag}: view only: the toolbar is still the right-most control`);
-      }
-      await shot(V.page, `${tag}-view-only`, outDir29);
-      await V.ctx.close();
-    }
-
-    // The toolbar does not shift on load, first visit or not (nothing waits for the status at the top right).
-    {
-      const { ctx, page } = await open(preview.base, DESKTOP);
-      for (const visit of ['first', 'second']) {
-        if (visit === 'second') await page.evaluate(() => localStorage.clear());
-        await page.route('**/api/chat', async (route) => {
-          if (route.request().method() === 'GET') await new Promise((r) => setTimeout(r, 2500));
-          await route.continue();
-        });
-        await page.goto(`${preview.base}/studio`);
-        await page.waitForSelector('[data-testid=toolbar]', { timeout: 60000 });
-        const early = await page.evaluate(() => ({ status: !!window.__studio?.chat?.getState().server, bar: document.querySelector('[data-testid=toolbar]').closest('.lg').getBoundingClientRect().toJSON(), name: document.querySelector('[data-testid=project-menu]').getBoundingClientRect().toJSON() }));
+    // The studio's entry per configuration, and nothing shifting on load.
+    if (wanted('entry-views')) {
+      for (const [w, h, lang] of configs) {
+        const phone = w < 768 || h < 520;
+        const tag = `${w}x${h}-${lang}`;
+        const { ctx, page } = await open(preview.base, phone ? { ...PHONE, viewport: { width: w, height: h } } : { ...DESKTOP, viewport: { width: w, height: h } }, `/studio?lang=${lang}`);
         await known(page);
-        await page.waitForSelector('[data-testid=share-button]', { timeout: 10000 });
+        await settle(page, 800);
+        check((await page.getByTestId('account-button').count()) === 0 && (await page.getByTestId('account-avatar').count()) === 0, `${tag}: no account button or avatar in the studio`);
+        if (phone) {
+          const hb = await box(page, 'header');
+          const want = w > h ? 56 : 60;
+          check(Math.abs(hb.b - want) <= 0.5, `${tag}: the header is back to ${want} px (${hb.b.toFixed(1)})`);
+          const name = await box(page, '[data-testid=project-menu]');
+          const sw = await box(page, '[data-testid=mode-switch]');
+          check((await page.locator('header [data-testid=share-button]').count()) === 0 && name.r < sw.l && Math.abs(w - 12 - sw.r) <= 1, `${tag}: the top row is the name left and the mode switch right, nothing else`);
+          const sc = await page.evaluate(() => [document.documentElement.scrollWidth, window.innerWidth]);
+          check(sc[0] <= sc[1], `${tag}: no horizontal scroll`);
+        } else {
+          const tl = await toolbarLast(page);
+          check(Math.abs(w - 18 - tl.right) <= 1 && tl.others.length === 0, `${tag}: the toolbar is the right-most control, 18 px from the edge (${tl.right.toFixed(1)}; others: ${tl.others.join(', ') || 'none'})`);
+          const name = await box(page, '[data-testid=project-menu]');
+          const sh = await glassBox(page, 'share-button');
+          const gap = sh.l - name.r;
+          const dc = (sh.t + sh.b) / 2 - (name.t + name.b) / 2;
+          check(Math.abs(gap - 12) <= 1 && Math.abs(dc) <= 1 && Math.abs(sh.h - 36) <= 0.5, `${tag}: "分享" right of the name on its centre line, 36 px high (gap ${gap.toFixed(1)}, centre ${dc.toFixed(1)})`);
+          const fits = await page.getByTestId('share-button').evaluate((e) => e.scrollWidth <= e.clientWidth + 0.5);
+          check(fits, `${tag}: the share label is not cut`);
+        }
+        await shot(page, `${tag}-signed-out`, outDir29);
+        const f0 = await framing(page);
+
+        // Share, signed out: the same surface, explaining and offering sign-in.
+        if (phone) {
+          await openMenu(page);
+          const first = await page.locator('[data-testid=project-menu-list] [role=menuitem]').first().getAttribute('data-testid');
+          const second = await page.locator('[data-testid=project-menu-list] [role=menuitem]').nth(1).getAttribute('data-testid');
+          check(first === 'menu-share' && second === 'menu-signin', `${tag}: "分享" is the project menu's first row, the account row next (${first}, ${second})`);
+          await page.getByTestId('menu-share').click();
+        } else await page.getByTestId('share-button').click();
+        await page.waitForSelector('[data-testid=share-need-account] [data-testid=share-signin]', { timeout: 10000 });
+        await settle(page, 1200);
+        if (!phone) {
+          const row = await box(page, '[data-title-row]');
+          const sf = await box(page, '[data-testid=share-surface]');
+          check(Math.abs(sf.t - row.b - 8) <= 1.5 && Math.abs(sf.l - row.l) <= 1.5, `${tag}: the share surface stands under the name's row, the module's gap (gap ${(sf.t - row.b).toFixed(1)}, left ${(sf.l - row.l).toFixed(1)})`);
+        }
+        check((await framing(page)) === f0, `${tag}: the house does not move when share opens`);
+        await shot(page, `${tag}-share-signed-out`, outDir29);
+        await closeShareUi(page);
+
+        // The invitation: not on arrival, after the first change (never while the reply runs).
+        check((await invites(page)) === 0, `${tag}: no invitation on arrival`);
+        const during = await change(page, lang);
+        await page.waitForSelector('[data-testid=signin-invite]', { timeout: 5000 }).catch(() => null);
+        const text = ((await page.getByTestId('signin-invite-text').textContent().catch(() => '')) ?? '').trim();
+        check(!during && text === (lang === 'zh' ? '登录后，项目随账户保存，可在其他设备打开，也能分享。' : 'Sign in to keep this project, open it on other devices and share it.'), `${tag}: after the first change the invitation shows, not while the reply ran (${text})`);
+        check((await framing(page)) === f0, `${tag}: the invitation does not move the house`);
+        const inv = await box(page, '[data-testid=signin-invite]');
+        const prompt = await box(page, '[data-testid=prompt]');
+        const clipped = await page.getByTestId('signin-invite-text').evaluate((e) => e.scrollHeight > e.clientHeight + 0.5 || e.scrollWidth > e.clientWidth + 0.5);
+        check(inv.b <= prompt.t - 6 && !clipped && (phone ? inv.h >= 47.5 && inv.h <= 64.5 : Math.abs(inv.h - 48) <= 0.5), `${tag}: above the prompt, ${phone ? '48 px or more (up to three lines)' : '48 px'}, its text whole (${inv.h.toFixed(1)} px high, ${(prompt.t - inv.b).toFixed(1)} px above)`);
+        await shot(page, `${tag}-invite`, outDir29);
+        await page.getByTestId('signin-invite-close').click();
         await settle(page, 400);
-        const late = await page.evaluate(() => ({ bar: document.querySelector('[data-testid=toolbar]').closest('.lg').getBoundingClientRect().toJSON(), name: document.querySelector('[data-testid=project-menu]').getBoundingClientRect().toJSON() }));
-        const same = (a, b) => ['left', 'top', 'right', 'bottom'].every((k) => Math.abs(a[k] - b[k]) <= 0.5);
-        check(!early.status && same(early.bar, late.bar) && same(early.name, late.name), `load (${visit} visit): the toolbar and the name stay where they are when the status arrives (${early.bar.right} -> ${late.bar.right})`);
-        await page.unroute('**/api/chat');
+        check((await invites(page)) === 0, `${tag}: closed, it leaves`);
+
+        // Sign in from the project menu's account row.
+        await openMenu(page);
+        await page.getByTestId('menu-signin').click();
+        await page.waitForSelector('[data-testid=signin-email-input]');
+        await settle(page, 900);
+        if (!phone) {
+          const nm = await box(page, '[data-house-name]');
+          const sp = await box(page, '[data-testid=signin-sheet]');
+          check(Math.abs(sp.t - nm.b - 8) <= 1.5 && Math.abs(sp.l - nm.l) <= 1.5, `${tag}: sign-in stands under the house name (gap ${(sp.t - nm.b).toFixed(1)})`);
+        }
+        const email = `head${++n}@example.com`;
+        await quickSignIn(page, email);
+        await page.waitForSelector('[data-testid=account-toast]', { state: 'detached', timeout: 8000 }).catch(() => null);
+        await page.waitForFunction(() => !!window.__studio.projects?.store.getState().openId && !window.__studio.projects.store.getState().busy, null, { timeout: 30000 });
+        await settle(page, 600);
+        check((await framing(page)) === f0 && (await page.getByTestId('account-button').count()) === 0 && (await invites(page)) === 0, `${tag}: signed in: no avatar appears, no invitation, the house stays`);
+        await shot(page, `${tag}-signed-in`, outDir29);
+
+        // The account menu from the project menu: who, allowance, keys, sign out; nothing else.
+        await openMenu(page);
+        const rowText = ((await page.getByTestId('menu-account').textContent()) ?? '').trim();
+        check(rowText === email, `${tag}: the account row shows the account (${rowText})`);
+        await page.getByTestId('menu-account').click();
+        await page.waitForSelector('[data-testid=account-menu] [data-testid=account-signout]');
+        await settle(page, 1000);
+        const allowance = ((await page.getByTestId('account-allowance').textContent().catch(() => '')) ?? '').trim();
+        check(allowance.length > 0 && (await page.getByTestId('account-keys').count()) === 1 && (await page.getByTestId('account-projects').count()) === 0, `${tag}: the account menu: allowance, my keys, sign out (${allowance})`);
+        if (!phone) {
+          const nm = await box(page, '[data-house-name]');
+          const am = await box(page, '[data-testid=account-menu]');
+          check(Math.abs(am.t - nm.b - 8) <= 1.5 && Math.abs(am.l - nm.l) <= 1.5, `${tag}: the account menu stands under the house name (gap ${(am.t - nm.b).toFixed(1)})`);
+        }
+        check((await framing(page)) === f0, `${tag}: the house does not move when the account menu opens`);
+        await shot(page, `${tag}-account-menu`, outDir29);
+        await page.keyboard.press('Escape');
+        await page.waitForSelector('[data-testid=account-menu]', { state: 'detached', timeout: 5000 });
+        await settle(page, 400);
+
+        // Share, signed in: the switch; the first configuration makes the link the view-only shots use.
+        await openShareUi(page, phone);
+        await page.waitForSelector('[data-testid=share-surface-body]', { timeout: 15000 });
+        if (!link) {
+          await page.getByTestId('share-switch').click();
+          await page.waitForSelector('[data-testid=share-link]', { timeout: 15000 });
+          link = await page.getByTestId('share-link').inputValue();
+        }
+        await settle(page, 1200);
+        await shot(page, `${tag}-share-open`, outDir29);
+        await closeShareUi(page);
+        await ctx.close();
+
+        // View only: no share, no invitation, no prompt.
+        const V = await open(preview.base, phone ? { ...PHONE, viewport: { width: w, height: h } } : { ...DESKTOP, viewport: { width: w, height: h } }, `${new URL(link).pathname}${new URL(link).search}&lang=${lang}`);
+        await V.page.waitForFunction(() => window.__studio.shared?.getState().status === 'ready', null, { timeout: 30000 });
+        await settle(V.page, 1200);
+        check((await V.page.getByTestId('share-button').count()) === 0 && (await invites(V.page)) === 0 && (await V.page.getByTestId('view-only-bar').count()) === 1, `${tag}: view only: no share button, no invitation`);
+        await openMenu(V.page);
+        check((await V.page.getByTestId('menu-share').count()) === 0, `${tag}: view only: no share row in the project menu`);
+        await closeMenu(V.page);
+        if (!phone) {
+          const tl = await toolbarLast(V.page);
+          check(tl.others.length === 0, `${tag}: view only: the toolbar is still the right-most control`);
+        }
+        await shot(V.page, `${tag}-view-only`, outDir29);
+        await V.ctx.close();
       }
-      await ctx.close();
+
+      // The toolbar does not shift on load, first visit or not (nothing waits for the status at the top right).
+      {
+        const { ctx, page } = await open(preview.base, DESKTOP);
+        for (const visit of ['first', 'second']) {
+          if (visit === 'second') await page.evaluate(() => localStorage.clear());
+          await page.route('**/api/chat', async (route) => {
+            if (route.request().method() === 'GET') await new Promise((r) => setTimeout(r, 2500));
+            await route.continue();
+          });
+          await page.goto(`${preview.base}/studio`);
+          await page.waitForSelector('[data-testid=toolbar]', { timeout: 60000 });
+          const early = await page.evaluate(() => ({ status: !!window.__studio?.chat?.getState().server, bar: document.querySelector('[data-testid=toolbar]').closest('.lg').getBoundingClientRect().toJSON(), name: document.querySelector('[data-testid=project-menu]').getBoundingClientRect().toJSON() }));
+          await known(page);
+          await page.waitForSelector('[data-testid=share-button]', { timeout: 10000 });
+          await settle(page, 400);
+          const late = await page.evaluate(() => ({ bar: document.querySelector('[data-testid=toolbar]').closest('.lg').getBoundingClientRect().toJSON(), name: document.querySelector('[data-testid=project-menu]').getBoundingClientRect().toJSON() }));
+          const same = (a, b) => ['left', 'top', 'right', 'bottom'].every((k) => Math.abs(a[k] - b[k]) <= 0.5);
+          check(!early.status && same(early.bar, late.bar) && same(early.name, late.name), `load (${visit} visit): the toolbar and the name stay where they are when the status arrives (${early.bar.right} -> ${late.bar.right})`);
+          await page.unroute('**/api/chat');
+        }
+        await ctx.close();
+      }
     }
 
-    // The invitation's rules (desktop zh): once; closed, not again for 14 days; walking, other surfaces; sign-in ends it.
-    {
-      const { ctx, page } = await open(preview.base, DESKTOP);
-      await known(page);
-      await change(page, 'zh');
-      await page.waitForSelector('[data-testid=signin-invite]', { timeout: 5000 });
-      const at0 = (await seen(page))?.at ?? 0;
-      check(at0 > 0, 'rules: shown after the first change; this browser remembers when');
-      await page.evaluate(() => window.__studio.store.getState().setWalk(true));
-      await settle(page, 800);
-      const walking = await invites(page);
-      await page.evaluate(() => window.__studio.store.getState().setWalk(false));
-      await settle(page, 800);
-      await openMenu(page);
-      const underMenu = await invites(page);
-      await closeMenu(page);
-      await page.getByTestId('bar-sun').click();
-      await settle(page, 800);
-      const underPanel = await invites(page);
-      await page.getByTestId('bar-sun').click();
-      await settle(page, 800);
-      check(walking === 0 && underMenu === 0 && underPanel === 0 && (await invites(page)) === 1, `rules: hidden while walking, under a menu or a tool panel, back after (${walking}, ${underMenu}, ${underPanel})`);
-      await page.getByTestId('signin-invite-close').click();
-      await settle(page, 300);
-      await change(page, 'zh');
-      check((await invites(page)) === 0, 'rules: closed: a second change does not bring it back');
-      await page.reload({ waitUntil: 'networkidle' });
-      await page.waitForFunction(() => window.__studio?.ready3d === true, null, { timeout: 180000 });
-      await known(page);
-      await settle(page, 600);
-      check((await invites(page)) === 0, 'rules: not on arrival after a reload');
-      await change(page, 'zh');
-      check((await invites(page)) === 0, 'rules: within 14 days of closing it, a change in a new page does not bring it back');
-      // Closed 15 days ago: the next change brings it back once.
-      await page.evaluate(() => localStorage.setItem('opensu.invite.v1', JSON.stringify({ at: Date.now() - 15 * 24 * 3600 * 1000 })));
-      await page.reload({ waitUntil: 'networkidle' });
-      await page.waitForFunction(() => window.__studio?.ready3d === true, null, { timeout: 180000 });
-      await known(page);
-      await settle(page, 600);
-      check((await invites(page)) === 0, 'rules: 15 days after closing, still not on arrival');
-      await change(page, 'zh');
-      check((await invites(page)) === 1, 'rules: 15 days after closing, the next change shows it again');
-      // "登录" opens sign-in above the input; the invitation steps away and ends once signed in.
-      await page.getByTestId('signin-invite-signin').click();
-      await page.waitForSelector('[data-testid=signin-email-input]');
-      await settle(page, 900);
-      const sp = await box(page, '[data-testid=signin-sheet]');
-      const pr = await box(page, '[data-testid=prompt]');
-      check((await invites(page)) === 0 && sp.b <= pr.t, `rules: "登录" opens sign-in above the input; the invitation steps away (${(pr.t - sp.b).toFixed(1)} px)`);
-      await quickSignIn(page, `rules${++n}@example.com`);
-      await settle(page, 600);
-      check((await invites(page)) === 0 && (await seen(page))?.done === true, 'rules: signed in, it ends for this browser');
-      await openMenu(page);
-      await page.getByTestId('menu-account').click();
-      await page.getByTestId('account-signout').click();
-      await page.waitForFunction(() => !window.__studio.chat.getState().server?.user, null, { timeout: 10000 });
-      await settle(page, 600);
-      await change(page, 'zh');
-      check((await invites(page)) === 0, 'rules: signed out again on this browser, a change does not bring it back');
-      await ctx.close();
+    // The invitation's rules, the quota note, sign-in off, the landing's sign-in.
+    if (wanted('entry-rules')) {
+      // The invitation's rules (desktop zh): once; closed, not again for 14 days; walking, other surfaces; sign-in ends it.
+      {
+        const { ctx, page } = await open(preview.base, DESKTOP);
+        await known(page);
+        await change(page, 'zh');
+        await page.waitForSelector('[data-testid=signin-invite]', { timeout: 5000 });
+        const at0 = (await seen(page))?.at ?? 0;
+        check(at0 > 0, 'rules: shown after the first change; this browser remembers when');
+        await page.evaluate(() => window.__studio.store.getState().setWalk(true));
+        await settle(page, 800);
+        const walking = await invites(page);
+        await page.evaluate(() => window.__studio.store.getState().setWalk(false));
+        await settle(page, 800);
+        await openMenu(page);
+        const underMenu = await invites(page);
+        await closeMenu(page);
+        await page.getByTestId('bar-sun').click();
+        await settle(page, 800);
+        const underPanel = await invites(page);
+        await page.getByTestId('bar-sun').click();
+        await settle(page, 800);
+        check(walking === 0 && underMenu === 0 && underPanel === 0 && (await invites(page)) === 1, `rules: hidden while walking, under a menu or a tool panel, back after (${walking}, ${underMenu}, ${underPanel})`);
+        await page.getByTestId('signin-invite-close').click();
+        await settle(page, 300);
+        await change(page, 'zh');
+        check((await invites(page)) === 0, 'rules: closed: a second change does not bring it back');
+        await page.reload({ waitUntil: 'networkidle' });
+        await page.waitForFunction(() => window.__studio?.ready3d === true, null, { timeout: 180000 });
+        await known(page);
+        await settle(page, 600);
+        check((await invites(page)) === 0, 'rules: not on arrival after a reload');
+        await change(page, 'zh');
+        check((await invites(page)) === 0, 'rules: within 14 days of closing it, a change in a new page does not bring it back');
+        // Closed 15 days ago: the next change brings it back once.
+        await page.evaluate(() => localStorage.setItem('opensu.invite.v1', JSON.stringify({ at: Date.now() - 15 * 24 * 3600 * 1000 })));
+        await page.reload({ waitUntil: 'networkidle' });
+        await page.waitForFunction(() => window.__studio?.ready3d === true, null, { timeout: 180000 });
+        await known(page);
+        await settle(page, 600);
+        check((await invites(page)) === 0, 'rules: 15 days after closing, still not on arrival');
+        await change(page, 'zh');
+        check((await invites(page)) === 1, 'rules: 15 days after closing, the next change shows it again');
+        // "登录" opens sign-in above the input; the invitation steps away and ends once signed in.
+        await page.getByTestId('signin-invite-signin').click();
+        await page.waitForSelector('[data-testid=signin-email-input]');
+        await settle(page, 900);
+        const sp = await box(page, '[data-testid=signin-sheet]');
+        const pr = await box(page, '[data-testid=prompt]');
+        check((await invites(page)) === 0 && sp.b <= pr.t, `rules: "登录" opens sign-in above the input; the invitation steps away (${(pr.t - sp.b).toFixed(1)} px)`);
+        await quickSignIn(page, `rules${++n}@example.com`);
+        await settle(page, 600);
+        check((await invites(page)) === 0 && (await seen(page))?.done === true, 'rules: signed in, it ends for this browser');
+        await openMenu(page);
+        await page.getByTestId('menu-account').click();
+        await page.getByTestId('account-signout').click();
+        await page.waitForFunction(() => !window.__studio.chat.getState().server?.user, null, { timeout: 10000 });
+        await settle(page, 600);
+        await change(page, 'zh');
+        check((await invites(page)) === 0, 'rules: signed out again on this browser, a change does not bring it back');
+        await ctx.close();
+      }
     }
     preview.stop();
 
-    // The quota-reached sign-in and the invitation never show together.
-    {
-      const q = await startPreview({ QUOTA_ANON_TRIAL: '1', QUOTA_IP_DAILY: '1000' });
-      const { ctx, page } = await open(q.base, DESKTOP);
-      await known(page);
-      await change(page, 'zh');
-      const up = await invites(page);
-      await turn(page, '你好');
-      const err = await lastError(page);
-      await page.evaluate(() => window.__studio.store.getState().setRecent(true));
-      await settle(page, 800);
-      const quotaSignIn = await page.getByTestId('quota-signin').count();
-      await page.evaluate(() => window.__studio.store.getState().setRecent(false));
-      await settle(page, 600);
-      check(up === 1 && err?.kind === 'quota' && quotaSignIn === 1 && (await invites(page)) === 0, `quota: the quota note with its sign-in stands alone; the invitation waits (${up}, ${err?.kind}, ${quotaSignIn})`);
-      await shot(page, '1440x900-zh-quota-no-invite', outDir29);
-      await ctx.close();
-      q.stop();
-    }
-
-    // Sign-in off: nothing of it is shown (studio, menu, landing; ?signin=1 is dropped); no invitation.
-    const off = await startPreview({ AUTH_ENABLED: 'false' });
-    for (const [label, opts, path] of [['desktop', DESKTOP, '/studio?signin=1'], ['phone', PHONE, '/studio'], ['phone-sideways', { ...PHONE, viewport: { width: 844, height: 390 } }, '/studio']]) {
-      const { ctx, page } = await open(off.base, opts, path);
-      await known(page);
-      await page.waitForTimeout(1500);
-      check((await page.getByTestId('account-button').count()) === 0 && (await page.getByTestId('signin-sheet').count()) === 0 && (await page.getByTestId('share-button').count()) === 0, `sign-in off (${label}): no account, no share, ?signin=1 opens nothing`);
-      const hb = await box(page, label === 'desktop' ? '[data-testid=title-block]' : 'header');
-      console.log(`    sign-in off (${label}): header bottom ${hb.b.toFixed(0)} px, framing ${await framing(page)}`);
-      if (label === 'desktop') {
-        check(!/signin=/.test(page.url()), 'sign-in off: ?signin=1 leaves the address too');
+    if (wanted('entry-rules')) {
+      // The quota-reached sign-in and the invitation never show together.
+      {
+        const q = await startPreview({ QUOTA_ANON_TRIAL: '1', QUOTA_IP_DAILY: '1000' });
+        const { ctx, page } = await open(q.base, DESKTOP);
+        await known(page);
         await change(page, 'zh');
-        check((await invites(page)) === 0, 'sign-in off: no invitation after a change');
-        await page.goto(`${off.base}/`, { waitUntil: 'networkidle' });
-        await page.waitForTimeout(800);
-        check((await page.getByTestId('landing-signin').count()) === 0, 'sign-in off: the landing has no sign-in link');
-      } else await shot(page, `sign-in-off-${label}`, outDir29);
-      await ctx.close();
-    }
-    off.stop();
+        const up = await invites(page);
+        await turn(page, '你好');
+        const err = await lastError(page);
+        await page.evaluate(() => window.__studio.store.getState().setRecent(true));
+        await settle(page, 800);
+        const quotaSignIn = await page.getByTestId('quota-signin').count();
+        await page.evaluate(() => window.__studio.store.getState().setRecent(false));
+        await settle(page, 600);
+        check(up === 1 && err?.kind === 'quota' && quotaSignIn === 1 && (await invites(page)) === 0, `quota: the quota note with its sign-in stands alone; the invitation waits (${up}, ${err?.kind}, ${quotaSignIn})`);
+        await shot(page, '1440x900-zh-quota-no-invite', outDir29);
+        await ctx.close();
+        q.stop();
+      }
 
-    // The landing: "sign in" goes to /studio?signin=1, which opens sign-in under the house name once.
-    {
-      const p2 = await startPreview();
-      const { ctx, page } = await open(p2.base, DESKTOP);
-      await page.goto(`${p2.base}/`, { waitUntil: 'networkidle' });
-      await page.waitForSelector('[data-testid=landing-signin]');
-      await page.getByTestId('landing-signin').click();
-      await page.waitForURL(/\/studio/);
-      await page.waitForSelector('[data-testid=signin-sheet]', { timeout: 60000 });
-      await settle(page, 900);
-      const nm = await box(page, '[data-house-name]');
-      const sp = await box(page, '[data-testid=signin-sheet]');
-      check(!/signin=/.test(page.url()) && Math.abs(sp.t - nm.b - 8) <= 1.5, `?signin=1 opens sign-in under the house name and leaves the address (${page.url()})`);
-      await page.keyboard.press('Escape');
-      await page.waitForSelector('[data-testid=signin-sheet]', { state: 'detached', timeout: 5000 });
-      await page.reload({ waitUntil: 'networkidle' });
-      await page.waitForFunction(() => window.__studio?.ready3d === true, null, { timeout: 180000 });
-      await page.waitForTimeout(1200);
-      check((await page.getByTestId('signin-sheet').count()) === 0, '?signin=1: a reload does not open it again');
-      await ctx.close();
-      p2.stop();
+      // Sign-in off: nothing of it is shown (studio, menu, landing; ?signin=1 is dropped); no invitation.
+      const off = await startPreview({ AUTH_ENABLED: 'false' });
+      for (const [label, opts, path] of [['desktop', DESKTOP, '/studio?signin=1'], ['phone', PHONE, '/studio'], ['phone-sideways', { ...PHONE, viewport: { width: 844, height: 390 } }, '/studio']]) {
+        const { ctx, page } = await open(off.base, opts, path);
+        await known(page);
+        await page.waitForTimeout(1500);
+        check((await page.getByTestId('account-button').count()) === 0 && (await page.getByTestId('signin-sheet').count()) === 0 && (await page.getByTestId('share-button').count()) === 0, `sign-in off (${label}): no account, no share, ?signin=1 opens nothing`);
+        const hb = await box(page, label === 'desktop' ? '[data-testid=title-block]' : 'header');
+        console.log(`    sign-in off (${label}): header bottom ${hb.b.toFixed(0)} px, framing ${await framing(page)}`);
+        if (label === 'desktop') {
+          check(!/signin=/.test(page.url()), 'sign-in off: ?signin=1 leaves the address too');
+          await change(page, 'zh');
+          check((await invites(page)) === 0, 'sign-in off: no invitation after a change');
+          await page.goto(`${off.base}/`, { waitUntil: 'networkidle' });
+          await page.waitForTimeout(800);
+          check((await page.getByTestId('landing-signin').count()) === 0, 'sign-in off: the landing has no sign-in link');
+        } else await shot(page, `sign-in-off-${label}`, outDir29);
+        await ctx.close();
+      }
+      off.stop();
+
+      // The landing: "sign in" goes to /studio?signin=1, which opens sign-in under the house name once.
+      {
+        const p2 = await startPreview();
+        const { ctx, page } = await open(p2.base, DESKTOP);
+        await page.goto(`${p2.base}/`, { waitUntil: 'networkidle' });
+        await page.waitForSelector('[data-testid=landing-signin]');
+        await page.getByTestId('landing-signin').click();
+        await page.waitForURL(/\/studio/);
+        await page.waitForSelector('[data-testid=signin-sheet]', { timeout: 60000 });
+        await settle(page, 900);
+        const nm = await box(page, '[data-house-name]');
+        const sp = await box(page, '[data-testid=signin-sheet]');
+        check(!/signin=/.test(page.url()) && Math.abs(sp.t - nm.b - 8) <= 1.5, `?signin=1 opens sign-in under the house name and leaves the address (${page.url()})`);
+        await page.keyboard.press('Escape');
+        await page.waitForSelector('[data-testid=signin-sheet]', { state: 'detached', timeout: 5000 });
+        await page.reload({ waitUntil: 'networkidle' });
+        await page.waitForFunction(() => window.__studio?.ready3d === true, null, { timeout: 180000 });
+        await page.waitForTimeout(1200);
+        check((await page.getByTestId('signin-sheet').count()) === 0, '?signin=1: a reload does not open it again');
+        await ctx.close();
+        p2.stop();
+      }
     }
   }
 
@@ -1539,7 +1560,7 @@ try {
 
     // Own key (the upstream is unreachable on purpose: the turn ends with an error, which is recorded too).
     const OWN = 'sk-own-e2e-not-a-real-key-123';
-    const ownCtx = await browser.newContext(DESKTOP);
+    const ownCtx = await newContext(DESKTOP);
     await ownCtx.addInitScript((k) => {
       localStorage.setItem('opensu.hints.v1', 'done');
       localStorage.setItem('opensu.ai', JSON.stringify({ useOwn: true, provider: 'custom', key: k, baseUrl: 'https://127.0.0.1:9/v1', model: 'my/own-model' }));
@@ -1579,7 +1600,7 @@ try {
     await ph.ctx.close();
     for (const [label, opts] of [['desktop', DESKTOP], ['phone', PHONE]]) {
       for (const lang of ['zh', 'en']) {
-        const ctx = await browser.newContext({ ...opts, locale: lang === 'zh' ? 'zh-CN' : 'en-US' });
+        const ctx = await newContext({ ...opts, locale: lang === 'zh' ? 'zh-CN' : 'en-US' });
         await ctx.addInitScript((l) => localStorage.setItem('opensu.lang', l), lang);
         const page = await ctx.newPage();
         await page.goto(`${preview.base}/`, { waitUntil: 'networkidle' });
@@ -1625,7 +1646,7 @@ try {
     const sheetGone = (page) => page.waitForSelector('[data-testid=keys-sheet]', { state: 'detached', timeout: 10000 });
     const lastCall = () => stub.received.at(-1);
     const withBrowserKey = async (opts, path) => {
-      const ctx = await browser.newContext(opts);
+      const ctx = await newContext(opts);
       await ctx.addInitScript((k) => {
         localStorage.setItem('opensu.hints.v1', 'done');
         if (!sessionStorage.getItem('e2e-key-set')) {
@@ -1734,14 +1755,14 @@ try {
     await page.getByTestId('key-free').click();
     await page.waitForTimeout(800);
     check((await label(page)) === '免费额度', 'choosing the free allowance switches at once');
-    await page.reload({ waitUntil: 'networkidle' });
-    await page.waitForFunction(() => window.__studio?.keys?.getState().ready === true, null, { timeout: 20000 });
+    await page.reload({ waitUntil: 'commit' });
+    await page.waitForFunction(() => window.__studio?.keys?.getState().ready === true, null, { timeout: NAV_MS });
     check((await label(page)) === '免费额度', 'after a reload: still the free allowance');
     await openPicker(page);
     await page.getByTestId('key-anthropic').click();
     await page.waitForTimeout(800);
-    await page.reload({ waitUntil: 'networkidle' });
-    await page.waitForFunction(() => window.__studio?.keys?.getState().ready === true, null, { timeout: 20000 });
+    await page.reload({ waitUntil: 'commit' });
+    await page.waitForFunction(() => window.__studio?.keys?.getState().ready === true, null, { timeout: NAV_MS });
     check((await label(page)) === 'Anthropic', 'after a reload: Anthropic again (remembered per account)');
 
     // Delete the key in use: the picker falls back to the free allowance, and turns are metered again.
@@ -1761,7 +1782,7 @@ try {
     check(c3?.provider === null && c3.authorization === `Bearer ${STUB_KEY}` && q3 === q2 - 1, `the site's key again, one credit taken (${q2} -> ${q3})`);
 
     // Another user cannot see or use them.
-    const other = await browser.newContext(DESKTOP);
+    const other = await newContext(DESKTOP);
     const op = await other.newPage();
     await op.goto(`${preview.base}/studio`);
     const otherList = await op.evaluate(async () => (await fetch('/api/keys')).status);

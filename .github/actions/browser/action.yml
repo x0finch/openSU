@@ -1,0 +1,59 @@
+name: Chromium and fonts
+description: >
+  Playwright's Chromium (cached by Playwright version) and the fonts the dev
+  container has (cached .deb files). Not `playwright install --with-deps`:
+  its apt download ran at 58 kB/s on run 1 of PR #3 and took 9 minutes
+  (task 030 notes). The runner image already has Chromium's system
+  libraries; if Chromium does not start, they are installed after all.
+runs:
+  using: composite
+  steps:
+    - name: Playwright version
+      id: pw
+      shell: bash
+      run: echo "version=$(node -p "require('playwright/package.json').version")" >> "$GITHUB_OUTPUT"
+
+    - uses: actions/cache@v4
+      id: pw-cache
+      with:
+        path: ~/.cache/ms-playwright
+        key: playwright-${{ runner.os }}-${{ steps.pw.outputs.version }}-chromium
+
+    - name: Chromium
+      if: steps.pw-cache.outputs.cache-hit != 'true'
+      shell: bash
+      run: pnpm exec playwright install chromium
+
+    # The fonts `playwright install-deps chromium` adds on ubuntu-24.04 (the
+    # CJK one, WenQuanYi Zen Hei, is the dev container's), downloaded once.
+    - uses: actions/cache@v4
+      id: fonts-cache
+      with:
+        path: ~/font-debs
+        key: font-debs-ubuntu-24.04-v1
+
+    - name: Download fonts
+      if: steps.fonts-cache.outputs.cache-hit != 'true'
+      shell: bash
+      run: |
+        mkdir -p ~/font-debs
+        cd ~/font-debs
+        sudo apt-get update -qq
+        apt-get download fonts-freefont-ttf fonts-ipafont-gothic fonts-tlwg-loma-otf fonts-unifont \
+          fonts-wqy-zenhei xfonts-cyrillic xfonts-encodings xfonts-scalable xfonts-utils
+        ls -l
+
+    - name: Install fonts
+      shell: bash
+      run: |
+        sudo dpkg -i ~/font-debs/*.deb > /dev/null
+        fc-cache -f
+        fc-match "sans-serif:lang=zh-cn"
+
+    - name: Chromium starts
+      shell: bash
+      run: |
+        if ! node -e "require('playwright').chromium.launch().then((b) => b.close())"; then
+          echo "::warning::Chromium does not start on this image; installing its system libraries"
+          pnpm exec playwright install-deps chromium
+        fi

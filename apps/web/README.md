@@ -72,7 +72,7 @@ whole matrix runs on GitHub Actions for every pull request to `main`
 |---|---|---|---|
 | `pnpm test:fast` (root) | package `tsc` build (types for the typecheck), `typecheck` of every package, every package's vitest, then this app's `test:fast` | no | no |
 | `pnpm --filter @opensu/web test:unit` | `scripts/*-test.ts` (node:test) | no | no |
-| `pnpm --filter @opensu/web test:static` | `ui-check` (base-component rule), `relay-check`, `auth-check` (Node, stubbed upstream, SQLite D1 look-alike) | no | no |
+| `pnpm --filter @opensu/web test:static` | `ui-check` (base-component rule), `ci-shards-check` (every section of a sharded suite is in a CI shard), `relay-check`, `auth-check` (Node, stubbed upstream, SQLite D1 look-alike) | no | no |
 | `pnpm --filter @opensu/web test:shots` | `shots.mjs --smoke`: studio checks (walk, sun, cutaway, sheets, ...) | yes | yes |
 | `pnpm --filter @opensu/web test:glass` | `glass-contrast.mjs`: text contrast on the glass surfaces | yes | yes |
 | `pnpm --filter @opensu/web test:chat` | `chat-e2e.mjs --smoke`: the assistant against the scripted stub | yes | yes |
@@ -89,8 +89,15 @@ one build serves all of them. No suite needs a secret or the network: the
 assistant is a local scripted stub, D1 is local and sign-in codes come from
 the test hook. Playwright is a root dev dependency (pinned in the lockfile);
 in the dev container its browsers are preinstalled in `/opt/pw-browsers`
-(`PLAYWRIGHT_BROWSERS_PATH`), on a CI runner `playwright install --with-deps
-chromium` puts them in the default cache.
+(`PLAYWRIGHT_BROWSERS_PATH`); on a CI runner `.github/actions/browser`
+installs Chromium and the container's fonts from caches.
+
+All of shots, chat and account take `--only <name prefixes>` (e.g.
+`pnpm --filter @opensu/web test:account --only entry-rules`); CI runs them
+in shards that way, and `scripts/ci-shards-check.mjs` (part of
+`test:static`) fails when a section is in no shard: add a new section to a shard in
+`.github/workflows/ci.yml`. account-e2e's `entry` has two parts,
+`entry-views` and `entry-rules`.
 
 ## Routes
 
