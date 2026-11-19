@@ -487,7 +487,7 @@ try {
     await until(a, async () => (await (await fetch('/api/projects')).json()).projects[0].revision > 1);
     check(true, 'saved to the account a few seconds after the change');
     // A thumbnail follows a quiet moment after the last change (THUMB_QUIET, 15 s).
-    await until(a, async () => (await (await fetch('/api/projects')).json()).projects[0].thumbAt > 0, null, 45000);
+    await until(a, async () => (await (await fetch('/api/projects')).json()).projects[0].thumbAt > 0, null, tmo(45000));
     const thumb = await a.evaluate(async (id) => { const p = (await (await fetch('/api/projects')).json()).projects.find((x) => x.id === id); const r = await fetch(`/api/projects/${id}/thumb?v=${p.thumbAt}`); const body = await r.arrayBuffer(); return { type: r.headers.get('content-type'), cache: r.headers.get('cache-control'), kb: body.byteLength / 1024, text: r.ok ? '' : new TextDecoder().decode(body) }; }, p1);
     check(/image\/(webp|jpeg)/.test(thumb.type) && thumb.kb < 60 && /private/.test(thumb.cache), `a thumbnail was drawn by the studio's viewer and stored (${thumb.type}, ${thumb.kb.toFixed(1)} KB, ${thumb.cache}${thumb.text}; ${JSON.stringify(await a.evaluate(() => globalThis.__thumb ?? null))})`);
     await openMenu(a);
