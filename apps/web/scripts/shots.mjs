@@ -246,14 +246,21 @@ const roofPixels = (px) => {
   return n;
 };
 
-/** Sets a React-controlled range input like a user drag would. */
-const setRange = (page, minutes) =>
-  page.evaluate((m) => {
-    const el = [...document.querySelectorAll('input[type=range]')].find((x) => x.offsetParent !== null);
+/**
+ * Sets a React-controlled range input like a user drag would. The panel that
+ * holds it loads on first use (task 031), so wait for it first; Base UI's range
+ * input is visually hidden and `position: fixed`, so it is found by being
+ * connected, not by `offsetParent`.
+ */
+const setRange = async (page, minutes) => {
+  await page.waitForSelector('input[type=range]', { state: 'attached', timeout: tmo(15000) });
+  return page.evaluate((m) => {
+    const el = [...document.querySelectorAll('input[type=range]')].find((x) => x.isConnected && !x.closest('[inert]'));
     const set = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set;
     set.call(el, String(m));
     el.dispatchEvent(new Event('input', { bubbles: true }));
   }, minutes);
+};
 
 /** Sun study and cutaway in the app: the slider moves shadows, a cut hides the roof. */
 async function sunAndCutChecks() {
@@ -357,7 +364,7 @@ async function siteChecks() {
   const urumqi = await page.evaluate(() => {
     const s = window.__studio.store.getState();
     const truth = window.__studio.engine.sunAt(s.sunInfo.date, s.sun.minutes);
-    const range = [...document.querySelectorAll('input[type=range]')].find((x) => x.offsetParent !== null);
+    const range = [...document.querySelectorAll('input[type=range]')].find((x) => x.isConnected && !x.closest('[inert]'));
     return {
       info: s.sunInfo, minutes: s.sun.minutes,
       truth: { sunrise: truth.times.sunrise, sunset: truth.times.sunset, noon: truth.times.solarNoon, el: truth.trueElevationDeg },
