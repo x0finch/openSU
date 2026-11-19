@@ -3,7 +3,8 @@
 // Input (task 031): `Field` gives its label and hint to the input inside it.
 import { Field as BaseField } from '@base-ui/react/field';
 import { Input as BaseInput } from '@base-ui/react/input';
-import type { InputHTMLAttributes, ReactNode, Ref } from 'react';
+import { OTPField as BaseOTP } from '@base-ui/react/otp-field';
+import type { HTMLAttributes, InputHTMLAttributes, ReactNode, Ref } from 'react';
 import { cx } from './surface';
 
 export function Input({ size = 'md', mono, className, icon, ref, ...rest }: Omit<InputHTMLAttributes<HTMLInputElement>, 'size'> & { size?: 'sm' | 'md' | 'lg'; mono?: boolean; icon?: ReactNode; ref?: Ref<HTMLInputElement> }) {
@@ -19,9 +20,31 @@ export function Input({ size = 'md', mono, className, icon, ref, ...rest }: Omit
   );
 }
 
-/** The six boxes of a sign-in code: one per digit. */
-export function CodeInput({ className, ref, ...rest }: InputHTMLAttributes<HTMLInputElement> & { ref?: Ref<HTMLInputElement> }) {
-  return <BaseInput ref={ref} {...(rest as object)} className={cx('lg-field lg-code tnum h-14 w-0 min-w-0 flex-1 text-center text-[24px] font-semibold text-ink outline-none disabled:opacity-50 [&:focus-visible]:outline-none', className)} />;
+/**
+ * A one-time code in boxes (iOS's verification-code entry), on Base UI's OTP Field: typing, paste, the keyboard's
+ * one-time-code suggestion, backspace and arrows are Base UI's. `label(n)`: the field's name (0) and each box's (n).
+ */
+export function CodeField({ length = 6, value, onValueChange, onComplete, disabled, label, className, rowRef, ...rest }: { length?: number; value: string; onValueChange: (v: string) => void; onComplete: (v: string) => void; disabled?: boolean; label: (n: number) => string; className?: string; rowRef?: Ref<HTMLDivElement> } & Omit<HTMLAttributes<HTMLDivElement>, 'onChange' | 'defaultValue'>) {
+  return (
+    <BaseOTP.Root
+      ref={rowRef}
+      length={length}
+      value={value}
+      onValueChange={(v) => onValueChange(v)}
+      onValueComplete={(v) => onComplete(v)}
+      disabled={disabled}
+      validationType="numeric"
+      inputMode="numeric"
+      autoComplete="one-time-code"
+      aria-label={label(0)}
+      className={cx('flex justify-between gap-2', className)}
+      {...(rest as object)}
+    >
+      {Array.from({ length }, (_, i) => (
+        <BaseOTP.Input key={i} aria-label={label(i + 1)} data-testid={`otp-${i}`} className="lg-field lg-code tnum h-14 w-0 min-w-0 flex-1 text-center text-[24px] font-semibold text-ink outline-none disabled:opacity-50 [&:focus-visible]:outline-none" />
+      ))}
+    </BaseOTP.Root>
+  );
 }
 
 /** A labelled field: the label above, the input (an `Input` inside), an optional hint under it. */

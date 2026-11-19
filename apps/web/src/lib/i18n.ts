@@ -1,5 +1,5 @@
 // Tiny i18n: one flat dictionary per language. Chinese is the default.
-import { chatEn, chatZh } from '../chat/messages';
+import { chatZh } from '../chat/messages';
 import { useStudio } from './store';
 
 const zh = {
@@ -276,286 +276,25 @@ const zh = {
 
 export type MessageKey = keyof typeof zh;
 
-const en: Record<MessageKey, string> = {
-  'brand.tagline': 'One sentence, one house',
-  'landing.title': 'A design tool for self-built houses',
-  'landing.lead': 'Describe the house you want and get a parametric model to refine: crisp axonometrics, readable floor plans and sunlight through the day.',
-  'landing.cta': 'Open the sample project',
-  'landing.openStudio': 'Open the studio',
-  'landing.secondary': 'Open source · self-hostable',
-  'landing.f1.title': 'A sentence becomes a house',
-  'landing.f1.body': 'Rooms, openings, stairs and roofs are a semantic model; every edit is validated.',
-  'landing.f2.title': 'Sun study',
-  'landing.f2.body': 'Drag the time and watch sunlight sweep the rooms.',
-  'landing.f3.title': 'One-click sheets',
-  'landing.f3.body': 'Axonometric on top, coloured plan below, ready to share.',
-  'landing.footer': 'openSU · AGPL-3.0',
-  'landing.records': 'Conversations with the assistant are saved on the server to improve it, and kept for 30 days.',
-  'landing.heroCaption': 'The sample project: {name}',
-
-  'project.title.modern-pitched': 'Pitched-roof house',
-  'project.sample': 'Sample',
-  'facts.plot': 'Plot',
-  'facts.area': 'Floor area',
-  'facts.storeys': 'Storeys',
-  'facts.storeysValue': '{n} storeys',
-  'facts.storeysAttic': '{n} + attic',
-
-  'mode.label': 'View',
-  'mode.3d': '3D',
-  'mode.plan': 'Plan',
-  'mode.sheet': 'Sheets',
-  'soon': 'Coming soon',
-
-  'views.label': 'Views',
-  'views.axo': 'Axo',
-  'views.eye': 'Eye',
-  'views.elevation': 'Elev.',
-  'view.axo-se': 'Axonometric SE',
-  'view.axo-ne': 'Axonometric NE',
-  'view.axo-nw': 'Axonometric NW',
-  'view.axo-sw': 'Axonometric SW',
-  'view.eye-sw': 'Eye level SW',
-  'view.eye-se': 'Eye level SE',
-  'view.elev-south': 'South elevation',
-  'view.elev-east': 'East elevation',
-  'view.elev-north': 'North elevation',
-  'view.elev-west': 'West elevation',
-  'viewShort.axo-se': 'SE',
-  'viewShort.axo-ne': 'NE',
-  'viewShort.axo-nw': 'NW',
-  'viewShort.axo-sw': 'SW',
-  'viewShort.eye-sw': 'Eye',
-  'viewShort.elev-south': 'S',
-  'viewShort.elev-east': 'E',
-  'viewShort.elev-north': 'N',
-  'viewShort.elev-west': 'W',
-
-  'levels.label': 'Levels',
-  'plan.zoomIn': 'Zoom in',
-  'plan.zoomOut': 'Zoom out',
-  'plan.fit': 'Fit to window',
-  'plan.gesture': 'Pinch to zoom, drag to pan.',
-  'view.reset': 'Reset view',
-  'north': 'North arrow',
-  'view.resetShort': 'Reset',
-
-  'sun.label': 'Sun',
-  'sun.offShort': 'Off',
-  'house.reset': 'Reset to template',
-  'house.resetConfirm': 'Reset? Your edits and the chat are cleared',
-  'house.autosaved': 'Edits are saved in this browser',
-  'house.autosavedAccount': 'Edits are saved with your account',
-  'projects.title': 'My projects',
-  'projects.new': 'New project',
-  'projects.full': 'Your projects are full. Delete one you no longer need to start another.',
-  'projects.loading': 'Reading your projects',
-  'projects.more': 'More',
-  'projects.rename': 'Rename',
-  'projects.delete': 'Delete',
-  'projects.deleteAsk': 'Delete this project?',
-  'projects.cancel': 'Cancel',
-  'projects.nameLabel': 'Project name',
-  'projects.copyName': '{name} copy',
-  'projects.conflict': 'Edited on another device. Yours is saved as a copy.',
-  'projects.notSynced': 'Not synced, will retry',
-  'projects.tooLarge': 'This project is too large to keep with your account',
-  'projects.notAdded': 'Your projects are full, so this house is kept in this browser only',
-  'projects.why': 'Sign in to keep your projects with your account and open them on any device.',
-  'projects.all': 'All projects',
-  'projects.edited': 'Edited {when}',
-  'projects.editedNow': 'Edited just now',
-  'projects.open': 'Open',
-  'projects.copy': 'Duplicate',
-  'projects.templates': 'Start from a template',
-  'projects.deleted': 'Deleted “{name}”',
-  'projects.undo': 'Undo',
-  'projects.notFound': 'Project not found',
-  'projects.notFoundWhy': 'It may have been deleted, or it belongs to another account.',
-  'projects.backHome': 'Back to my projects',
-  'projects.shared': 'Shared',
-
-  'share.button': 'Share',
-  'share.titleOf': 'Share “{name}”',
-  'share.anyone': 'Anyone with the link can view',
-  'share.viewersCannot': 'Viewers cannot change the project.',
-  'share.link': 'Share link',
-  'share.copy': 'Copy link',
-  'share.send': 'Send link',
-  'share.copied': 'Link copied',
-  'share.failed': 'Sharing could not be changed. Please try again.',
-  'share.needAccount': 'To share, keep this project with your account first.',
-  'share.notKept': 'This project is not kept with your account yet, so it cannot be shared.',
-  'share.viewOnly': 'View only',
-  'share.makeCopy': 'Make my own copy',
-  'share.replaceAsk': 'Replace the house you edited on this device?',
-  'share.replace': 'Replace',
-  'share.copyFull': 'Your projects are full. Delete one you no longer need and try again.',
-  'share.copyFailed': 'The copy could not be made. Please try again.',
-  'share.gone': 'This link is no longer shared',
-  'share.goneWhy': 'The owner turned sharing off, or the link is incomplete.',
-  'share.goneHome': 'Open openSU',
-  'share.error': 'This link cannot be opened right now',
-  'share.errorWhy': 'Please try again later.',
-  'sun.study': 'Sun study',
-  'sun.hint': 'Turn on the sun study or drag the time to watch sunlight sweep the rooms',
-  'sun.time': 'Time',
-  'sun.play': 'Play the day',
-  'sun.pause': 'Pause',
-  'sun.exit': 'Turn off the sun',
-  'sun.dates': 'Date',
-  'sun.date.winter': 'Winter solstice',
-  'sun.date.spring': 'Spring equinox',
-  'sun.date.summer': 'Summer solstice',
-  'sun.date.autumn': 'Autumn equinox',
-  'sun.date.today': 'Today',
-  'sun.position': 'Sun {dir} · {el}° high',
-  'sun.span': 'Sunrise {rise} · Sunset {set}',
-
-  'cut.label': 'Cutaway',
-  'cut.all': 'All',
-  'cut.paused': 'Shown in axonometric views',
-
-  'walk.enter': 'Walk',
-  'walk.enterLong': 'Walk through the house',
-  'walk.exit': 'Exit walk',
-  'walk.hint': 'WASD or arrow keys to move · drag to look · Shift to run',
-  'walk.hintTouch': 'Joystick to move · drag to look around',
-  'walk.map': 'Where you are',
-  'walk.goto': 'Go to {level}',
-  'walk.joystick': 'Move',
-
-  'sheets.label': 'Sheets',
-  'sheets.generating': 'Rendering {n} / {total}',
-  'sheets.ready': '{n} sheets · 1500 × 2000 PNG',
-  'sheets.hint': 'Ready to post and share',
-  'sheets.downloadAll': 'Download all',
-  'sheets.download': 'Download',
-  'sheets.share': 'Share',
-  'sheets.open': 'Open large',
-  'sheets.close': 'Close',
-  'sheets.prev': 'Previous',
-  'sheets.next': 'Next',
-  'sheets.level': '{level} plan',
-  'sheets.views': 'Axonometric & elevation',
-  'sheets.error': 'The sheets could not be rendered. Reload to try again.',
-
-  'chat.open': 'Open AI assistant',
-  'chat.close': 'Close',
-  'chat.title': 'AI design assistant',
-  'chat.body': 'Soon you will edit the house here in one sentence: add a bedroom, turn the living room south, switch to a gable roof.',
-  'chat.placeholder': 'Describe a change…',
-  'chat.send': 'Send',
-  ...chatEn,
-
-  'lang.switch': '中文',
-  'loading': 'Loading the model',
-  'loading3d': 'Building the 3D view',
-  'error.webgl': 'This device cannot show the 3D view (WebGL2 required).',
-
-  'share.title': 'Shared design',
-  'share.body': 'Share pages are under construction.',
-  'share.open': 'Open the sample in the studio',
-  'share.id': 'ID',
-  'share.missing': 'Design not found',
-  'share.missingBody': 'There is no design behind this link: it may be mistyped, or the share was removed. You can start from a sample in the studio.',
-  'share.start': 'Open the studio',
-  'more.open': 'Project menu',
-  'more.location': 'Location',
-  'more.orientation': 'Orientation',
-  'more.templates': 'Start from a template',
-  'more.lang': 'Language',
-  'more.about': 'About openSU',
-  'more.export': 'Export conversation',
-  'bar.views': 'View',
-  'bar.levels': 'Levels',
-  'bar.sun': 'Sun',
-  'bar.walk': 'Walk',
-  'bar.zoom': 'Zoom',
-  'views.hint': 'Drag to orbit · double-click to reset',
-  'prompt.placeholder': 'Change the house in a sentence',
-  'prompt.collapse': 'Hide the conversation',
-  'prompt.last': 'Last change',
-  'hint.sun': 'See the sunlight',
-  'hint.walk': 'Walk',
-  'hint.sheets': 'Make the sheets',
-  'hint.dismiss': 'Dismiss tips',
-  'sun.noon': 'Noon {t}',
-  'sun.dateMenu': 'Date',
-  'tools.label': 'Tools',
-  'tools.close': 'Close',
-  'tools.back': 'Back',
-  'views.title': 'View',
-  'levels.whole': 'Whole house',
-  'levels.cutHeight': 'Cut {h} m above each floor',
-  'sun.sub': '{date} · sun in the {dir}, {el}° high',
-  'sun.subOff': '{date} · sun below the horizon',
-  'sun.subRise': '{date} · sunrise, sun on the {dir} horizon',
-  'sun.subSet': '{date} · sunset, sun on the {dir} horizon',
-  'sun.subDay': '{date} · polar day · sun in the {dir}, {el}° high',
-  'sun.subNight': '{date} · polar night, the sun does not rise',
-  'sun.polarDay': 'Polar day: the sun does not set',
-  'sun.polarNight': 'Polar night',
-  'sun.polarNightNote': 'The sun stays below the horizon all day, so there is no sunlight to study. The house is shown in presentation light; try another date.',
-  'sun.rise': 'Sunrise {t}',
-  'sun.set': 'Sunset {t}',
-  'sun.site': 'Location and orientation',
-  'sun.front': 'Front faces {dir}',
-  'walk.pill': 'Walking · {level} · arrow keys to move, drag to look · Esc or “Walk ×” to leave',
-  'walk.pillTouch': 'Walking · drag to look · tap “Walk ×” to leave',
-  'loc.title': 'Where the house is',
-  'loc.newHouse': 'Where will the new house stand?',
-  'loc.intro': 'Sunlight depends on where the house is and which way it faces.',
-  'loc.search': 'Search a city: English, Chinese or pinyin',
-  'loc.none': 'No such place in the list. Try a nearby city, or enter latitude and longitude.',
-  'loc.loading': 'Loading the city list',
-  'loc.mine': 'Use my location',
-  'loc.mineNote': 'Asked only when you tap. Rounded to 0.01° (about 1 km) and kept in this browser and the house data; never sent to any service.',
-  'loc.locating': 'Getting your location…',
-  'loc.denied': 'Could not get your location (not allowed or not available). Search a city or enter it by hand.',
-  'loc.manual': 'Enter latitude and longitude',
-  'loc.lat': 'Latitude (north +)',
-  'loc.lon': 'Longitude (east +)',
-  'loc.apply': 'Use this location',
-  'loc.invalid': 'Latitude between -90 and 90, longitude between -180 and 180.',
-  'loc.skip': 'Skip for now (near Hangzhou)',
-  'loc.near': 'Near {name}',
-  'loc.tz': 'Time zone {tz} · from the nearest city, {name}',
-  'loc.current': 'Current location',
-  'loc.edit': 'Location set to {name}',
-  'loc.source': 'City data: Wikidata (CC0), GeoNames (CC BY 4.0)',
-  'panel.done': 'Done',
-  'ori.title': 'Orientation',
-  'ori.front': 'The front (bottom of the plan) faces {dir}',
-  'ori.drag': 'Drag the north needle; snaps to 5°. Arrow keys fine-tune',
-  'ori.sunny': 'Here the noon sun is to the {sun}: a front facing {sun} gets the most winter sun.',
-  'ori.presets': 'Common orientations',
-  'ori.dial': 'North needle',
-  'ori.edit': 'Orientation set to {dir}',
-  'tpl.note': 'You can undo back to the current house afterwards.',
-  'tpl.edit': 'Switched to the template {name}',
-  'tpl.restart': 'Start over from a template',
-  'tpl.confirm': 'This house will be replaced; you can undo back to it. Signed in, you can keep several projects side by side.',
-  'tpl.replace': 'Replace anyway',
-  'tpl.confirmTitle': 'Switch to {name}?',
-  'menu.undo': 'Undo',
-  'menu.undoStep': 'Undo {s}',
-  'menu.redo': 'Redo',
-  'menu.redoStep': 'Redo {s}',
-  'menu.signInLink': 'Sign in',
-  'menu.signInRest': ' to open it on other devices',
-  'loading.studio': 'Opening the studio',
-  'loading.sheets': 'Preparing the sheets',
-};
 
 /** Level names in the model are Chinese; English names by position. */
 const levelEn = ['Ground floor', 'First floor', 'Second floor', 'Third floor'];
 
 export type Lang = 'zh' | 'en';
-export const dictionaries: Record<Lang, Record<MessageKey, string>> = { zh, en };
+/** Chinese is always here; English arrives with its module (task 033: not part of the first paint). */
+export const dictionaries: Record<Lang, Record<MessageKey, string> | null> = { zh, en: null };
+
+let enLoad: Promise<void> | null = null;
+/** Loads a language's dictionary (English only; Chinese is built in). */
+export function loadLang(lang: Lang): Promise<void> {
+  if (lang === 'zh' || dictionaries.en) return Promise.resolve();
+  return (enLoad ??= import('./i18n-en').then((m) => {
+    dictionaries.en = m.en;
+  }));
+}
 
 export function translate(lang: Lang, key: MessageKey, vars?: Record<string, string | number>): string {
-  let s = dictionaries[lang][key] ?? zh[key];
+  let s = dictionaries[lang]?.[key] ?? zh[key];
   if (vars) for (const [k, v] of Object.entries(vars)) s = s.replaceAll(`{${k}}`, String(v));
   return s;
 }
@@ -569,4 +308,14 @@ export function useT() {
 export function levelName(lang: Lang, name: string, index: number, isAttic: boolean): string {
   if (lang === 'zh') return name;
   return isAttic ? 'Attic' : (levelEn[index] ?? name);
+}
+
+// The address or the saved preference asks for English: fetch it now, before the first render needs it.
+if (typeof window !== 'undefined') {
+  try {
+    const q = new URLSearchParams(location.search).get('lang');
+    if (q === 'en' || (!q && localStorage.getItem('opensu.lang') === 'en')) void loadLang('en');
+  } catch {
+    /* no storage: the switch loads it */
+  }
 }

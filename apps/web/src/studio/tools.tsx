@@ -12,7 +12,7 @@ import { type Tray, useStudio } from '../lib/store';
 import { clock } from '../lib/sun';
 import { DEFAULT_VIEW } from '../lib/views';
 import type { Derived } from './house-data';
-import { planCommands } from './PlanView';
+import { planCommands } from './plan-commands';
 import { WalkIcon } from './walk-icon';
 
 /** Height of a level cutaway above its floor, m (the kernel's CUT_HEIGHT, 1250 mm). */

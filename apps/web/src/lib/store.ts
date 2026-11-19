@@ -2,7 +2,7 @@
 // drawn is derived from it (model -> resolve -> kernel -> render / plan).
 import type { House } from '@opensu/model';
 import { create } from 'zustand';
-import type { Lang } from './i18n';
+import { type Lang, loadLang } from './i18n';
 import { DEFAULT_VIEW, presetById, type ViewId } from './views';
 
 const isAxo = (id: ViewId) => presetById(id).kind === 'axo';
@@ -151,7 +151,8 @@ export const useStudio = create<StudioState>((set) => ({
       /* private mode: keep it in memory only */
     }
     if (typeof document !== 'undefined') document.documentElement.lang = lang === 'zh' ? 'zh-CN' : 'en';
-    set({ lang });
+    // English's dictionary loads on demand (task 033): the switch happens once it is here.
+    void loadLang(lang).then(() => set({ lang }));
   },
   setMode: (mode) => set((s) => ({ mode, tray: mode === 'sheet' || (mode === 'plan' && s.tray !== 'levels') ? null : s.tray, ...(mode === '3d' ? {} : { walk: false }) })),
   // The cutaway choice survives a change of view (eye level and elevations

@@ -1,5 +1,6 @@
 // One short message above the input that leaves by itself (task 027; the
 // sign-in confirmation of task 026 uses the same place). The latest wins.
+import { showToast } from '@opensu/ui';
 import { create } from 'zustand';
 
 interface ToastState {
@@ -12,6 +13,8 @@ interface ToastState {
 
 export const useToast = create<ToastState>(() => ({ text: '', testId: '', seq: 0 }));
 
+/** Shows a message (Base UI's toast manager, task 033); the store keeps the latest for the e2e hook. */
 export function toast(text: string, testId = 'toast'): void {
   useToast.setState((s) => ({ text, testId, seq: s.seq + 1 }));
+  showToast({ title: text, testId });
 }

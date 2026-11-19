@@ -15,7 +15,7 @@ import type { Lang } from '../lib/i18n';
 import { HistoryIcon, NoteIcon, PlanCheckIcon, RedoIcon, StopIcon, UndoIcon } from './icons';
 import { useKeys } from './keys';
 import { KeyPicker } from './KeyPicker';
-import { Button, Dot, InputBar, InputField, PromptText, TextSurface } from '@opensu/ui';
+import { Button, Dialog, Dot, InputBar, InputField, PromptText } from '@opensu/ui';
 
 // The conversation (messages, the recent strip, the pinned column and sheet) loads when needed (task 032).
 const LazyRecentStrip = lazy(() => import('./conversation').then((m) => ({ default: m.RecentStrip })));
@@ -405,25 +405,17 @@ function PromptInput({ phone, pinned, className }: { phone?: boolean; pinned?: b
 
 /** The key settings over the drawing, when the conversation is not pinned (desktop) or always (phone). */
 export function SettingsHost({ phone }: { phone?: boolean }) {
+  const t = useT();
   const open = useChat((s) => s.settingsOpen);
   const pinnedColumn = useStudio((s) => s.pinned && s.mode !== 'sheet') && !phone;
   const close = () => useChat.getState().setSettingsOpen(false);
-  if (!open || pinnedColumn) return null;
+  // Task 033: a modal on Base UI's Dialog (the pinned column shows the same settings inside itself).
   return (
-    <>
-      <div className="pointer-events-auto absolute inset-0 z-40 animate-[fade-in_160ms_ease-out] bg-black/10" onClick={close} aria-hidden="true" />
-      <TextSurface
-        radius={phone ? 34 : 30}
-        className={cx(
-          'absolute z-50 flex flex-col overflow-hidden',
-          phone ? 'inset-x-2 bottom-2 h-[86%] land:inset-x-auto land:top-2 land:right-2 land:bottom-2 land:h-auto land:w-[400px]' : 'top-1/2 left-1/2 h-[min(600px,calc(100%-120px))] w-[420px] -translate-x-1/2 -translate-y-1/2',
-        )}
-      >
-        <Suspense fallback={null}>
-          <SettingsSheet />
-        </Suspense>
-      </TextSurface>
-    </>
+    <Dialog open={open && !pinnedColumn} onClose={close} label={t('settings.title')} phone={phone}>
+      <Suspense fallback={null}>
+        <SettingsSheet />
+      </Suspense>
+    </Dialog>
   );
 }
 

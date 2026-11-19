@@ -1,7 +1,7 @@
 // The sign-in sheet's content (task 019), loaded on first use or when the page is idle (task 032).
-import { type ClipboardEvent, type FormEvent, type KeyboardEvent, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { type FormEvent, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { GoogleLogo } from '../components/icons';
-import { CodeInput, Input, PopoverAction, PopoverBody, PopoverDescription, PopoverFooter, PopoverHeader, PopoverTitle, Separator, Spinner } from '@opensu/ui';
+import { CodeField, Input, PopoverAction, PopoverBody, PopoverDescription, PopoverFooter, PopoverHeader, PopoverTitle, Separator, Spinner } from '@opensu/ui';
 import { GoogleButton } from './GoogleButton';
 import { type MessageKey, useT } from '../lib/i18n';
 import { closeSignIn, continueWithGoogle, editEmail, sendCode, useAccount, verifyCode } from './account';
@@ -10,16 +10,14 @@ import { useChat } from './chat-store';
 type T = ReturnType<typeof useT>;
 const tk = (t: T) => (k: MessageKey) => t(k);
 
-/** Six boxes, as in iOS verification-code entry. */
+/** Six boxes, as in iOS verification-code entry (Base UI's OTP Field, through the base's CodeField). */
 export function CodeBoxes({ onComplete, disabled, wrong, label }: { onComplete: (code: string) => void; disabled?: boolean; wrong: number; label: (n: number) => string }) {
-  const [digits, setDigits] = useState<string[]>(['', '', '', '', '', '']);
-  const refs = useRef<(HTMLInputElement | null)[]>([]);
+  const [code, setCode] = useState('');
   const row = useRef<HTMLDivElement>(null);
-  const done = useRef(onComplete);
-  done.current = onComplete;
+  const first = () => row.current?.querySelector<HTMLInputElement>('input[data-testid=otp-0]');
   // The first box is focused on arrival (again once a hidden sheet shows).
   useLayoutEffect(() => {
-    const focus = () => refs.current[0]?.focus({ preventScroll: true });
+    const focus = () => first()?.focus({ preventScroll: true });
     focus();
     const ids = [60, 150, 300, 500, 800, 1200].map((ms) => window.setTimeout(() => !row.current?.contains(document.activeElement) && focus(), ms));
     return () => ids.forEach(clearTimeout);
@@ -35,78 +33,22 @@ export function CodeBoxes({ onComplete, disabled, wrong, label }: { onComplete: 
     }
     const reduced = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
     const id = window.setTimeout(() => {
-      setDigits(['', '', '', '', '', '']);
-      refs.current[0]?.focus({ preventScroll: true });
+      setCode('');
+      first()?.focus({ preventScroll: true });
     }, reduced ? 0 : 450);
     return () => clearTimeout(id);
   }, [wrong]);
-
-  const fill = (from: number, chars: string) => {
-    const only = chars.replace(/\D/g, '');
-    if (!only) return;
-    // A whole code (paste or the keyboard's one-time-code suggestion) fills every box.
-    const start = only.length >= 6 ? 0 : from;
-    const next = [...digits];
-    for (let i = 0; i < only.length && start + i < 6; i++) next[start + i] = only[i]!;
-    setDigits(next);
-    const end = Math.min(5, start + only.length);
-    refs.current[next.every(Boolean) ? 5 : end]?.focus({ preventScroll: true });
-    if (next.every(Boolean)) done.current(next.join(''));
-  };
-  const onKey = (i: number) => (e: KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === 'Backspace') {
-      e.preventDefault();
-      const next = [...digits];
-      // Backspace clears this box, or goes back and clears the previous one.
-      if (next[i]) next[i] = '';
-      else if (i > 0) {
-        next[i - 1] = '';
-        refs.current[i - 1]?.focus();
-      }
-      setDigits(next);
-    } else if (e.key === 'ArrowLeft' && i > 0) {
-      e.preventDefault();
-      refs.current[i - 1]?.focus();
-    } else if (e.key === 'ArrowRight' && i < 5) {
-      e.preventDefault();
-      refs.current[i + 1]?.focus();
-    }
-  };
-  const onPaste = (i: number) => (e: ClipboardEvent<HTMLInputElement>) => {
-    e.preventDefault();
-    fill(i, e.clipboardData.getData('text'));
-  };
   return (
-    <div ref={row} className="flex justify-between gap-2" role="group" aria-label={label(0)} onAnimationEnd={() => row.current?.classList.remove('otp-shake')} data-testid="otp-boxes">
-      {digits.map((d, i) => (
-        <CodeInput
-          key={i}
-          ref={(el) => {
-            refs.current[i] = el;
-          }}
-          value={d}
-          disabled={disabled}
-          onChange={(e) => {
-            const v = e.target.value;
-            if (!v) {
-              const next = [...digits];
-              next[i] = '';
-              setDigits(next);
-            } else fill(i, v.slice(d ? 1 : 0) || v);
-          }}
-          onKeyDown={onKey(i)}
-          onPaste={onPaste(i)}
-          onFocus={(e) => e.target.select()}
-          type="text"
-          inputMode="numeric"
-          pattern="[0-9]*"
-          autoComplete="one-time-code"
-          maxLength={6}
-          aria-label={label(i + 1)}
-          data-testid={`otp-${i}`}
-        />
-      ))}
-    </div>
+    <CodeField
+      rowRef={row}
+      value={code}
+      onValueChange={setCode}
+      onComplete={onComplete}
+      disabled={disabled}
+      label={label}
+      onAnimationEnd={() => row.current?.classList.remove('otp-shake')}
+      data-testid="otp-boxes"
+    />
   );
 }
 

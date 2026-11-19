@@ -8,10 +8,10 @@
 // studio's glass primitives.
 import { TEMPLATE_META } from '@opensu/agent/templates-meta';
 import { Link } from '@tanstack/react-router';
-import { type MouseEvent as RMouseEvent, type ReactNode, type RefObject, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { type MouseEvent as RMouseEvent, type ReactNode, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { CubeIcon, LinkIcon, Mark, MoreIcon, PlusIcon } from '../components/icons';
 import { cx, LangToggle } from '../components/ui';
-import { Button, GlassLayer, Menu, MenuItem, NameInput, Separator, Tile, TileButton, TileLink, TileMark, Toast } from '@opensu/ui';
+import { Button, GlassLayer, Menu, MenuItem, NameInput, Separator, Tile, TileButton, TileLink, TileMark, closeToast, showToast } from '@opensu/ui';
 import { loadSaved } from '../lib/autosave';
 import { type Lang, useT } from '../lib/i18n';
 import { projectTitle, type ProjectMeta, projectName, projectSync, thumbUrl, useProjects, useProjectSync } from '../lib/projects';
@@ -239,7 +239,6 @@ export function ProjectsPage() {
   const [asking, setAsking] = useState<string | null>(null);
   /** Deleted, not sent yet: the toast can bring them back. */
   const [pending, setPending] = useState<Map<string, number>>(new Map());
-  const [toast, setToast] = useState<{ id: string; name: string } | null>(null);
   const menuRef = useRef<HTMLElement | null>(null);
   const pendingRef = useRef(pending);
   pendingRef.current = pending;
@@ -277,21 +276,24 @@ export function ProjectsPage() {
         n.delete(p.id);
         return n;
       });
-      setToast((x) => (x?.id === p.id ? null : x));
       void projectSync.remove(p.id);
     }, UNDO_MS);
     setPending((m) => new Map(m).set(p.id, timer));
-    setToast({ id: p.id, name: projectName(lang, p) });
+    showToast({
+      title: t('projects.deleted', { name: projectName(lang, p) }),
+      testId: 'project-deleted-toast',
+      timeout: UNDO_MS,
+      action: { label: t('projects.undo'), testId: 'project-undo', onClick: () => undo(p.id) },
+    });
   };
-  const undo = () => {
-    if (!toast) return;
-    clearTimeout(pending.get(toast.id));
+  const undo = (id: string) => {
+    clearTimeout(pendingRef.current.get(id));
     setPending((m) => {
       const n = new Map(m);
-      n.delete(toast.id);
+      n.delete(id);
       return n;
     });
-    setToast(null);
+    closeToast();
   };
 
   const shown = projects.filter((p) => !pending.has(p.id));
@@ -419,22 +421,7 @@ export function ProjectsPage() {
           <SignInHost />
           <ShareHost />
         </div>
-        {!toast && <StudioToast className="fixed inset-x-0 bottom-[max(24px,env(safe-area-inset-bottom))] z-50 px-4" />}
-        {toast && (
-          <div className="pointer-events-none fixed inset-x-0 bottom-[max(24px,env(safe-area-inset-bottom))] z-50 flex justify-center px-4">
-            <Toast
-              data-testid="project-deleted-toast"
-              key={toast.id}
-              action={
-                <Button variant="plain" size="xs" strong onClick={undo} data-testid="project-undo">
-                  {t('projects.undo')}
-                </Button>
-              }
-            >
-              <span className="max-w-[min(360px,calc(100vw-160px))] truncate">{t('projects.deleted', { name: toast.name })}</span>
-            </Toast>
-          </div>
-        )}
+        <StudioToast className="fixed inset-x-0 bottom-[max(24px,env(safe-area-inset-bottom))] z-50 px-4" />
       </div>
     </GlassLayer>
   );

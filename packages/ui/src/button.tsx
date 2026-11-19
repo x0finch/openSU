@@ -4,6 +4,7 @@
 // pages it uses the paper styles. Callers choose a variant and a size and
 // lay the button out (margins, flex); they never set its radius, hover,
 // focus ring or shadow.
+import { Button as BaseButton } from '@base-ui/react/button';
 import { type AnchorHTMLAttributes, type ButtonHTMLAttributes, type ReactNode, type Ref } from 'react';
 import { GlassButton } from './glass-button';
 import { Spinner } from './spinner';
@@ -116,7 +117,7 @@ function classes({ variant = 'plain', size = 'md', icon, children, full, strong,
 export function Button({ variant = 'plain', size = 'md', height, icon, label, tip, full, strong, danger, busy, row, tile, selected, inverted, dim, className, children, ref, ...rest }: Common & ButtonHTMLAttributes<HTMLButtonElement> & { ref?: Ref<HTMLButtonElement> }) {
   if (variant === 'glass') return <GlassButton icon={icon} label={label} size={height ?? 48} tip={tip} className={className} ref={ref} {...rest}>{children}</GlassButton>;
   const btn = (
-    <button
+    <BaseButton
       ref={ref}
       type="button"
       aria-label={label}
@@ -129,7 +130,7 @@ export function Button({ variant = 'plain', size = 'md', height, icon, label, ti
     >
       {busy ? <Spinner /> : icon}
       {children}
-    </button>
+    </BaseButton>
   );
   return tip && label ? <Tooltip label={label}>{btn}</Tooltip> : btn;
 }

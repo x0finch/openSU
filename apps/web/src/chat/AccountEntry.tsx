@@ -4,15 +4,14 @@
 // right (signed out "登录", signed in the picture or the first letter of
 // the name). Both open the same surfaces (`openAccount`): one
 // implementation. Hidden when the server offers no sign-in.
-import { type ReactElement, type ReactNode, type RefObject, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { type ReactElement, useEffect, useRef } from 'react';
 import { PersonIcon } from '../components/icons';
-import { Avatar, Button, cx, Menu, MenuItem, MenuLabel, Separator, Toast, Tooltip } from '@opensu/ui';
+import { Avatar, Button, cx, Menu, MenuItem, MenuLabel, Separator, showToast, ToastViewport, Tooltip, useToastCount } from '@opensu/ui';
 import { useT } from '../lib/i18n';
 import { closeAccountMenu, openSignIn, signOut, useAccount } from './account';
 import { useChat } from './chat-store';
 import { useKeys } from './keys';
 import { showKeyChoices } from './KeyPicker';
-import { useToast } from '../lib/toast';
 import { SignInInvite, useInviteVisible } from './SignInInvite';
 
 export const ACCOUNT_BUTTON = '[data-account-button]';
@@ -169,30 +168,23 @@ export function AccountMenuHost() {
 export function StudioToast({ className, invite }: { className?: string; invite?: 'desktop' | 'phone' }) {
   const t = useT();
   const welcome = useAccount((s) => s.welcome);
-  const note = useToast();
   const user = useUser();
-  const [shown, setShown] = useState<{ text: string; testId: string } | null>(null);
   useEffect(() => {
     if (!welcome || !user) return;
-    setShown({ text: t('account.signedInAs', { name: accountName(user) }), testId: 'account-toast' });
-    const id = window.setTimeout(() => setShown(null), 3200);
-    return () => clearTimeout(id);
+    showToast({ title: t('account.signedInAs', { name: accountName(user) }), testId: 'account-toast', timeout: 3200 });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [welcome]);
-  useEffect(() => {
-    if (!note.seq) return;
-    setShown({ text: note.text, testId: note.testId });
-    const id = window.setTimeout(() => setShown(null), 5200);
-    return () => clearTimeout(id);
-  }, [note.seq, note.text, note.testId]);
-  const inviting = useInviteVisible() && !!invite;
-  if (!shown) return inviting ? <div className={className}><SignInInvite phone={invite === 'phone'} /></div> : null;
+  const showing = useToastCount() > 0;
+  const inviting = useInviteVisible() && !!invite && !showing;
   return (
-    <div className={cx('pointer-events-none flex animate-[fade-in_200ms_ease-out] justify-center', className)}>
-      <Toast data-testid={shown.testId}>
-        <span className="max-w-[min(480px,calc(100vw-56px))] truncate">{shown.text}</span>
-      </Toast>
-    </div>
+    <>
+      {inviting && (
+        <div className={className}>
+          <SignInInvite phone={invite === 'phone'} />
+        </div>
+      )}
+      <ToastViewport className={cx(className, !showing && 'hidden')} />
+    </>
   );
 }
 

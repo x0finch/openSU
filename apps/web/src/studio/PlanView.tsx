@@ -1,3 +1,4 @@
+import { planCommands } from './plan-commands';
 import type { ResolvedHouse } from '@opensu/model';
 import type { FrameInsets } from '@opensu/render';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
@@ -27,7 +28,6 @@ interface Box {
 }
 
 /** Imperative handle for the zoom buttons that live outside this component. */
-export const planCommands: { zoom: (factor: number) => void; fit: () => void } = { zoom: () => {}, fit: () => {} };
 
 let planMod: Promise<typeof import('./plan-data')> | null = null;
 

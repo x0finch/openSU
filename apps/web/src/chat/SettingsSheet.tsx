@@ -33,7 +33,7 @@ export function SettingsSheet() {
   const serverLine = !server ? t('settings.server.unknown') : server.serverKey ? t('settings.server.on', { provider: providerName(server.provider), model: server.model ?? '' }) : t('settings.server.off');
 
   return (
-    <div className="flex min-h-0 flex-1 animate-[fade-in_140ms_ease-out] flex-col" role="dialog" aria-label={t('settings.title')} data-testid="settings-sheet">
+    <div className="flex min-h-0 flex-1 animate-[fade-in_140ms_ease-out] flex-col" role="group" aria-label={t('settings.title')} data-testid="settings-sheet">
       <div className="flex h-11 shrink-0 items-center gap-1 border-b border-hairline px-1.5">
         <Button variant="quiet" size="sm" onClick={close} icon={<ChevronLeftIcon width={17} height={17} />} className="gap-0.5 pr-2.5 pl-1.5 text-sm font-normal">
           {t('settings.done')}

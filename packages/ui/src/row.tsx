@@ -1,12 +1,13 @@
 // Row: a full-width tappable row inside a panel.
+import { Button as BaseButton } from '@base-ui/react/button';
 import { type ButtonHTMLAttributes } from 'react';
 import { cx } from './surface';
 
 /** A row inside a panel: label, value, optional action. Rows are separated by Separator. */
 export function Row({ children, className, ...rest }: ButtonHTMLAttributes<HTMLButtonElement>) {
   return (
-    <button type="button" className={cx('lg-plate flex min-h-11 w-full items-center gap-2.5 rounded-[14px] px-3 text-left text-[14.5px] font-medium', className)} {...rest}>
+    <BaseButton type="button" className={cx('lg-plate flex min-h-11 w-full items-center gap-2.5 rounded-[14px] px-3 text-left text-[14.5px] font-medium', className)} {...rest}>
       {children}
-    </button>
+    </BaseButton>
   );
 }

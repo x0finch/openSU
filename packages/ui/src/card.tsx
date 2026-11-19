@@ -2,6 +2,7 @@
 // Tile: a project or template card on /projects (a picture in a hairline
 // frame; interactive tiles darken their frame on hover). PaperSheet: a
 // sheet of paper (white, a soft shadow; it lifts on hover). PageDots.
+import { Button as BaseButton } from '@base-ui/react/button';
 import type { AnchorHTMLAttributes, ButtonHTMLAttributes, HTMLAttributes, ReactNode, Ref } from 'react';
 import { cx } from './surface';
 
@@ -17,9 +18,9 @@ export function TileLink({ className, children, ...rest }: AnchorHTMLAttributes<
 
 export function TileButton({ className, children, ...rest }: ButtonHTMLAttributes<HTMLButtonElement>) {
   return (
-    <button type="button" {...rest} className={cx(TILE, 'grid w-full place-items-center text-ink-2 enabled:hover:border-ink-3 enabled:hover:text-ink disabled:text-ink-3', className)}>
+    <BaseButton type="button" {...rest} className={cx(TILE, 'grid w-full place-items-center text-ink-2 enabled:hover:border-ink-3 enabled:hover:text-ink disabled:text-ink-3', className)}>
       {children}
-    </button>
+    </BaseButton>
   );
 }
 
@@ -41,7 +42,7 @@ export function TileMark({ children }: { children: ReactNode }) {
 export function PaperSheet({ ready, corner, className, children, ref, ...rest }: ButtonHTMLAttributes<HTMLButtonElement> & { ready: boolean; corner?: ReactNode; ref?: Ref<HTMLButtonElement> }) {
   return (
     <div className="group relative">
-      <button
+      <BaseButton
         ref={ref}
         type="button"
         {...rest}
@@ -52,7 +53,7 @@ export function PaperSheet({ ready, corner, className, children, ref, ...rest }:
         )}
       >
         {children}
-      </button>
+      </BaseButton>
       {corner && <span className="absolute top-2 right-2 opacity-0 transition-opacity duration-150 group-hover:opacity-100 focus-within:opacity-100">{corner}</span>}
     </div>
   );

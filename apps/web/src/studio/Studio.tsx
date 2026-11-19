@@ -28,7 +28,6 @@ import { Hints, ModeSwitch, TitleMenu, useSunPlayer } from './chrome';
 import type { Derived } from './house-data';
 import { Loading } from './Loading';
 import { type DockExtent, PhoneDock, SHEET_MS } from './PhoneDock';
-import { PlanView } from './PlanView';
 import { ProjectMissing } from './ProjectMissing';
 import { shareBody, ShareHost } from './Share';
 import { useSharedProject } from '../lib/share';
@@ -41,6 +40,7 @@ import { preloadPanels } from './tools';
 
 // The walk HUD and the tool panels load when needed (task 032: not part of the first paint).
 const WalkHUD = lazy(() => import('./WalkHUD').then((m) => ({ default: m.WalkHUD })));
+const PlanView = lazy(() => import('./PlanView').then((m) => ({ default: m.PlanView })));
 const MobileWalkHUD = lazy(() => import('./WalkHUD').then((m) => ({ default: m.MobileWalkHUD })));
 const LandscapeWalkHUD = lazy(() => import('./WalkHUD').then((m) => ({ default: m.LandscapeWalkHUD })));
 
@@ -356,6 +356,7 @@ export function Studio() {
     const go = () => {
       preloadPanels();
       void import('./WalkHUD');
+      void import('./PlanView');
       void shareBody.preload();
       void signInBody.preload();
       void import('../chat/SettingsSheet');
@@ -468,7 +469,11 @@ export function Studio() {
             <Viewer3D resolved={derived.resolved} active={mode === '3d'} insets={insets} layoutKey={layoutKey} insetMs={desktop ? undefined : SHEET_MS} compact={!desktop} wide={!fullFrame} margin={fullFrame ? 1 : desktop ? FRAME_MARGIN.desktop : FRAME_MARGIN.phone} />
           </div>
         )}
-        {derived && levelId && mode === 'plan' && <PlanView resolved={derived.resolved} levelId={levelId} active insets={insets} layoutKey={layoutKey} />}
+        {derived && levelId && mode === 'plan' && (
+          <Suspense fallback={null}>
+            <PlanView resolved={derived.resolved} levelId={levelId} active insets={insets} layoutKey={layoutKey} />
+          </Suspense>
+        )}
         {derived && mode === 'sheet' && (
           <Suspense fallback={<QuietLoading label={t('loading.sheets')} />}>
             <SheetGallery derived={derived} desktop={desktop} />
