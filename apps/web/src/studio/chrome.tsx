@@ -5,7 +5,7 @@ import { type ReactNode, type RefObject, useEffect, useLayoutEffect, useRef, use
 import { TEMPLATE_META } from '@opensu/agent/templates-meta';
 import { ChevronDownSmallIcon, CloseIcon, CopyIcon, DownloadIcon, FolderIcon, LayersIcon, Mark, PencilIcon, PersonIcon, PlusIcon, ShareIcon } from '../components/icons';
 import { cx } from '../components/ui';
-import { Button, Dot, Menu, MenuItem, MenuLabel, MenuSeparator, NameInput, Segmented, Skeleton } from '@opensu/ui';
+import { Button, Dot, GLASS, Menu, MenuItem, MenuLabel, MenuSeparator, NameInput, Segmented, Skeleton } from '@opensu/ui';
 import { type MessageKey, useT } from '../lib/i18n';
 import { freshView, type Mode, useStudio } from '../lib/store';
 import { fmtArea, fmtLen, goToProjects, projectSync, useHouseName, useProjects, useProjectsOffered } from '../lib/projects';
@@ -163,6 +163,12 @@ function Item({ children, onSelect, value, icon, danger, testId }: { children: R
 
 const Sep = () => <MenuSeparator />;
 
+/**
+ * A surface opened from a row of the project menu opens once the menu has left (its close motion), so the two glass
+ * surfaces never stand on each other at the house name.
+ */
+const afterMenu = (f: () => void) => window.setTimeout(f, GLASS.popCloseMs);
+
 /** ⌘ on Apple keyboards, Ctrl elsewhere (the shortcut shown beside undo and redo). */
 const isMac = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent);
 export const UNDO_KEYS = isMac ? '⌘Z' : 'Ctrl+Z';
@@ -234,7 +240,7 @@ function ProjectMenu({ open, anchor, onClose, compact, onRename, ref }: { open: 
       {/* Signed in, the project kept with the account: share (task 032: only here, only then), rename, duplicate, new. */}
       {edit && cloud && openId && (
         <>
-          <Item icon={<ShareIcon width={16} height={16} />} onSelect={() => { onClose(false); openShare(null, null); }} testId="menu-share">
+          <Item icon={<ShareIcon width={16} height={16} />} onSelect={() => { onClose(false); afterMenu(() => openShare(null, null)); }} testId="menu-share">
             {t('share.button')}
           </Item>
           <Item icon={<PencilIcon width={16} height={16} />} testId="menu-rename" onSelect={() => { onClose(false); onRename(); }}>
@@ -288,8 +294,8 @@ function ProjectMenu({ open, anchor, onClose, compact, onRename, ref }: { open: 
             <MenuItem
               icon={<PersonIcon width={17} height={17} />}
               onClick={(e) => {
-                openAccount(e.currentTarget, 'menu');
                 onClose(false);
+                afterMenu(() => openAccount(document.querySelector<HTMLElement>('[data-testid=project-menu]'), 'menu'));
               }}
               data-testid="menu-template-signin"
             >
@@ -339,8 +345,8 @@ function ProjectMenu({ open, anchor, onClose, compact, onRename, ref }: { open: 
                       variant="link"
                       className="h-auto px-0 align-baseline text-[12px] font-semibold text-ink underline underline-offset-2"
                       onClick={(e) => {
-                        openAccount(e.currentTarget, 'menu');
                         onClose(false);
+                        afterMenu(() => openAccount(document.querySelector<HTMLElement>('[data-testid=project-menu]'), 'menu'));
                       }}
                       data-testid="menu-signin"
                     >
