@@ -14,9 +14,11 @@ Read `docs/DECISIONS.md` before changing architecture and
   reference images and generated screenshots). Never embed those images in
   the repo in any form.
 - Do not open GitHub issues, PRs or comments. Only the lead does, sparingly.
-- Commit on your own working branch and push it there. Never push to
-  `main`: a push to `main` deploys, and `main` only takes merged pull
-  requests whose checks passed.
+- Commit on your own working branch and push it there. A push to `main`
+  deploys. Development stage (owner's decision, 2026-11-19): once the full
+  CI matrix is green on your branch (run `ci.yml` by hand on it), merge it
+  into `main` and push to deploy, without asking first. Never push to
+  `main` what CI has not passed.
 - Visual tokens have two homes. The scene's (drawing colours, line widths,
   light values) live in `packages/render/src/style/tokens.ts`. The UI's
   (glass material numbers, radii, spacing, type sizes, motion, colours of
