@@ -1571,12 +1571,21 @@ try {
     check(await a.page.getByTestId('menu-export').isDisabled(), 'export is disabled while the conversation is empty');
     await closeMenu(a.page);
     await turn(a.page, '北侧房间加深一点');
-    // The note leaves after 5 s unless hovered. Point at its undo first, as a person does: the click's own
-    // stability wait took longer than that on a runner with second-long frames.
-    const undoBtn = a.page.getByRole('button', { name: '撤销' }).first();
-    const ub = await undoBtn.boundingBox();
-    if (ub) await a.page.mouse.move(ub.x + ub.width / 2, ub.y + ub.height / 2);
-    await undoBtn.click();
+    // Undo the edit. The after-turn note leaves after 5 s unless hovered; on a runner with second-long frames the
+    // turn's own wait can outlast it. Then undo where the turn itself is, in the recent strip (the record is what
+    // this section checks, not the note).
+    const noteUndo = a.page.getByTestId('change-toast').getByRole('button', { name: '撤销' });
+    const ub = await noteUndo.boundingBox({ timeout: tmo(1000) }).catch(() => null);
+    let viaNote = false;
+    if (ub) {
+      await a.page.mouse.move(ub.x + ub.width / 2, ub.y + ub.height / 2);
+      viaNote = await noteUndo.click({ timeout: tmo(5000) }).then(() => true, () => false);
+    }
+    if (!viaNote) {
+      await a.page.evaluate(() => window.__studio.store.getState().setRecent(true));
+      await a.page.getByTestId('recent-strip').getByRole('button', { name: '撤销' }).first().click();
+      await a.page.evaluate(() => window.__studio.store.getState().setRecent(false));
+    }
     await a.page.waitForFunction(() => window.__studio.chat.getState().items.some((i) => i.undo === 'can-redo'));
     await turn(a.page, '你好');
     await settle(a.page);
