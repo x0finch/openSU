@@ -7,6 +7,8 @@
     "build": "pnpm -r build",
     "typecheck": "pnpm -r typecheck",
     "test": "pnpm -r test",
+    "test:fast": "pnpm -r --filter './packages/*' exec tsc -p tsconfig.build.json && pnpm -r typecheck && pnpm -r --filter './packages/*' test && pnpm --filter @opensu/web test:fast",
+    "test:packages": "pnpm --filter @opensu/render shots && pnpm --filter @opensu/sheet shots && pnpm --filter @opensu/plan shots",
     "dev": "pnpm --filter @opensu/web dev",
     "dev:render": "pnpm --filter @opensu/render dev",
     "shots": "pnpm --filter @opensu/render shots",
@@ -15,6 +17,7 @@
     "eval": "node tools/eval/run.mjs"
   },
   "devDependencies": {
+    "playwright": "1.63.0",
     "typescript": "5.9.3"
   }
 }

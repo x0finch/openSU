@@ -1,0 +1,204 @@
+# Tests for pull requests to main (task 030).
+#
+# Jobs run in parallel:
+#   fast      `pnpm test:fast`: package build (tsc only), typecheck of every
+#             package, node unit tests, static checks. No browser.
+#   packages  browser renders of the packages (render, sheet, plan shots).
+#   web       one job per apps/web browser suite (`pnpm --filter @opensu/web
+#             test:<suite>`); account-e2e is sharded by its sections.
+#   ci-ok     needs all of the above; the one check to make required.
+#
+# No secrets are used: the suites run against the built app in workerd
+# (`vite preview`) with a local chat stub, a local D1 and the email test
+# hook. Screenshots and logs of a failed job are uploaded as an artifact.
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    # Explicit bash gets -o pipefail, so `| tee` keeps a failing exit code.
+    shell: bash
+
+env:
+  # Browsers are installed (and cached) by the browser jobs themselves.
+  PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: '1'
+
+jobs:
+  fast:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+
+      # The account shards in the `web` matrix name account-e2e's sections
+      # by hand; a section that no shard names would silently stop running.
+      - name: Account shards cover every section
+        run: |
+          want=$(grep -o "wanted('[a-z0-9-]*')" apps/web/scripts/account-e2e.mjs | sed "s/wanted('\(.*\)')/\1/" | sort -u)
+          have=$(grep -o "account-sections: [a-z0-9,-]*" .github/workflows/ci.yml | sed 's/account-sections: //' | tr ',' '\n' | sort -u)
+          missing=$(comm -23 <(echo "$want") <(echo "$have"))
+          if [ -n "$missing" ]; then
+            echo "::error::account-e2e sections not in any CI shard: $missing"
+            exit 1
+          fi
+          echo "all account-e2e sections are covered: $(echo $want)"
+
+      - run: pnpm test:fast
+
+  packages:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Playwright version
+        id: pw
+        run: echo "version=$(node -p "require('playwright/package.json').version")" >> "$GITHUB_OUTPUT"
+      - uses: actions/cache@v4
+        id: pw-cache
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ steps.pw.outputs.version }}-chromium
+      - name: Chromium
+        if: steps.pw-cache.outputs.cache-hit != 'true'
+        run: pnpm exec playwright install --with-deps chromium
+      - name: Chromium system libraries
+        if: steps.pw-cache.outputs.cache-hit == 'true'
+        run: pnpm exec playwright install-deps chromium
+
+      - name: Package shots
+        run: |
+          mkdir -p artifacts
+          pnpm test:packages 2>&1 | tee artifacts/packages.log
+
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: packages
+          path: artifacts/
+          retention-days: 7
+          if-no-files-found: ignore
+
+  web:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - suite: shots
+            run: test:shots
+          - suite: glass
+            run: test:glass
+          - suite: chat
+            run: test:chat
+          - suite: audit
+            run: test:audit
+          # account-e2e alone takes well over 5 minutes; shards by section.
+          # Every section of account-e2e.mjs must appear in one line below
+          # (the `fast` job checks that).
+          - suite: account-1
+            run: test:account
+            account-sections: desktop,projects
+          - suite: account-2
+            run: test:account
+            account-sections: share,canonical,google,limits
+          - suite: account-3
+            run: test:account
+            account-sections: entry
+          - suite: account-4
+            run: test:account
+            account-sections: phone,turns,keys
+    name: web (${{ matrix.suite }})
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Playwright version
+        id: pw
+        run: echo "version=$(node -p "require('playwright/package.json').version")" >> "$GITHUB_OUTPUT"
+      - uses: actions/cache@v4
+        id: pw-cache
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ steps.pw.outputs.version }}-chromium
+      - name: Chromium
+        if: steps.pw-cache.outputs.cache-hit != 'true'
+        run: pnpm exec playwright install --with-deps chromium
+      - name: Chromium system libraries
+        if: steps.pw-cache.outputs.cache-hit == 'true'
+        run: pnpm exec playwright install-deps chromium
+
+      # One build per job; the suites use dist/ and never build themselves.
+      - name: Build
+        run: pnpm --filter @opensu/web build
+
+      # shots.mjs compares the app's 3D view with the renderer demo pixel for
+      # pixel when artifacts/shots/<view>.png exist (they do on a dev
+      # machine after `pnpm shots`); render those four views first.
+      - name: Renderer reference shots
+        if: matrix.suite == 'shots'
+        run: pnpm --filter @opensu/render shots axo-se,axo-ne,eye-sw,elev-south
+
+      - name: Suite
+        env:
+          SECTIONS: ${{ matrix.account-sections }}
+        run: |
+          mkdir -p artifacts
+          if [ -n "$SECTIONS" ]; then
+            pnpm --filter @opensu/web ${{ matrix.run }} --only "$SECTIONS" 2>&1 | tee artifacts/${{ matrix.suite }}.log
+          else
+            pnpm --filter @opensu/web ${{ matrix.run }} 2>&1 | tee artifacts/${{ matrix.suite }}.log
+          fi
+
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: web-${{ matrix.suite }}
+          path: artifacts/
+          retention-days: 7
+          if-no-files-found: ignore
+
+  ci-ok:
+    if: always()
+    needs: [fast, packages, web]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 2
+    steps:
+      - name: All jobs passed
+        env:
+          RESULTS: ${{ join(needs.*.result, ' ') }}
+        run: |
+          echo "results: $RESULTS"
+          for r in $RESULTS; do
+            if [ "$r" != "success" ]; then
+              echo "::error::a required job did not succeed ($r)"
+              exit 1
+            fi
+          done

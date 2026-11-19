@@ -29,7 +29,7 @@ pnpm dev                                # vite dev with the Cloudflare plugin (w
 pnpm build                              # all packages, then this app + the bundle size report
 pnpm --filter @opensu/web preview       # the built app in the local Workers runtime (workerd)
 pnpm --filter @opensu/web shots         # checks + screenshots -> artifacts/web/*.png
-pnpm --filter @opensu/web test          # smoke checks + chat e2e + relay checks (needs a build)
+pnpm --filter @opensu/web test          # everything below in "Tests" (needs a build)
 pnpm --filter @opensu/web chat          # chat e2e against the scripted stub -> artifacts/web/chat-*.png
 pnpm --filter @opensu/web accounts      # task 019: sign-in and the daily quota against the stub, fresh local D1
                                         # -> artifacts/task019/*.png
@@ -61,6 +61,36 @@ sheet set yields one 1500 x 2000 PNG blob per level plus the axonometric.
 SwiftShader). When `artifacts/shots/*.png` from `pnpm shots` exist it also
 checks that the app's 3D view of the golden house matches the renderer demo
 pixel for pixel.
+
+## Tests
+
+Locally run the fast loop plus the browser suite your change touches; the
+whole matrix runs on GitHub Actions for every pull request to `main`
+(`.github/workflows/ci.yml`, task 030; the required check is `ci-ok`).
+
+| Command | What it covers | Browser | Build |
+|---|---|---|---|
+| `pnpm test:fast` (root) | package `tsc` build (types for the typecheck), `typecheck` of every package, every package's vitest, then this app's `test:fast` | no | no |
+| `pnpm --filter @opensu/web test:unit` | `scripts/*-test.ts` (node:test) | no | no |
+| `pnpm --filter @opensu/web test:static` | `ui-check` (base-component rule), `relay-check`, `auth-check` (Node, stubbed upstream, SQLite D1 look-alike) | no | no |
+| `pnpm --filter @opensu/web test:shots` | `shots.mjs --smoke`: studio checks (walk, sun, cutaway, sheets, ...) | yes | yes |
+| `pnpm --filter @opensu/web test:glass` | `glass-contrast.mjs`: text contrast on the glass surfaces | yes | yes |
+| `pnpm --filter @opensu/web test:chat` | `chat-e2e.mjs --smoke`: the assistant against the scripted stub | yes | yes |
+| `pnpm --filter @opensu/web test:account` | `account-e2e.mjs --smoke`: sign-in, quota, keys, projects, share links (fresh local D1, email test hook); `--only desktop,projects` for some sections | yes | yes |
+| `pnpm --filter @opensu/web test:audit` | `ui-audit.mjs --smoke`: UI rules, compared with `scripts/ui-audit-allow.json` | yes | yes |
+| `pnpm --filter @opensu/web test:browser` | the five browser suites in a row | yes | yes |
+| `pnpm --filter @opensu/web test` | `test:fast` then `test:browser` | yes | yes |
+| `pnpm test:packages` (root) | render, sheet and plan shots of the golden house (CI `packages` job) | yes | no |
+| `pnpm test` (root) | `pnpm -r test`: every package's vitest and this app's `test` (12 to 15 minutes) | yes | yes |
+
+"Build" means `pnpm --filter @opensu/web build` first: the browser suites
+serve `dist/` with `vite preview` (workerd) and never build themselves, so
+one build serves all of them. No suite needs a secret or the network: the
+assistant is a local scripted stub, D1 is local and sign-in codes come from
+the test hook. Playwright is a root dev dependency (pinned in the lockfile);
+in the dev container its browsers are preinstalled in `/opt/pw-browsers`
+(`PLAYWRIGHT_BROWSERS_PATH`), on a CI runner `playwright install --with-deps
+chromium` puts them in the default cache.
 
 ## Routes
 

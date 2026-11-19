@@ -27,4 +27,12 @@ Read `docs/DECISIONS.md` before changing architecture and
   (Playwright + Chromium are preinstalled; do not run `playwright install`).
   Headless WebGL needs `--use-angle=swiftshader --enable-unsafe-swiftshader`
   (or `--use-gl=swiftshader`).
+- Tests: do not run the whole suite locally (`pnpm -r test`, 12 to 15
+  minutes). Run `pnpm test:fast` (about a minute: typecheck, unit tests,
+  static checks, no browser) plus the one browser suite your change
+  touches (`pnpm --filter @opensu/web test:shots|test:glass|test:chat|
+  test:account|test:audit`, after `pnpm --filter @opensu/web build`). The
+  full matrix runs on GitHub Actions for each pull request (`ci.yml`; the
+  check to pass is `ci-ok`). Agents still do not push or open pull
+  requests; the lead does. Script list: `apps/web/README.md`, "Tests".
 - Report honestly: list what does not work or was skipped.
