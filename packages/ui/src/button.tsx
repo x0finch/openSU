@@ -147,21 +147,6 @@ export function ButtonLink({ variant = 'paper', size = 'md', icon, full, strong,
 /** The class of a button of `variant` and `size`, for a router link that must render its own element. */
 export const buttonClass = (o: Common & { children?: ReactNode; className?: string }) => merge(classes(o), o.className);
 
-/**
- * "Continue with Google": Google's own button (its brand rules: the
- * standard "G" unmodified, 12 px before it, 10 px after, 12 px after the
- * text; its dark theme, glass.css `.google-btn`). The logo comes from the
- * caller's icon set.
- */
-export function GoogleButton({ label, logo, className, ...rest }: ButtonHTMLAttributes<HTMLButtonElement> & { label: string; logo: ReactNode }) {
-  return (
-    <button type="button" {...rest} className={cx('hit google-btn flex h-12 w-full items-center justify-center rounded-full pr-3 pl-3 text-[15px] font-medium', className)}>
-      <span className="mr-2.5 inline-flex shrink-0">{logo}</span>
-      <span className="truncate">{label}</span>
-    </button>
-  );
-}
-
 /** The ginkgo chip with an arrow at the end of a paper call to action; it nudges forward on hover. */
 export function ButtonArrow({ children }: { children: ReactNode }) {
   return <span className="grid size-6 place-items-center rounded-full bg-accent text-ink transition-transform duration-200 ease-out-soft group-hover:translate-x-0.5">{children}</span>;

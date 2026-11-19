@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react';
 import { createRootRoute, HeadContent, Outlet, Scripts } from '@tanstack/react-router';
 import appCss from '../styles.css?url';
-import { ButtonLink } from '../ui';
+import { ButtonLink } from '@opensu/ui';
 
 export const Route = createRootRoute({
   head: () => ({

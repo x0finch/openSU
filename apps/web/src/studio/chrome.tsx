@@ -6,7 +6,7 @@ import { type KeyboardEvent as RKeyboardEvent, type ReactNode, type RefObject, u
 import { TEMPLATE_META } from '@opensu/agent/templates-meta';
 import { ChevronDownSmallIcon, CloseIcon, CompassIcon, CopyIcon, DownloadIcon, FolderIcon, LayersIcon, Mark, PencilIcon, PersonIcon, PinIcon, PlusIcon, ResetViewIcon, ShareIcon } from '../components/icons';
 import { cx } from '../components/ui';
-import { Button, Dot, Menu, MenuItem, MenuLabel, MenuSeparator, NameInput, Segmented, Skeleton } from '../ui';
+import { Button, Dot, Menu, MenuItem, MenuLabel, MenuSeparator, NameInput, Segmented, Skeleton } from '@opensu/ui';
 import { type MessageKey, useT } from '../lib/i18n';
 import { freshView, type Mode, useStudio } from '../lib/store';
 import { resetToTemplate } from '../lib/autosave';

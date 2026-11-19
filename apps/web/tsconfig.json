@@ -16,7 +16,8 @@
       "@opensu/kernel": ["../../packages/kernel/src/index.ts"],
       "@opensu/render": ["../../packages/render/src/index.ts"],
       "@opensu/plan": ["../../packages/plan/src/index.ts"],
-      "@opensu/sheet": ["../../packages/sheet/src/index.ts"]
+      "@opensu/sheet": ["../../packages/sheet/src/index.ts"],
+      "@opensu/ui": ["../../packages/ui/src/index.ts"]
     }
   },
   "include": ["src", "vite.config.ts"]

@@ -6,7 +6,7 @@
 import { type CSSProperties, type PointerEvent as RPointerEvent, useEffect, useRef, useState } from 'react';
 import { CloseIcon } from '../components/icons';
 import { cx } from '../components/ui';
-import { Button, HudInset, HudKnob, HudPanel } from '../ui';
+import { Button, HudInset, HudKnob, HudPanel } from '@opensu/ui';
 import { levelName, useT } from '../lib/i18n';
 import { useStudio } from '../lib/store';
 import type { Derived } from './house-data';

@@ -11,7 +11,7 @@ import { Link } from '@tanstack/react-router';
 import { type MouseEvent as RMouseEvent, type ReactNode, type RefObject, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { CubeIcon, LinkIcon, Mark, MoreIcon, PlusIcon } from '../components/icons';
 import { cx, LangToggle } from '../components/ui';
-import { Button, GlassLayer, Menu, MenuItem, NameInput, Separator, Tile, TileButton, TileLink, TileMark, Toast } from '../ui';
+import { Button, GlassLayer, Menu, MenuItem, NameInput, Separator, Tile, TileButton, TileLink, TileMark, Toast } from '@opensu/ui';
 import { loadSaved } from '../lib/autosave';
 import { type Lang, useT } from '../lib/i18n';
 import { projectTitle, type ProjectMeta, projectName, projectSync, thumbUrl, useProjects, useProjectSync } from '../lib/projects';

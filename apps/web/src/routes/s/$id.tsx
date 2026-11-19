@@ -4,7 +4,7 @@ import { createIsomorphicFn } from '@tanstack/react-start';
 import { getRequestUrl } from '@tanstack/react-start/server';
 import { useEffect } from 'react';
 import { Mark } from '../../components/icons';
-import { ButtonLink } from '../../ui';
+import { ButtonLink } from '@opensu/ui';
 import { useT } from '../../lib/i18n';
 import { restoreLang } from '../../lib/store';
 

@@ -1,6 +1,7 @@
 // Static check of the base-component rule (task 029; it grew out of the
-// glass check of tasks 017 and 025). Everything outside src/ui/ only
-// applies base components: no file there sets a radius, a hover or focus
+// glass check of tasks 017 and 025). Since task 031 the base components
+// are the package `@opensu/ui` (packages/ui); everything in this app only
+// applies them: no file there sets a radius, a hover or focus
 // state, a focus ring, a shadow, a backdrop or a surface's padding, uses a
 // base component's own classes (`lg-plate`, `lg-field`, ...), sets a
 // surface title's size, draws a tooltip, or positions a floating surface
@@ -45,8 +46,20 @@ const ALLOW = [
   { file: 'studio/ProjectMissing.tsx', rule: 'title size', why: 'the not-found page of a project or link (paper, full screen), not a surface title' },
 ];
 
+/**
+ * Product components that left the base in task 031 (a stranger's app would
+ * not use them unchanged): they compose package parts and keep their own
+ * look, so the rule does not apply to them. Each with its reason.
+ */
+const PRODUCT = [
+  { file: 'chat/turn.tsx', why: 'the assistant turn: its timeline marks and disclosure line are this product\'s conversation' },
+  { file: 'chat/GoogleButton.tsx', why: 'Google\'s own button: its brand rules (fill, stroke, radius), styles.css `.google-btn`' },
+  { file: 'studio/paper-sheet.tsx', why: 'the drawing sheet\'s picture and its placeholder (this product\'s sheet layout)' },
+];
+
 const walk = (dir) => readdirSync(dir, { withFileTypes: true }).flatMap((e) => (e.isDirectory() ? walk(join(dir, e.name)) : [join(dir, e.name)]));
-const files = walk(src).filter((f) => /\.(tsx?|css)$/.test(f) && !relative(src, f).replaceAll('\\', '/').startsWith('ui/') && !f.endsWith('routeTree.gen.ts') && !f.endsWith('styles.css'));
+const product = new Set(PRODUCT.map((p) => p.file));
+const files = walk(src).filter((f) => /\.(tsx?|css)$/.test(f) && !product.has(relative(src, f).replaceAll('\\', '/')) && !f.endsWith('routeTree.gen.ts') && !f.endsWith('styles.css'));
 const failures = [];
 const allowed = new Set();
 
@@ -100,7 +113,8 @@ for (const f of files) {
     if (FLOATING.test(t.name) && (POSITION.test(cls) || /\b(left|top|right|bottom|inset|transform|position|margin\w*)\s*:/.test(style))) fail('floating surface positioned', t.line, `<${t.name} ${cls} ${style}> (give it an anchor and a placement)`);
   }
 }
-console.log(`ui check: ${files.length} files outside src/ui/, ${failures.length} violations, ${allowed.size} allowed exceptions`);
+console.log(`ui check: ${files.length} app files, ${failures.length} violations, ${allowed.size} allowed exceptions, ${PRODUCT.length} product components`);
+for (const p of PRODUCT) console.log(`  product ${p.file} (${p.why})`);
 for (const a of allowed) console.log(`  allowed ${a}`);
 for (const f of failures) console.log(`  FAIL ${f}`);
 process.exit(failures.length ? 1 : 0);

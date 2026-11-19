@@ -10,7 +10,7 @@
 // The look follows the approved prototype (docs/prototypes/liquid-glass.html)
 // and, through it, glasswork's material (MIT, see THIRD_PARTY_NOTICES.md).
 // No number of the look lives here: every value comes in through
-// `GlassMaterial` and `GlassShape` (the web app's glass module owns them).
+// `GlassMaterial` and `GlassShape` (`@opensu/ui` owns them; these conform structurally).
 import {
   BufferAttribute,
   BufferGeometry,

@@ -14,7 +14,7 @@
 // view-only mode. It lies over the drawing and never moves the house.
 import { useEffect, useState } from 'react';
 import { create } from 'zustand';
-import { floatingOpen, Notice, NoticeAction, subscribeFloating } from '../ui';
+import { floatingOpen, Notice, NoticeAction, subscribeFloating } from '@opensu/ui';
 import { useT } from '../lib/i18n';
 import { useShareUi } from '../lib/share';
 import { useStudio } from '../lib/store';

@@ -15,9 +15,14 @@ Read `docs/DECISIONS.md` before changing architecture and
   the repo in any form.
 - Do not open GitHub issues, PRs or comments. Only the lead does, sparingly.
 - Do not push. Commit locally on the current branch; the lead pushes.
-- Visual tokens live in one place (`packages/render/src/style/tokens.ts`).
-  Do not hard-code colors, line widths or light values anywhere else, and do
-  not change tokens unless the task says so.
+- Visual tokens have two homes. The scene's (drawing colours, line widths,
+  light values) live in `packages/render/src/style/tokens.ts`. The UI's
+  (glass material numbers, radii, spacing, type sizes, motion, colours of
+  controls and pages) live in `packages/ui`: CSS variables in
+  `src/styles.css` (`@theme`) and the glass layer's `--lg-*`, with
+  `src/material.ts` as the one TypeScript mirror where code needs numbers.
+  Do not hard-code these anywhere else, and do not change tokens unless the
+  task says so.
 - Server code must stay trivial: the deploy target is Cloudflare Workers free
   tier (10 ms CPU per request). Geometry, validation, rendering and image
   export run in the browser.

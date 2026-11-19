@@ -16,7 +16,8 @@ import type { Lang } from '../lib/i18n';
 import { ChevronDownIcon, ComposeIcon, DockIcon, HistoryIcon, NoteIcon, PlanCheckIcon, RedoIcon, RetryIcon, SlidersIcon, StopIcon, UndockIcon, UndoIcon } from './icons';
 import { accountKeyInUse, openKeySheet, useKeys } from './keys';
 import { KeyPicker } from './KeyPicker';
-import { Badge, Button, Dot, IconButton, InputBar, InputField, PromptText, Separator, TextSurface, Turn, type TurnEntry } from '../ui';
+import { Badge, Button, Dot, IconButton, InputBar, InputField, PromptText, Separator, TextSurface } from '@opensu/ui';
+import { Turn, type TurnEntry } from './turn';
 import { turnView } from './turn-parts';
 import { SettingsSheet } from './SettingsSheet';
 

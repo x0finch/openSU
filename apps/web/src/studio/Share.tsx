@@ -6,7 +6,7 @@
 // The viewer's side: the quiet bar that takes the prompt's place, with
 // "make my own copy" (Figma's "View only" and "Duplicate to your drafts").
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { Button, cx, Input, Notice, NoticeAction, Popover, PopoverAction, PopoverBody, PopoverDescription, PopoverFooter, PopoverHeader, PopoverTitle, Switch, usePhone } from '../ui';
+import { Button, cx, Input, Notice, NoticeAction, Popover, PopoverAction, PopoverBody, PopoverDescription, PopoverFooter, PopoverHeader, PopoverTitle, Switch, usePhone } from '@opensu/ui';
 import { useT } from '../lib/i18n';
 import { projectName, projectSync, useHouseName, useProjects, useProjectsOffered } from '../lib/projects';
 import { closeShare, copyLink, makeCopy, openShare, setShared, shareUrl, useShareUi } from '../lib/share';

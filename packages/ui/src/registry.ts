@@ -2,17 +2,17 @@
 // shape here. The registry measures the elements (ResizeObserver, layout
 // events, and every frame while something animates) and hands the list of
 // shapes to the active backend:
-// - WebGL: the 3D viewer's composite pass draws the glass into the canvas
-//   (`attachWebGL`), the DOM elements stay transparent;
+// - canvas ('webgl'): an app's renderer plugged in with `attachCanvas` draws
+//   the glass into its canvas; the DOM elements stay transparent;
 // - CSS: each element draws itself with the CSS material (glass.css).
 // Components never talk to a backend directly.
-import type { GlassMaterial, GlassShape } from '@opensu/render';
+import type { GlassMaterial, GlassShape } from './glass-types';
 import { GLASS, type GlassRole, type GlassTone, shaderMaterial, tintOf } from './material';
 import { onSpringFrame } from './spring';
 
 export type GlassBackend = 'webgl' | 'css';
 
-/** Where the WebGL backend draws: the viewer's canvas and its glass API. */
+/** The canvas backend an app plugs in: its canvas and a function that receives the shapes. */
 export interface GlassTarget {
   canvas: HTMLElement;
   setGlass(shapes: readonly GlassShape[] | null, material?: GlassMaterial): void;
@@ -89,7 +89,7 @@ class Registry {
   private wired = false;
   /** Glass pushes to the viewer (tests count them while a panel animates). */
   pushes = 0;
-  /** The last shape drawn per element, viewport px (tests read it: `window.__glass.shapeOf`). */
+  /** The last shape drawn per element, viewport px (an app's tests may read it). */
   private drawn = new WeakMap<HTMLElement, Rect & { radius: number; alpha: number }>();
 
   /** The shape the WebGL backend drew last for `el` (null on the CSS backend or when not drawn). */
@@ -127,7 +127,6 @@ class Registry {
     window.addEventListener('scroll', kick, true);
     for (const ev of ['transitionrun', 'transitionend', 'animationstart', 'animationend']) document.addEventListener(ev, kick, true);
     onSpringFrame(() => this.collect());
-    (window as unknown as { __glass?: unknown }).__glass = { shapeOf: (el: HTMLElement) => this.shapeOf(el) };
     const mq = matchMedia('(prefers-reduced-transparency: reduce)');
     const onMq = () => this.setOpaque(mq.matches);
     mq.addEventListener?.('change', onMq);
@@ -147,8 +146,12 @@ class Registry {
     };
   }
 
-  /** The 3D viewer's canvas is showing: draw the glass there. `null`: back to CSS. */
-  attachWebGL(target: GlassTarget | null): void {
+  /**
+   * The optional canvas backend: an app's renderer that draws the glass into
+   * its own canvas plugs in here (it receives every surface's shape and the
+   * material). `null`: back to the CSS backend.
+   */
+  attachCanvas(target: GlassTarget | null): void {
     if (this.target === target) return;
     this.target?.setGlass(null);
     this.target = target;

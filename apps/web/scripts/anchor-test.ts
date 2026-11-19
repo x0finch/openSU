@@ -1,9 +1,9 @@
-// Unit tests of where an anchored surface stands (task 025, src/ui/anchor.ts).
+// Unit tests of where an anchored surface stands (task 025, packages/ui/src/anchor.ts).
 //   node --experimental-strip-types --no-warnings --import ./scripts/ts-resolve.mjs --test scripts/anchor-test.ts
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { place } from '../src/ui/anchor.ts';
-import { GLASS } from '../src/ui/material.ts';
+import { place } from '../../../packages/ui/src/anchor.ts';
+import { GLASS } from '../../../packages/ui/src/material.ts';
 
 const view = { w: 1440, h: 900 };
 const gap = GLASS.anchorGap;

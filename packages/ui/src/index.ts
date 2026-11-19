@@ -1,8 +1,8 @@
 // The base components (task 029; organised like shadcn/ui: one file per
 // component, small composable parts, variants as props). Everything
 // outside this folder only applies these; see README.md.
-export { cx, GlassLayer, useGlass, usePress, type GlassProps } from './surface';
-export { Button, ButtonArrow, ButtonLink, buttonClass, GoogleButton, type ButtonSize, type ButtonVariant } from './button';
+export { cx, Glass, GlassLayer, useGlass, useMergedRef, usePress, type GlassProps } from './surface';
+export { Button, ButtonArrow, ButtonLink, buttonClass, type ButtonSize, type ButtonVariant } from './button';
 export { IconButton } from './icon-button';
 export { ToolbarButton, ToolbarGroup } from './toolbar';
 export { Segmented, type Segment } from './segmented';
@@ -27,10 +27,10 @@ export { Dot } from './dot';
 export { Badge } from './badge';
 export { Skeleton } from './skeleton';
 export { Avatar } from './avatar';
-export { PageDots, PaperSheet, PaperSheetImage, SheetPlaceholder, Tile, TileButton, TileLink, TileMark } from './card';
-export { DisclosureRegion, Turn, type TurnEntry, type TurnProps } from './turn';
+export { PageDots, PaperSheet, Tile, TileButton, TileLink, TileMark } from './card';
 export { coveredBy, floatingOpen, type Placement, subscribeFloating } from './anchor';
-export { glassRegistry, type GlassBackend, type GlassTarget } from './registry';
+export { glassRegistry, type GlassBackend, type GlassTarget, type Rect, type ShapeOverride } from './registry';
+export type { GlassMaterial, GlassShape } from './glass-types';
 export { GLASS, TONES, type GlassRole, type GlassTone } from './material';
 export { Spring, SPRINGS, prefersReducedMotion } from './spring';
 export { DESKTOP_QUERY, usePhone } from './use-phone';

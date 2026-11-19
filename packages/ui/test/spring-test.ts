@@ -1,8 +1,8 @@
 // Unit tests of the shared glass spring (node --test, types stripped).
-//   node --experimental-strip-types --no-warnings --test scripts/spring-test.ts
+//   node --experimental-strip-types --no-warnings --test test/spring-test.ts
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { Spring, SPRINGS, step, stiffnessOf } from '../src/ui/spring.ts';
+import { Spring, SPRINGS, step, stiffnessOf } from '../src/spring.ts';
 
 /** Simulates a spring from 0 to 1 at 120 Hz; returns the samples. */
 function run(preset: { response: number; damping: number }, seconds = 2): number[] {

@@ -8,7 +8,7 @@
 import { type KeyboardEvent as RKeyboardEvent, type PointerEvent as RPointerEvent, type ReactNode, useEffect, useMemo, useRef, useState } from 'react';
 import { ChevronDownSmallIcon, LocateIcon, PinIcon, SearchIcon } from '../components/icons';
 import { cx } from '../components/ui';
-import { Button, Input, PopoverAction, PopoverBody, PopoverDescription, PopoverFooter, PopoverHeader, PopoverTitle, Separator } from '../ui';
+import { Button, Input, PopoverAction, PopoverBody, PopoverDescription, PopoverFooter, PopoverHeader, PopoverTitle, Separator } from '@opensu/ui';
 import { applyEdit } from '../chat/chat-store';
 import { useT } from '../lib/i18n';
 import type { Place } from '../lib/places';

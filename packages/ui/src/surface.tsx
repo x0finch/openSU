@@ -3,7 +3,6 @@
 // active backend needs: transparent over the WebGL canvas, the CSS
 // material elsewhere. Everything else in the module is built on it.
 import { createContext, type CSSProperties, type HTMLAttributes, type ReactNode, type Ref, useCallback, useContext, useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } from 'react';
-import './glass.css';
 import { cssVars, GLASS, type GlassRole, type GlassTone } from './material';
 import { type GlassBackend, glassRegistry, type ShapeOverride } from './registry';
 import { Spring, SPRINGS } from './spring';

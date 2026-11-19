@@ -14,7 +14,7 @@ import { cx } from '../components/ui';
 import { ChatInput, PinnedChat, RecentStrip } from '../chat/ChatPanel';
 import { useKeys } from '../chat/keys';
 import { useAccount } from '../chat/account';
-import { Sheet, SheetContent } from '../ui';
+import { Sheet, SheetContent } from '@opensu/ui';
 import { useShareUi } from '../lib/share';
 import { useStudio } from '../lib/store';
 import { Hints } from './chrome';

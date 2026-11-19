@@ -9,7 +9,7 @@ import {
   SunIcon, ViewIcon,
 } from '../components/icons';
 import { cx } from '../components/ui';
-import { Button, Choice, Popover, PopoverHeader, PopoverTitle, Row, Segmented, Separator, Slider, ToolbarButton, ToolbarGroup, Tooltip } from '../ui';
+import { Button, Choice, Popover, PopoverHeader, PopoverTitle, Row, Segmented, Separator, Slider, ToolbarButton, ToolbarGroup, Tooltip } from '@opensu/ui';
 import { levelName, type MessageKey, useT } from '../lib/i18n';
 import { bearingText, bearingWords, frontBearing, placeText, utcText } from '../lib/site';
 import { useViewOnly } from '../lib/view-only';

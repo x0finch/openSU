@@ -47,6 +47,8 @@ export default defineConfig({
       '@opensu/render': src('render'),
       '@opensu/plan': src('plan'),
       '@opensu/sheet': src('sheet'),
+      // The UI package's folder: `@opensu/ui` is its index, `@opensu/ui/styles.css` its stylesheet.
+      '@opensu/ui': fileURLToPath(new URL('../../packages/ui/src', import.meta.url)),
     },
   },
   build: {

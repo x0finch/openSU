@@ -32,7 +32,7 @@ import { ProjectMissing } from './ProjectMissing';
 import { ShareButton, ShareHost } from './Share';
 import { useSharedProject } from '../lib/share';
 import { DesktopTools, PanelCard, TRAY_ID } from './tools';
-import { GlassLayer, type GlassTone } from '../ui';
+import { GlassLayer, type GlassTone } from '@opensu/ui';
 import { useDerived } from './useDerived';
 import { Viewer3D } from './Viewer3D';
 import { LandscapeWalkHUD, MobileWalkHUD, useEscapeExitsWalk, WalkHUD } from './WalkHUD';

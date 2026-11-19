@@ -2,7 +2,7 @@
 import type { ReactNode } from 'react';
 import { useT } from '../lib/i18n';
 import { useStudio } from '../lib/store';
-import { Button } from '../ui';
+import { Button } from '@opensu/ui';
 
 export function cx(...c: (string | false | null | undefined)[]): string {
   return c.filter(Boolean).join(' ');

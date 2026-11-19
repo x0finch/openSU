@@ -1,4 +1,6 @@
 @import "tailwindcss";
+/* The UI package: its tokens (@theme), utilities and the glass styles (task 031). */
+@import "@opensu/ui/styles.css";
 @import "@fontsource-variable/inter/wght.css";
 
 /*
@@ -7,57 +9,6 @@
  * filter utilities. Nothing in the studio blurs the canvas (task 014/015).
  */
 @source not inline("transition backdrop-filter backdrop-blur");
-
-/*
- * UI tokens: colours, radii and type of the app (Tailwind exposes each one
- * as a utility, e.g. text-ink, border-hairline, rounded-ui). Chrome
- * surfaces (background, border, shadow, blur) belong to the glass module
- * (src/ui/: material.ts and glass.css), never here. Drawing colours
- * live in packages/render and packages/plan.
- */
-@theme {
-  --color-*: initial;
-  --color-ink: #2a2a2a;
-  --color-ink-2: #606060;
-  --color-ink-3: #707070;
-  --color-hairline: #e6e6e6;
-  --color-wash: #f4f4f3;
-  --color-page: #ffffff;
-  --color-accent: #f2d40f;
-  --color-accent-ink: #8a7400;
-  /* Icons and text on the accent, and text written straight on the drawing (docs/UI_STYLE.md). */
-  --color-on-accent: #1c1c1e;
-  --color-canvas-ink: #1b1c1e;
-  --color-transparent: transparent;
-  --color-white: #ffffff;
-  /* Text and icons on an ink fill (inverted controls); glass sets it per tone. */
-  --color-on-ink: #ffffff;
-  /* A destructive confirmation ("删除？"): text only. */
-  --color-danger: #c0392b;
-  /* Only as a low alpha (hairlines, scrims). */
-  --color-black: #000000;
-
-  --radius-ui: 10px;
-  --radius-sm: 7px;
-  --shadow-hair: 0 0 0 1px rgba(0, 0, 0, 0.05);
-  /* The input capsule's working glow (glass module): a light travelling round its rim (our palette). */
-  --color-glow-warm: #fff4c2;
-  --color-glow-red: rgba(232, 100, 60, 0.55);
-
-  --font-sans: "Inter Variable", Inter, "PingFang SC", "Hiragino Sans GB", "Noto Sans SC", "Noto Sans CJK SC",
-    "Source Han Sans SC", "Microsoft YaHei", "WenQuanYi Zen Hei", system-ui, sans-serif;
-
-  --text-2xs: 10.5px;
-  --text-2xs--line-height: 14px;
-  --text-xs: 12px;
-  --text-xs--line-height: 16px;
-  --text-sm: 13px;
-  --text-sm--line-height: 18px;
-  --text-base: 14px;
-  --text-base--line-height: 20px;
-
-  --ease-out-soft: cubic-bezier(0.22, 0.8, 0.24, 1);
-}
 
 /* A phone held sideways: little height, so header and sheet go to one row each. */
 @custom-variant land (@media (orientation: landscape) and (max-height: 519px));
@@ -87,34 +38,6 @@
   }
   ::selection {
     background: color-mix(in srgb, var(--color-accent) 55%, transparent);
-  }
-}
-
-
-@utility tnum {
-  font-variant-numeric: tabular-nums;
-}
-
-/*
- * Phones: a control that looks smaller than 44 px still takes a 44 px touch
- * target (an invisible extension around it).
- */
-@utility hit {
-  position: relative;
-  &::after {
-    content: "";
-    position: absolute;
-    left: 50%;
-    top: 50%;
-    width: max(100%, 44px);
-    height: max(100%, 44px);
-    transform: translate(-50%, -50%);
-  }
-}
-
-@keyframes fade-in {
-  from {
-    opacity: 0;
   }
 }
 
@@ -160,4 +83,25 @@
     opacity: 0;
     transform: translateY(8px);
   }
+}
+
+/*
+ * "Continue with Google" (task 019): Google's own dark button theme, as its
+ * sign-in branding guidelines require for the full-colour "G" (fill
+ * #131314, 1 px inside stroke #8E918F, text #E3E3E3; light, dark or neutral
+ * only, never a tinted or see-through background). Brand colours, not
+ * studio tokens; the only opaque control inside a glass panel.
+ */
+.google-btn {
+  background: #131314;
+  color: #e3e3e3;
+  box-shadow: inset 0 0 0 1px #8e918f;
+  transition: filter 150ms;
+}
+.google-btn:hover:not(:disabled) {
+  filter: brightness(1.15);
+}
+.google-btn:focus-visible {
+  outline: 2px solid var(--lg-ink);
+  outline-offset: 2px;
 }

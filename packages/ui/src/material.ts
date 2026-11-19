@@ -1,7 +1,7 @@
 // The glass material: every number of the studio's liquid glass, and the
 // only place they exist (docs/UI_STYLE.md, "Tokens"). They feed the WebGL
 // composite pass (`shaderMaterial`) and the CSS backend (`cssVars`).
-import type { GlassMaterial } from '@opensu/render';
+import type { GlassMaterial } from './glass-types';
 
 export type GlassTone = 'light' | 'dark';
 /** A surface's role: a control (thin tint) or a surface holding body text (denser). */

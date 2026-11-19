@@ -4,7 +4,7 @@
 // signed in), or a share link (`/studio?s=<token>`, task 028) that is
 // turned off, unknown, or cannot be read right now.
 import { Mark } from '../components/icons';
-import { Button, ButtonLink } from '../ui';
+import { Button, ButtonLink } from '@opensu/ui';
 import { openSignIn } from '../chat/account';
 import { useChat } from '../chat/chat-store';
 import { type MessageKey, useT } from '../lib/i18n';

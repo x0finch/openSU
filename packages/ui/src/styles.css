@@ -1,0 +1,91 @@
+/*
+ * @opensu/ui's stylesheet (task 031). An app imports it after Tailwind:
+ *
+ *   @import "tailwindcss";
+ *   @import "@opensu/ui/styles.css";
+ *
+ * It brings the package's tokens, its two utilities and the glass styles,
+ * and points Tailwind at the components' sources.
+ */
+@import "./glass.css";
+
+@source "./";
+
+/*
+ * The UI tokens: colours of controls and pages, radii, type sizes and
+ * easing (Tailwind exposes each one as a utility, e.g. text-ink,
+ * border-hairline, rounded-ui). The glass material's numbers are in
+ * material.ts (the TypeScript side; GlassLayer sets them as --lg-*
+ * custom properties). Drawing colours live in packages/render and
+ * packages/plan, never here.
+ */
+@theme {
+  --color-*: initial;
+  --color-ink: #2a2a2a;
+  --color-ink-2: #606060;
+  --color-ink-3: #707070;
+  --color-hairline: #e6e6e6;
+  --color-wash: #f4f4f3;
+  --color-page: #ffffff;
+  --color-accent: #f2d40f;
+  --color-accent-ink: #8a7400;
+  /* Icons and text on the accent, and text written straight on the drawing (docs/UI_STYLE.md). */
+  --color-on-accent: #1c1c1e;
+  --color-canvas-ink: #1b1c1e;
+  --color-transparent: transparent;
+  --color-white: #ffffff;
+  /* Text and icons on an ink fill (inverted controls); glass sets it per tone. */
+  --color-on-ink: #ffffff;
+  /* A destructive confirmation ("删除？"): text only. */
+  --color-danger: #c0392b;
+  /* Only as a low alpha (hairlines, scrims). */
+  --color-black: #000000;
+
+  --radius-ui: 10px;
+  --radius-sm: 7px;
+  --shadow-hair: 0 0 0 1px rgba(0, 0, 0, 0.05);
+  /* The input capsule's working glow (glass module): a light travelling round its rim (our palette). */
+  --color-glow-warm: #fff4c2;
+  --color-glow-red: rgba(232, 100, 60, 0.55);
+
+  --font-sans: "Inter Variable", Inter, "PingFang SC", "Hiragino Sans GB", "Noto Sans SC", "Noto Sans CJK SC",
+    "Source Han Sans SC", "Microsoft YaHei", "WenQuanYi Zen Hei", system-ui, sans-serif;
+
+  --text-2xs: 10.5px;
+  --text-2xs--line-height: 14px;
+  --text-xs: 12px;
+  --text-xs--line-height: 16px;
+  --text-sm: 13px;
+  --text-sm--line-height: 18px;
+  --text-base: 14px;
+  --text-base--line-height: 20px;
+
+  --ease-out-soft: cubic-bezier(0.22, 0.8, 0.24, 1);
+}
+
+@utility tnum {
+  font-variant-numeric: tabular-nums;
+}
+
+/*
+ * Phones: a control that looks smaller than 44 px still takes a 44 px touch
+ * target (an invisible extension around it).
+ */
+@utility hit {
+  position: relative;
+  &::after {
+    content: "";
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    width: max(100%, 44px);
+    height: max(100%, 44px);
+    transform: translate(-50%, -50%);
+  }
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+}

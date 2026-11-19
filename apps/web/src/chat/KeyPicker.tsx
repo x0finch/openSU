@@ -6,7 +6,7 @@
 // The menu opens at its button (task 025: the glass module places it).
 import { type FormEvent, type KeyboardEvent as RKeyboardEvent, useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
 import { ChevronDownSmallIcon, CheckIcon, PlusIcon } from '../components/icons';
-import { Button, Choice, cx, Field, Input, Menu, MenuItem, MenuLabel, Popover, PopoverAction, PopoverBody, PopoverDescription, PopoverFooter, PopoverHeader, PopoverTitle, Separator, usePhone } from '../ui';
+import { Button, Choice, cx, Field, Input, Menu, MenuItem, MenuLabel, Popover, PopoverAction, PopoverBody, PopoverDescription, PopoverFooter, PopoverHeader, PopoverTitle, Separator, usePhone } from '@opensu/ui';
 import { type MessageKey, useT } from '../lib/i18n';
 import { useStudio } from '../lib/store';
 import { useChat } from './chat-store';

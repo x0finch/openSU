@@ -8,7 +8,8 @@
 // sheet. Nothing navigates away from the drawing; the message draft stays.
 import { type ClipboardEvent, type FormEvent, type KeyboardEvent, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { GoogleLogo } from '../components/icons';
-import { CodeInput, GoogleButton, Input, Popover, PopoverAction, PopoverBody, PopoverDescription, PopoverFooter, PopoverHeader, PopoverTitle, Separator, Spinner, usePhone } from '../ui';
+import { CodeInput, Input, Popover, PopoverAction, PopoverBody, PopoverDescription, PopoverFooter, PopoverHeader, PopoverTitle, Separator, Spinner, usePhone } from '@opensu/ui';
+import { GoogleButton } from './GoogleButton';
 import { type MessageKey, useT } from '../lib/i18n';
 import { closeSignIn, continueWithGoogle, editEmail, sendCode, useAccount, verifyCode } from './account';
 import { useChat } from './chat-store';

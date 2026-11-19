@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { ChevronLeftIcon } from '../components/icons';
 import { cx } from '../components/ui';
-import { Button, Choice, Dot, Field, Input, Switch } from '../ui';
+import { Button, Choice, Dot, Field, Input, Switch } from '@opensu/ui';
 import { useT } from '../lib/i18n';
 import { DEFAULT_MODELS } from '../lib/providers';
 import { useChat } from './chat-store';

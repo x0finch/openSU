@@ -3,7 +3,7 @@ import { createFileRoute, Link } from '@tanstack/react-router';
 import { useEffect, useState } from 'react';
 import { ArrowRightIcon, Mark } from '../components/icons';
 import { cx, LangToggle } from '../components/ui';
-import { buttonClass, ButtonArrow } from '../ui';
+import { buttonClass, ButtonArrow } from '@opensu/ui';
 import { type MessageKey, translate, useT } from '../lib/i18n';
 import { restoreLang, useStudio } from '../lib/store';
 

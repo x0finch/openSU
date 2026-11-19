@@ -6,7 +6,7 @@
 // implementation. Hidden when the server offers no sign-in.
 import { type KeyboardEvent as RKeyboardEvent, type ReactNode, type RefObject, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { PersonIcon } from '../components/icons';
-import { Avatar, Button, cx, Menu, MenuItem, MenuLabel, Separator, Toast, Tooltip } from '../ui';
+import { Avatar, Button, cx, Menu, MenuItem, MenuLabel, Separator, Toast, Tooltip } from '@opensu/ui';
 import { useT } from '../lib/i18n';
 import { closeAccountMenu, openSignIn, signOut, useAccount } from './account';
 import { useChat } from './chat-store';

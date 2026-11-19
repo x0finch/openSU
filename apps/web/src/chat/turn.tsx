@@ -15,8 +15,7 @@
 // line is a button with aria-expanded. Content (rich text, buttons) comes
 // from the caller; this file owns the structure and the motion.
 import { type ReactNode, useId, useLayoutEffect, useRef, useState } from 'react';
-import { cx } from './surface';
-import { Spring, SPRINGS } from './spring';
+import { cx, Spring, SPRINGS } from '@opensu/ui';
 
 /** One line of the timeline: a sentence (rendered by the caller) or a change. */
 export type TurnEntry = { type: 'text'; content: ReactNode } | { type: 'change'; summary: string };
