@@ -63,7 +63,9 @@ Update it when a milestone moves.
   autofill on real devices.
 - Owner to confirm (`docs/tasks/019-accounts-quota.md`, "Deviations"):
   the anonymous trial is 3 per day, not 3 once.
-- `pnpm -r test` takes 12-15 minutes.
+- `pnpm -r test` takes 12-15 minutes locally; task 030 runs it as parallel
+  jobs on each pull request (`.github/workflows/ci.yml`) and adds
+  `pnpm test:fast` (about 70 s) for the local loop.
 - 022: API keys saved with the account (OpenRouter, OpenAI, Anthropic),
   encrypted with `KEYS_SECRET`, with a picker in the conversation. Off
   until the owner sets `KEYS_SECRET` and sign-in works. Anthropic goes

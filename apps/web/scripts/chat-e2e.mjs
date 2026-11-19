@@ -16,6 +16,7 @@ import { createServer } from 'node:net';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { scriptFor, STUB_KEY, STUB_MODEL, startStub } from './chat-stub.mjs';
+import { scaleBrowser, tmo } from '../../../tools/e2e-timeouts.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const appRoot = resolve(here, '..');
@@ -73,7 +74,7 @@ async function startPreview(vars) {
   proc.stdout.on('data', (d) => (p.log += d));
   proc.stderr.on('data', (d) => (p.log += d));
   process.on('exit', p.stop);
-  for (let i = 0; i < 120; i++) {
+  for (let i = 0; i < tmo(120); i++) {
     try {
       if ((await fetch(`${base}/api/health`)).ok) return p;
     } catch {
@@ -92,6 +93,7 @@ console.log(`chat stub (scripted, not a model) on ${stub.url}`);
 const browser = await playwright.chromium.launch({
   args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist', '--enable-webgl'],
 });
+scaleBrowser(browser);
 
 async function open(base, ctxOpts, path) {
   const ctx = await browser.newContext(ctxOpts);
@@ -103,7 +105,7 @@ async function open(base, ctxOpts, path) {
     if (m.type() === 'error' && !/Failed to load resource/.test(m.text())) failures.push(`${path}: console error ${m.text()}`);
   });
   await page.goto(`${base}${path}`, { waitUntil: 'networkidle' });
-  await page.waitForFunction(() => window.__studio?.ready3d === true, null, { timeout: 180000 });
+  await page.waitForFunction(() => window.__studio?.ready3d === true, null, { timeout: tmo(180000) });
   return { ctx, page };
 }
 
@@ -112,7 +114,7 @@ async function shot(page, name, dir = outDir) {
   mkdirSync(dir, { recursive: true });
   const file = resolve(dir, `${name}.png`);
   // Software GL on a busy machine can take long for one frame.
-  await page.screenshot({ path: file, timeout: 180000 });
+  await page.screenshot({ path: file, timeout: tmo(180000) });
   console.log(`  -> ${file}`);
 }
 
@@ -147,8 +149,8 @@ const waitDone = (page, n) =>
   page.waitForFunction((k) => {
     const ms = [...document.querySelectorAll('[data-testid=assistant-message]')];
     return ms.length >= k && ms[k - 1].dataset.phase === 'done';
-  }, n, { timeout: 60000 });
-const waitGrown = (page) => page.waitForFunction(() => !window.__studio?.growing, null, { timeout: 30000 });
+  }, n, { timeout: tmo(60000) });
+const waitGrown = (page) => page.waitForFunction(() => !window.__studio?.growing, null, { timeout: tmo(30000) });
 
 async function sendMessage(page, text) {
   const input = page.getByTestId('prompt-bar');
@@ -209,14 +211,14 @@ try {
       });
     });
     await sendMessage(page, '把北侧房间加深 600');
-    await page.waitForFunction(() => document.querySelector('[data-testid=assistant-message]')?.textContent?.includes('轴线 F'), null, { timeout: 30000 });
+    await page.waitForFunction(() => document.querySelector('[data-testid=assistant-message]')?.textContent?.includes('轴线 F'), null, { timeout: tmo(30000) });
     const midText = await page.getByTestId('assistant-message').first().textContent();
     check(/北侧房间加深/.test(midText ?? '') && (await page.getByTestId('turn-toggle').count()) === 0, 'stream shows text before the tool call is applied');
     await shot(page, 'chat-streaming-desktop');
     stub.config.holdMs = 0;
     stub.config.delay = 8;
     // The grow transition runs right after the edit lands.
-    await page.waitForFunction(() => window.__studio?.growing === true, null, { timeout: 30000 }).catch(() => {});
+    await page.waitForFunction(() => window.__studio?.growing === true, null, { timeout: tmo(30000) }).catch(() => {});
     await page.waitForTimeout(500);
     await shot(page, 'chat-grow-desktop');
     await waitDone(page, 1);
@@ -321,7 +323,7 @@ try {
 
     // 8. A new house plays the full grow.
     await sendMessage(page, '重新开始一栋新房子');
-    await page.waitForFunction(() => window.__studio?.growing === true, null, { timeout: 30000 });
+    await page.waitForFunction(() => window.__studio?.growing === true, null, { timeout: tmo(30000) });
     await page.waitForTimeout(700);
     await shot(page, 'chat-new-house-grow-desktop');
     await waitDone(page, 6);
@@ -349,7 +351,7 @@ try {
     await page.getByTestId('chat-history').click();
     check((await page.getByTestId('recent-strip').count()) === 1, 'the history button opens the last exchange');
     await page.getByTestId('bar-walk').click();
-    await page.waitForFunction(() => window.__studio?.engine?.viewer?.walking === true, null, { timeout: 30000 });
+    await page.waitForFunction(() => window.__studio?.engine?.viewer?.walking === true, null, { timeout: tmo(30000) });
     await page.waitForTimeout(400);
     check((await page.getByTestId('recent-strip').count()) === 0, 'walk mode closes the recent strip');
     const walk = await page.evaluate(() => {
@@ -365,7 +367,7 @@ try {
     await settle(page);
     await shot(page, 'chat-walk-after-edit-desktop');
     await page.getByTestId('bar-walk').click();
-    await page.waitForFunction(() => window.__studio?.engine?.viewer?.walking === false, null, { timeout: 30000 });
+    await page.waitForFunction(() => window.__studio?.engine?.viewer?.walking === false, null, { timeout: tmo(30000) });
     check(true, '"走进去 ×" ends the walk');
     await ctx.close();
   }
@@ -384,23 +386,23 @@ try {
     const saved = await page.evaluate(() => JSON.parse(localStorage.getItem('opensu.autosave.v1') ?? '{}').history ?? null);
     check(saved?.undo?.length === 1 && saved.redo.length === 0, `the undo history is autosaved (${saved?.undo?.length ?? 0} undo step)`);
     await page.reload({ waitUntil: 'networkidle' });
-    await page.waitForFunction(() => window.__studio?.ready3d === true, null, { timeout: 180000 });
+    await page.waitForFunction(() => window.__studio?.ready3d === true, null, { timeout: tmo(180000) });
     const area1 = await shownArea(page);
     await page.getByTestId('chat-history').click();
     const undo = page.getByTestId('recent-strip').getByRole('button', { name: '撤销' });
     check(Math.abs(area1 - area0 - 13.3) < 0.15 && (await undo.count()) === 1, `after a reload the recent strip still offers undo (${area0} -> ${area1} m²)`);
     await shot(page, 'chat-reload-undo-desktop');
     await undo.click();
-    await page.waitForFunction((a) => document.querySelector('[data-testid=fact-area]')?.textContent?.startsWith(String(a)), area0, { timeout: 30000 });
+    await page.waitForFunction((a) => document.querySelector('[data-testid=fact-area]')?.textContent?.startsWith(String(a)), area0, { timeout: tmo(30000) });
     check(true, `undo after the reload restores the house (${area0} m²)`);
     const redo = page.getByTestId('recent-strip').getByRole('button', { name: '恢复' });
     check((await redo.count()) === 1, 'and offers redo');
     await page.waitForTimeout(1200);
     await page.reload({ waitUntil: 'networkidle' });
-    await page.waitForFunction(() => window.__studio?.ready3d === true, null, { timeout: 180000 });
+    await page.waitForFunction(() => window.__studio?.ready3d === true, null, { timeout: tmo(180000) });
     await page.getByTestId('chat-history').click();
     await page.getByTestId('recent-strip').getByRole('button', { name: '恢复' }).click();
-    await page.waitForFunction((a) => !document.querySelector('[data-testid=fact-area]')?.textContent?.startsWith(String(a)), area0, { timeout: 30000 });
+    await page.waitForFunction((a) => !document.querySelector('[data-testid=fact-area]')?.textContent?.startsWith(String(a)), area0, { timeout: tmo(30000) });
     check(Math.abs((await shownArea(page)) - area1) < 0.05, 'redo survives a reload too');
     // A save made before task 018 (no turn structure) still loads and reads as plain text.
     // First let the redo's autosave (a 600 ms timer) land, or it overwrites the old save written here.
@@ -415,7 +417,7 @@ try {
       localStorage.setItem('opensu.autosave.v1', JSON.stringify(s));
     });
     await page.reload({ waitUntil: 'networkidle' });
-    await page.waitForFunction(() => window.__studio?.ready3d === true, null, { timeout: 180000 });
+    await page.waitForFunction(() => window.__studio?.ready3d === true, null, { timeout: tmo(180000) });
     await page.getByTestId('chat-history').click();
     const legacy = page.getByTestId('recent-strip').getByTestId('assistant-message');
     const legacyText = (await legacy.textContent()) ?? '';
@@ -435,7 +437,7 @@ try {
       stub.config.delay = 10;
       await sendMessage(page, '请分三步帮我改一改这栋房子');
       // Compact while working: one live line naming the step being sent.
-      await page.waitForFunction(() => document.querySelector('[data-testid=recent-strip] [data-testid=turn][data-live]')?.textContent?.includes('第 1 步：北侧房间加深 600 mm'), null, { timeout: 60000 });
+      await page.waitForFunction(() => document.querySelector('[data-testid=recent-strip] [data-testid=turn][data-live]')?.textContent?.includes('第 1 步：北侧房间加深 600 mm'), null, { timeout: tmo(60000) });
       const liveText = (await strip.getByTestId('assistant-message').textContent()) ?? '';
       check(!liveText.includes('先把北侧房间加深') && (await strip.locator('[role=status]').count()) === 1, `${name}: compact, working: one live line with the step, not the sentence (${liveText})`);
       await page.waitForTimeout(300);
@@ -485,7 +487,7 @@ try {
       await sendMessage(page, '你好');
       await waitDone(page, 2);
       // The collapse runs on the spring; software GL can make its frames slow.
-      await page.waitForFunction(() => document.querySelectorAll('[data-testid=chat-panel] [data-testid=assistant-message]')[0]?.querySelectorAll('[data-testid=turn-sentence]').length === 0, null, { timeout: 20000 }).catch(() => {});
+      await page.waitForFunction(() => document.querySelectorAll('[data-testid=chat-panel] [data-testid=assistant-message]')[0]?.querySelectorAll('[data-testid=turn-sentence]').length === 0, null, { timeout: tmo(20000) }).catch(() => {});
       const older = panel.getByTestId('assistant-message').first();
       const olderToggle = older.getByTestId('turn-toggle');
       check((await olderToggle.getAttribute('aria-expanded')) === 'false' && (await older.getByTestId('turn-sentence').count()) === 0 && ((await older.textContent()) ?? '').includes('三处都改好了'),
@@ -494,7 +496,7 @@ try {
       await shot(page, `${name}-full-older-collapsed`, dir);
       await olderToggle.click();
       await page.waitForTimeout(800);
-      await page.waitForFunction(() => !document.querySelector('[data-testid=chat-panel] [data-testid=assistant-message] [data-testid=turn] [data-open]')?.style.height, null, { timeout: 20000 }).catch(() => {});
+      await page.waitForFunction(() => !document.querySelector('[data-testid=chat-panel] [data-testid=assistant-message] [data-testid=turn] [data-open]')?.style.height, null, { timeout: tmo(20000) }).catch(() => {});
       check((await older.getByTestId('turn-sentence').count()) === 3 && (await olderToggle.getAttribute('aria-expanded')) === 'true', `${name}: full: expanding an older turn shows its timeline`);
       await older.evaluate((el) => el.scrollIntoView({ block: 'start' }));
       await page.waitForTimeout(200);
@@ -515,7 +517,7 @@ try {
     stub.config.delay = 20;
     await page.getByTestId('suggestions').getByRole('button').first().click();
     // The note after the turn shows for a few seconds: watch for it from now on (frames are slow here).
-    const toast = page.waitForSelector('[data-testid=change-toast] button:has-text("撤销")', { timeout: 90000 }).then(() => true, () => false);
+    const toast = page.waitForSelector('[data-testid=change-toast] button:has-text("撤销")', { timeout: tmo(90000) }).then(() => true, () => false);
     // Give the drawing back to watch the house change.
     await page.getByTestId('chat-history').click();
     await page.waitForTimeout(600);
@@ -524,11 +526,11 @@ try {
     await shot(page, 'chat-phone-streaming');
     stub.config.holdMs = 0;
     stub.config.delay = 8;
-    await page.waitForFunction(() => window.__studio?.growing === true, null, { timeout: 30000 }).catch(() => {});
+    await page.waitForFunction(() => window.__studio?.growing === true, null, { timeout: tmo(30000) }).catch(() => {});
     await page.waitForTimeout(500);
     await shot(page, 'chat-phone-grow');
     await waitGrown(page);
-    await page.waitForFunction(() => !document.querySelector('[data-testid=chat-status]'), null, { timeout: 30000 });
+    await page.waitForFunction(() => !document.querySelector('[data-testid=chat-status]'), null, { timeout: tmo(30000) });
     await page.waitForTimeout(300);
     check(await toast, 'phone: a short note sums up the change with undo');
     await shot(page, 'chat-phone-bar');

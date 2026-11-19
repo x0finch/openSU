@@ -1,0 +1,182 @@
+# Tests for pull requests to main (task 030).
+#
+# Jobs run in parallel:
+#   fast      `pnpm test:fast`: package build (tsc only), typecheck of every
+#             package, node unit tests, static checks. No browser.
+#   packages  browser renders of the packages (render, sheet, plan shots).
+#   web       one job per apps/web browser suite (`pnpm --filter @opensu/web
+#             test:<suite>`); the long suites are sharded by their sections.
+#   ci-ok     needs all of the above; the one check to make required.
+#
+# No secrets are used: the suites run against the built app in workerd
+# (`vite preview`) with a local chat stub, a local D1 and the email test
+# hook. Logs of a failed job are uploaded as an artifact.
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    # Explicit bash gets -o pipefail, so `| tee` keeps a failing exit code.
+    shell: bash
+
+env:
+  # Browsers are installed (and cached) by the browser jobs themselves.
+  PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: '1'
+  # Every wait limit in the browser suites x4 (tools/e2e-timeouts.mjs): a
+  # runner draws the studio's WebGL several times slower than the dev
+  # container. Only how long a wait may take; no check changes.
+  E2E_TIMEOUT_SCALE: '4'
+
+jobs:
+  fast:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      # Includes apps/web scripts/ci-shards-check.mjs: every section of a
+      # sharded suite is named by a shard below.
+      - run: pnpm test:fast
+
+  packages:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - uses: ./.github/actions/browser
+
+      - name: Package shots
+        run: |
+          mkdir -p artifacts
+          pnpm test:packages 2>&1 | tee artifacts/packages.log
+
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: packages
+          path: artifacts/
+          retention-days: 7
+          if-no-files-found: ignore
+
+  web:
+    runs-on: ubuntu-24.04
+    # The longest shard took about 5.5 minutes of suite time on run 1;
+    # the rest is set-up. Room for a slow runner, not for a hang.
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        # `only`: the shard's sections (name prefixes, the suite's --only).
+        # Sized from run 1 of PR #3 (docs/tasks/030-notes.md); the `fast`
+        # job checks that every section is in some shard.
+        include:
+          - suite: glass
+            run: test:glass
+          - suite: audit
+            run: test:audit
+          - suite: shots-still
+            run: test:shots
+            only: check-still
+          - suite: shots-views
+            run: test:shots
+            only: landing,studio-3d,studio-plan,check-controls,check-walk,check-sun
+          - suite: shots-site
+            run: test:shots
+            only: check-site,check-eye,studio-sheets
+          - suite: chat-desktop
+            run: test:chat
+            only: chat-desktop,chat-repair,chat-error,chat-settings,chat-giveup,chat-new
+          - suite: chat-more
+            run: test:chat
+            only: chat-reload,chat-steps,chat-phone,chat-nokey
+          - suite: account-projects
+            run: test:account
+            only: projects
+          - suite: account-share
+            run: test:account
+            only: share,canonical
+          - suite: account-entry-views
+            run: test:account
+            only: entry-views
+          - suite: account-entry-rules
+            run: test:account
+            only: entry-rules
+          - suite: account-keys
+            run: test:account
+            only: keys,desktop
+          - suite: account-turns
+            run: test:account
+            only: turns,phone,limits,google
+    name: web (${{ matrix.suite }})
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - uses: ./.github/actions/browser
+
+      # One build per job; the suites use dist/ and never build themselves.
+      - name: Build
+        run: pnpm --filter @opensu/web build
+
+      - name: Suite
+        env:
+          ONLY: ${{ matrix.only }}
+        run: |
+          mkdir -p artifacts
+          if [ -n "$ONLY" ]; then
+            pnpm --filter @opensu/web ${{ matrix.run }} --only "$ONLY" 2>&1 | tee artifacts/${{ matrix.suite }}.log
+          else
+            pnpm --filter @opensu/web ${{ matrix.run }} 2>&1 | tee artifacts/${{ matrix.suite }}.log
+          fi
+
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: web-${{ matrix.suite }}
+          path: artifacts/
+          retention-days: 7
+          if-no-files-found: ignore
+
+  ci-ok:
+    if: always()
+    needs: [fast, packages, web]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 2
+    steps:
+      - name: All jobs passed
+        env:
+          RESULTS: ${{ join(needs.*.result, ' ') }}
+        run: |
+          echo "results: $RESULTS"
+          for r in $RESULTS; do
+            if [ "$r" != "success" ]; then
+              echo "::error::a required job did not succeed ($r)"
+              exit 1
+            fi
+          done

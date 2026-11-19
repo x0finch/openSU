@@ -7,6 +7,7 @@ import { fileURLToPath } from 'node:url';
 import { createRequire } from 'node:module';
 import { createServer } from 'vite';
 import { workspaceAliases } from '../demo/aliases.js';
+import { scaleBrowser, tmo } from '../../../tools/e2e-timeouts.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const pkgRoot = resolve(here, '..');
@@ -29,6 +30,7 @@ const base = `http://127.0.0.1:${server.httpServer.address().port}/`;
 const browser = await playwright.chromium.launch({
   args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist', '--enable-webgl'],
 });
+scaleBrowser(browser);
 let failed = false;
 try {
   const page = await browser.newPage({ viewport: { width: 1200, height: 900 }, deviceScaleFactor: 1 });
@@ -40,7 +42,7 @@ try {
     failed = true;
   });
   await page.goto(base);
-  await page.waitForFunction(() => window.__ready === true, null, { timeout: 180000 });
+  await page.waitForFunction(() => window.__ready === true, null, { timeout: tmo(180000) });
   // Ad-hoc single sheet: --sheet '<SheetOptions JSON>' writes artifacts/sheets/custom.png.
   const custom = process.argv.indexOf('--sheet');
   if (custom > 0) {

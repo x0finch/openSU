@@ -12,6 +12,7 @@ import { createServer } from 'node:net';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { countControls } from './controls.mjs';
+import { scaleBrowser, tmo } from '../../../tools/e2e-timeouts.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const appRoot = resolve(here, '..');
@@ -61,7 +62,7 @@ const stopServer = () => server.kill('SIGTERM');
 process.on('exit', stopServer);
 
 async function waitForServer() {
-  for (let i = 0; i < 120; i++) {
+  for (let i = 0; i < tmo(120); i++) {
     try {
       const r = await fetch(`${base}/api/health`);
       if (r.ok) return;
@@ -102,6 +103,7 @@ console.log(`preview (workerd) on ${base}`);
 const browser = await playwright.chromium.launch({
   args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist', '--enable-webgl'],
 });
+scaleBrowser(browser);
 
 const DESKTOP = { viewport: { width: 1440, height: 900 }, deviceScaleFactor: 1 };
 const PHONE = { viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, isMobile: true, hasTouch: true };
@@ -127,14 +129,14 @@ async function noHorizontalScroll(page, name) {
 async function shot(page, name) {
   const file = resolve(outDir, `${name}.png`);
   // Software GL on a busy machine can take long for one frame.
-  await page.screenshot({ path: file, timeout: 180000 });
+  await page.screenshot({ path: file, timeout: tmo(180000) });
   console.log(`  -> ${file}`);
 }
 
 async function studio3d(opts, name, query = '', after) {
   if (!wanted(name)) return;
   const { ctx, page } = await open(opts, `/studio${query}`);
-  await page.waitForFunction(() => window.__studio?.ready3d === true, null, { timeout: 180000 });
+  await page.waitForFunction(() => window.__studio?.ready3d === true, null, { timeout: tmo(180000) });
   await page.evaluate(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))));
   const ink = await page.evaluate(() => window.__studio.engine.inkCoverage());
   check(ink > 0.02, `${name}: 3D canvas is not blank (${(ink * 100).toFixed(1)}% ink)`);
@@ -147,7 +149,7 @@ async function studio3d(opts, name, query = '', after) {
 async function studioPlan(opts, name, query = '', after) {
   if (!wanted(name)) return;
   const { ctx, page } = await open(opts, `/studio?mode=plan${query}`);
-  await page.waitForSelector('[data-testid=plan] svg', { timeout: 60000 });
+  await page.waitForSelector('[data-testid=plan] svg', { timeout: tmo(60000) });
   const n = await page.evaluate(() => document.querySelector('[data-testid=plan] svg')?.querySelectorAll('path, rect, text').length ?? 0);
   check(n > 50, `${name}: plan SVG present (${n} elements)`);
   if (after) await after(page);
@@ -186,7 +188,7 @@ async function compareWithRenderShots() {
   for (const v of views) {
     // The renderer demo draws the golden reference house.
     await page.goto(`${base}/studio?sample=golden&frame=full&view=${v}`, { waitUntil: 'networkidle' });
-    await page.waitForFunction(() => window.__studio?.ready3d === true, null, { timeout: 180000 });
+    await page.waitForFunction(() => window.__studio?.ready3d === true, null, { timeout: tmo(180000) });
     const ref = `data:image/png;base64,${readFileSync(resolve(shotsDir, `${v}.png`)).toString('base64')}`;
     const diff = await page.evaluate(async (src) => {
       const img = new Image();
@@ -257,7 +259,7 @@ const setRange = (page, minutes) =>
 async function sunAndCutChecks() {
   if (!wanted('check-sun')) return;
   const { ctx, page } = await open(DESKTOP, '/studio?sun=winter&time=10:00&cut=L1');
-  await page.waitForFunction(() => window.__studio?.ready3d === true, null, { timeout: 180000 });
+  await page.waitForFunction(() => window.__studio?.ready3d === true, null, { timeout: tmo(180000) });
   await settle(page);
   const a = await canvasPixels(page);
   await page.getByTestId('bar-sun').click();
@@ -307,7 +309,7 @@ async function controlChecks() {
   if (!wanted('check-controls')) return;
   for (const [name, opts] of [['desktop', DESKTOP], ['phone', PHONE]]) {
     const { ctx, page } = await open(opts, '/studio');
-    await page.waitForFunction(() => window.__studio?.ready3d === true, null, { timeout: 180000 });
+    await page.waitForFunction(() => window.__studio?.ready3d === true, null, { timeout: tmo(180000) });
     await page.waitForTimeout(500);
     const c = await page.evaluate(countControls);
     check(c.widgets <= CONTROL_LIMITS.widgets && c.elements <= CONTROL_LIMITS.elements, `${name}: ${c.widgets} visible controls (${c.elements} counting each segment), max ${CONTROL_LIMITS.widgets} / ${CONTROL_LIMITS.elements}: ${c.list.join(' | ')}`);
@@ -331,16 +333,16 @@ async function noonElevation(page) {
 async function siteChecks() {
   if (!wanted('check-site')) return;
   const { ctx, page } = await open(DESKTOP, '/studio');
-  await page.waitForFunction(() => window.__studio?.ready3d === true, null, { timeout: 180000 });
+  await page.waitForFunction(() => window.__studio?.ready3d === true, null, { timeout: tmo(180000) });
   const hz = await noonElevation(page);
   check(Math.abs(hz.elevation - 36.3) < 0.3, `default site (near Hangzhou): winter-solstice noon sun ${hz.elevation.toFixed(1)} deg (~36.3)`);
   const pick = async (query, expect) => {
     if (!(await page.getByTestId('tray-sun').count())) await page.getByTestId('bar-sun').click();
     await page.getByTestId('sun-place').click();
     await page.getByTestId('loc-search').fill(query);
-    await page.waitForSelector('[data-testid=loc-results] button', { timeout: 30000 });
+    await page.waitForSelector('[data-testid=loc-results] button', { timeout: tmo(30000) });
     await page.locator('[data-testid=loc-results] button').first().click();
-    await page.waitForFunction((e) => window.__studio.store.getState().house.site.placeName === e, expect, { timeout: 30000 });
+    await page.waitForFunction((e) => window.__studio.store.getState().house.site.placeName === e, expect, { timeout: tmo(30000) });
     await settle(page);
   };
   // A new place refreshes the sun strip, the slider range and the shadows at
@@ -389,7 +391,7 @@ async function siteChecks() {
   // Undo from the recent strip (the last studio edits with undo).
   await page.getByTestId('chat-history').click();
   await page.getByTestId('recent-strip').getByRole('button', { name: '撤销' }).last().click();
-  await page.waitForFunction(() => window.__studio.store.getState().house.site.placeName === '哈尔滨市', null, { timeout: 10000 });
+  await page.waitForFunction(() => window.__studio.store.getState().house.site.placeName === '哈尔滨市', null, { timeout: tmo(10000) });
   check(true, 'undo in the recent strip restores the previous place');
   await page.keyboard.press('Escape');
   // Orientation: the front facing due east = north turned by 90 deg; the sun and the shadows turn with it.
@@ -400,7 +402,7 @@ async function siteChecks() {
   await page.getByTestId('project-menu').click();
   await page.getByTestId('menu-orientation').click();
   await page.getByRole('button', { name: '东（90°）' }).click();
-  await page.waitForFunction(() => window.__studio.store.getState().house.site.northDeg === 90, null, { timeout: 10000 });
+  await page.waitForFunction(() => window.__studio.store.getState().house.site.northDeg === 90, null, { timeout: tmo(10000) });
   await page.waitForTimeout(400);
   await settle(page);
   const az1 = await page.evaluate(() => window.__studio.engine.viewer.sunStudy.azimuthDeg);
@@ -439,15 +441,15 @@ async function siteChecks() {
   await page.getByTestId('project-menu').click();
   await page.getByRole('menuitem', { name: /换一个模板/ }).click();
   await page.getByRole('menuitem', { name: /三合院/ }).click();
-  await page.waitForSelector('[data-testid=loc-skip]', { timeout: 60000 });
-  await page.waitForFunction(() => !window.__studio?.growing, null, { timeout: 60000 });
+  await page.waitForSelector('[data-testid=loc-skip]', { timeout: tmo(60000) });
+  await page.waitForFunction(() => !window.__studio?.growing, null, { timeout: tmo(60000) });
   // Wait for the state, not a fixed time (software GL can be slow to finish the view change).
   await page
     .waitForFunction(() => {
       const s = window.__studio.store.getState();
       const v = window.__studio.engine.viewer;
       return s.view === 'axo-se' && !s.cut && !s.sun.on && !v.cutaway && v.lightingMode.mode === 'presentation' && v.currentView?.id === 'axo-se';
-    }, null, { timeout: 15000 })
+    }, null, { timeout: tmo(15000) })
     .catch(() => {});
   const fresh = await page.evaluate(() => {
     const s = window.__studio.store.getState();
@@ -654,7 +656,7 @@ async function stillHouseChecks() {
   // Half the pixels: software GL then draws frames often enough to see the re-frame animate.
   {
     const { ctx, page } = await open(DESKTOP, '/studio?sun=winter&time=10:00&dpr=0.5');
-    await page.waitForFunction(() => window.__studio?.ready3d === true, null, { timeout: 180000 });
+    await page.waitForFunction(() => window.__studio?.ready3d === true, null, { timeout: tmo(180000) });
     await page.waitForTimeout(800);
     await recorder.install(page);
     for (const tool of ['views', 'levels', 'sun']) await still(page, `3D ${tool} panel`, () => page.getByTestId(`bar-${tool}`).click(), esc(page));
@@ -704,7 +706,7 @@ async function stillHouseChecks() {
         .waitForFunction((w) => {
           const el = document.querySelector('[data-testid=chat-panel]');
           return `${getComputedStyle(el).opacity} ${el.hasAttribute('inert')}` === w;
-        }, want, { timeout: 8000 })
+        }, want, { timeout: tmo(8000) })
         .then(() => true, () => false);
     await page.getByTestId('project-menu').click();
     check(await sideState('0 true'), 'pinned: the project menu opens over the sidebar, which steps aside (no glass on glass)');
@@ -718,7 +720,7 @@ async function stillHouseChecks() {
   // Desktop plan.
   {
     const { ctx, page } = await open(DESKTOP, '/studio?mode=plan');
-    await page.waitForSelector('[data-testid=plan] svg', { timeout: 60000 });
+    await page.waitForSelector('[data-testid=plan] svg', { timeout: tmo(60000) });
     await page.waitForTimeout(600);
     await recorder.install(page);
     await still(page, 'plan levels panel', () => page.getByTestId('bar-levels').click(), esc(page));
@@ -737,8 +739,8 @@ async function stillHouseChecks() {
   // Phone: the sheet at both detents, in 3D and plan.
   for (const mode of ['3d', 'plan']) {
     const { ctx, page } = await open(PHONE, `/studio?sun=winter&time=10:00${mode === 'plan' ? '&mode=plan' : ''}`);
-    if (mode === '3d') await page.waitForFunction(() => window.__studio?.ready3d === true, null, { timeout: 180000 });
-    else await page.waitForSelector('[data-testid=plan] svg', { timeout: 60000 });
+    if (mode === '3d') await page.waitForFunction(() => window.__studio?.ready3d === true, null, { timeout: tmo(180000) });
+    else await page.waitForSelector('[data-testid=plan] svg', { timeout: tmo(60000) });
     await page.waitForTimeout(800);
     await recorder.install(page);
     const tool = mode === '3d' ? 'views' : 'levels';
@@ -775,7 +777,7 @@ async function stillHouseChecks() {
 async function eyeLevelChecks() {
   if (!wanted('check-eye')) return;
   const { ctx, page } = await open(DESKTOP, '/studio?view=eye-sw');
-  await page.waitForFunction(() => window.__studio?.ready3d === true, null, { timeout: 180000 });
+  await page.waitForFunction(() => window.__studio?.ready3d === true, null, { timeout: tmo(180000) });
   await settle(page);
   const az = await page.evaluate(() => window.__studio.engine.viewer.currentView?.azimuthDeg);
   check(az === 140, `T1 eye level looks from the unobstructed south-east (azimuth ${az})`);
@@ -784,7 +786,7 @@ async function eyeLevelChecks() {
 
 /** Waits for walk mode (after its dissolve) and places the walker. */
 async function walkTo(page, x, y, heading) {
-  await page.waitForFunction(() => window.__studio?.engine?.viewer?.walking === true, null, { timeout: 60000 });
+  await page.waitForFunction(() => window.__studio?.engine?.viewer?.walking === true, null, { timeout: tmo(60000) });
   await page.waitForTimeout(400);
   await page.evaluate(([px, py, h]) => {
     const v = window.__studio.engine.viewer;
@@ -798,8 +800,8 @@ async function walkTo(page, x, y, heading) {
 async function walkChecks() {
   if (!wanted('check-walk')) return;
   const { ctx, page } = await open(DESKTOP, '/studio?sample=golden&walk=1');
-  await page.waitForFunction(() => window.__studio?.ready3d === true, null, { timeout: 180000 });
-  await page.waitForFunction(() => window.__studio?.engine?.viewer?.walking === true, null, { timeout: 60000 });
+  await page.waitForFunction(() => window.__studio?.ready3d === true, null, { timeout: tmo(180000) });
+  await page.waitForFunction(() => window.__studio?.engine?.viewer?.walking === true, null, { timeout: tmo(60000) });
   check(await page.locator('[data-testid=walk-hud]').count() === 1, 'walk HUD with mini-map is shown');
   const st0 = await page.evaluate(() => window.__studio.engine.viewer.walkState);
   check(st0 && st0.level === 'L1', `walk starts on the ground floor (${JSON.stringify(st0)})`);
@@ -834,7 +836,7 @@ async function walkChecks() {
   // Exit returns to the view.
   await page.getByRole('button', { name: '退出漫游' }).click();
   // The exit is a dissolve driven by frames: wait for the state, not a fixed time.
-  await page.waitForFunction(() => window.__studio.engine.viewer.walking === false, null, { timeout: 15000 }).catch(() => {});
+  await page.waitForFunction(() => window.__studio.engine.viewer.walking === false, null, { timeout: tmo(15000) }).catch(() => {});
   check((await page.evaluate(() => window.__studio.engine.viewer.walking)) === false, 'exit leaves walk mode');
   await ctx.close();
 }
@@ -844,13 +846,13 @@ async function sheets(opts, name) {
   if (!wanted(name)) return;
   const { ctx, page } = await open(opts, '/studio?mode=sheet');
   const t0 = Date.now();
-  await page.waitForSelector('[data-testid=sheets]', { timeout: 60000 });
+  await page.waitForSelector('[data-testid=sheets]', { timeout: tmo(60000) });
   if (!smoke && name.includes('desktop')) {
     // Progress state while the set renders.
     await page.waitForTimeout(400);
     await shot(page, `${name}-progress`);
   }
-  await page.waitForFunction(() => window.__sheets?.done === true, null, { timeout: 300000 });
+  await page.waitForFunction(() => window.__sheets?.done === true, null, { timeout: tmo(300000) });
   const res = await page.evaluate(() => ({
     error: window.__sheets.error,
     files: window.__sheets.files.map((f) => f && { w: f.width, h: f.height, bytes: f.blob.size, type: f.blob.type }),
@@ -923,7 +925,7 @@ try {
     await studio3d(DESKTOP, 'studio-walk-desktop-en', '?sample=golden&walk=1&lang=en', (p) => walkTo(p, 7.3, 8.6, 180));
     // The starter house (the studio's default), from its own entrance.
     await studio3d(DESKTOP, 'studio-walk-starter-desktop', '?walk=1&sun=winter&time=10:00', async (p) => {
-      await p.waitForFunction(() => window.__studio?.engine?.viewer?.walking === true, null, { timeout: 60000 });
+      await p.waitForFunction(() => window.__studio?.engine?.viewer?.walking === true, null, { timeout: tmo(60000) });
       await p.waitForTimeout(500);
     });
     await compareWithRenderShots();

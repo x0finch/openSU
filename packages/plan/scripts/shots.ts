@@ -30,8 +30,11 @@ for (const level of house.levels) {
 }
 
 // Rasterise with the preinstalled Playwright Chromium.
+const timeoutScale = Number(process.env.E2E_TIMEOUT_SCALE) > 0 ? Number(process.env.E2E_TIMEOUT_SCALE) : 1;
 const require = createRequire(import.meta.url);
 interface Page {
+  setDefaultTimeout(ms: number): void;
+  setDefaultNavigationTimeout(ms: number): void;
   setViewportSize(s: { width: number; height: number }): Promise<void>;
   setContent(html: string): Promise<void>;
   evaluate(expr: string): Promise<unknown>;
@@ -56,6 +59,9 @@ if (!playwright) {
       for (const fl of files) {
         const dpr = base * scale;
         const page = await browser.newPage({ deviceScaleFactor: dpr });
+        // The suites' one timeout scale (tools/e2e-timeouts.mjs), on Playwright's 30 s defaults.
+        page.setDefaultTimeout(30000 * timeoutScale);
+        page.setDefaultNavigationTimeout(30000 * timeoutScale);
         await page.setViewportSize({ width: fl.w, height: fl.h });
         await page.setContent(`<!doctype html><html><body style="margin:0">${fl.svg}</body></html>`);
         await page.evaluate('document.fonts.ready.then(() => true)');
