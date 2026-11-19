@@ -81,10 +81,12 @@ the same tint, blur and rim (no refraction).
    request.
 9. **One bold colour.** Ginkgo yellow for the sun, the play button, the
    send button and the working glow. Everything else is ink.
-10. **Smoky glass by default.** The owner chose dark, smoky capsules
-    (direction 4), so dark glass with light ink is the default in every
-    view. Light glass stays defined in the material but is not used by
-    default.
+10. **iOS 26 glass (task 034, the owner's decision of 2026-11-19).** The
+    reference is iOS 26's Liquid Glass. Light glass with dark ink is the
+    default, as iOS over light content; it turns dark where the content
+    behind it is dark (walking through rooms). This replaces direction 4
+    (dark, smoky capsules everywhere). `?glass=dark` / `?glass=light` fix
+    one tone for comparison and tests.
 11. **Not everything is glass.** The house name and area are plain text
     on the drawing. Sheets in the gallery stay white paper.
 
@@ -99,11 +101,11 @@ Material:
 |---|---|---|
 | tint colour | white | rgb(30 30 34) |
 | tint, capsule | 14% (glasswork range 6-22%) | 60% (30% and 45% failed 4.5:1 for labels over white) |
-| tint, text surface | 42% | 60% |
+| tint, text surface | 60% (task 034: 42% left the phone sun sheet's text at 4.2:1 over its scrim) | 60% |
 | blur | 2 px (panel morph up to 6 px) | same |
 | saturation | 1.8 | 1.6 |
 | brightness | 1.06 | 0.80 |
-| ink | rgba(0,0,0,.86), secondary rgba(60,60,67,.7) | rgba(255,255,255,.94), secondary rgba(235,235,245,.64) |
+| ink | rgba(0,0,0,.86), secondary rgba(60,60,67,.8) (task 034: .7 measured 4.49:1 on white) | rgba(255,255,255,.94), secondary rgba(235,235,245,.64) |
 
 Rim refraction (same for both):
 

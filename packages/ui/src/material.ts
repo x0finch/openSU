@@ -41,7 +41,9 @@ export const TONES: Record<GlassTone, Tone> = {
   light: {
     tint: [1, 1, 1],
     tintControl: 0.14,
-    tintText: 0.42,
+    // Task 034 (iOS 26): surfaces holding text (panels, menus, sheets, the conversation) are frosted white enough
+    // for dark ink over any content, also over a sheet's scrim (glass-contrast: 4.5:1 for every role).
+    tintText: 0.6,
     tintLens: 0.55,
     lensFace: 'rgba(255, 255, 255, 0)',
     thumbFace: '#ffffff',
@@ -54,7 +56,7 @@ export const TONES: Record<GlassTone, Tone> = {
     shadowBlur: 16,
     hairline: 0.12,
     ink: 'rgba(0, 0, 0, 0.86)',
-    ink2: 'rgba(60, 60, 67, 0.7)',
+    ink2: 'rgba(60, 60, 67, 0.8)',
     rowHover: 'rgba(0, 0, 0, 0.05)',
     rowActive: 'rgba(0, 0, 0, 0.09)',
     separator: 'rgba(60, 60, 67, 0.16)',

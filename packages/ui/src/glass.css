@@ -139,7 +139,8 @@
 }
 .lg-slider .lg-lens-face {
   background: var(--lg-thumb-face);
-  box-shadow: 0 1px 4px rgb(0 0 0 / 0.18);
+  /* iOS's thumb (task 034): a hairline ring and two soft shadows, so a white thumb reads on white glass. */
+  box-shadow: 0 0 0 0.5px rgb(0 0 0 / 0.08), 0 3px 8px rgb(0 0 0 / 0.16), 0 1px 2px rgb(0 0 0 / 0.1);
 }
 /* The magnified copy of what lies under a lens (labels, the slider track). */
 .lg-lens-copy {

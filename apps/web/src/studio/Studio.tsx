@@ -389,7 +389,13 @@ export function Studio() {
   const sideRight = column ? PIN_RIGHT : 0;
   const walkLandscape = walk && landscape;
   // Smoky (dark) glass is the studio's material; ?glass=light shows light glass for comparison.
-  const [glassTone] = useState<GlassTone>(() => (typeof location !== 'undefined' && new URLSearchParams(location.search).get('glass') === 'light' ? 'light' : 'dark'));
+  // Task 034 (iOS 26): light glass by default, as iOS's Liquid Glass over light content; it turns dark where the
+  // content behind it is dark (walking through rooms). `?glass=dark` / `?glass=light` fix one tone (comparison, tests).
+  const [fixedTone] = useState<GlassTone | null>(() => {
+    const q = typeof location !== 'undefined' ? new URLSearchParams(location.search).get('glass') : null;
+    return q === 'dark' || q === 'light' ? q : null;
+  });
+  const glassTone: GlassTone = fixedTone ?? (walk ? 'dark' : 'light');
 
   const main = useRef<HTMLElement>(null);
   useClickAwayFromDrawing(main);

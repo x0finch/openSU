@@ -25,7 +25,7 @@ export function useGlass(): { backend: GlassBackend; tone: GlassTone; opaque: bo
  * blur...) for everything inside. `tone` picks smoky (dark, the default
  * the owner chose) or light glass.
  */
-export function GlassLayer({ tone = 'dark', children }: { tone?: GlassTone; children: ReactNode }) {
+export function GlassLayer({ tone = 'light', children }: { tone?: GlassTone; children: ReactNode }) {
   useEffect(() => glassRegistry.setTone(tone), [tone]);
   useEffect(() => {
     const idle = (window as Window & { requestIdleCallback?: (f: () => void, o?: { timeout: number }) => number }).requestIdleCallback;

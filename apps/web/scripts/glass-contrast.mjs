@@ -19,7 +19,7 @@ import { scaleBrowser, tmo } from '../../../tools/e2e-timeouts.mjs';
 const here = dirname(fileURLToPath(import.meta.url));
 const appRoot = resolve(here, '..');
 const MIN = 4.5;
-const tone = process.argv.includes('--glass') ? process.argv[process.argv.indexOf('--glass') + 1] : 'dark';
+const tone = process.argv.includes('--glass') ? process.argv[process.argv.indexOf('--glass') + 1] : 'light';
 
 const require = createRequire(import.meta.url);
 let playwright;
