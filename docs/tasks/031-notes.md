@@ -237,6 +237,43 @@ would need the tooltip trigger to work before Base UI's code arrives).
   anchor or the anchor's bar, and its anchor-side edge stays within the
   module's gap of where it rests; all five pass.
 
+Run again on 2026-11-19 after the fixes below (step 6): all 18 surfaces
+measured (9 per viewport) with the numbers above; all five strips pass.
+`capture` now waits until the open surface rests (no starting style, no
+transform, no running animation) instead of a fixed 1.3 s: the phone share
+sheet, opened from the project menu, was still sliding at 1.3 s and was
+first reported "NOT FOUND" (at rest it is correct: 374x160, same header).
+On the phone strip the close leaves no mid-motion frame: the sheet's
+`onClosed` timer is Vaul's real 500 ms slide, which the 40x slowdown does
+not stretch, so the slowed sheet is unmounted at 500 ms. At real speed the
+two are the same length. `--only probe-share` logs that sheet over time.
+
+## Steps 5 and 6, finished (2026-11-19)
+
+The three defects were already handled in steps 2 and 3 (see "Defects of
+2026-11-18"); step 5 was verification. PR #4's first CI run (run
+44447300691, on the WIP head 4665253) failed five jobs. Causes and fixes:
+
+| Job | Cause | Fix |
+|---|---|---|
+| shots-views | `check-sun` set the slider before the lazily loaded sun panel existed (`Illegal invocation` on `undefined`) | `setRange` waits for the range input; Base UI's input is visually hidden and `position: fixed`, so it is found by being connected and not inert, not by `offsetParent` (also `check-site`) |
+| shots-still | **a real defect**: on phones with the conversation pinned, a tap on a tool did nothing. The tray was set on pointer-up, then Radix's outside-interaction dismissal of the docked (non-modal) Vaul drawer called `onOpenChange(false)` and the dock's `close()` cleared it | `sheet-vaul.tsx`: `onInteractOutside` is cancelled unless the sheet is modal and the press is on its scrim. Escape, the scrim and a drag down still close (checked pinned and unpinned at 390x844) |
+| account-projects | the thumbnail wait was the one bare limit left (`45000`, not `tmo()`), so CI's x4 did not apply | `tmo(45000)` |
+| account-entry-views | the account menu was measured at its first frame (gap 3.2 = 0.4 x 8, the starting scale) after a fixed 1 s pause on a runner with second-long frames | the share surface, sign-in and account menu are measured once they rest; the 8 px assertion is unchanged |
+| audit | the WIP commit shortened the prompt `row-align` allow key; the audit still reports it with the reply's text, so it was NEW and FIXED at once | the key restored as on `main` |
+
+Locally after the fixes: `shots --smoke` (all sections), `account-e2e
+--smoke --only projects`, `--only entry-views`, `ui-audit --smoke` pass.
+The other account shards, chat and glass passed on CI run 44447300691 and
+were not touched.
+
+Defect 2 (toolbar labels collapse on opening a panel) is the first-use
+rule of task 017, as found in step 5's first pass; a tool's own width does
+not change when its panel opens (`w-11`, its value or its icon). Left as
+is. If the collapse feels wrong to the owner, the alternative is to
+collapse the names when the first panel *closes*, so the bar never
+changes under an open panel.
+
 ## Checks whose text or steps changed
 
 - `shots.mjs` still-house, phone: the sheet is closed with its close
@@ -278,4 +315,7 @@ would need the tooltip trigger to work before Base UI's code arrives).
 - Not verified on a real phone or Safari; only Chromium (SwiftShader).
 - The frame strips have few mid-motion frames (slow screenshots); the
   in-page probe (`getComputedStyle` every 40 ms) shows the transform going
-  from `scale(0.94, 0.4)` to none in about 380 ms.
+  from `scale(0.94, 0.4)` to none in about 380 ms. The phone close has no
+  slowed mid-motion frame (see "Evidence").
+- The comparison sheets and strips were reviewed by the implementing agent
+  only, not by the lead.

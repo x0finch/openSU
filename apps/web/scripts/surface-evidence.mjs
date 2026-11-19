@@ -131,7 +131,17 @@ const measure = (page) =>
 
 const rows = [];
 async function capture(page, name, label, phone) {
-  await page.waitForTimeout(1300);
+  await page.waitForTimeout(600);
+  // At rest: a surface opened from another one (share from the project menu) can still be sliding after a fixed pause.
+  await page
+    .waitForFunction(() => {
+      const s = [...document.querySelectorAll('[data-anchored][data-open], .lg-sheet[data-open]')].pop();
+      if (!s || s.getBoundingClientRect().height < 40) return false;
+      const pop = s.closest('.lg-pop') ?? s;
+      return !pop.hasAttribute('data-starting-style') && getComputedStyle(s).transform === 'none' && s.getAnimations({ subtree: true }).every((a) => a.playState !== 'running');
+    }, null, { timeout: tmo(8000) })
+    .catch(() => console.log(`  (${label}: not at rest after the wait; measured as it is)`));
+  await page.waitForTimeout(300);
   const m = await measure(page);
   const file = resolve(raw, `${phone ? 'phone' : 'desktop'}-${name}.png`);
   if (m && !phone) {
@@ -314,7 +324,25 @@ try {
     writeFileSync(resolve(out, 'surfaces.json'), JSON.stringify(rows, null, 1));
   }
   if (want('strips')) await strips();
-  if (only?.includes('probe')) {
+  if (only?.includes('probe-share')) {
+    // The phone share sheet, signed in, opened from the project menu: where the sheet and its glass are over time.
+    const { ctx, page } = await studio(PHONE, 'probe-share@example.com');
+    await page.getByTestId('project-menu').click();
+    await page.waitForTimeout(700);
+    await page.getByTestId('menu-share').click();
+    for (const ms of [200, 600, 1300, 3000]) {
+      await page.waitForTimeout(ms);
+      console.log(ms, JSON.stringify(await page.evaluate(() => [...document.querySelectorAll('.lg-sheet')].map((s) => {
+        const r = s.getBoundingClientRect();
+        const g = window.__glass?.shapeOf?.(s);
+        const ops = [];
+        for (let x = s; x && x.nodeType === 1; x = x.parentElement) if (Number(getComputedStyle(x).opacity) < 1) ops.push(`${x.tagName}.${String(x.className).slice(0, 30)}=${getComputedStyle(x).opacity}`);
+        return { kind: s.getAttribute('data-sheet'), open: s.hasAttribute('data-open'), y: Math.round(r.top), h: Math.round(r.height), glass: g ? { y: Math.round(g.y), h: Math.round(g.height) } : null, transform: getComputedStyle(s).transform, ops };
+      }))));
+    }
+    await page.screenshot({ path: resolve(raw, 'probe-share-phone.png') });
+    await ctx.close();
+  } else if (only?.includes('probe')) {
     // The account menu under the house name: its gap, settled (account-e2e's check).
     const { ctx, page } = await studio(DESKTOP, 'probe@example.com');
     await page.getByTestId('project-menu').click();
