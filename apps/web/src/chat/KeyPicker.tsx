@@ -6,7 +6,7 @@
 // The menu opens at its button (task 025: the glass module places it).
 import { type FormEvent, type KeyboardEvent as RKeyboardEvent, useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
 import { ChevronDownSmallIcon, CheckIcon, PlusIcon } from '../components/icons';
-import { Button, Choice, cx, Field, Input, Menu, MenuItem, MenuLabel, Popover, PopoverAction, PopoverBody, PopoverDescription, PopoverFooter, PopoverHeader, PopoverTitle, Separator, usePhone } from '@opensu/ui';
+import { Button, Choice, type CloseReason, cx, Field, Input, Menu, MenuItem, MenuLabel, Popover, PopoverAction, PopoverBody, PopoverDescription, PopoverFooter, PopoverHeader, PopoverTitle, Separator, usePhone } from '@opensu/ui';
 import { type MessageKey, useT } from '../lib/i18n';
 import { useStudio } from '../lib/store';
 import { useChat } from './chat-store';
@@ -41,29 +41,6 @@ export function KeyPicker({ variant, phone }: { variant: 'input' | 'header'; pho
   const label = useCurrentLabel(t, variant === 'input');
   const btn = useRef<HTMLButtonElement>(null);
   const menu = useRef<HTMLElement | null>(null);
-  // A press outside closes it; Escape closes it and returns to the button.
-  useEffect(() => {
-    if (!open) return;
-    const down = (e: PointerEvent) => {
-      const n = e.target as Node;
-      if (menu.current?.contains(n) || btn.current?.contains(n)) return;
-      openPicker(null);
-    };
-    const key = (e: KeyboardEvent) => {
-      if (e.key !== 'Escape') return;
-      e.preventDefault();
-      e.stopPropagation();
-      openPicker(null);
-      btn.current?.focus({ preventScroll: true });
-    };
-    window.addEventListener('pointerdown', down, true);
-    window.addEventListener('keydown', key, true);
-    menu.current?.querySelector<HTMLElement>('[role=menuitemradio], [role=menuitem]')?.focus({ preventScroll: true });
-    return () => {
-      window.removeEventListener('pointerdown', down, true);
-      window.removeEventListener('keydown', key, true);
-    };
-  }, [open]);
   // In the pinned field (task 023): as high as send; its ends even (4 px), so its text is 8 px from the
   // field's edge (4 + 4) and the field's ends read even with send's concentric 4 px; no resting plate
   // (a lighter plate costs the label contrast); pt-px: the glyphs' optical centre.
@@ -91,10 +68,12 @@ export function KeyPicker({ variant, phone }: { variant: 'input' | 'header'; pho
         ref={menu}
         open={open}
         anchor={() => btn.current}
+        // Base UI closes it (Escape: focus back to the button; a press outside; focus leaving); the button toggles it.
+        onClose={() => openPicker(null)}
         placement={variant === 'input' ? 'above-start' : 'below-start'}
         label={t('keys.menu')}
         style={{ width: 'min(300px, calc(100vw - 24px))' }}
-        data-testid={open ? 'key-menu' : undefined}
+        testId={open ? 'key-menu' : undefined}
       >
         <KeyMenuBody anchor={() => btn.current} />
       </Menu>
@@ -134,17 +113,9 @@ function KeyMenuBody({ anchor }: { anchor: () => HTMLElement | null }) {
     openPicker(null);
     void fn();
   };
-  const onKey = (e: RKeyboardEvent) => {
-    const d = e.key === 'ArrowDown' ? 1 : e.key === 'ArrowUp' ? -1 : 0;
-    if (!d) return;
-    e.preventDefault();
-    const items = [...((e.currentTarget as HTMLElement).querySelectorAll<HTMLElement>('[role=menuitemradio], [role=menuitem]'))];
-    const i = items.indexOf(document.activeElement as HTMLElement);
-    items[(i + d + items.length) % items.length]?.focus();
-  };
   const browserKey = settings.key.trim() ? (settings.provider === 'custom' ? (browserKeyProvider(settings) ? PROVIDER_NAMES[browserKeyProvider(settings)!] : t('settings.p.custom')) : PROVIDER_NAMES[settings.provider]) : null;
   return (
-    <div onKeyDown={onKey} className="flex flex-col">
+    <div className="flex flex-col">
       {server?.serverKey && (
         <MenuItem role="menuitemradio" aria-checked={src.kind === 'site'} icon={<Check on={src.kind === 'site'} />} detail={<FreeDetail />} onClick={() => pick(() => choose({ kind: 'site' }))} data-testid="key-free">
           {t('keys.free')}
@@ -334,29 +305,18 @@ export function KeySheetHost() {
   const t = useT();
   const phone = usePhone();
   const sheet = useKeys((s) => s.sheet);
-  const from = useKeys((s) => s.anchor);
   const [shown, setShown] = useState<KeySheetMode | null>(sheet);
-  const [rect, setRect] = useState<DOMRect | null>(null);
   const panel = useRef<HTMLElement>(null);
   const open = !!sheet;
   useLayoutEffect(() => {
     if (sheet) {
       setShown(sheet);
-      setRect(from?.isConnected ? from.getBoundingClientRect() : null);
     }
-  }, [sheet, from]);
-  useEffect(() => {
-    if (!open || phone) return;
-    const down = (e: PointerEvent) => {
-      if (panel.current?.contains(e.target as Node) || useKeys.getState().busy) return;
-      if (useKeys.getState().sheet?.mode === 'offer') markOffered();
-      closeKeySheet();
-    };
-    window.addEventListener('pointerdown', down, true);
-    return () => window.removeEventListener('pointerdown', down, true);
-  }, [open, phone]);
+  }, [sheet]);
   if (!shown) return null;
-  const close = () => {
+  const close = (reason?: CloseReason) => {
+    // A press outside while a key is being checked leaves it open.
+    if (reason === 'outside-press' && useKeys.getState().busy) return;
     if (useKeys.getState().sheet?.mode === 'offer') markOffered();
     closeKeySheet();
   };
@@ -364,14 +324,13 @@ export function KeySheetHost() {
     setShown(null);
     if (!phone) document.querySelector<HTMLElement>('[data-testid=prompt-bar]')?.focus({ preventScroll: true });
   };
-  // Above the input (where the draft waits), grown out of the control that opened it (its box: a menu row closes with its menu).
+  // Above the input (where the draft waits); it grows out of the input's upper edge.
   return (
     <Popover
       ref={panel}
       open={open}
       anchor={() => document.querySelector<HTMLElement>('[data-testid=prompt]')}
       placement="above-center"
-      from={() => (open && rect ? { x: rect.left, y: rect.top, width: rect.width, height: rect.height } : from?.isConnected ? from : document.querySelector<HTMLElement>('[data-testid=prompt]'))}
       size="dialog"
       onClose={close}
       onClosed={onClosed}

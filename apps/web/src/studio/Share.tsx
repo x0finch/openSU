@@ -188,32 +188,9 @@ export function ShareHost() {
       c();
     };
   }, []);
-  // A press outside closes it (desktop); Escape closes it and gives focus back to its opener.
-  useEffect(() => {
-    if (!open) return;
-    const down = (e: PointerEvent) => {
-      if (phone || panel.current?.contains(e.target as Node)) return;
-      const opener = useShareUi.getState().anchor;
-      if (opener?.contains(e.target as Node) || (e.target as Element | null)?.closest?.(SHARE_BUTTON)) return;
-      closeShare();
-    };
-    const key = (e: KeyboardEvent) => {
-      if (e.key !== 'Escape') return;
-      e.preventDefault();
-      e.stopPropagation();
-      closeShare();
-      useShareUi.getState().anchor?.focus({ preventScroll: true });
-    };
-    window.addEventListener('pointerdown', down, true);
-    window.addEventListener('keydown', key, true);
-    return () => {
-      window.removeEventListener('pointerdown', down, true);
-      window.removeEventListener('keydown', key, true);
-    };
-  }, [open, phone]);
   if (!shown) return null;
-  // The studio: under the row of the house name it shares (as the project menu stands under the name), grown out of the
-  // share button. The projects page: under the card's "more" button.
+  // The studio: under the row of the house name it shares (as the project menu stands under the name). The projects
+  // page: under the card's "more" button. Base UI closes it (Escape: focus back to its opener; a press outside).
   const opener = () => (anchorEl?.isConnected ? anchorEl : document.querySelector<HTMLElement>(SHARE_BUTTON));
   const row = () => opener()?.closest<HTMLElement>(TITLE_ROW) ?? null;
   const anchor = () => row() ?? opener();
@@ -223,9 +200,9 @@ export function ShareHost() {
       open={open}
       anchor={anchor}
       placement={row() ? 'below-start' : 'below-end'}
-      from={opener}
       size="dialog"
       onClose={closeShare}
+      finalFocus={() => opener()}
       onClosed={() => setShown(false)}
       labelledBy="share-title"
       label={t('share.button')}

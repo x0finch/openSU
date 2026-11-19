@@ -1,6 +1,8 @@
 // Field and Input: a text field inside glass (a quiet well with a hairline
-// that brightens on focus; the caret is yellow). `Field` adds a label above
-// and a hint under it.
+// that brightens on focus; the caret is the accent), on Base UI's Field and
+// Input (task 031): `Field` gives its label and hint to the input inside it.
+import { Field as BaseField } from '@base-ui/react/field';
+import { Input as BaseInput } from '@base-ui/react/input';
 import type { InputHTMLAttributes, ReactNode, Ref } from 'react';
 import { cx } from './surface';
 
@@ -8,9 +10,9 @@ export function Input({ size = 'md', mono, className, icon, ref, ...rest }: Omit
   return (
     <label className={cx('lg-field flex min-w-0 items-center gap-2', size === 'lg' ? 'h-12 px-4' : size === 'md' ? 'h-11 px-3.5' : 'h-10 px-3', className)}>
       {icon}
-      <input
+      <BaseInput
         ref={ref}
-        {...rest}
+        {...(rest as object)}
         className={cx('h-full w-full min-w-0 truncate bg-transparent font-medium text-ink outline-none placeholder:font-normal placeholder:text-ink-2 [&:focus-visible]:outline-none', mono && 'tnum', size === 'lg' ? 'text-[16px]' : size === 'md' ? 'text-[14px]' : 'text-[13.5px]')}
       />
     </label>
@@ -19,20 +21,21 @@ export function Input({ size = 'md', mono, className, icon, ref, ...rest }: Omit
 
 /** The six boxes of a sign-in code: one per digit. */
 export function CodeInput({ className, ref, ...rest }: InputHTMLAttributes<HTMLInputElement> & { ref?: Ref<HTMLInputElement> }) {
-  return <input ref={ref} {...rest} className={cx('lg-field lg-code tnum h-14 w-0 min-w-0 flex-1 text-center text-[24px] font-semibold text-ink outline-none disabled:opacity-50 [&:focus-visible]:outline-none', className)} />;
+  return <BaseInput ref={ref} {...(rest as object)} className={cx('lg-field lg-code tnum h-14 w-0 min-w-0 flex-1 text-center text-[24px] font-semibold text-ink outline-none disabled:opacity-50 [&:focus-visible]:outline-none', className)} />;
 }
 
+/** A labelled field: the label above, the input (an `Input` inside), an optional hint under it. */
 export function Field({ label, hint, children }: { label: ReactNode; hint?: ReactNode; children: ReactNode }) {
   return (
-    <div className="block">
-      <span className="mb-1.5 block text-[12px] font-medium text-ink-2">{label}</span>
+    <BaseField.Root className="block">
+      <BaseField.Label className="mb-1.5 block text-[12px] font-medium text-ink-2">{label}</BaseField.Label>
       {children}
-      {hint && <span className="mt-1.5 block text-[12px] leading-4 text-ink-2">{hint}</span>}
-    </div>
+      {hint && <BaseField.Description className="mt-1.5 block text-[12px] leading-4 text-ink-2">{hint}</BaseField.Description>}
+    </BaseField.Root>
   );
 }
 
 /** A name typed in place on paper (the house name in the studio, a card's name on /projects). */
 export function NameInput({ className, ref, ...rest }: InputHTMLAttributes<HTMLInputElement> & { ref?: Ref<HTMLInputElement> }) {
-  return <input ref={ref} {...rest} className={cx('min-w-0 rounded-[8px] bg-page px-1.5 font-semibold outline outline-1 outline-ink-3 focus:outline-2 focus:outline-ink', className)} />;
+  return <BaseInput ref={ref} {...(rest as object)} className={cx('min-w-0 rounded-[8px] bg-page px-1.5 font-semibold outline outline-1 outline-ink-3 focus:outline-2 focus:outline-ink', className)} />;
 }

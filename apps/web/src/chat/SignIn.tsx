@@ -255,9 +255,9 @@ const INPUT = '[data-testid=prompt]';
 const ACCOUNT = '[data-account-button]';
 
 /**
- * Hosts the sheet. Desktop: a popover at the house name (from its menu)
- * or above the input, grown out of the opening control's box (a menu row
- * closes with its menu); it flows back into the house name or that control.
+ * Hosts the sheet. Desktop: a popover at the house name (from its menu),
+ * at the account button (/projects) or above the input; it grows away from
+ * that anchor and goes back to it.
  */
 export function SignInHost() {
   const t = useT();
@@ -267,37 +267,11 @@ export function SignInHost() {
   const from = useAccount((s) => s.anchor);
   const [shown, setShown] = useState(open);
   const panel = useRef<HTMLElement>(null);
-  const [rect, setRect] = useState<DOMRect | null>(null);
   useLayoutEffect(() => {
-    if (open) {
-      setShown(true);
-      setRect(from?.isConnected ? from.getBoundingClientRect() : null);
-    }
-  }, [open, from]);
-  // A press outside the panel closes it (desktop).
-  useEffect(() => {
-    if (!open || phone) return;
-    const down = (e: PointerEvent) => {
-      if (panel.current?.contains(e.target as Node)) return;
-      // The account button (/projects) toggles it itself.
-      if ((e.target as Element | null)?.closest?.('[data-account-button]')) return;
-      if (useAccount.getState().busy) return;
-      closeSignIn();
-    };
-    window.addEventListener('pointerdown', down, true);
-    return () => window.removeEventListener('pointerdown', down, true);
-  }, [open, phone]);
+    if (open) setShown(true);
+  }, [open]);
   // Where it stands: under the house name (from its menu or the share button beside it), at the account button (/projects), else above the input, where the draft waits.
   const anchor = () => (origin === 'account' && from?.isConnected ? from : document.querySelector<HTMLElement>(origin === 'menu' ? HOUSE_NAME : origin === 'account' ? ACCOUNT : INPUT));
-  // What it grows out of: the opening control's box (a menu row closes with its menu); it flows back into the house name or that control.
-  const grow = () => {
-    if (open && rect) return { x: rect.left, y: rect.top, width: rect.width, height: rect.height };
-    // Back into the house name, or the control beside it that opened it (the share button).
-    if (origin === 'menu') return from?.isConnected ? from : document.querySelector<HTMLElement>(MENU_TRIGGER);
-    // Back into the account button (after a sign-in it is the avatar, a new element).
-    if (origin === 'account') return document.querySelector<HTMLElement>(ACCOUNT) ?? (from?.isConnected ? from : null);
-    return from?.isConnected ? from : document.querySelector<HTMLElement>(INPUT);
-  };
   if (!shown) return null;
   const onClosed = () => {
     setShown(false);
@@ -312,9 +286,12 @@ export function SignInHost() {
       open={open}
       anchor={anchor}
       placement={origin === 'menu' ? 'below-start' : origin === 'account' ? 'below-end' : 'above-center'}
-      from={grow}
       size="dialog"
-      onClose={closeSignIn}
+      // Base UI closes it (Escape, a press outside); not while a code is being checked.
+      onClose={(reason) => {
+        if (reason === 'outside-press' && useAccount.getState().busy) return;
+        closeSignIn();
+      }}
       onClosed={onClosed}
       labelledBy="signin-title"
       label={t('account.title')}

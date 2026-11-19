@@ -1,5 +1,5 @@
-// Switch: on / off (the track fills with the glass ink).
-import { type ButtonHTMLAttributes } from 'react';
+// Switch: on / off (the track fills with the glass ink), on Base UI's Switch.
+import { Switch as BaseSwitch } from '@base-ui/react/switch';
 import { cx } from './surface';
 
 /**
@@ -7,12 +7,21 @@ import { cx } from './surface';
  * the link can view"): a track that fills with the glass ink when on and a
  * knob that slides across. No accent colour (the one bold colour is kept
  * for the sun, play, send and the working glow). Name it with `label`, or
- * with a <label htmlFor> on the row it sits in.
+ * with a <label htmlFor={id}> on the row it sits in.
  */
-export function Switch({ checked, onChange, label, className, ...rest }: Omit<ButtonHTMLAttributes<HTMLButtonElement>, 'onChange'> & { checked: boolean; onChange: (on: boolean) => void; label?: string }) {
+export function Switch({ checked, onChange, label, className, disabled, id, ...rest }: { checked: boolean; onChange: (on: boolean) => void; label?: string; className?: string; disabled?: boolean; id?: string } & Record<`data-${string}`, string | undefined>) {
   return (
-    <button type="button" role="switch" aria-checked={checked} aria-label={label} onClick={() => onChange(!checked)} className={cx('hit lg-switch', className)} {...rest}>
-      <span className="lg-switch-knob" aria-hidden="true" />
-    </button>
+    <BaseSwitch.Root
+      nativeButton
+      render={<button type="button" id={id} />}
+      checked={checked}
+      onCheckedChange={(on) => onChange(on)}
+      disabled={disabled}
+      aria-label={label}
+      className={cx('hit lg-switch', className)}
+      {...rest}
+    >
+      <BaseSwitch.Thumb className="lg-switch-knob" />
+    </BaseSwitch.Root>
   );
 }

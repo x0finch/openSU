@@ -11,7 +11,9 @@
     ".": "./src/index.ts",
     "./styles.css": "./src/styles.css"
   },
-  "sideEffects": ["*.css"],
+  "sideEffects": [
+    "*.css"
+  ],
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
@@ -27,5 +29,8 @@
     "react": "19.3.1",
     "react-dom": "19.3.1",
     "typescript": "5.9.3"
+  },
+  "dependencies": {
+    "@base-ui/react": "1.9.0"
   }
 }

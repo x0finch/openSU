@@ -1,7 +1,15 @@
-// Menu: pop-up menus (rows of one height and inset, touch scrubbing), MenuItem, MenuLabel (an identity header row), MenuSeparator.
-import { type ButtonHTMLAttributes, type ReactNode, useEffect, useRef } from 'react';
-import { cx, useMergedRef } from './surface';
-import { type AnchoredProps, AnchoredSurface } from './anchored';
+// Menu: pop-up menus on Base UI's Menu (task 031): Menu, MenuItem,
+// MenuLabel (an identity header row, a status line, an allowance),
+// MenuSeparator. Base UI places it at the module gap from its anchor,
+// moves focus and the highlight with the arrow keys, and closes it on
+// Escape, a press outside or focus leaving; rows of one height and inset;
+// touch scrubbing is ours (a finger slides across the rows and lifts on one).
+import { Menu as BaseMenu } from '@base-ui/react/menu';
+import { type ButtonHTMLAttributes, type CSSProperties, type KeyboardEventHandler, type ReactNode, type Ref, useEffect, useRef } from 'react';
+import { anchorBox, FLOATING, type Placement, sideAlign } from './floating';
+import { GLASS } from './material';
+import { cx, Glass, usePortalHost } from './surface';
+import { type Box, useFloatingBox } from './use-floating-box';
 
 /**
  * Touch scrubbing (2b.3): while a finger is down (also the press that
@@ -66,25 +74,119 @@ function useMenuScrub(open: boolean, menu: { current: HTMLElement | null }): voi
   }, [open, menu]);
 }
 
-/** A menu: a popover with menu semantics; rows separated by inset hairlines; touch scrubbing. */
-export function Menu({ label, children, ref, ...rest }: AnchoredProps & { label: string }) {
+export interface MenuProps {
+  open: boolean;
+  /** The control it stands at. */
+  anchor: () => HTMLElement | null;
+  /** Base UI asks to close it (Escape, a press outside, focus leaving it); `viaKey`: by the keyboard (focus goes back to the anchor). */
+  onClose: (viaKey: boolean) => void;
+  /** Its accessible name. */
+  label: string;
+  placement?: Placement;
+  /** It has left (after its closing motion). */
+  onClosed?: () => void;
+  /** Its box while open (viewport px), null when closed. */
+  onBox?: (b: Box | null) => void;
+  style?: Pick<CSSProperties, 'width' | 'minWidth' | 'maxWidth' | 'maxHeight'>;
+  className?: string;
+  onKeyDown?: KeyboardEventHandler<HTMLElement>;
+  /** Where focus goes when it closes (Base UI's `finalFocus`; default: back where it was). */
+  finalFocus?: BaseMenu.Popup.Props['finalFocus'];
+  testId?: string;
+  ref?: Ref<HTMLElement | null>;
+  children: ReactNode;
+}
+
+/** A menu: rows separated by inset hairlines; touch scrubbing. */
+export function Menu({ open, anchor, onClose, label, placement = 'below-start', onClosed, onBox, style, className, onKeyDown, finalFocus, testId, ref, children }: MenuProps) {
   const el = useRef<HTMLElement | null>(null);
-  const merged = useMergedRef(el, ref);
-  useMenuScrub(rest.open, el);
+  const host = usePortalHost();
+  useMenuScrub(open, el);
+  const boxRef = useFloatingBox(open, anchor, true, onBox);
+  const { side, align } = sideAlign(placement);
+  // A menu opened from inside a text surface (the pinned conversation) stays within it when it fits.
+  const within = () => {
+    const a = anchor();
+    const s = a?.closest<HTMLElement>('.lg[data-kind=text]');
+    return s && s !== a ? s : undefined;
+  };
+  const boundary = within();
   return (
-    <AnchoredSurface ref={merged} ariaRole="menu" aria-label={label} kind="text" radius={22} {...rest} className={cx('touch-none', rest.className)}>
-      <div className="flex flex-col p-1.5">{children}</div>
-    </AnchoredSurface>
+    <BaseMenu.Root
+      open={open}
+      modal={false}
+      onOpenChange={(next, details) => {
+        if (next) return;
+        const target = (details.event as Event | undefined)?.target as Node | null | undefined;
+        // The anchor toggles its menu itself.
+        if (details.reason === 'outside-press' && target && anchor()?.contains(target)) return details.cancel();
+        onClose(details.reason === 'escape-key');
+      }}
+      onOpenChangeComplete={(o) => {
+        if (!o) onClosed?.();
+      }}
+    >
+      <BaseMenu.Portal container={host ?? undefined}>
+        <BaseMenu.Positioner ref={boxRef} anchor={anchorBox(anchor)} side={side} align={align} {...FLOATING} collisionBoundary={boundary ?? 'clipping-ancestors'} className="z-50">
+          <BaseMenu.Popup
+            finalFocus={finalFocus}
+            render={(props, state) => {
+              const { style: s, className: c, ...rest } = props;
+              return (
+                <Glass
+                  {...rest}
+                  ref={(node: HTMLElement | null) => {
+                    el.current = node;
+                    if (node) (node as HTMLElement & { __anchor?: () => HTMLElement | null }).__anchor = anchor;
+                    if (typeof ref === 'function') ref(node);
+                    else if (ref) (ref as { current: HTMLElement | null }).current = node;
+                    const r = (props as { ref?: Ref<HTMLElement> }).ref;
+                    if (typeof r === 'function') r(node);
+                    else if (r) (r as { current: HTMLElement | null }).current = node;
+                  }}
+                  kind="text"
+                  radius={GLASS.radiusMenu}
+                  layer={1}
+                  ariaRole="menu"
+                  aria-label={label}
+                  inert={!state.open || undefined}
+                  onKeyDown={(e) => {
+                    rest.onKeyDown?.(e as never);
+                    onKeyDown?.(e);
+                  }}
+                  className={cx('lg-pop pointer-events-auto touch-none overflow-y-auto overscroll-contain outline-none', c, className)}
+                  style={{ ...s, maxHeight: 'var(--available-height)', ...style }}
+                  data-testid={testId}
+                  data-anchored=""
+                  data-placement={placement}
+                />
+              );
+            }}
+          >
+            <div className="flex flex-col p-1.5">{children}</div>
+          </BaseMenu.Popup>
+        </BaseMenu.Positioner>
+      </BaseMenu.Portal>
+    </BaseMenu.Root>
   );
 }
 
-export function MenuItem({ children, icon, detail, danger, className, ...rest }: ButtonHTMLAttributes<HTMLButtonElement> & { icon?: ReactNode; detail?: ReactNode; danger?: boolean }) {
+/** A row of a menu (a native button; Base UI moves the highlight and focus). It does not close the menu: the caller does when the row acts. */
+export function MenuItem({ children, icon, detail, danger, className, onClick, disabled, ...rest }: ButtonHTMLAttributes<HTMLButtonElement> & { icon?: ReactNode; detail?: ReactNode; danger?: boolean }) {
   return (
-    <button type="button" role="menuitem" tabIndex={-1} className={cx('lg-plate flex h-10 w-full items-center gap-2.5 rounded-[16px] px-3 text-left text-[14px] font-medium focus-visible:bg-[var(--lg-row-active)] focus-visible:outline-none', danger && 'text-danger', className)} {...rest}>
+    <BaseMenu.Item
+      {...(rest as object)}
+      nativeButton
+      closeOnClick={false}
+      disabled={disabled}
+      onClick={onClick as never}
+      render={<button type="button" />}
+      className={cx('lg-plate flex h-10 w-full items-center gap-2.5 rounded-[16px] px-3 text-left text-[14px] font-medium focus-visible:outline-none data-[highlighted]:bg-[var(--lg-row-active)]', danger && 'text-danger', className)}
+    >
       {icon && <span className="grid size-5 shrink-0 place-items-center text-ink-2">{icon}</span>}
       <span className="min-w-0 flex-1 truncate">{children}</span>
       {detail !== undefined && <span className="max-w-[52%] shrink-0 truncate text-[13px] font-normal text-ink-2">{detail}</span>}
-    </button>
+    </BaseMenu.Item>
   );
 }
 
@@ -112,4 +214,6 @@ export function MenuLabel({ title, sub, detail, small, testId, subTestId, flag }
 }
 
 /** The hairline between groups of rows. */
-export { Separator as MenuSeparator } from './separator';
+export function MenuSeparator({ className }: { className?: string }) {
+  return <BaseMenu.Separator className={cx('lg-sep mx-3 my-1', className)} />;
+}

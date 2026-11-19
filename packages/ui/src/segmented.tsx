@@ -1,5 +1,9 @@
-// Segmented: a radio group in a capsule with a sliding glass lens (the view switch; the phone tab bar).
-import { type KeyboardEvent as RKeyboardEvent, type ReactNode, useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
+// Segmented: a radio group in a capsule with a sliding glass lens (the view
+// switch; the phone tab bar). The segments are Base UI's RadioGroup and Radio
+// (task 031: arrow keys, one tab stop); the lens and its drag are ours.
+import { Radio } from '@base-ui/react/radio';
+import { RadioGroup } from '@base-ui/react/radio-group';
+import { type KeyboardEvent as RKeyboardEvent, type ReactNode, type Ref, useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { cx, Glass, GlassLens, useGlass } from './surface';
 import { GLASS, TONES } from './material';
 import { type ShapeOverride } from './registry';
@@ -177,21 +181,14 @@ export function Segmented<T extends string>({ value, onChange, segments, label, 
   };
   useEffect(() => () => clearTimeout(settleTimer.current), []);
 
+  /** The phone tool bar (buttons, not radios): arrows move the focus; Enter or Space opens. The segments' keys are Base UI's. */
   const onKey = (e: RKeyboardEvent) => {
     const d = e.key === 'ArrowRight' || e.key === 'ArrowDown' ? 1 : e.key === 'ArrowLeft' || e.key === 'ArrowUp' ? -1 : 0;
-    if (!d) return;
+    if (!d || !tabs) return;
     e.preventDefault();
-    if (tabs) {
-      // A tool bar: arrows move the focus; Enter or Space opens.
-      const items = [...(row.current?.querySelectorAll<HTMLButtonElement>('[data-seg]:not(:disabled)') ?? [])];
-      const i = items.indexOf(document.activeElement as HTMLButtonElement);
-      items[(i + d + items.length) % items.length]?.focus();
-      return;
-    }
-    const i = Math.max(0, segments.findIndex((s) => s.value === value));
-    const next = segments[(i + d + segments.length) % segments.length]!;
-    onChange(next.value);
-    box.current?.querySelector<HTMLButtonElement>(`[data-seg="${next.value}"]`)?.focus();
+    const items = [...(row.current?.querySelectorAll<HTMLButtonElement>('[data-seg]:not(:disabled)') ?? [])];
+    const i = items.indexOf(document.activeElement as HTMLButtonElement);
+    items[(i + d + items.length) % items.length]?.focus();
   };
 
   const tone = useGlass().tone;
@@ -235,44 +232,34 @@ export function Segmented<T extends string>({ value, onChange, segments, label, 
         </span>
       );
     });
-  return (
-    <Glass
-      ref={box}
-      ariaRole={tabs ? 'toolbar' : 'radiogroup'}
-      aria-label={label}
-      onKeyDown={onKey}
-      onPointerDown={onPointerDown}
-      onPointerMove={onPointerMove}
-      onPointerUp={onPointerUp}
-      onPointerCancel={onPointerUp}
-      className={cx('pointer-events-auto relative touch-pan-y items-stretch select-none', tabs ? 'flex' : 'inline-flex', className)}
-      style={{ height, padding: pad }}
-      data-testid={testId}
-    >
+  const items = segments.map((s) => {
+    const common = {
+      'aria-label': s.ariaLabel,
+      disabled: s.disabled,
+      'data-seg': s.value,
+      'data-value': s.value,
+      className: cx(
+        'hit lg-focus inline-flex h-full items-center justify-center rounded-full whitespace-nowrap text-ink-2 disabled:opacity-35',
+        tabs ? 'min-w-0 flex-1 flex-col gap-0.5 px-1' : cx('text-[14px] font-medium', compact ? 'px-3 max-[339px]:px-2' : 'px-[18px]'),
+      ),
+      style: tabs ? undefined : { minWidth: compact ? 44 : 60 },
+      ...s.props,
+    };
+    return tabs ? (
+      // Pointer activations are handled on release (lens drag); a click with detail 0 is the keyboard.
+      <button key={s.value} type="button" tabIndex={0} onClick={(e) => e.detail === 0 && (s.value !== valueRef.current || reselect) && onChange(s.value)} {...common}>
+        {face(s, false)}
+      </button>
+    ) : (
+      <Radio.Root key={s.value} value={s.value} disabled={s.disabled} nativeButton render={<button type="button" {...common} />}>
+        {face(s, false)}
+      </Radio.Root>
+    );
+  });
+  const inner = (
+    <>
       <div ref={row} className={cx('relative flex', tabs && 'flex-1')}>
-        {segments.map((s) => (
-          <button
-            key={s.value}
-            type="button"
-            role={tabs ? undefined : 'radio'}
-            aria-checked={tabs ? undefined : s.value === value}
-            aria-label={s.ariaLabel}
-            tabIndex={tabs || s.value === value || (value === null && s === segments[0]) ? 0 : -1}
-            disabled={s.disabled}
-            data-seg={s.value}
-            data-value={s.value}
-            // Pointer activations are handled on release (lens drag); a click with detail 0 is the keyboard.
-            onClick={(e) => e.detail === 0 && (s.value !== valueRef.current || reselect) && onChange(s.value)}
-            className={cx(
-              'hit lg-focus inline-flex h-full items-center justify-center rounded-full whitespace-nowrap text-ink-2 disabled:opacity-35',
-              tabs ? 'min-w-0 flex-1 flex-col gap-0.5 px-1' : cx('text-[14px] font-medium', compact ? 'px-3 max-[339px]:px-2' : 'px-[18px]'),
-            )}
-            style={tabs ? undefined : { minWidth: compact ? 44 : 60 }}
-            {...s.props}
-          >
-            {face(s, false)}
-          </button>
-        ))}
+        {items}
       </div>
       <GlassLens ref={lens} shape={lensShape}>
         <span className="lg-lens-face" />
@@ -282,7 +269,47 @@ export function Segmented<T extends string>({ value, onChange, segments, label, 
           </div>
         </div>
       </GlassLens>
-    </Glass>
+    </>
+  );
+  const shell = {
+    onPointerDown,
+    onPointerMove,
+    onPointerUp,
+    onPointerCancel: onPointerUp,
+    className: cx('pointer-events-auto relative touch-pan-y items-stretch select-none', tabs ? 'flex' : 'inline-flex', className),
+    style: { height, padding: pad },
+    'data-testid': testId,
+  };
+  if (tabs) {
+    return (
+      <Glass ref={box} ariaRole="toolbar" aria-label={label} onKeyDown={onKey} {...shell}>
+        {inner}
+      </Glass>
+    );
+  }
+  return (
+    <RadioGroup
+      value={value}
+      // Pointer choices are made on release (the lens drag, above); Base UI's own change is the keyboard's.
+      onValueChange={(v, details) => {
+        const ev = details.event as Event & { detail?: number };
+        if (ev?.type === 'click' && (ev.detail ?? 0) > 0) return;
+        if (v !== valueRef.current) onChange(v as T);
+      }}
+      aria-label={label}
+      render={(props) => {
+        const { role: _role, ...rest } = props as typeof props & { role?: string };
+        return (
+          <Glass {...rest} ref={(el: HTMLElement | null) => {
+            box.current = el;
+            const r = (props as { ref?: Ref<HTMLElement> }).ref;
+            if (typeof r === 'function') r(el);
+            else if (r) (r as { current: HTMLElement | null }).current = el;
+          }} ariaRole="radiogroup" {...shell} />
+        );
+      }}
+    >
+      {inner}
+    </RadioGroup>
   );
 }
-

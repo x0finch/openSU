@@ -270,27 +270,6 @@ export function ProjectsPage() {
     if (cloud) void projectSync.refresh();
   }, [cloud]);
 
-  // A press outside closes the card menu; Escape closes it and gives focus back.
-  useEffect(() => {
-    if (!menu) return;
-    const down = (e: PointerEvent) => {
-      if (menuRef.current?.contains(e.target as Node) || menu.el.contains(e.target as Node)) return;
-      setMenu(null);
-    };
-    const key = (e: KeyboardEvent) => {
-      if (e.key !== 'Escape') return;
-      e.preventDefault();
-      setMenu(null);
-      menu.el.focus();
-    };
-    window.addEventListener('pointerdown', down, true);
-    window.addEventListener('keydown', key, true);
-    return () => {
-      window.removeEventListener('pointerdown', down, true);
-      window.removeEventListener('keydown', key, true);
-    };
-  }, [menu]);
-
   const remove = (p: ProjectMeta) => {
     const timer = window.setTimeout(() => {
       setPending((m) => {
@@ -385,13 +364,15 @@ export function ProjectsPage() {
           {cloud && !loaded && !projects.length && <p className="mt-6 text-[14px] text-ink-2" data-testid="projects-loading">{t('projects.loading')}</p>}
         </main>
         <Menu
-          ref={menuRef as RefObject<HTMLElement | null>}
+          ref={menuRef}
           open={!!menu && !!menuProject}
           anchor={() => menu?.el ?? null}
+          // Base UI closes it (Escape: focus back to the card's button; a press outside); the button toggles it.
+          onClose={() => setMenu(null)}
           placement="below-end"
           label={t('projects.more')}
           style={{ width: 220 }}
-          data-testid={menu ? 'project-menu-card' : undefined}
+          testId={menu ? 'project-menu-card' : undefined}
         >
           {menuProject && (
             <>

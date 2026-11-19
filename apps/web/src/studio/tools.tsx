@@ -270,7 +270,7 @@ function ViewsPanel({ onClose }: { onClose: () => void }) {
   const resetView = useStudio((s) => s.resetView);
   const label = (id: ViewId) => (presetById(id).kind === 'elevation' ? t(`view.${id}`) : t(`viewShort.${id}` as MessageKey));
   const cell = (id: ViewId) => (
-    <Tooltip key={id} label={t(`view.${id}`)} className="min-w-0">
+    <Tooltip key={id} label={t(`view.${id}`)}>
       <Button
         variant={view === id ? 'plain' : 'quiet'}
         tile
@@ -574,8 +574,8 @@ function SunPanel({ onClose, phone }: { onClose: () => void; phone?: boolean }) 
   const [placeMain, placeNote] = placeTxt.includes('（') ? [placeTxt.slice(0, placeTxt.indexOf('（')), placeTxt.slice(placeTxt.indexOf('（'))] : placeTxt.includes(' (') ? [placeTxt.slice(0, placeTxt.indexOf(' (')), placeTxt.slice(placeTxt.indexOf(' ('))] : [placeTxt, ''];
   return (
     <>
-      {/* The untitled variant of the panel header: the clock is the heading; the title names the panel for screen readers. */}
-      <PopoverTitle hidden>{t('sun.label')}</PopoverTitle>
+      {/* Task 031 (defect 1): the same header as every surface; the clock is body content under it. */}
+      <PanelHead title={t('sun.label')} onClose={onClose} />
       <div className="flex items-start gap-3">
         <div className="min-w-0 flex-1">
           <p className="tnum text-[40px] leading-10 font-bold tracking-[-0.02em]" data-testid="sun-clock">{polar === 'night' ? t('sun.polarNight') : clock(value, lang)}</p>
@@ -676,16 +676,21 @@ if (typeof window !== 'undefined') {
   window.addEventListener('pointerdown', () => (keyboardUser = false), true);
 }
 
+/** Where focus goes in an open panel: the chosen option, else the first control. */
+function focusTarget(el: HTMLElement | null | undefined): HTMLElement | null {
+  return el?.querySelector<HTMLElement>('[aria-checked=true], [aria-pressed=true], button:not([data-panel-close]), input:not([type=text])') ?? null;
+}
+
 /**
  * Moves focus into a panel when it opens from the keyboard (the chosen
- * option, else the first control); Escape brings it back to the tool.
+ * option, else the first control); Escape brings it back to the tool. The
+ * phone sheet's; a desktop panel gives the same rule to Base UI
+ * (`initialFocus`).
  */
 export function useFocusOnOpen(ref: React.RefObject<HTMLElement | null>, key: string | null): void {
   useLayoutEffect(() => {
     if (!key || !keyboardUser) return;
-    const el = ref.current;
-    const target = el?.querySelector<HTMLElement>('[aria-checked=true], [aria-pressed=true], button, input:not([type=text])');
-    target?.focus({ preventScroll: true });
+    focusTarget(ref.current)?.focus({ preventScroll: true });
   }, [key]); // eslint-disable-line react-hooks/exhaustive-deps
 }
 
@@ -715,7 +720,6 @@ export function PanelCard({ derived, onRect }: { derived: Derived | null; onRect
   }, [current]); // eslint-disable-line react-hooks/exhaustive-deps
   const ref = useRef<HTMLElement>(null);
   const setTray = useStudio((s) => s.setTray);
-  useFocusOnOpen(ref, current);
   return (
     <>
       {panels.map((p) => {
@@ -731,6 +735,10 @@ export function PanelCard({ derived, onRect }: { derived: Derived | null; onRect
             placement={byName ? 'below-start' : 'below-center'}
             size="tool"
             onClose={() => setTray(null)}
+            // A tool's panel stays while the drawing is used (a click on the drawing closes it, Studio.tsx); Escape closes it.
+            closeOnOutsidePress={false}
+            // Opened from the keyboard, focus goes to the chosen option (else the first control); opened by a press it stays.
+            initialFocus={() => (keyboardUser ? focusTarget(ref.current) ?? true : false)}
             onClosed={() => setPanels((ps) => ps.filter((q) => q.key !== p.key))}
             onBox={on ? onRect : undefined}
             id={p.panel === 'site' ? undefined : TRAY_ID[p.panel]}

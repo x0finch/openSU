@@ -117,9 +117,24 @@ export const GLASS = {
   screenInset: 12,
   /** Radii, CSS px. */
   radiusPanel: 30,
+  /** A pop-up menu (task 029's 22, now named). */
+  radiusMenu: 22,
   /** The named widths of a popover (task 029): a tool's panel, a dialog (share, sign-in, keys). */
   panelWidth: { tool: 330, dialog: 380 },
   radiusText: 26,
+  /**
+   * The open and close of an anchored surface (task 031: CSS transitions that
+   * Base UI drives with data-starting-style / data-ending-style, from
+   * --transform-origin, the anchor-facing edge). Its first frame: this scale
+   * of its size, grown from that edge, fully transparent. The timing follows
+   * the module's `SPRINGS.morph` (response 0.42 s, a little overshoot);
+   * closing is quicker, as Apple's popovers close.
+   */
+  popOpenMs: 380,
+  popCloseMs: 220,
+  popEase: 'cubic-bezier(0.32, 0.72, 0, 1)',
+  popFromX: 0.94,
+  popFromY: 0.4,
 } as const;
 
 /** The CSS backend: glasswork's material (tint, `blur() saturate() brightness()`, rim light and bevel). */
@@ -180,5 +195,9 @@ export function cssVars(tone: GlassTone): Record<string, string> {
     '--lg-row-hover': t.rowHover,
     '--lg-row-active': t.rowActive,
     '--lg-separator': t.separator,
+    '--lg-pop-open': `${GLASS.popOpenMs}ms`,
+    '--lg-pop-close': `${GLASS.popCloseMs}ms`,
+    '--lg-pop-ease': GLASS.popEase,
+    '--lg-pop-from': `scale(${GLASS.popFromX}, ${GLASS.popFromY})`,
   };
 }

@@ -1,4 +1,7 @@
-// Slider: a rail with a yellow fill and a glass thumb that lifts while dragged.
+// Slider: a rail with a yellow fill and a glass thumb that lifts while dragged,
+// on Base UI's Slider (task 031: its value, pointer and keyboard handling and
+// the range input screen readers use; the lens is drawn here).
+import { Slider as BaseSlider } from '@base-ui/react/slider';
 import { type CSSProperties, type ReactNode, useCallback, useLayoutEffect, useRef } from 'react';
 import { cx, GlassLens, useGlass } from './surface';
 import { TONES } from './material';
@@ -14,8 +17,8 @@ const THUMB_GROW = 0.5;
 /**
  * A slider whose thumb is a glass lens: a solid white pill at rest; while
  * dragged it lifts into a clear lens that magnifies the track and settles
- * back on release (2b.4). The native range input stays for keyboard and
- * screen readers.
+ * back on release (2b.4). Base UI's thumb (its range input) is the focus
+ * and the keyboard; the visible thumb is the lens.
  */
 export function Slider({ min, max, value, onChange, ariaLabel, ariaValueText, idle, className, style, children }: { min: number; max: number; value: number; onChange: (v: number) => void; ariaLabel: string; ariaValueText?: string; idle?: boolean; className?: string; style?: CSSProperties; children?: ReactNode }) {
   const wrap = useRef<HTMLDivElement>(null);
@@ -87,34 +90,45 @@ export function Slider({ min, max, value, onChange, ariaLabel, ariaValueText, id
     <div className="lg-slider-fill" style={{ width: `calc(${THUMB_W / 2}px + (100% - ${THUMB_W}px) * ${progress})`, ...(idle ? { background: 'var(--lg-ink-2)' } : {}) }} />
   );
   return (
-    <div ref={wrap} className={cx('lg-slider', className)} style={style} data-fill={fill}>
-      <div ref={rail} className="lg-slider-rail">
-        {railInner}
-      </div>
-      <GlassLens ref={lens} shape={lensShape}>
-        <span className="lg-lens-face" />
-        <div ref={copy} className="lg-lens-copy">
-          <div className="lg-slider-rail" style={{ maskImage: 'none' }}>
-            {railInner}
-          </div>
+    <BaseSlider.Root
+      value={value}
+      onValueChange={(v) => onChange(Array.isArray(v) ? v[0]! : v)}
+      min={min}
+      max={max}
+      step={1}
+      thumbAlignment="edge"
+      className={cx('lg-slider', className)}
+      style={style}
+      data-fill={fill}
+    >
+      <BaseSlider.Control
+        ref={wrap}
+        className="absolute inset-0"
+        onPointerDown={() => {
+          lift(true);
+          const up = () => {
+            lift(false);
+            window.removeEventListener('pointerup', up, true);
+            window.removeEventListener('pointercancel', up, true);
+          };
+          window.addEventListener('pointerup', up, true);
+          window.addEventListener('pointercancel', up, true);
+        }}
+      >
+        <div ref={rail} className="lg-slider-rail">
+          {railInner}
         </div>
-      </GlassLens>
-      <input
-        type="range"
-        min={min}
-        max={max}
-        step={1}
-        value={value}
-        onChange={(e) => onChange(Number(e.target.value))}
-        onPointerDown={() => lift(true)}
-        onPointerUp={() => lift(false)}
-        onPointerCancel={() => lift(false)}
-        onBlur={() => lift(false)}
-        aria-label={ariaLabel}
-        aria-valuetext={ariaValueText}
-      />
+        <GlassLens ref={lens} shape={lensShape}>
+          <span className="lg-lens-face" />
+          <div ref={copy} className="lg-lens-copy">
+            <div className="lg-slider-rail" style={{ maskImage: 'none' }}>
+              {railInner}
+            </div>
+          </div>
+        </GlassLens>
+        <BaseSlider.Thumb className="lg-slider-thumb" aria-label={ariaLabel} getAriaValueText={ariaValueText === undefined ? undefined : () => ariaValueText} onBlur={() => lift(false)} />
+      </BaseSlider.Control>
       {children}
-    </div>
+    </BaseSlider.Root>
   );
 }
-

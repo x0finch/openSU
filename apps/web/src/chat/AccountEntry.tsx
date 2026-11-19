@@ -4,7 +4,7 @@
 // right (signed out "登录", signed in the picture or the first letter of
 // the name). Both open the same surfaces (`openAccount`): one
 // implementation. Hidden when the server offers no sign-in.
-import { type KeyboardEvent as RKeyboardEvent, type ReactNode, type RefObject, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { type ReactElement, type ReactNode, type RefObject, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { PersonIcon } from '../components/icons';
 import { Avatar, Button, cx, Menu, MenuItem, MenuLabel, Separator, Toast, Tooltip } from '@opensu/ui';
 import { useT } from '../lib/i18n';
@@ -73,7 +73,7 @@ export function AccountButton({ size = 48, round, className }: { size?: number; 
     'data-state': user ? 'signed-in' : 'signed-out',
   };
   // Phones have no hover: no tooltip there (a tap would leave it standing).
-  const tipped = (label: string, el: ReactNode) => (round ? <span className={cx('inline-flex', className)}>{el}</span> : <Tooltip label={label} className={className}>{el}</Tooltip>);
+  const tipped = (label: string, el: ReactElement) => <span className={cx('inline-flex', className)}>{round ? el : <Tooltip label={label}>{el}</Tooltip>}</span>;
   if (user) {
     const inner = Math.round(size * (40 / 48));
     return tipped(t('account.label'), <Button variant="glass" {...common} label={`${t('account.label')}: ${accountName(user)}`} icon={<Avatar name={accountName(user)} image={user.image} size={inner} />} />);
@@ -97,7 +97,6 @@ export function AccountMenuHost() {
   const t = useT();
   const open = useAccount((s) => s.menu);
   const from = useAccount((s) => s.menuFrom);
-  const rect = useAccount((s) => s.menuRect);
   const user = useUser();
   const server = useChat((s) => s.server);
   // On the projects page (task 027): no keys row (the key picker lives in the studio).
@@ -109,52 +108,20 @@ export function AccountMenuHost() {
     if (open && !user) closeAccountMenu();
   }, [open, user]);
   const back = () => document.querySelector<HTMLElement>(from === 'button' ? ACCOUNT_BUTTON : '[data-testid=project-menu]')?.focus({ preventScroll: true });
-  // A press outside closes it (the button toggles it itself); Escape closes it and returns to the button.
-  useEffect(() => {
-    if (!show) return;
-    const down = (e: PointerEvent) => {
-      const n = e.target as Element;
-      if (menu.current?.contains(n) || n.closest?.(ACCOUNT_BUTTON)) return;
-      closeAccountMenu();
-    };
-    const key = (e: KeyboardEvent) => {
-      if (e.key !== 'Escape') return;
-      e.preventDefault();
-      e.stopPropagation();
-      closeAccountMenu();
-      back();
-    };
-    window.addEventListener('pointerdown', down, true);
-    window.addEventListener('keydown', key, true);
-    return () => {
-      window.removeEventListener('pointerdown', down, true);
-      window.removeEventListener('keydown', key, true);
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [show]);
-  useLayoutEffect(() => {
-    if (show) menu.current?.querySelector<HTMLElement>('[role=menuitem]')?.focus({ preventScroll: true });
-  }, [show]);
   const quota = server?.serverKey && server.quota && server.quota.kind === 'user' ? server.quota : null;
-  const onKey = (e: RKeyboardEvent) => {
-    const d = e.key === 'ArrowDown' ? 1 : e.key === 'ArrowUp' ? -1 : 0;
-    if (!d) return;
-    e.preventDefault();
-    const items = [...(menu.current?.querySelectorAll<HTMLElement>('[role=menuitem]') ?? [])];
-    const i = items.indexOf(document.activeElement as HTMLElement);
-    items[(i + d + items.length) % items.length]?.focus();
-  };
   return (
     <Menu
-      ref={menu as RefObject<HTMLElement | null>}
+      ref={menu}
       open={show}
       anchor={() => document.querySelector<HTMLElement>(from === 'button' ? ACCOUNT_BUTTON : HOUSE_NAME)}
+      // Base UI closes it (Escape, a press outside, focus leaving); the button toggles it itself.
+      onClose={() => closeAccountMenu()}
+      // Back to the control it came from (the account button, or the house name when the project menu opened it).
+      finalFocus={() => document.querySelector<HTMLElement>(from === 'button' ? ACCOUNT_BUTTON : '[data-testid=project-menu]')}
       placement={from === 'button' ? 'below-end' : 'below-start'}
-      from={rect ? () => rect : undefined}
       label={t('account.menu')}
-      onKeyDown={onKey}
       style={{ width: 'min(320px, calc(100vw - 24px))' }}
-      data-testid={show ? 'account-menu' : undefined}
+      testId={show ? 'account-menu' : undefined}
     >
       {user && (
         <>

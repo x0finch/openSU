@@ -1,19 +1,19 @@
-// The base components (task 029; organised like shadcn/ui: one file per
-// component, small composable parts, variants as props). Everything
-// outside this folder only applies these; see README.md.
+// @opensu/ui (task 031): Liquid Glass components on Base UI, organised like
+// shadcn/ui (one file per component, small composable parts, variants as
+// props). Apps only apply these; see README.md.
 export { cx, Glass, GlassLayer, useGlass, useMergedRef, usePress, type GlassProps } from './surface';
 export { Button, ButtonArrow, ButtonLink, buttonClass, type ButtonSize, type ButtonVariant } from './button';
 export { IconButton } from './icon-button';
 export { ToolbarButton, ToolbarGroup } from './toolbar';
 export { Segmented, type Segment } from './segmented';
-export { Popover, PopoverAction, PopoverBody, PopoverDescription, PopoverFooter, PopoverHeader, PopoverTitle, SheetContent, type PopoverProps, type PopoverSize } from './popover';
-export { Menu, MenuItem, MenuLabel, MenuSeparator } from './menu';
+export { Popover, PopoverAction, PopoverBody, PopoverDescription, PopoverFooter, PopoverHeader, PopoverTitle, SheetContent, type CloseReason, type PopoverProps, type PopoverSize } from './popover';
+export { Menu, MenuItem, MenuLabel, MenuSeparator, type MenuProps } from './menu';
 export { Sheet } from './sheet';
 export { Switch } from './switch';
 export { Slider } from './slider';
 export { Choice } from './choice';
 export { Row } from './row';
-export { Tooltip } from './tooltip';
+export { Tooltip, TOOLTIP_DELAY } from './tooltip';
 export { Toast } from './toast';
 export { Separator } from './separator';
 export { TextSurface } from './text-surface';
@@ -28,7 +28,8 @@ export { Badge } from './badge';
 export { Skeleton } from './skeleton';
 export { Avatar } from './avatar';
 export { PageDots, PaperSheet, Tile, TileButton, TileLink, TileMark } from './card';
-export { coveredBy, floatingOpen, type Placement, subscribeFloating } from './anchor';
+export { coveredBy, floatingOpen, type Placement, subscribeFloating } from './floating';
+export type { Box } from './use-floating-box';
 export { glassRegistry, type GlassBackend, type GlassTarget, type Rect, type ShapeOverride } from './registry';
 export type { GlassMaterial, GlassShape } from './glass-types';
 export { GLASS, TONES, type GlassRole, type GlassTone } from './material';

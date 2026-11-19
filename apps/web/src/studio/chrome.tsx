@@ -2,7 +2,7 @@
 // menu), the mode switch, the first-visit hints and the day player. The
 // toolbar and its panels live in tools.tsx, the conversation in chat/.
 import { useNavigate } from '@tanstack/react-router';
-import { type KeyboardEvent as RKeyboardEvent, type ReactNode, type RefObject, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { type ReactNode, type RefObject, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { TEMPLATE_META } from '@opensu/agent/templates-meta';
 import { ChevronDownSmallIcon, CloseIcon, CompassIcon, CopyIcon, DownloadIcon, FolderIcon, LayersIcon, Mark, PencilIcon, PersonIcon, PinIcon, PlusIcon, ResetViewIcon, ShareIcon } from '../components/icons';
 import { cx } from '../components/ui';
@@ -21,33 +21,6 @@ import { showKeyChoices } from '../chat/KeyPicker';
 import type { Derived } from './house-data';
 import { loadHouseData } from './useDerived';
 
-
-/** Closes the menu / tray on Escape and on a press outside `ref` (and outside `except`). */
-function useDismiss(open: boolean, close: (viaKey: boolean) => void, refs: RefObject<HTMLElement | null>[], ignore?: string): void {
-  const closeRef = useRef(close);
-  closeRef.current = close;
-  useEffect(() => {
-    if (!open) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && !e.defaultPrevented) {
-        e.preventDefault();
-        closeRef.current(true);
-      }
-    };
-    const onDown = (e: PointerEvent) => {
-      if (refs.some((r) => r.current?.contains(e.target as Node))) return;
-      if (ignore && (e.target as Element | null)?.closest?.(ignore)) return;
-      closeRef.current(false);
-    };
-    window.addEventListener('keydown', onKey);
-    window.addEventListener('pointerdown', onDown, true);
-    return () => {
-      window.removeEventListener('keydown', onKey);
-      window.removeEventListener('pointerdown', onDown, true);
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open]);
-}
 
 /* ------------------------------------------------------------------ */
 /* Title and project menu                                              */
@@ -98,9 +71,9 @@ export function TitleMenu({ derived, onRect, compact, trailing }: { derived: Der
     setOpen(false);
     if (focus) trigger.current?.focus();
   };
-  const menu = useRef<HTMLDivElement>(null);
-  // The name toggles the menu itself; a press anywhere else (the share button beside it included) closes it.
-  useDismiss(open, close, [trigger, menu]);
+  const menu = useRef<HTMLElement | null>(null);
+  // The name toggles the menu itself; Base UI closes it on Escape (focus back to the name), a press anywhere else (the
+  // share button beside it included) or focus leaving it.
   // The name the user gave the project (task 027), else the house's own title.
   const name = useHouseName();
   // Rename in place (task 027: the file name in the top bar, as in Figma and Google Docs): Enter saves, Escape cancels.
@@ -194,7 +167,7 @@ function Item({ children, onSelect, value, icon, danger, testId }: { children: R
 
 const Sep = () => <MenuSeparator />;
 
-function ProjectMenu({ open, anchor, onClose, compact, onRename, ref }: { open: boolean; anchor: () => HTMLElement | null; onClose: (focus: boolean) => void; compact?: boolean; onRename: () => void; ref: RefObject<HTMLDivElement | null> }) {
+function ProjectMenu({ open, anchor, onClose, compact, onRename, ref }: { open: boolean; anchor: () => HTMLElement | null; onClose: (focus: boolean) => void; compact?: boolean; onRename: () => void; ref: RefObject<HTMLElement | null> }) {
   const t = useT();
   const navigate = useNavigate();
   const lang = useStudio((s) => s.lang);
@@ -215,24 +188,12 @@ function ProjectMenu({ open, anchor, onClose, compact, onRename, ref }: { open: 
   const edit = !useViewOnly();
   const [templates, setTemplates] = useState(false);
   const [confirm, setConfirm] = useState(false);
-  // Arrow keys move between items; focus starts on the first.
+  // Closed: the templates and the reset confirmation fold back.
   useLayoutEffect(() => {
-    if (!open) {
-      setTemplates(false);
-      setConfirm(false);
-      return;
-    }
-    ref.current?.querySelector<HTMLElement>('[role=menuitem]')?.focus({ preventScroll: true });
-  }, [ref, open]);
-  const onKey = (e: RKeyboardEvent) => {
-    const items = [...(ref.current?.querySelectorAll<HTMLElement>('[role=menuitem]:not(:disabled)') ?? [])];
-    const i = items.indexOf(document.activeElement as HTMLElement);
-    const d = e.key === 'ArrowDown' ? 1 : e.key === 'ArrowUp' ? -1 : 0;
-    if (d) {
-      e.preventDefault();
-      items[(i + d + items.length) % items.length]?.focus();
-    } else if (e.key === 'Tab') onClose(false);
-  };
+    if (open) return;
+    setTemplates(false);
+    setConfirm(false);
+  }, [open]);
   const pick = async (id: string) => {
     onClose(false);
     const m = await loadHouseData();
@@ -245,14 +206,14 @@ function ProjectMenu({ open, anchor, onClose, compact, onRename, ref }: { open: 
   };
   return (
     <Menu
-      ref={ref as RefObject<HTMLElement | null>}
+      ref={ref}
       open={open}
       anchor={anchor}
+      onClose={onClose}
       placement="below-start"
       label={t('more.open')}
-      onKeyDown={onKey}
       style={{ width: compact ? 'min(300px, calc(100vw - 24px))' : 300 }}
-      data-testid={open ? 'project-menu-list' : undefined}
+      testId={open ? 'project-menu-list' : undefined}
     >
       {/* Phones (task 029): "分享" first. The top row has no room for a button beside the name (measured at 390 and
           360 px wide); the same share surface opens, as a sheet. Desktop has the button beside the name. */}
