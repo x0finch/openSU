@@ -3,7 +3,8 @@
 // sheet on phones; the projects page's card menu opens the same surface).
 // The viewer's side: the quiet bar that takes the prompt's place, with
 // "make my own copy" (Figma's "View only" and "Duplicate to your drafts").
-import { lazy, Suspense, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { lazyPart } from '../lib/lazy-part';
 import { Notice, NoticeAction, Popover, usePhone } from '@opensu/ui';
 import { useT } from '../lib/i18n';
 import { projectSync, useHouseName } from '../lib/projects';
@@ -22,7 +23,7 @@ export const TITLE_ROW = '[data-title-row]';
 /* The surface                                                         */
 /* ------------------------------------------------------------------ */
 
-const ShareBody = lazy(() => import('./share-body'));
+export const shareBody = lazyPart(() => import('./share-body'));
 
 /**
  * The one share surface: on desktop under the house name's row (the
@@ -34,6 +35,7 @@ const ShareBody = lazy(() => import('./share-body'));
  */
 export function ShareHost() {
   const t = useT();
+  const Body = shareBody.use();
   const phone = usePhone();
   const open = useShareUi((s) => s.open);
   const anchorEl = useShareUi((s) => s.anchor);
@@ -73,7 +75,7 @@ export function ShareHost() {
   return (
     <Popover
       ref={panel}
-      open={open}
+      open={open && !!Body}
       anchor={anchor}
       placement={row() ? 'below-start' : 'below-end'}
       size="dialog"
@@ -84,9 +86,7 @@ export function ShareHost() {
       label={t('share.button')}
       testId="share-surface"
     >
-      <Suspense fallback={null}>
-        <ShareBody />
-      </Suspense>
+      {Body && <Body />}
     </Popover>
   );
 }

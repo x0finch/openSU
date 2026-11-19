@@ -6,13 +6,14 @@
 // bottom sheet (the base Popover's phone form). One field per step, one primary action,
 // a short line of what happens next; errors are calm sentences in the
 // sheet. Nothing navigates away from the drawing; the message draft stays.
-import { lazy, Suspense, useLayoutEffect, useRef, useState } from 'react';
+import { useLayoutEffect, useRef, useState } from 'react';
+import { lazyPart } from '../lib/lazy-part';
 import { Popover, usePhone } from '@opensu/ui';
 import { useT } from '../lib/i18n';
 import { closeSignIn, useAccount } from './account';
 
 
-const SignInBody = lazy(() => import('./signin-body'));
+export const signInBody = lazyPart(() => import('./signin-body'));
 
 const MENU_TRIGGER = '[data-testid=project-menu]';
 const HOUSE_NAME = '[data-house-name]';
@@ -26,6 +27,7 @@ const ACCOUNT = '[data-account-button]';
  */
 export function SignInHost() {
   const t = useT();
+  const Body = signInBody.use();
   const phone = usePhone();
   const open = useAccount((s) => s.open);
   const origin = useAccount((s) => s.origin);
@@ -48,7 +50,7 @@ export function SignInHost() {
   return (
     <Popover
       ref={panel}
-      open={open}
+      open={open && !!Body}
       anchor={anchor}
       placement={origin === 'menu' ? 'below-start' : origin === 'account' ? 'below-end' : 'above-center'}
       size="dialog"
@@ -62,9 +64,7 @@ export function SignInHost() {
       label={t('account.title')}
       testId="signin-sheet"
     >
-      <Suspense fallback={null}>
-        <SignInBody />
-      </Suspense>
+      {Body && <Body />}
     </Popover>
   );
 }

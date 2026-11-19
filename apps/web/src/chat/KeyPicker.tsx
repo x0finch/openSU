@@ -4,7 +4,8 @@
 // entering or changing a key. Apple's pattern: a pop-up button shows the
 // current choice; choosing switches at once; entering a key is a sheet.
 // The menu opens at its button (task 025: the glass module places it).
-import { lazy, Suspense, useId, useLayoutEffect, useRef, useState } from 'react';
+import { useId, useLayoutEffect, useRef, useState } from 'react';
+import { lazyPart } from '../lib/lazy-part';
 import { ChevronDownSmallIcon } from '../components/icons';
 import { Button, type CloseReason, cx, Menu, Popover, usePhone } from '@opensu/ui';
 import { useT } from '../lib/i18n';
@@ -32,6 +33,7 @@ function useCurrentLabel(t: T, short = false): string {
  */
 export function KeyPicker({ variant, phone }: { variant: 'input' | 'header'; phone?: boolean }) {
   const t = useT();
+  const MenuBody = keyMenuBody.use();
   const id = useId();
   const open = useKeys((s) => s.picker === id || (s.picker === 'any' && variant === 'header') || (s.picker === 'pinned' && variant === 'input'));
   // In the pinned field the short name, so a typed sentence keeps one line (task 023).
@@ -63,7 +65,7 @@ export function KeyPicker({ variant, phone }: { variant: 'input' | 'header'; pho
       {/* At the button (Apple's pop-up menu): above it in a field, below it in a header; inside the pinned conversation when it fits. */}
       <Menu
         ref={menu}
-        open={open}
+        open={open && !!MenuBody}
         anchor={() => btn.current}
         // Base UI closes it (Escape: focus back to the button; a press outside; focus leaving); the button toggles it.
         onClose={() => openPicker(null)}
@@ -72,16 +74,14 @@ export function KeyPicker({ variant, phone }: { variant: 'input' | 'header'; pho
         style={{ width: 'min(300px, calc(100vw - 24px))' }}
         testId={open ? 'key-menu' : undefined}
       >
-        <Suspense fallback={null}>
-          <KeyMenuBody anchor={() => btn.current} />
-        </Suspense>
+        {MenuBody && <MenuBody anchor={() => btn.current} />}
       </Menu>
     </>
   );
 }
 
-const KeyMenuBody = lazy(() => import('./key-menu-body'));
-const SheetBody = lazy(() => import('./key-sheet-body'));
+export const keyMenuBody = lazyPart(() => import('./key-menu-body'));
+export const keySheetBody = lazyPart(() => import('./key-sheet-body'));
 
 /**
  * Hosts the key sheet. Desktop: a glass panel that grows out of the
@@ -90,6 +90,7 @@ const SheetBody = lazy(() => import('./key-sheet-body'));
  */
 export function KeySheetHost() {
   const t = useT();
+  const SheetBody = keySheetBody.use();
   const phone = usePhone();
   const sheet = useKeys((s) => s.sheet);
   const [shown, setShown] = useState<KeySheetMode | null>(sheet);
@@ -115,7 +116,7 @@ export function KeySheetHost() {
   return (
     <Popover
       ref={panel}
-      open={open}
+      open={open && !!SheetBody}
       anchor={() => document.querySelector<HTMLElement>('[data-testid=prompt]')}
       placement="above-center"
       size="dialog"
@@ -125,9 +126,7 @@ export function KeySheetHost() {
       label={t('keys.menu')}
       testId="keys-sheet"
     >
-      <Suspense fallback={null}>
-        <SheetBody key={`${shown.mode}-${'provider' in shown ? shown.provider : ''}`} sheet={shown} />
-      </Suspense>
+      {SheetBody && <SheetBody key={`${shown.mode}-${'provider' in shown ? shown.provider : ''}`} sheet={shown} />}
     </Popover>
   );
 }

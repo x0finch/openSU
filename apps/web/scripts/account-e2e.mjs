@@ -661,7 +661,7 @@ try {
     await waitOpen(a);
     const kept = await houseName(a);
     // Task 032: signing out is on /projects; back in the studio, the house last open is this browser's.
-    await signOutViaProjects(a, base);
+    await signOutViaProjects(a, preview.base);
     await a.waitForTimeout(500);
     check((await houseName(a)) === kept && !(await P(a)).on, `sign-out (on /projects): the house last open is this browser's (${kept})`);
     await A.ctx.close();
