@@ -5,6 +5,7 @@
 import { createContext, type CSSProperties, type HTMLAttributes, type ReactNode, type Ref, useCallback, useContext, useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { cssVars, GLASS, type GlassRole, type GlassTone } from './material';
 import { type GlassBackend, glassRegistry, type ShapeOverride } from './registry';
+import { preloadSurfaces } from './preload';
 import { Spring, SPRINGS } from './spring';
 
 export function cx(...c: (string | false | null | undefined)[]): string {
@@ -26,6 +27,11 @@ export function useGlass(): { backend: GlassBackend; tone: GlassTone; opaque: bo
  */
 export function GlassLayer({ tone = 'dark', children }: { tone?: GlassTone; children: ReactNode }) {
   useEffect(() => glassRegistry.setTone(tone), [tone]);
+  useEffect(() => {
+    const idle = (window as Window & { requestIdleCallback?: (f: () => void, o?: { timeout: number }) => number }).requestIdleCallback;
+    if (idle) idle(preloadSurfaces, { timeout: 2000 });
+    else window.setTimeout(preloadSurfaces, 1200);
+  }, []);
   const [host, setHost] = useState<HTMLElement | null>(null);
   return (
     <div className="contents" style={cssVars(tone) as CSSProperties} data-glass-tone={tone}>

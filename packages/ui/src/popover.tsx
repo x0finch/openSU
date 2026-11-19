@@ -12,16 +12,17 @@
 // responsive rule, in the package). Callers compose the parts and lay out
 // their own content inside the body; they never set padding, a title size
 // or a radius.
-import { Popover as BasePopover } from '@base-ui/react/popover';
-import { createContext, type ReactNode, type Ref, useContext, useState } from 'react';
+import type { Popover as BasePopover } from '@base-ui/react/popover';
+import { lazy, type ReactNode, type Ref, Suspense, useContext, useState } from 'react';
 import { CloseGlyph, BackGlyph } from './glyphs';
-import { anchorBox, FLOATING, type Placement, sideAlign } from './floating';
+import { type Placement } from './floating';
 import { Button } from './button';
 import { IconButton } from './icon-button';
 import { GLASS } from './material';
+import { PopoverParts } from './parts-context';
 import { Sheet } from './sheet';
-import { cx, Glass, usePortalHost } from './surface';
-import { type Box, useFloatingBox } from './use-floating-box';
+import { cx } from './surface';
+import { type Box } from './use-floating-box';
 import { usePhone } from './use-phone';
 
 export type PopoverSize = keyof typeof GLASS.panelWidth;
@@ -63,15 +64,16 @@ export interface PopoverProps {
   children: ReactNode;
 }
 
-/** Inside a desktop popover: the header's close button is Base UI's Close part (it completes the dialog's focus handling). */
-const InPopover = createContext(false);
+const PopoverBase = lazy(() => import('./popover-base'));
 
-export function Popover({ open, anchor, placement = 'below-start', size = 'dialog', maxHeight, onClose, onClosed, onBox, role = 'dialog', closeOnOutsidePress = true, initialFocus, finalFocus, labelledBy, label, id, testId, phone: force, ref, children }: PopoverProps) {
+export function Popover(props: PopoverProps) {
+  const { open, onClose, onClosed, role = 'dialog', labelledBy, label, id, testId, phone: force, ref, children } = props;
   const auto = usePhone();
   const phone = force ?? auto;
   const [vh] = useState(() => (typeof window === 'undefined' ? 800 : window.innerHeight));
-  const host = usePortalHost();
-  const boxRef = useFloatingBox(open && !phone, anchor, false, onBox);
+  // Base UI's tree loads with the first open (popover-base.tsx); until then there is nothing to render.
+  const [used, setUsed] = useState(open);
+  if (open && !used) setUsed(true);
   if (phone) {
     // The phone form (task 031: on Vaul): a sheet that rises over the bars and a scrim; nothing rides on it.
     return (
@@ -92,71 +94,11 @@ export function Popover({ open, anchor, placement = 'below-start', size = 'dialo
       </Sheet>
     );
   }
-  const { side, align } = sideAlign(placement);
+  if (!used) return null;
   return (
-    <BasePopover.Root
-      open={open}
-      modal={role === 'dialog' ? 'trap-focus' : false}
-      onOpenChange={(next, details) => {
-        if (next) return;
-        const target = (details.event as Event | undefined)?.target as Node | null | undefined;
-        // The anchor toggles its surface itself (a press on it is not a press outside).
-        if (details.reason === 'outside-press' && target && anchor()?.contains(target)) return details.cancel();
-        if (!closeOnOutsidePress && (details.reason === 'outside-press' || details.reason === 'focus-out')) return details.cancel();
-        // The header's close button calls the header's own handler.
-        if (details.reason === 'close-press') return;
-        onClose(details.reason);
-      }}
-      onOpenChangeComplete={(o) => {
-        if (!o) onClosed?.();
-      }}
-    >
-      <BasePopover.Portal container={host ?? undefined}>
-        <BasePopover.Positioner ref={boxRef} anchor={anchorBox(anchor)} side={side} align={align} {...FLOATING} className="z-50">
-          <BasePopover.Popup
-            initialFocus={initialFocus}
-            finalFocus={finalFocus}
-            render={(props, state) => {
-              const { role: _role, style, className, ...rest } = props as typeof props & { role?: string };
-              return (
-                <Glass
-                  {...rest}
-                  ref={(el: HTMLElement | null) => {
-                    if (el) (el as HTMLElement & { __anchor?: () => HTMLElement | null }).__anchor = anchor;
-                    if (typeof ref === 'function') ref(el);
-                    else if (ref) (ref as { current: HTMLElement | null }).current = el;
-                    const r = (props as { ref?: Ref<HTMLElement> }).ref;
-                    if (typeof r === 'function') r(el);
-                    else if (r) (r as { current: HTMLElement | null }).current = el;
-                  }}
-                  kind="text"
-                  radius={GLASS.radiusPanel}
-                  layer={1}
-                  ariaRole={role}
-                  id={id}
-                  aria-label={label}
-                  aria-labelledby={labelledBy}
-                  // Closed (still leaving): out of reach at once, without waiting for its last frames.
-                  aria-modal={role === 'dialog' && state.open ? 'true' : undefined}
-                  inert={!state.open || undefined}
-                  className={cx('lg-pop pointer-events-auto flex flex-col overflow-y-auto overscroll-contain', className)}
-                  style={{ ...style, width: GLASS.panelWidth[size], maxHeight: maxHeight ? `min(${maxHeight}, var(--available-height))` : 'var(--available-height)' }}
-                  data-testid={testId}
-                  data-anchored=""
-                  data-popover={size}
-                  data-placement={placement}
-                  data-panel={role === 'group' && state.open ? '' : undefined}
-                />
-              );
-            }}
-          >
-            <InPopover.Provider value>
-              <div className="lg-panel">{children}</div>
-            </InPopover.Provider>
-          </BasePopover.Popup>
-        </BasePopover.Positioner>
-      </BasePopover.Portal>
-    </BasePopover.Root>
+    <Suspense fallback={null}>
+      <PopoverBase {...props} />
+    </Suspense>
   );
 }
 
@@ -171,21 +113,21 @@ export function SheetContent({ children, panel, ref }: { children: ReactNode; pa
 
 /** The header: an optional back button, the title, the close button (every surface has one). */
 export function PopoverHeader({ children, onClose, closeLabel, closeTestId, back }: { children: ReactNode; onClose: () => void; closeLabel: string; closeTestId?: string; back?: { label: string; onClick: () => void; testId?: string } }) {
-  const inPopover = useContext(InPopover);
+  const parts = useContext(PopoverParts);
   const close = (
     <IconButton label={closeLabel} tip={false} size={32} onClick={onClose} data-testid={closeTestId} data-panel-close="">
       <CloseGlyph />
     </IconButton>
   );
   return (
-    <header className="lg-panel-head" data-panel-head="">
+    <header className="lg-panel-head" data-slot="popover-header" data-panel-head="">
       {back && (
         <IconButton label={back.label} tip={false} size={32} onClick={back.onClick} data-testid={back.testId} data-panel-back="">
           <BackGlyph />
         </IconButton>
       )}
       {children}
-      {inPopover ? <BasePopover.Close render={close} /> : close}
+      {parts ? <parts.Close render={close} /> : close}
     </header>
   );
 }
@@ -193,7 +135,7 @@ export function PopoverHeader({ children, onClose, closeLabel, closeTestId, back
 /** The title (one size for every surface). */
 export function PopoverTitle({ children, id }: { children: ReactNode; id?: string }) {
   return (
-    <h2 className="lg-panel-title" id={id} data-panel-title="">
+    <h2 className="lg-panel-title" id={id} data-slot="popover-title" data-panel-title="">
       {children}
     </h2>
   );
@@ -202,7 +144,7 @@ export function PopoverTitle({ children, id }: { children: ReactNode; id?: strin
 /** One line under the title: what the surface is for. */
 export function PopoverDescription({ children, testId }: { children: ReactNode; testId?: string }) {
   return (
-    <p className="lg-panel-sub" data-testid={testId}>
+    <p className="lg-panel-sub" data-slot="popover-description" data-testid={testId}>
       {children}
     </p>
   );
@@ -210,14 +152,14 @@ export function PopoverDescription({ children, testId }: { children: ReactNode; 
 
 /** The content: sections one gap apart. */
 export function PopoverBody({ children, className }: { children: ReactNode; className?: string }) {
-  return <div className={cx('lg-panel-body', className)}>{children}</div>;
+  return <div className={cx('lg-panel-body', className)} data-slot="popover-body">{children}</div>;
 }
 
 /** The action row at the bottom (one primary action, then plain secondary ones) and an optional footnote under it. */
 export function PopoverFooter({ children, note }: { children?: ReactNode; note?: ReactNode }) {
   return (
     <>
-      {children && <div className="lg-panel-actions">{children}</div>}
+      {children && <div className="lg-panel-actions" data-slot="popover-footer">{children}</div>}
       {note && <p className="lg-panel-foot">{note}</p>}
     </>
   );

@@ -748,8 +748,9 @@ export function PanelCard({ derived, onRect }: { derived: Derived | null; onRect
             // Clear of the input at the bottom (its 112 px), as before.
             maxHeight="calc(100vh - 66px - 112px)"
           >
-            {/* A panel flowing back is an empty shape: its controls are gone at once (no duplicates for keyboard, screen readers and tests). */}
-            {on && <PanelBody derived={derived} kind={p.panel} />}
+            {/* A closing panel keeps its content (inert, so out of reach) and leaves as itself; one replaced by another
+                panel's opening is an empty shape at once (no duplicate controls while both are mounted). */}
+            {(on || !current) && <PanelBody derived={derived} kind={p.panel} />}
           </Popover>
         );
       })}

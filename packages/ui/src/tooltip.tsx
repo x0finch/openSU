@@ -45,7 +45,7 @@ export function Tooltip({ label, children, side = 'bottom' }: { label: ReactNode
       <BaseTooltip.Trigger delay={TOOLTIP_DELAY} render={children} />
       <BaseTooltip.Portal container={host ?? undefined}>
         <BaseTooltip.Positioner side={side} sideOffset={10} collisionPadding={8} positionMethod="fixed" className="z-[60]">
-          <BaseTooltip.Popup className="lg-tip" aria-hidden="true">
+          <BaseTooltip.Popup className="lg-tip" data-slot="tooltip-content" aria-hidden="true">
             {label}
           </BaseTooltip.Popup>
         </BaseTooltip.Positioner>

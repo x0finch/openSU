@@ -125,7 +125,18 @@ class Registry {
     const kick = () => this.kick();
     window.addEventListener('resize', kick);
     window.addEventListener('scroll', kick, true);
-    for (const ev of ['transitionrun', 'transitionend', 'animationstart', 'animationend']) document.addEventListener(ev, kick, true);
+    // CSS motion (task 031: surfaces open and close with transitions Base UI and Vaul drive): measure every frame for
+    // as long as any transition or animation runs, whatever its length or the frame rate.
+    const start = (e: Event) => {
+      this.running.add(`${(e as TransitionEvent).propertyName ?? (e as AnimationEvent).animationName}|${this.idOf(e.target)}`);
+      this.kick();
+    };
+    const end = (e: Event) => {
+      this.running.delete(`${(e as TransitionEvent).propertyName ?? (e as AnimationEvent).animationName}|${this.idOf(e.target)}`);
+      this.kick();
+    };
+    for (const ev of ['transitionrun', 'animationstart']) document.addEventListener(ev, start, true);
+    for (const ev of ['transitionend', 'transitioncancel', 'animationend', 'animationcancel']) document.addEventListener(ev, end, true);
     onSpringFrame(() => this.collect());
     const mq = matchMedia('(prefers-reduced-transparency: reduce)');
     const onMq = () => this.setOpaque(mq.matches);
@@ -195,10 +206,23 @@ class Registry {
     if (!this.raf && typeof requestAnimationFrame === 'function') this.raf = requestAnimationFrame(this.frame);
   }
 
+  /** Transitions and animations running now (property or name, and the element's id). */
+  private running = new Set<string>();
+  private ids = new WeakMap<object, number>();
+  private nextEl = 1;
+  private idOf(t: EventTarget | null): number {
+    if (!t) return 0;
+    let id = this.ids.get(t);
+    if (!id) this.ids.set(t, (id = this.nextEl++));
+    return id;
+  }
+
   private frame = (): void => {
     this.raf = 0;
     this.collect();
-    if (performance.now() < this.hotUntil) this.raf = requestAnimationFrame(this.frame);
+    // A transition that never ends (its element removed) stops counting after a while.
+    if (this.running.size && performance.now() - this.hotUntil > 4000) this.running.clear();
+    if (this.running.size || performance.now() < this.hotUntil) this.raf = requestAnimationFrame(this.frame);
   };
 
   /** Measures every surface and pushes the shapes to the WebGL backend when they changed. */

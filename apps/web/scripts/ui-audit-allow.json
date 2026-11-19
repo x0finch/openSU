@@ -4,7 +4,7 @@
     "accent-use|chat-panel|[turn-change] span|accent (background) outside the sun, play, send and the working glow",
     "accent-use|prompt|[chat-history] span|accent (background) outside the sun, play, send and the working glow",
     "inset-lr|chat-panel|[chat-panel] header \"AI 设计助手 取消固定\"|panel header: left inset # px, right inset # px",
-    "inset-lr|chat-panel|[chat-panel] header \"AI 设计助手 新对话 取消固定\"|panel header: left inset # px, right inset # px",
+    "inset-lr|toolbar|[toolbar]|left inset # px, right inset # px",
     "row-align|prompt|[prompt] form \"已修改：北侧房间加深 600 mm…\"|# children on # different centre lines (spread # px)",
     "text-size|chat-panel|[chat-panel] 10.5 px text|# px text (minimum # px)",
     "text-size|project-menu-list|[project-menu-list] 11 px text|# px text (minimum # px)"

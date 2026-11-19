@@ -13,7 +13,7 @@ export function Switch({ checked, onChange, label, className, disabled, id, ...r
   return (
     <BaseSwitch.Root
       nativeButton
-      render={<button type="button" id={id} />}
+      render={<button type="button" id={id} data-slot="switch" />}
       checked={checked}
       onCheckedChange={(on) => onChange(on)}
       disabled={disabled}

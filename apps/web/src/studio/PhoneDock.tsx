@@ -14,7 +14,7 @@ import { cx } from '../components/ui';
 import { ChatInput, PinnedChat, RecentStrip } from '../chat/ChatPanel';
 import { useKeys } from '../chat/keys';
 import { useAccount } from '../chat/account';
-import { Sheet, SheetContent } from '@opensu/ui';
+import { preloadSheet, Sheet, SheetContent } from '@opensu/ui';
 import { useShareUi } from '../lib/share';
 import { useStudio } from '../lib/store';
 import { Hints } from './chrome';
@@ -67,6 +67,8 @@ export function PhoneDock({ derived, landscape, onExtent }: { derived: Derived |
   const pinned = useStudio((s) => s.pinned);
   const recent = useStudio((s) => s.recent);
   const panel = useOpenPanel();
+  const lastPanel = useRef(panel);
+  if (panel) lastPanel.current = panel;
   const panelKey = useStudio((s) => (s.sitePanel ? `site-${s.sitePanel.kind}` : `tray-${s.tray}`));
   const want: SheetKind | null = panel ? 'tool' : pinned && !walk ? 'chat' : null;
   /** The kind rendered (kept while the sheet flows away). */
@@ -75,6 +77,8 @@ export function PhoneDock({ derived, landscape, onExtent }: { derived: Derived |
     if (want) setShown(want);
   }, [want]);
 
+  // The sheet's code (Vaul) loads on first use; on a phone, fetch it ahead of the first tap.
+  useEffect(() => preloadSheet(), []);
   const root = useRef<HTMLDivElement>(null);
   const ride = useRef<HTMLDivElement>(null);
   const toolbar = useRef<HTMLDivElement>(null);
@@ -144,7 +148,8 @@ export function PhoneDock({ derived, landscape, onExtent }: { derived: Derived |
 
   // The pinned conversation hides the input (it has its own).
   const hideInput = want === 'chat';
-  const covered = signing || want === 'tool';
+  // Until the sheet has left (it slides down over them), the bars stay covered.
+  const covered = signing || want === 'tool' || shown === 'tool';
   const chat = shown === 'chat';
   const sheet = shown && (
     <Sheet
@@ -174,7 +179,8 @@ export function PhoneDock({ derived, landscape, onExtent }: { derived: Derived |
         </div>
       ) : (
         <SheetContent ref={content} panel>
-          <PanelBody derived={derived} phone />
+          {/* While it slides away the sheet keeps the panel it showed (inert by then). */}
+          <PanelBody derived={derived} phone kind={lastPanel.current ?? undefined} />
         </SheetContent>
       )}
     </Sheet>

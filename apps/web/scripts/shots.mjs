@@ -753,12 +753,15 @@ async function stillHouseChecks() {
       await page.mouse.down();
       for (let i = 1; i <= 12; i++) await page.mouse.move(x, g.y + 8 - i * 50);
       await page.mouse.up();
-    }, () => page.getByTestId(`bar-${tool}`).click());
-    if (mode === '3d') await still(page, 'phone 3d: switching sheets views -> sun', async () => {
+      // Task 031 (defect 3): the sheet lies over the tool bar and a scrim; it closes from its own header.
+    }, () => page.getByTestId('panel-close').click());
+    if (mode === '3d') await still(page, 'phone 3d: one sheet after another, views -> sun', async () => {
       await page.getByTestId('bar-views').click();
       await page.waitForTimeout(600);
+      await page.getByTestId('panel-close').click();
+      await page.waitForTimeout(600);
       await page.getByTestId('bar-sun').click();
-    }, () => page.getByTestId('bar-sun').click());
+    }, () => page.getByTestId('panel-close').click());
     if (mode === '3d') {
       // The pinned conversation's sheet stays: the house moves above it once; a tool sheet over it does not move it.
       const base = (await restAfter(page)).at(-1);
@@ -767,7 +770,7 @@ async function stillHouseChecks() {
       const pinning = await restAfter(page);
       const framedBottom = await page.evaluate(() => window.__studio.engine.viewer.framedInsets.bottom);
       check(pinning.length >= 3 && pinning.at(-1) !== base && framedBottom > 844 * 0.47, `phone 3d: pinning moves the house above the conversation sheet, smoothly (${pinning.length - 2} frames between; bottom inset ${framedBottom})`);
-      await still(page, 'phone 3d pinned: views sheet over the conversation', () => page.getByTestId('bar-views').click(), () => page.getByTestId('bar-views').click());
+      await still(page, 'phone 3d pinned: views sheet over the conversation', () => page.getByTestId('bar-views').click(), () => page.getByTestId('panel-close').click());
     }
     await ctx.close();
   }

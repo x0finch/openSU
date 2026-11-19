@@ -99,6 +99,7 @@ export function Slider({ min, max, value, onChange, ariaLabel, ariaValueText, id
       thumbAlignment="edge"
       className={cx('lg-slider', className)}
       style={style}
+      data-slot="slider"
       data-fill={fill}
     >
       <BaseSlider.Control

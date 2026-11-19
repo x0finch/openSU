@@ -30,20 +30,19 @@ export interface AnchorBox {
  * edge, aligned with the control, so the surface (and its first frame,
  * which grows from this edge) never lies over the bar.
  */
-export function anchorBox(get: () => HTMLElement | null): () => AnchorBox | null {
+export function anchorBox(get: () => HTMLElement | null): () => AnchorBox | HTMLElement | null {
   return () => {
     const a = get();
     if (!a || !a.isConnected) return null;
+    const bar = a.closest<HTMLElement>('.lg[data-kind=control]');
+    // Not in a bar: the element itself, so Base UI follows its size and position as they change.
+    if (!bar || bar === a || bar.getBoundingClientRect().height > 64) return a;
     return {
       contextElement: a,
       getBoundingClientRect: () => {
         const r = a.getBoundingClientRect();
-        const bar = a.closest<HTMLElement>('.lg[data-kind=control]');
-        if (bar && bar !== a && !bar.hasAttribute('data-floating')) {
-          const b = bar.getBoundingClientRect();
-          if (b.height <= 64) return new DOMRect(r.left, b.top, r.width, b.height);
-        }
-        return r;
+        const b = bar.getBoundingClientRect();
+        return new DOMRect(r.left, b.top, r.width, b.height);
       },
     };
   };

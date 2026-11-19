@@ -4,5 +4,5 @@ import { cx } from './surface';
 
 /** An inset hairline between rows or groups of a panel. */
 export function Separator({ className }: { className?: string }) {
-  return <BaseSeparator className={cx('lg-sep mx-3 my-1', className)} />;
+  return <BaseSeparator className={cx('lg-sep mx-3 my-1', className)} data-slot="separator" />;
 }

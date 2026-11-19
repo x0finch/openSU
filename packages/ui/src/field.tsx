@@ -27,7 +27,7 @@ export function CodeInput({ className, ref, ...rest }: InputHTMLAttributes<HTMLI
 /** A labelled field: the label above, the input (an `Input` inside), an optional hint under it. */
 export function Field({ label, hint, children }: { label: ReactNode; hint?: ReactNode; children: ReactNode }) {
   return (
-    <BaseField.Root className="block">
+    <BaseField.Root className="block" data-slot="field">
       <BaseField.Label className="mb-1.5 block text-[12px] font-medium text-ink-2">{label}</BaseField.Label>
       {children}
       {hint && <BaseField.Description className="mt-1.5 block text-[12px] leading-4 text-ink-2">{hint}</BaseField.Description>}
