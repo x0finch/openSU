@@ -128,63 +128,80 @@ function mapOf(w: number, h: number, r: number): Map {
 
 let nextId = 1;
 
+/** One SVG filter: the map image and the three displacements (one per colour channel, red bending most). */
+interface Filter {
+  el: SVGFilterElement;
+  image: SVGFEImageElement;
+  disp: SVGFEDisplacementMapElement[];
+}
+
+function makeFilter(): Filter {
+  const f = document.createElementNS(NS, 'filter');
+  f.id = `lg-refract-${nextId++}`;
+  // The region: the element's box (user space = the element's border box).
+  const attrs: [string, string][] = [['filterUnits', 'userSpaceOnUse'], ['primitiveUnits', 'userSpaceOnUse'], ['color-interpolation-filters', 'sRGB'], ['x', '0'], ['y', '0']];
+  for (const [a, v] of attrs) f.setAttribute(a, v);
+  const image = document.createElementNS(NS, 'feImage');
+  image.setAttribute('x', '0');
+  image.setAttribute('y', '0');
+  image.setAttribute('preserveAspectRatio', 'none');
+  image.setAttribute('result', 'map');
+  f.append(image);
+  // Each channel displaced on its own and kept (opaque), then summed: the rim's colour fringe.
+  const keep = ['1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 1', '0 0 0 0 0 0 1 0 0 0 0 0 0 0 0 0 0 0 0 1', '0 0 0 0 0 0 0 0 0 0 0 0 1 0 0 0 0 0 0 1'];
+  const disp: SVGFEDisplacementMapElement[] = [];
+  keep.forEach((values, c) => {
+    const dm = document.createElementNS(NS, 'feDisplacementMap');
+    dm.setAttribute('in', 'SourceGraphic');
+    dm.setAttribute('in2', 'map');
+    dm.setAttribute('xChannelSelector', 'R');
+    dm.setAttribute('yChannelSelector', 'G');
+    const cm = document.createElementNS(NS, 'feColorMatrix');
+    cm.setAttribute('type', 'matrix');
+    cm.setAttribute('values', values);
+    cm.setAttribute('result', `c${c}`);
+    f.append(dm, cm);
+    disp.push(dm);
+  });
+  for (const [a, b] of [['c0', 'c1'], ['s', 'c2']]) {
+    const sum = document.createElementNS(NS, 'feComposite');
+    sum.setAttribute('in', a!);
+    sum.setAttribute('in2', b!);
+    sum.setAttribute('operator', 'arithmetic');
+    sum.setAttribute('k2', '1');
+    sum.setAttribute('k3', '1');
+    sum.setAttribute('result', 's');
+    f.append(sum);
+  }
+  return { el: f, image, disp };
+}
+
+function sizeFilter(f: Filter, w: number, h: number): void {
+  for (const n of [f.el, f.image]) {
+    n.setAttribute('width', String(w));
+    n.setAttribute('height', String(h));
+  }
+}
+
 /**
- * One surface's refraction: its filter, sized to the element. `update`
- * follows a new size or radius: the map image is stretched to the new size
- * at once (a frame never shows the backdrop out of place) and redrawn for
- * it once the size has settled.
+ * One surface's refraction, sized to the element. A new size or radius
+ * stretches the map in use at once (a frame never shows the backdrop out of
+ * place) and, once the size has settled, draws a map for it in a new filter
+ * that replaces the old one only when its image is ready: a filter whose
+ * map image has not loaded yet displaces the whole backdrop out of the box
+ * (it shows black), so the element never points at one.
  */
 export class Refraction {
-  private filter: SVGFilterElement;
-  private image: SVGFEImageElement;
-  /** One displacement per colour channel (red bends most, blue least: dispersion). */
-  private disp: SVGFEDisplacementMapElement[] = [];
+  /** The filter the element uses now (null until the first map is ready). */
+  private shown: Filter | null = null;
+  /** A filter being readied (its map image loading). */
+  private next: Filter | null = null;
   private key = '';
+  private size = { w: 0, h: 0 };
   private timer = 0;
-  private applied = false;
+  private gone = false;
 
-  constructor(private el: HTMLElement) {
-    const id = `lg-refract-${nextId++}`;
-    const f = document.createElementNS(NS, 'filter');
-    f.id = id;
-    // The region: the element's box (user space = the element's border box).
-    const attrs: [string, string][] = [['filterUnits', 'userSpaceOnUse'], ['primitiveUnits', 'userSpaceOnUse'], ['color-interpolation-filters', 'sRGB'], ['x', '0'], ['y', '0']];
-    for (const [a, v] of attrs) f.setAttribute(a, v);
-    const im = document.createElementNS(NS, 'feImage');
-    im.setAttribute('x', '0');
-    im.setAttribute('y', '0');
-    im.setAttribute('preserveAspectRatio', 'none');
-    im.setAttribute('result', 'map');
-    f.append(im);
-    // Each channel displaced on its own and kept (opaque), then summed: the rim's colour fringe.
-    const keep = ['1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 1', '0 0 0 0 0 0 1 0 0 0 0 0 0 0 0 0 0 0 0 1', '0 0 0 0 0 0 0 0 0 0 0 0 1 0 0 0 0 0 0 1'];
-    keep.forEach((values, c) => {
-      const dm = document.createElementNS(NS, 'feDisplacementMap');
-      dm.setAttribute('in', 'SourceGraphic');
-      dm.setAttribute('in2', 'map');
-      dm.setAttribute('xChannelSelector', 'R');
-      dm.setAttribute('yChannelSelector', 'G');
-      const cm = document.createElementNS(NS, 'feColorMatrix');
-      cm.setAttribute('type', 'matrix');
-      cm.setAttribute('values', values);
-      cm.setAttribute('result', `c${c}`);
-      f.append(dm, cm);
-      this.disp.push(dm);
-    });
-    for (const [a, b] of [['c0', 'c1'], ['s', 'c2']]) {
-      const sum = document.createElementNS(NS, 'feComposite');
-      sum.setAttribute('in', a!);
-      sum.setAttribute('in2', b!);
-      sum.setAttribute('operator', 'arithmetic');
-      sum.setAttribute('k2', '1');
-      sum.setAttribute('k3', '1');
-      sum.setAttribute('result', 's');
-      f.append(sum);
-    }
-    defs().appendChild(f);
-    this.filter = f;
-    this.image = im;
-  }
+  constructor(private el: HTMLElement) {}
 
   /** The element's size (layout px, transforms aside) and corner radius changed, or may have. */
   update(): void {
@@ -194,37 +211,47 @@ export class Refraction {
     const r = Math.round(parseFloat(getComputedStyle(el).borderTopLeftRadius) || 0);
     const key = `${w}x${h}r${r}`;
     if (key === this.key) return;
-    for (const [n, a] of [[this.filter, 'width'], [this.image, 'width']] as const) n.setAttribute(a, String(w));
-    for (const [n, a] of [[this.filter, 'height'], [this.image, 'height']] as const) n.setAttribute(a, String(h));
+    this.size = { w, h };
+    if (this.shown) sizeFilter(this.shown, w, h);
+    if (this.next) sizeFilter(this.next, w, h);
     const first = !this.key;
     this.key = key;
     clearTimeout(this.timer);
     if (first) this.draw(w, h, r, key);
-    // Resizing (a sheet's height, a growing strip): keep the old map stretched until the size settles.
+    // Resizing (a sheet's height, a growing strip): keep the map in use stretched until the size settles.
     else this.timer = window.setTimeout(() => this.draw(w, h, r, key), 120);
   }
 
   private draw(w: number, h: number, r: number, key: string): void {
-    if (!this.filter.isConnected) return;
+    if (this.gone || this.key !== key) return;
     const m = mapOf(w, h, r);
-    if (this.key !== key) return;
-    this.disp.forEach((d, c) => d.setAttribute('scale', String(2 * m.pull * (1 + GLASS.dispersion * (1 - c)))));
-    this.image.setAttribute('href', m.url);
-    if (this.applied) return;
-    // The first map: put the filter on once the image is decoded (an empty map would shift the whole backdrop).
+    this.next?.el.remove();
+    const f = makeFilter();
+    this.next = f;
+    sizeFilter(f, this.size.w, this.size.h);
+    f.disp.forEach((d, c) => d.setAttribute('scale', String(2 * m.pull * (1 + GLASS.dispersion * (1 - c)))));
+    f.image.setAttribute('href', m.url);
+    defs().appendChild(f.el);
     const img = new Image();
     img.src = m.url;
-    img.decode().then(() => requestAnimationFrame(() => {
-      if (!this.filter.isConnected) return;
-      this.applied = true;
-      this.el.style.setProperty('--lg-refract', `url(#${this.filter.id})`);
+    // Decoded, then two frames for the filter's own image to load and be drawn once, off screen.
+    img.decode().then(() => requestAnimationFrame(() => requestAnimationFrame(() => {
+      if (this.gone || this.next !== f) return;
+      this.next = null;
+      const old = this.shown;
+      this.shown = f;
+      this.el.style.setProperty('--lg-refract', `url(#${f.el.id})`);
       this.el.dataset.refract = '';
-    }), () => {});
+      // The old filter goes a frame later, once the element has moved to the new one.
+      if (old) requestAnimationFrame(() => old.el.remove());
+    })), () => {});
   }
 
   dispose(): void {
+    this.gone = true;
     clearTimeout(this.timer);
-    this.filter.remove();
+    this.shown?.el.remove();
+    this.next?.el.remove();
     this.el.style.removeProperty('--lg-refract');
     delete this.el.dataset.refract;
   }

@@ -551,6 +551,19 @@
   align-items: center;
   gap: 8px;
 }
+/*
+ * On a floating panel (radius 30, inset 22) the header rides 10 px up and
+ * out, so a corner button's circle (radius 18) is concentric with the
+ * panel's corner, as iOS 26 places a sheet's buttons. The phone sheet's
+ * grabber sits above its header, so there it stays in the inset.
+ */
+.lg-panel:not([data-phone]) .lg-panel-head {
+  margin-top: -10px;
+  margin-right: -10px;
+}
+.lg-panel:not([data-phone]) .lg-panel-head:has(> [data-panel-back]) {
+  margin-left: -10px;
+}
 .lg-panel-title {
   min-width: 0;
   flex: 1;
