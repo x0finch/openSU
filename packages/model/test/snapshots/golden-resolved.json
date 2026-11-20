@@ -2470,7 +2470,8 @@
      "space": "gf-stair",
      "kind": "u",
      "up": "S",
-     "toLevel": "L2"
+     "toLevel": "L2",
+     "firstHalf": 1
     }
    ],
    "slab": [
@@ -4113,7 +4114,8 @@
      "space": "l2-stair",
      "kind": "u",
      "up": "S",
-     "toLevel": "L3"
+     "toLevel": "L3",
+     "firstHalf": 1
     }
    ],
    "slab": [

@@ -92,6 +92,14 @@ export interface ResolvedStair {
   up: Side;
   /** Level the stair arrives at, or null when there is none (invalid). */
   toLevel: string | null;
+  /**
+   * A stair of two flights (U, L): the half of the well, across the climbing
+   * direction, that holds the first flight (-1 = the west or south half, 1 =
+   * the east or north one). It is the half the stair is entered from (task
+   * 037): the open boundaries and doors of the stair space on its long
+   * sides; else the half the stair space sits in.
+   */
+  firstHalf: -1 | 1;
 }
 
 export interface SlabOpening {
@@ -203,6 +211,64 @@ export interface Analysis {
   /** Problems found while resolving (openings that cannot be placed,
    *  misaligned stairs). `validate` reports them. */
   problems: Issue[];
+}
+
+/**
+ * The half of a stairwell that holds the first flight (ResolvedStair.firstHalf):
+ * the side the stair space is entered from. Its long sides (parallel to the
+ * flights) are weighed: open boundaries to the spaces it is open to and
+ * doors in its walls, by length, at their position across the well. With no
+ * entry on a long side (or one on each, balanced), the half the stair space
+ * sits in, as before.
+ */
+function stairFirstHalf(grid: Grid, ctx: LevelCtx, st: Stair, cells: Set<number>, wellCells: Set<number>, openings: readonly ResolvedOpening[]): -1 | 1 {
+  const ns = st.up === 'N' || st.up === 'S';
+  const box = (set: Set<number>) => {
+    let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+    for (const k of set) {
+      const i = k % grid.nx, j = Math.floor(k / grid.nx);
+      x0 = Math.min(x0, grid.xs[i]!); x1 = Math.max(x1, grid.xs[i + 1]!);
+      y0 = Math.min(y0, grid.ys[j]!); y1 = Math.max(y1, grid.ys[j + 1]!);
+    }
+    return [x0, y0, x1, y1] as const;
+  };
+  const w = box(wellCells);
+  const mid = ns ? (w[0] + w[2]) / 2 : (w[1] + w[3]) / 2;
+  const si = ctx.spaceIndex.get(st.space);
+  const open = openToPairs(ctx.level);
+  let weight = 0, sum = 0;
+  // Open boundaries: a stair cell next to a cell of a space it is open to, across the flights.
+  for (const k of cells) {
+    const i = k % grid.nx, j = Math.floor(k / grid.nx);
+    const steps: [number, number][] = ns ? [[-1, 0], [1, 0]] : [[0, -1], [0, 1]];
+    for (const [di, dj] of steps) {
+      const ni = i + di, nj = j + dj;
+      if (ni < 0 || nj < 0 || ni >= grid.nx || nj >= grid.ny) continue;
+      const o = ctx.owner[cellKey(grid, ni, nj)]!;
+      if (o < 0 || o === si) continue;
+      const other = ctx.level.spaces[o]!;
+      if (!open.has(pairKey(st.space, other.id))) continue;
+      const len = ns ? grid.ys[j + 1]! - grid.ys[j]! : grid.xs[i + 1]! - grid.xs[i]!;
+      const at = ns ? grid.xs[di < 0 ? i : i + 1]! : grid.ys[dj < 0 ? j : j + 1]!;
+      weight += len;
+      sum += len * at;
+    }
+  }
+  // Doors in the stair space's walls along the flights.
+  for (const op of openings) {
+    if (op.kind === 'window' || !op.sides.includes(st.space)) continue;
+    if (ns ? op.orient !== 'NS' : op.orient !== 'EW') continue;
+    weight += op.width;
+    sum += op.width * (ns ? op.center[0] : op.center[1]);
+  }
+  if (weight > 0) {
+    const at = sum / weight;
+    if (at < mid - 1) return -1;
+    if (at > mid + 1) return 1;
+  }
+  const own = box(cells);
+  const c = ns ? (own[0] + own[2]) / 2 : (own[1] + own[3]) / 2;
+  return c < mid - 1 ? -1 : 1;
 }
 
 const pairKey = (a: string, b: string) => (a < b ? `${a}\u0000${b}` : `${b}\u0000${a}`);
@@ -628,6 +694,7 @@ export function analyse(house: House): Analysis {
     const stairs: ResolvedStair[] = level.stairs.map((st) => ({
       id: st.id, space: st.space, kind: st.kind, up: st.up,
       toLevel: house.levels[ctx.index + 1]?.id ?? null,
+      firstHalf: 1,
     }));
     const rl: ResolvedLevel = {
       id: level.id, name: level.name, index: ctx.index, elevation, height: level.height,
@@ -656,6 +723,8 @@ export function analyse(house: House): Analysis {
       });
       const holeCells = well.size ? well : cells;
       levels[upper.index]!.slabOpenings.push({ stair: st.id, rings: rings(grid, holeCells) });
+      const rs = levels[ctx.index]!.stairs.find((x) => x.id === st.id);
+      if (rs) rs.firstHalf = stairFirstHalf(grid, ctx, st, cells, holeCells, levels[ctx.index]!.openings);
     }
   });
 

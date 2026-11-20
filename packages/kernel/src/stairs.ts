@@ -1,6 +1,6 @@
 // Stairs inferred from the stairwell (the slab opening in the level above)
 // and the storey height: straight, U (two flights and a landing) or L.
-import { RISER, STEP_SLAB } from './constants';
+import { FLOOR_SLAB, RISER, STEP_SLAB } from './constants';
 import type { Ctx, Rect } from './context';
 import { flat } from './massing';
 
@@ -14,6 +14,13 @@ export interface StairWalk {
   ramps: { rect: Rect; axis: 'x' | 'y'; from: number; to: number; z0: number; z1: number }[];
   /** Thin rails between flights (plan rects). */
   rails: Rect[];
+  /**
+   * A U stair: the floor of the level above that reaches over the foot of
+   * the first flight (plan rect), where someone leaving the top of the
+   * second flight steps across to the first flight's side; null when the
+   * headroom over the flight leaves no room for it.
+   */
+  cover: Rect | null;
   /** Storey height climbed. */
   rise: number;
 }
@@ -34,10 +41,6 @@ export function buildStairs(ctx: Ctx): StairInfo[] {
       const H = upper.elev - lv.elev;
       const n = Math.max(2, Math.round(H / RISER));
       const riser = H / n;
-      const space = lv.level.spaces.find((s) => s.id === st.space);
-      const sp = space?.polygon ?? [];
-      const sx = sp.length ? sp.reduce((a, p) => a + p[0], 0) / sp.length : (r[0] + r[2]) / 2;
-      const sy = sp.length ? sp.reduce((a, p) => a + p[1], 0) / sp.length : (r[1] + r[3]) / 2;
       const part = { id: `${lv.level.id}:stair`, level: lv.level.id, role: 'stair' as const, material: 'wall' as const };
       const step = (x0: number, y0: number, x1: number, y1: number, top: number) =>
         ctx.massing.add({ x0: Math.min(x0, x1), y0: Math.min(y0, y1), x1: Math.max(x0, x1), y1: Math.max(y0, y1), z0: lv.elev + Math.max(0, top - riser - STEP_SLAB), top: flat(lv.elev + top), part, prio: 10, tag: 'stair' });
@@ -51,7 +54,7 @@ export function buildStairs(ctx: Ctx): StairInfo[] {
       const startA = sign > 0 ? a0 : a1;
       // Walking surfaces: ramps from the well edge (the slab edge of the
       // level above / the floor below) over each flight, flat landings.
-      const walk: StairWalk = { level: lv.index, well: r, ramps: [], rails: [], rise: H };
+      const walk: StairWalk = { level: lv.index, well: r, ramps: [], rails: [], rise: H, cover: null };
       const edgeA = startA - sign * inset, farA = (sign > 0 ? a1 : a0) + sign * inset;
       const ramp = (al0: number, al1: number, cr0: number, cr1: number, along: [number, number], z: [number, number], onCross = false) => {
         const rect: Rect = ns
@@ -70,8 +73,8 @@ export function buildStairs(ctx: Ctx): StairInfo[] {
       }
       const width = (c1 - c0) / 2;
       const cm = (c0 + c1) / 2;
-      // First flight on the half that holds the stair space.
-      const firstHigh = (ns ? sx : sy) >= cm;
+      // First flight on the half the stair is entered from (the model decides: ResolvedStair.firstHalf).
+      const firstHigh = st.firstHalf > 0;
       const f1: [number, number] = firstHigh ? [cm, c1] : [c0, cm];
       const f2: [number, number] = firstHigh ? [c0, cm] : [cm, c1];
       const n1 = Math.ceil(n / 2), n2 = n - n1;
@@ -85,8 +88,27 @@ export function buildStairs(ctx: Ctx): StairInfo[] {
       if (st.kind === 'u') {
         ramp(lStart, lEnd + sign * inset, c0, c1, [lStart, lStart], [n1 * riser, n1 * riser]);
         ramp(lStart, edgeA, f2[0], f2[1], [lStart, edgeA], [n1 * riser, H]);
+        // The second flight arrives at the start end, over the first flight's foot (task 037): the floor above
+        // reaches over that foot, as far as the headroom over the flight allows, so the top of the second flight
+        // steps across onto it and out of the well on the first flight's side (the side the stair is entered from).
+        const headroom = 2000;
+        const reach = ((H - FLOOR_SLAB - headroom) / (n1 * riser)) * run;
+        const cover = Math.min(width, run * 0.5, reach);
+        let railFrom = edgeA;
+        if (cover >= 700) {
+          const coverEnd = startA + sign * cover;
+          const fOut = firstHigh ? c1 + inset : c0 - inset;
+          ramp(edgeA, coverEnd, cm, fOut, [edgeA, edgeA], [H, H]);
+          const rc: Rect = ns ? [Math.min(cm, fOut), Math.min(edgeA, coverEnd), Math.max(cm, fOut), Math.max(edgeA, coverEnd)] : [Math.min(edgeA, coverEnd), Math.min(cm, fOut), Math.max(edgeA, coverEnd), Math.max(cm, fOut)];
+          walk.cover = rc;
+          const up = ctx.levels[lv.index + 1]!;
+          const slab = { id: `${up.level.id}:slab`, level: up.level.id, role: 'slab' as const, material: 'wall' as const };
+          const floor = { id: `${up.level.id}:floor`, level: up.level.id, role: 'floor' as const, material: 'floor' as const };
+          ctx.massing.add({ x0: rc[0], y0: rc[1], x1: rc[2], y1: rc[3], z0: upper.elev - FLOOR_SLAB, top: flat(upper.elev), part: slab, topPart: floor, prio: 10, tag: 'house' });
+          railFrom = coverEnd;
+        }
         const rail = 20;
-        walk.rails.push(ns ? [cm - rail, Math.min(edgeA, lStart), cm + rail, Math.max(edgeA, lStart)] : [Math.min(edgeA, lStart), cm - rail, Math.max(edgeA, lStart), cm + rail]);
+        walk.rails.push(ns ? [cm - rail, Math.min(railFrom, lStart), cm + rail, Math.max(railFrom, lStart)] : [Math.min(railFrom, lStart), cm - rail, Math.max(railFrom, lStart), cm + rail]);
         box(lStart, lEnd, c0, c1, n1 * riser);
         const g2 = run / Math.max(1, n2);
         for (let k = 1; k < n2; k++) box(lStart - sign * (k - 1) * g2, lStart - sign * k * g2, f2[0], f2[1], (n1 + k) * riser);

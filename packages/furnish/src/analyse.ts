@@ -207,12 +207,7 @@ function stairsOf(house: ResolvedHouse, index: number, spaces: SpaceInfo[], wall
     const box = bboxOfPoints(so.rings.flat());
     return insetByWalls(box, lvl.walls);
   };
-  const firstHalfOf = (well: Rect, flight: Rect, dir: Side): -1 | 0 | 1 => {
-    const alongX = dir === 'N' || dir === 'S';
-    const mid = alongX ? (well.x0 + well.x1) / 2 : (well.y0 + well.y1) / 2;
-    const c = alongX ? (flight.x0 + flight.x1) / 2 : (flight.y0 + flight.y1) / 2;
-    return c < mid - 1 ? -1 : c > mid + 1 ? 1 : 0;
-  };
+
   for (const sp of spaces) {
     if (sp.type !== 'stair') continue;
     const up = level.stairs.find((st) => st.space === sp.id);
@@ -220,20 +215,8 @@ function stairsOf(house: ResolvedHouse, index: number, spaces: SpaceInfo[], wall
     if (!up && !down) continue;
     const st = up ?? down!;
     const well = up ? (wellOf(up.id, index + 1) ?? sp.clear) : sp.clear;
-    // First flight half: from where the stair space sits inside its well, or
-    // (when it fills the well) the same half as the stair arriving from below.
-    let half: -1 | 1 = 1;
-    const own = (lvl: number, stair: typeof st): -1 | 1 | null => {
-      const l = house.levels[lvl]!;
-      const s = l.spaces.find((x) => x.id === stair.space);
-      const w = wellOf(stair.id, lvl + 1);
-      if (!s || !w) return null;
-      const r = insetByWalls(bboxOfPoints(s.polygon), l.walls);
-      const h = firstHalfOf(w, r, stair.up);
-      return h === -1 || h === 1 ? h : null;
-    };
-    if (up) half = own(index, up) ?? (down && prev ? own(index - 1, down) : null) ?? 1;
-    else if (down && prev) half = own(index - 1, down) ?? 1;
+    // First flight half: the model's (the side the stair is entered from, task 037).
+    const half: -1 | 1 = st.firstHalf;
     out.push({
       space: sp.id, clip: sp.clear, well, kind: st.kind, dir: st.up,
       firstHalf: half, up: !!up, down: !!down,
