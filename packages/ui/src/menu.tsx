@@ -49,8 +49,14 @@ export function Menu(props: MenuProps) {
   );
 }
 
-/** A row of a menu (a native button; Base UI moves the highlight and focus). It does not close the menu: the caller does when the row acts. */
-export function MenuItem({ children, icon, detail, danger, className, onClick, disabled, ...rest }: ButtonHTMLAttributes<HTMLButtonElement> & { icon?: ReactNode; detail?: ReactNode; danger?: boolean }) {
+/**
+ * A row of a menu (a native button; Base UI moves the highlight and focus), as iOS 26 draws it: the label leads,
+ * its symbol trails (`icon`); a checkmark column, when the menu is a choice, leads (`lead`). `detail` is a value
+ * in secondary text before the symbol; `shortcut` its keys, shown only with a mouse. Rows are 36 px with a fine
+ * pointer and 44 px on touch. Disabled (Base UI marks it `data-disabled`, not the native attribute), the whole
+ * row greys out, as iOS does at the end of undo or redo. It does not close the menu: the caller does when the row acts.
+ */
+export function MenuItem({ children, icon, lead, detail, shortcut, sub, danger, className, onClick, disabled, ...rest }: ButtonHTMLAttributes<HTMLButtonElement> & { icon?: ReactNode; lead?: ReactNode; detail?: ReactNode; shortcut?: ReactNode; sub?: ReactNode; danger?: boolean }) {
   const parts = useContext(MenuParts);
   if (!parts) return null;
   return (
@@ -61,11 +67,16 @@ export function MenuItem({ children, icon, detail, danger, className, onClick, d
       disabled={disabled}
       onClick={onClick as never}
       render={<button type="button" data-slot="menu-item" />}
-      className={cx('lg-plate flex h-10 w-full items-center gap-2.5 rounded-[16px] px-3 text-left text-[14px] font-medium focus-visible:outline-none data-[highlighted]:bg-[var(--lg-row-active)]', danger && 'text-danger', className)}
+      className={cx('lg-plate flex min-h-9 w-full items-center gap-2.5 rounded-[14px] px-3 text-left text-[14px] focus-visible:outline-none data-[highlighted]:bg-[var(--lg-row-active)] data-[disabled]:opacity-35 pointer-coarse:min-h-11 pointer-coarse:text-[15px]', sub ? 'py-1.5' : undefined, danger && 'text-danger', className)}
     >
-      {icon && <span className="grid size-5 shrink-0 place-items-center text-ink-2">{icon}</span>}
-      <span className="min-w-0 flex-1 truncate">{children}</span>
-      {detail !== undefined && <span className="max-w-[52%] shrink-0 truncate text-[13px] font-normal text-ink-2">{detail}</span>}
+      {lead !== undefined && <span className="grid size-4 shrink-0 place-items-center">{lead}</span>}
+      <span className="flex min-w-0 flex-1 flex-col">
+        <span className="truncate">{children}</span>
+        {sub && <span className="truncate text-[12.5px] leading-[18px] text-ink-2">{sub}</span>}
+      </span>
+      {detail !== undefined && <span className="max-w-[52%] shrink-0 truncate text-[13px] text-ink-2">{detail}</span>}
+      {shortcut !== undefined && <span className="shrink-0 text-[13px] text-ink-2 pointer-coarse:hidden">{shortcut}</span>}
+      {icon && <span className="grid size-5 shrink-0 place-items-center">{icon}</span>}
     </parts.Item>
   );
 }
@@ -76,10 +87,11 @@ export function MenuItem({ children, icon, detail, danger, className, onClick, d
  * or a label and its value (`detail`).
  */
 export function MenuLabel({ title, sub, detail, small, testId, subTestId, flag }: { title?: ReactNode; sub?: ReactNode; detail?: ReactNode; small?: ReactNode; testId?: string; subTestId?: string; flag?: string }) {
-  if (small !== undefined) return <p className="px-3 pt-1 pb-1.5 text-[12px] leading-4 text-ink-2" data-testid={testId} data-failed={flag}>{small}</p>;
+  // A menu's title (iOS 26): a quiet line over the rows, at the top of the menu.
+  if (small !== undefined) return <p className="px-3 pt-1.5 pb-1 text-[12px] leading-4 text-ink-2" data-testid={testId} data-failed={flag}>{small}</p>;
   if (detail !== undefined) {
     return (
-      <div className="flex h-10 items-center gap-2.5 px-3 text-[14px] font-medium" data-testid={testId}>
+      <div className="flex min-h-9 items-center gap-2.5 px-3 text-[14px] pointer-coarse:min-h-11 pointer-coarse:text-[15px]" data-testid={testId}>
         <span className="min-w-0 flex-1 truncate">{title}</span>
         <span className="tnum shrink-0 text-[13px] font-normal text-ink-2">{detail}</span>
       </div>

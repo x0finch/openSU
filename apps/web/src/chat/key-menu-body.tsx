@@ -42,8 +42,10 @@ export default function KeyMenuBody({ anchor }: { anchor: () => HTMLElement | nu
   const browserKey = settings.key.trim() ? (settings.provider === 'custom' ? (browserKeyProvider(settings) ? PROVIDER_NAMES[browserKeyProvider(settings)!] : t('settings.p.custom')) : PROVIDER_NAMES[settings.provider]) : null;
   return (
     <div className="flex flex-col">
+      {/* The menu's title (iOS 26): where keys are kept. */}
+      {ready && <MenuLabel small={t('keys.where')} />}
       {server?.serverKey && (
-        <MenuItem role="menuitemradio" aria-checked={src.kind === 'site'} icon={<Check on={src.kind === 'site'} />} detail={<FreeDetail />} onClick={() => pick(() => choose({ kind: 'site' }))} data-testid="key-free">
+        <MenuItem role="menuitemradio" aria-checked={src.kind === 'site'} lead={<Check on={src.kind === 'site'} />} detail={<FreeDetail />} onClick={() => pick(() => choose({ kind: 'site' }))} data-testid="key-free">
           {t('keys.free')}
         </MenuItem>
       )}
@@ -54,13 +56,13 @@ export default function KeyMenuBody({ anchor }: { anchor: () => HTMLElement | nu
             <MenuItem
               role="menuitemradio"
               aria-checked={on}
-              icon={<Check on={on} />}
+              lead={<Check on={on} />}
+              sub={<span className="tnum">{`••${k.hint} · ${modelOf(k)}`}</span>}
               onClick={() => pick(() => choose({ kind: 'account', provider: k.provider }))}
-              className="h-auto min-h-12 min-w-0 flex-1 py-1.5"
+              className="min-w-0 flex-1"
               data-testid={`key-${k.provider}`}
             >
-              <span className="block truncate">{PROVIDER_NAMES[k.provider]}</span>
-              <span className="tnum block truncate text-[12px] leading-4 font-normal text-ink-2">{`••${k.hint} · ${modelOf(k)}`}</span>
+              {PROVIDER_NAMES[k.provider]}
             </MenuItem>
             <Button
               variant="quiet"
@@ -76,7 +78,7 @@ export default function KeyMenuBody({ anchor }: { anchor: () => HTMLElement | nu
         );
       })}
       {browserKey && (
-        <MenuItem role="menuitemradio" aria-checked={src.kind === 'browser'} icon={<Check on={src.kind === 'browser'} />} detail={browserKey} onClick={() => pick(() => choose({ kind: 'browser' }))} data-testid="key-browser">
+        <MenuItem role="menuitemradio" aria-checked={src.kind === 'browser'} lead={<Check on={src.kind === 'browser'} />} detail={browserKey} onClick={() => pick(() => choose({ kind: 'browser' }))} data-testid="key-browser">
           {t('keys.browser')}
         </MenuItem>
       )}
@@ -97,7 +99,6 @@ export default function KeyMenuBody({ anchor }: { anchor: () => HTMLElement | nu
           {t('keys.addOwn')}
         </MenuItem>
       )}
-      {ready && <MenuLabel small={t('keys.where')} />}
     </div>
   );
 }

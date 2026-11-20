@@ -268,8 +268,7 @@ export const en: Record<MessageKey, string> = {
   'menu.undoStep': 'Undo {s}',
   'menu.redo': 'Redo',
   'menu.redoStep': 'Redo {s}',
-  'menu.signInLink': 'Sign in',
-  'menu.signInRest': ' to open it on other devices',
+  'menu.signInSub': 'Open this house on other devices',
   'loading.studio': 'Opening the studio',
   'loading.sheets': 'Preparing the sheets',
 };

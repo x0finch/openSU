@@ -149,13 +149,13 @@
   transition: background-color 160ms ease;
 }
 @media (hover: hover) and (pointer: fine) {
-  .lg-plate:hover:not(:disabled) {
+  .lg-plate:hover:not(:disabled, [data-disabled]) {
     background: var(--lg-row-hover);
   }
 }
 .lg-plate[data-on],
 .lg-plate[data-scrub],
-.lg-plate:active:not(:disabled) {
+.lg-plate:active:not(:disabled, [data-disabled]) {
   background: var(--lg-row-active);
 }
 /*

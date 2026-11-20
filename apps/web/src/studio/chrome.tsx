@@ -238,12 +238,20 @@ function ProjectMenu({ open, anchor, onClose, compact, onRename, ref }: { open: 
       style={{ width: compact ? 'min(300px, calc(100vw - 24px))' : 300 }}
       testId={open ? 'project-menu-list' : undefined}
     >
+      {/* The menu's title (iOS 26): where edits are kept, or one quiet line when saving fails (task 027). */}
+      {edit && (
+        <MenuLabel
+          testId="menu-saved"
+          flag={failed ?? undefined}
+          small={failed === 'retry' ? t('projects.notSynced') : failed === 'too-large' ? t('projects.tooLarge') : failed === 'full' ? t('projects.notAdded') : cloud ? t('house.autosavedAccount') : t('house.autosaved')}
+        />
+      )}
       {edit && (
         <>
-          <MenuItem icon={<UndoIcon width={16} height={16} />} detail={UNDO_KEYS} disabled={!steps.undo} className="disabled:text-ink-3" onClick={() => { onClose(false); undoLast(); }} data-testid="menu-undo">
+          <MenuItem icon={<UndoIcon width={16} height={16} />} shortcut={UNDO_KEYS} disabled={!steps.undo} onClick={() => { onClose(false); undoLast(); }} data-testid="menu-undo">
             <span className="block truncate">{steps.undo ? t('menu.undoStep', { s: steps.undo }) : t('menu.undo')}</span>
           </MenuItem>
-          <MenuItem icon={<RedoIcon width={16} height={16} />} detail={REDO_KEYS} disabled={!steps.redo} className="disabled:text-ink-3" onClick={() => { onClose(false); redoNext(); }} data-testid="menu-redo">
+          <MenuItem icon={<RedoIcon width={16} height={16} />} shortcut={REDO_KEYS} disabled={!steps.redo} onClick={() => { onClose(false); redoNext(); }} data-testid="menu-redo">
             <span className="block truncate">{steps.redo ? t('menu.redoStep', { s: steps.redo }) : t('menu.redo')}</span>
           </MenuItem>
           <Sep />
@@ -290,7 +298,7 @@ function ProjectMenu({ open, anchor, onClose, compact, onRename, ref }: { open: 
         </Item>
       )}
       {local && templates && !pending && (
-        <div className="mb-1 ml-9">
+        <div className="mb-1 ml-4">
           {TEMPLATE_META.map((m) => (
             <Item key={m.id} onSelect={() => (edited ? setPending(m.id) : void pick(m.id))} value={`${m.plot.width / 1000} × ${m.plot.depth / 1000} m`} testId={`menu-template-${m.id}`}>
               {m.name}
@@ -331,7 +339,7 @@ function ProjectMenu({ open, anchor, onClose, compact, onRename, ref }: { open: 
         <MenuItem
           icon={<DownloadIcon width={16} height={16} />}
           disabled={!hasChat}
-          className="disabled:text-ink-3"
+         
           onClick={() => {
             onClose(false);
             exportConversation();
@@ -341,36 +349,22 @@ function ProjectMenu({ open, anchor, onClose, compact, onRename, ref }: { open: 
           {t('more.export')}
         </MenuItem>
       )}
-      {/* Where edits are kept; signed out, a link to sign in. One quiet line when saving fails (task 027). */}
-      {edit && (
-        <MenuLabel
-          testId="menu-saved"
-          flag={failed ?? undefined}
-          small={
-            failed === 'retry' ? t('projects.notSynced') : failed === 'too-large' ? t('projects.tooLarge') : failed === 'full' ? t('projects.notAdded') : cloud ? t('house.autosavedAccount') : (
-              <>
-                {t('house.autosaved')}
-                {authOn && (
-                  <>
-                    {' · '}
-                    <Button
-                      variant="link"
-                      className="h-auto px-0 align-baseline text-[12px] font-semibold text-ink underline underline-offset-2"
-                      onClick={(e) => {
-                        onClose(false);
-                        afterMenu(() => ref.current, () => openAccount(document.querySelector<HTMLElement>('[data-testid=project-menu]'), 'menu'));
-                      }}
-                      data-testid="menu-signin"
-                    >
-                      {t('menu.signInLink')}
-                    </Button>
-                    {t('menu.signInRest')}
-                  </>
-                )}
-              </>
-            )
-          }
-        />
+      {/* Signed out: sign in to open the house on other devices (task 035: a row; it was a link in the status line). */}
+      {edit && !cloud && !failed && authOn && (
+        <>
+          <Sep />
+          <MenuItem
+            icon={<PersonIcon width={17} height={17} />}
+            sub={t('menu.signInSub')}
+            onClick={() => {
+              onClose(false);
+              afterMenu(() => ref.current, () => openAccount(document.querySelector<HTMLElement>('[data-testid=project-menu]'), 'menu'));
+            }}
+            data-testid="menu-signin"
+          >
+            {t('account.signIn')}
+          </MenuItem>
+        </>
       )}
     </Menu>
   );

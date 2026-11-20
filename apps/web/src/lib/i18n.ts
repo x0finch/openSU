@@ -268,8 +268,7 @@ const zh = {
   'menu.undoStep': '撤销 {s}',
   'menu.redo': '重做',
   'menu.redoStep': '重做 {s}',
-  'menu.signInLink': '登录',
-  'menu.signInRest': '后可在其他设备打开',
+  'menu.signInSub': '在其他设备上打开这个房子',
   'loading.studio': '正在打开工作室',
   'loading.sheets': '正在准备图册',
 } as const;
