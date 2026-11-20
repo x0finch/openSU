@@ -11,6 +11,7 @@
 //   node scripts/glass-contrast.mjs [--glass light] [--phone]
 import { spawn } from 'node:child_process';
 import { createRequire } from 'node:module';
+import { mkdirSync, writeFileSync } from 'node:fs';
 import { createServer } from 'node:net';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -81,7 +82,7 @@ async function textBoxes(page, selectors) {
             color ??= parse(getComputedStyle(n.parentElement).color);
           }
         }
-        if (rects.length && color) out.push({ name, rects, color });
+        if (rects.length && color) out.push({ name, rects, color, text: (el.textContent ?? el.placeholder ?? '').trim().slice(0, 30) });
       }
     }
     return out;
@@ -115,13 +116,13 @@ async function measure(page, label, selectors) {
           const d = g.getImageData(Math.round(x * k), Math.round(y * k), Math.max(1, Math.round(w * k)), Math.max(1, Math.round(h * k))).data;
           for (let i = 0; i < d.length; i += 4) {
             const l = L(d[i], d[i + 1], d[i + 2]);
-            if (!worst || (lightInk ? l > worst.l : l < worst.l)) worst = { l, rgb: [d[i], d[i + 1], d[i + 2]] };
+            if (!worst || (lightInk ? l > worst.l : l < worst.l)) worst = { l, rgb: [d[i], d[i + 1], d[i + 2]], at: [Math.round(x + ((i / 4) % Math.max(1, Math.round(w * k))) / k), Math.round(y + Math.floor(i / 4 / Math.max(1, Math.round(w * k))) / k)] };
           }
         }
         const mix = [0, 1, 2].map((j) => b.color[j] * ia + worst.rgb[j] * (1 - ia));
         const li = L(...mix);
         const ratio = (Math.max(li, worst.l) + 0.05) / (Math.min(li, worst.l) + 0.05);
-        return { name: b.name, ratio, bg: worst.rgb };
+        return { name: b.name, ratio, bg: worst.rgb, text: b.text, at: worst.at };
       });
     },
     { png, boxes },
@@ -130,7 +131,12 @@ async function measure(page, label, selectors) {
   const by = new Map();
   for (const r of results) if (!by.has(r.name) || r.ratio < by.get(r.name).ratio) by.set(r.name, r);
   const rows = [...by.values()];
-  for (const r of rows) console.log(`  ${r.ratio >= MIN ? 'ok  ' : 'FAIL'} ${label}: ${r.name} ${r.ratio.toFixed(2)}:1 (bg rgb ${r.bg.join(' ')})`);
+  for (const r of rows) console.log(`  ${r.ratio >= MIN ? 'ok  ' : 'FAIL'} ${label}: ${r.name} ${r.ratio.toFixed(2)}:1 (bg rgb ${r.bg.join(' ')})${r.ratio >= MIN ? '' : ` under "${r.text}" at ${r.at?.join(', ')}`}`);
+  // A failure keeps the screenshot it was measured on (CI uploads artifacts/).
+  if (rows.some((r) => r.ratio < MIN)) {
+    mkdirSync(resolve(appRoot, '../../artifacts'), { recursive: true });
+    writeFileSync(resolve(appRoot, `../../artifacts/glass-contrast-${label.replace(/\W+/g, '-')}.png`), Buffer.from(png, 'base64'));
+  }
   return rows;
 }
 
