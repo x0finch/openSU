@@ -145,7 +145,7 @@ export const en: Record<MessageKey, string> = {
   'walk.enter': 'Walk',
   'walk.enterLong': 'Walk through the house',
   'walk.exit': 'Exit walk',
-  'walk.hint': 'WASD or arrow keys to move · drag to look · Shift to run',
+  'walk.hint': 'WASD or arrow keys to move · click, then move the mouse to look (Esc frees it) · Shift to run',
   'walk.hintTouch': 'Joystick to move · drag to look around',
   'walk.map': 'Where you are',
   'walk.goto': 'Go to {level}',

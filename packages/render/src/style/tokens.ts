@@ -291,14 +291,23 @@ export const walk = {
   /** Walking and running (Shift) speed, metres per second. */
   speed: 1.5,
   fastSpeed: 3.4,
-  /** Turning speed with the arrow keys, degrees per second. */
+  /** Turning speed with Q / E, degrees per second. */
   turnSpeedDeg: 95,
+  /**
+   * Seconds a walk or a turn takes to reach its speed, and to stop (an
+   * exponential ease; the owner found instant starts and stops dizzying).
+   */
+  moveEase: 0.15,
   /** Highest step up or down taken without a stair, metres. */
   stepUp: 0.45,
-  /** Look sensitivity, degrees per CSS pixel of drag. */
-  lookDegPerPx: 0.22,
-  /** Touch look: degrees turned by a swipe across the whole screen width. */
-  touchLookDegPerScreen: 200,
+  /**
+   * Look sensitivity, degrees per CSS pixel: a mouse (a drag, or the locked
+   * pointer) and a finger. The owner found 0.22 and 200 degrees per screen
+   * width dizzying; these are a reference walk-through's (wushi), which they
+   * found comfortable.
+   */
+  lookDegPerPx: 0.14,
+  touchLookDegPerPx: 0.29,
   /** Pitch limits (degrees): verticals stay close to vertical. */
   maxPitchDeg: 40,
   /** Seconds the eye takes to settle onto a new floor height (stairs). */

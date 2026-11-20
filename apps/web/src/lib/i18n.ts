@@ -145,7 +145,7 @@ const zh = {
   'walk.enter': '漫游',
   'walk.enterLong': '进入室内漫游',
   'walk.exit': '退出漫游',
-  'walk.hint': 'WASD 或方向键移动 · 拖动环视 · Shift 加速',
+  'walk.hint': 'WASD 或方向键移动 · 点击画面后移动鼠标环视，Esc 释放 · Shift 加速',
   'walk.hintTouch': '左下摇杆移动 · 拖动画面环视',
   'walk.map': '当前位置',
   'walk.goto': '去{level}',

@@ -1,8 +1,11 @@
 // First-person walk controller: a perspective camera at eye height that
 // moves through the house with collisions (see world.ts). Keyboard (WASD /
-// arrows, Shift to run), drag to look; `setMove` takes an analogue input
-// (the app's touch joystick). Renders continuously only while something
-// moves and stops when input stops.
+// arrows to walk and step sideways, Q / E to turn, Shift to run); looking
+// round by a drag, or on a desktop by the locked pointer (a click on the
+// view locks it, Esc frees it); the view turns the way the hand moves, as a
+// head does. `setMove` takes an analogue input (the app's touch joystick).
+// Walking and turning ease in and out. Renders continuously only while
+// something moves and stops when input stops.
 import { MathUtils, PerspectiveCamera, Vector3 } from 'three';
 import { walk as walkTokens } from '../style/tokens.js';
 import { WalkWorld, type WalkPose } from './world.js';
@@ -30,10 +33,12 @@ export interface WalkHost {
 
 const KEYS_FORWARD = new Set(['KeyW', 'ArrowUp']);
 const KEYS_BACK = new Set(['KeyS', 'ArrowDown']);
-const KEYS_LEFT = new Set(['KeyA']);
-const KEYS_RIGHT = new Set(['KeyD']);
-const KEYS_TURN_LEFT = new Set(['ArrowLeft', 'KeyQ']);
-const KEYS_TURN_RIGHT = new Set(['ArrowRight', 'KeyE']);
+const KEYS_LEFT = new Set(['KeyA', 'ArrowLeft']);
+const KEYS_RIGHT = new Set(['KeyD', 'ArrowRight']);
+const KEYS_TURN_LEFT = new Set(['KeyQ']);
+const KEYS_TURN_RIGHT = new Set(['KeyE']);
+/** A pointer that moves less than this (CSS px) between down and up is a click (it locks the pointer). */
+const CLICK_SLOP = 4;
 
 export class WalkController {
   readonly camera: PerspectiveCamera;
@@ -46,10 +51,12 @@ export class WalkController {
   private readonly keys = new Set<string>();
   private run = false;
   private analog = { forward: 0, strafe: 0 };
+  /** The eased walk (forward, strafe, -1..1) and turn (-1..1) that follow the input. */
+  private vel = { forward: 0, strafe: 0, turn: 0 };
   private raf = 0;
   private last = 0;
   private dom: HTMLElement | null = null;
-  private drag: { id: number; x: number; y: number; touch: boolean } | null = null;
+  private drag: { id: number; x: number; y: number; touch: boolean; travel: number } | null = null;
   private readonly cleanup: (() => void)[] = [];
   /** Called whenever the position, heading or level changes. */
   onChange: ((s: WalkState) => void) | null = null;
@@ -152,27 +159,42 @@ export class WalkController {
     on(window, 'blur', () => this.keys.clear());
     on(dom, 'pointerdown', (e: PointerEvent) => {
       if (this.drag) return;
-      this.drag = { id: e.pointerId, x: e.clientX, y: e.clientY, touch: e.pointerType === 'touch' };
+      this.drag = { id: e.pointerId, x: e.clientX, y: e.clientY, touch: e.pointerType === 'touch', travel: 0 };
       dom.setPointerCapture?.(e.pointerId);
     });
     on(dom, 'pointermove', (e: PointerEvent) => {
-      if (!this.drag || e.pointerId !== this.drag.id) return;
+      if (!this.drag || e.pointerId !== this.drag.id || this.locked()) return;
       const dx = e.clientX - this.drag.x, dy = e.clientY - this.drag.y;
       this.drag.x = e.clientX;
       this.drag.y = e.clientY;
-      // Drag the view: the scene follows the pointer. A finger turns by a
-      // share of the screen width, so a swipe feels like a mouse drag.
-      const k = this.drag.touch ? walkTokens.touchLookDegPerScreen / Math.max(200, dom.clientWidth) : walkTokens.lookDegPerPx;
-      this.look(-dx * k, dy * k);
+      this.drag.travel += Math.abs(dx) + Math.abs(dy);
+      // The view turns the way the hand moves (a head turning), by a fixed angle per pixel.
+      const k = this.drag.touch ? walkTokens.touchLookDegPerPx : walkTokens.lookDegPerPx;
+      this.look(dx * k, -dy * k);
     });
     const end = (e: PointerEvent) => {
-      if (this.drag && e.pointerId === this.drag.id) this.drag = null;
+      if (!this.drag || e.pointerId !== this.drag.id) return;
+      const click = e.type === 'pointerup' && e.pointerType === 'mouse' && e.button === 0 && this.drag.travel < CLICK_SLOP;
+      this.drag = null;
+      // A click on the view (not a drag) locks the pointer: the mouse then looks round without a button held.
+      if (click && !this.locked()) dom.requestPointerLock?.()?.catch?.(() => {});
     };
     on(dom, 'pointerup', end);
     on(dom, 'pointercancel', end);
+    on(document, 'mousemove', (e: MouseEvent) => {
+      if (!this.locked()) return;
+      const k = walkTokens.lookDegPerPx;
+      this.look(e.movementX * k, -e.movementY * k);
+    });
+  }
+
+  /** Whether the pointer is locked to the view (a desktop look without a button held). */
+  private locked(): boolean {
+    return !!this.dom && typeof document !== 'undefined' && document.pointerLockElement === this.dom;
   }
 
   detach(): void {
+    if (this.locked()) document.exitPointerLock?.();
     for (const f of this.cleanup.splice(0)) f();
     this.dom = null;
     this.keys.clear();
@@ -191,7 +213,8 @@ export class WalkController {
     const keysOn = [...k].length > 0;
     const analogOn = this.analog.forward !== 0 || this.analog.strafe !== 0;
     const settling = Math.abs(this.eyeZ - (this.pose.z + walkTokens.eyeHeight)) > 0.002;
-    return keysOn || analogOn || settling;
+    const easing = Math.abs(this.vel.forward) + Math.abs(this.vel.strafe) + Math.abs(this.vel.turn) > 0.001;
+    return keysOn || analogOn || settling || easing;
   }
 
   /** Starts the frame loop if something moves; it stops by itself. */
@@ -218,22 +241,31 @@ export class WalkController {
     let fwd = (has(KEYS_FORWARD) ? 1 : 0) - (has(KEYS_BACK) ? 1 : 0) + this.analog.forward;
     let str = (has(KEYS_RIGHT) ? 1 : 0) - (has(KEYS_LEFT) ? 1 : 0) + this.analog.strafe;
     const turn = (has(KEYS_TURN_RIGHT) ? 1 : 0) - (has(KEYS_TURN_LEFT) ? 1 : 0);
-    if (turn) this.heading += turn * walkTokens.turnSpeedDeg * dt;
     const len = Math.hypot(fwd, str);
     if (len > 1) {
       fwd /= len;
       str /= len;
     }
+    // Ease towards the input: no instant start or stop.
+    const e = 1 - Math.exp(-dt / Math.max(1e-3, walkTokens.moveEase));
+    const v = this.vel;
+    v.forward += (fwd - v.forward) * e;
+    v.strafe += (str - v.strafe) * e;
+    v.turn += (turn - v.turn) * e;
+    for (const key of ['forward', 'strafe', 'turn'] as const) if (Math.abs(v[key]) < 0.001 && !(key === 'turn' ? turn : key === 'forward' ? fwd : str)) v[key] = 0;
+    if (v.turn) {
+      this.heading += v.turn * walkTokens.turnSpeedDeg * dt;
+      this.changed();
+    }
     const speed = this.run ? walkTokens.fastSpeed : walkTokens.speed;
-    if (fwd || str) {
+    if (v.forward || v.strafe) {
       const a = MathUtils.degToRad(this.heading);
       const fx = Math.sin(a), fy = Math.cos(a);
       const d = speed * dt;
       const before = this.pose;
-      this.pose = this.world.move(this.pose, (fx * fwd + fy * str) * d, (fy * fwd - fx * str) * d);
+      this.pose = this.world.move(this.pose, (fx * v.forward + fy * v.strafe) * d, (fy * v.forward - fx * v.strafe) * d);
       if (before.x !== this.pose.x || before.y !== this.pose.y || before.z !== this.pose.z) this.changed();
     }
-    if (turn) this.changed();
     // The eye follows the floor smoothly (stairs, the step onto a deck).
     const target = this.pose.z + walkTokens.eyeHeight;
     const t = 1 - Math.exp(-dt / Math.max(1e-3, walkTokens.heightSmoothing));
