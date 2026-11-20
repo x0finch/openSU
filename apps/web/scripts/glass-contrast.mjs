@@ -174,7 +174,19 @@ for (const [label, vp, opts] of [['desktop', { width: 1440, height: 900 }, {}], 
   {
     const { ctx, page } = await open(`/studio?${q}&sun=winter&time=10:00`, vp, opts);
     await page.getByTestId('bar-sun').click();
-    await page.waitForTimeout(1500);
+    // The panel (on phones a sheet that slides up) has settled inside the screen: its box holds still for a few
+    // frames. A slow runner otherwise measures it mid-slide, its text below the screen's edge.
+    await page.waitForFunction(() => {
+      const p = document.querySelector('[data-panel]')?.closest('.lg');
+      if (!p) return false;
+      const r = p.getBoundingClientRect();
+      const key = `${Math.round(r.top)},${Math.round(r.height)}`;
+      const w = window;
+      if (w.__panelBox?.key === key) w.__panelBox.n++;
+      else w.__panelBox = { key, n: 0 };
+      return r.bottom <= innerHeight + 0.5 && w.__panelBox.n >= 5;
+    }, null, { timeout: tmo(30000), polling: 'raf' });
+    await page.waitForTimeout(300);
     all.push(...(await measure(page, `${label} sun panel`, [['panel text', '[data-panel] p, [data-panel] span, [data-panel] h2']])));
     await ctx.close();
   }
