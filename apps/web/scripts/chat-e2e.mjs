@@ -179,6 +179,15 @@ async function menuOffers(page, kind) {
   return on;
 }
 
+/** What the conversation shows now (for a failed check's message): its surfaces and every assistant message, shortened. */
+async function conversationState(page) {
+  return page.evaluate(() => {
+    const vis = (sel) => [...document.querySelectorAll(sel)].filter((e) => e.checkVisibility?.() ?? true).length;
+    const msgs = [...document.querySelectorAll('[data-testid=assistant-message]')].map((m, i) => `${i}${m.checkVisibility?.() === false ? '(hidden)' : ''}:${(m.textContent ?? '').replace(/\s+/g, ' ').slice(0, 24)}`);
+    return `strip ${vis('#recent-strip')}, panel ${vis('[data-testid=chat-panel]')}, menus ${vis('[role=menu]')}, messages [${msgs.join(' | ')}]`;
+  });
+}
+
 async function sendMessage(page, text) {
   const input = page.getByTestId('prompt-bar');
   await input.fill(text);
@@ -288,7 +297,12 @@ try {
     check(/"ok":false/.test(firstResult) && /l2-family/.test(firstResult), 'repair: the rejected batch went back with errors naming the right id');
     const msg2 = page.getByTestId('assistant-message').nth(1);
     check((await msg2.textContent())?.includes('二楼起居室已改成卧室'), 'repair: final reply shown');
-    check((await msg2.getByTestId('turn-change').count()) === 1 && (await msg2.getByTestId('turn-toggle').textContent()) === '做了 1 步修改', 'repair: one change for the repaired edit');
+    {
+      const changes = await msg2.getByTestId('turn-change').count();
+      const toggle = await msg2.getByTestId('turn-toggle').textContent({ timeout: tmo(2000) }).catch(() => null);
+      const ok = changes === 1 && toggle === '做了 1 步修改';
+      check(ok, `repair: one change for the repaired edit${ok ? '' : ` (${changes} changes, toggle ${JSON.stringify(toggle)}; ${await conversationState(page)})`}`);
+    }
     await page.waitForTimeout(200);
     await shot(page, 'chat-repair-desktop');
 
@@ -296,7 +310,10 @@ try {
     await sendMessage(page, '限流测试');
     await waitDone(page, 3);
     const msg3 = page.getByTestId('assistant-message').nth(2);
-    check((await msg3.textContent())?.includes('请求太频繁'), 'rate limit: calm inline message');
+    {
+      const ok = (await msg3.textContent({ timeout: tmo(2000) }).catch(() => ''))?.includes('请求太频繁');
+      check(ok, `rate limit: calm inline message${ok ? '' : ` (${await conversationState(page)})`}`);
+    }
     check((await msg3.getByRole('button', { name: '重试' }).count()) === 1, 'rate limit: retry offered');
     await shot(page, 'chat-error-desktop');
 
