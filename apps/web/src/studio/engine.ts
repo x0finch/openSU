@@ -49,6 +49,8 @@ export interface Engine {
   onWalk(cb: (s: WalkState | null) => void): () => void;
   /** Analogue movement from the touch joystick (-1..1 each). */
   walkMove(forward: number, strafe: number): void;
+  /** A jump (the touch button; Space on a keyboard). */
+  walkJump(): void;
   /** Jump to a level's stair arrival point while walking. */
   walkToLevel(levelId: string): void;
   /**
@@ -699,6 +701,9 @@ export function createEngine(container: HTMLElement, resolved: ResolvedHouse, op
     onWalk(cb) {
       walkListeners.add(cb);
       return () => walkListeners.delete(cb);
+    },
+    walkJump() {
+      viewer.walk?.jump();
     },
     walkMove(forward, strafe) {
       viewer.walk?.setMove(forward, strafe);

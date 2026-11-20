@@ -17,6 +17,8 @@
   html,
   body {
     height: 100%;
+    /* No history swipe (a Mac trackpad's two-finger sideways swipe) or bounce off the page's edges: an app, not a document. */
+    overscroll-behavior: none;
     background: var(--color-page);
     color: var(--color-ink);
     font-family: var(--font-sans);

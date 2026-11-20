@@ -168,6 +168,33 @@ function Joystick({ className, style }: { className?: string; style?: CSSPropert
   );
 }
 
+/** Touch: a round button that jumps (Space on a keyboard). */
+function JumpButton({ className, style }: { className?: string; style?: CSSProperties }) {
+  const t = useT();
+  return (
+    <HudPanel
+      kind="control"
+      inset="none"
+      className={cx('grid size-[72px] touch-none place-items-center text-[15px] font-semibold select-none', className)}
+      style={style}
+      // On press, not on release: a jump is felt at once.
+      onPointerDown={(e) => {
+        e.preventDefault();
+        walkBridge.jump();
+      }}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter') walkBridge.jump();
+      }}
+      tabIndex={0}
+      ariaRole="button"
+      aria-label={t('walk.jump')}
+      testId="walk-jump"
+    >
+      {t('walk.jump')}
+    </HudPanel>
+  );
+}
+
 function useCoarsePointer(): boolean {
   const [coarse, setCoarse] = useState(() => typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches);
   useEffect(() => {
@@ -211,6 +238,7 @@ export function WalkHUD({ derived, left = 0 }: { derived: Derived | null; left?:
         <p className="mt-1.5 px-1 text-[12px] leading-4 font-medium text-ink-2">{coarse ? t('walk.hintTouch') : t('walk.hint')}</p>
       </HudPanel>
       {coarse && <Joystick className="absolute right-6 bottom-[100px]" />}
+      {coarse && <JumpButton className="absolute right-[160px] bottom-[126px]" />}
     </>
   );
 }
@@ -232,6 +260,7 @@ export function MobileWalkHUD({ derived, top, bottom }: { derived: Derived | nul
         </div>
       </div>
       <Joystick className="absolute left-4 size-[112px]! transition-[bottom] duration-300 ease-out-soft" style={{ bottom: bottom + 12 }} />
+      <JumpButton className="absolute right-4 transition-[bottom] duration-300 ease-out-soft" style={{ bottom: bottom + 32 }} />
     </>
   );
 }
@@ -257,6 +286,7 @@ export function LandscapeWalkHUD({ derived }: { derived: Derived | null }) {
         <MiniMap derived={derived} width={124} />
       </HudPanel>
       <Joystick className="absolute bottom-3 size-[112px]!" style={{ left }} />
+      <JumpButton className="absolute bottom-[84px]" style={{ right }} />
       <HudPanel inset="row" className="absolute bottom-3 w-[340px]" style={{ right }}>
         <SunTime className="min-w-0 flex-1" />
       </HudPanel>

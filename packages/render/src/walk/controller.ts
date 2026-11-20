@@ -1,6 +1,7 @@
 // First-person walk controller: a perspective camera at eye height that
 // moves through the house with collisions (see world.ts). Keyboard (WASD /
-// arrows to walk and step sideways, Q / E to turn, Shift to run); looking
+// arrows to walk and step sideways, Q / E to turn, Shift to run, Space to
+// jump; `jump()` for a touch button); looking
 // round by a drag, or on a desktop by the locked pointer (a click on the
 // view locks it, Esc frees it); the view turns the way the hand moves, as a
 // head does. `setMove` takes an analogue input (the app's touch joystick).
@@ -37,6 +38,7 @@ const KEYS_LEFT = new Set(['KeyA', 'ArrowLeft']);
 const KEYS_RIGHT = new Set(['KeyD', 'ArrowRight']);
 const KEYS_TURN_LEFT = new Set(['KeyQ']);
 const KEYS_TURN_RIGHT = new Set(['KeyE']);
+const KEYS_JUMP = new Set(['Space']);
 /** A pointer that moves less than this (CSS px) between down and up is a click (it locks the pointer). */
 const CLICK_SLOP = 4;
 
@@ -51,6 +53,9 @@ export class WalkController {
   private readonly keys = new Set<string>();
   private run = false;
   private analog = { forward: 0, strafe: 0 };
+  /** A jump: height of the feet above the floor and their vertical speed. */
+  private air = 0;
+  private vz = 0;
   /** The eased walk (forward, strafe, -1..1) and turn (-1..1) that follow the input. */
   private vel = { forward: 0, strafe: 0, turn: 0 };
   private raf = 0;
@@ -130,6 +135,13 @@ export class WalkController {
     this.changed();
   }
 
+  /** Jumps (when standing on a floor): the eye rises about half a metre and falls back. */
+  jump(): void {
+    if (this.air > 0 || this.vz !== 0) return;
+    this.vz = walkTokens.jumpSpeed;
+    this.wake();
+  }
+
   /** Keyboard and pointer input on a DOM element (the canvas). */
   attach(dom: HTMLElement): void {
     this.detach();
@@ -144,6 +156,12 @@ export class WalkController {
     };
     on(window, 'keydown', (e: KeyboardEvent) => {
       if (editable(e) || e.metaKey || e.ctrlKey || e.altKey) return;
+      if (KEYS_JUMP.has(e.code)) {
+        // Not a press of the focused button, nor a page scroll.
+        e.preventDefault();
+        if (!e.repeat) this.jump();
+        return;
+      }
       const all = [KEYS_FORWARD, KEYS_BACK, KEYS_LEFT, KEYS_RIGHT, KEYS_TURN_LEFT, KEYS_TURN_RIGHT];
       this.run = e.shiftKey;
       if (all.some((s) => s.has(e.code))) {
@@ -181,6 +199,9 @@ export class WalkController {
     };
     on(dom, 'pointerup', end);
     on(dom, 'pointercancel', end);
+    // A two-finger sideways swipe on a Mac trackpad would go back a page (the browser's history swipe): the view
+    // takes the wheel while walking.
+    on(dom, 'wheel', (e: WheelEvent) => e.preventDefault(), { passive: false });
     on(document, 'mousemove', (e: MouseEvent) => {
       if (!this.locked()) return;
       const k = walkTokens.lookDegPerPx;
@@ -214,7 +235,8 @@ export class WalkController {
     const analogOn = this.analog.forward !== 0 || this.analog.strafe !== 0;
     const settling = Math.abs(this.eyeZ - (this.pose.z + walkTokens.eyeHeight)) > 0.002;
     const easing = Math.abs(this.vel.forward) + Math.abs(this.vel.strafe) + Math.abs(this.vel.turn) > 0.001;
-    return keysOn || analogOn || settling || easing;
+    const jumping = this.air > 0 || this.vz !== 0;
+    return keysOn || analogOn || settling || easing || jumping;
   }
 
   /** Starts the frame loop if something moves; it stops by itself. */
@@ -226,7 +248,9 @@ export class WalkController {
     }
     this.last = performance.now();
     const tick = (now: number) => {
-      const dt = Math.min(0.1, (now - this.last) / 1000);
+      // A frame's timestamp can be earlier than the moment the loop was woken (it is the frame's start): never a
+      // negative step (it would end a jump at once).
+      const dt = MathUtils.clamp((now - this.last) / 1000, 0, 0.1);
       this.last = now;
       this.update(dt);
       this.host.renderNow();
@@ -266,6 +290,16 @@ export class WalkController {
       this.pose = this.world.move(this.pose, (fx * v.forward + fy * v.strafe) * d, (fy * v.forward - fx * v.strafe) * d);
       if (before.x !== this.pose.x || before.y !== this.pose.y || before.z !== this.pose.z) this.changed();
     }
+    // A jump: up and back down onto the floor (which may have changed under the feet).
+    if (this.air > 0 || this.vz !== 0) {
+      this.vz -= walkTokens.gravity * dt;
+      this.air += this.vz * dt;
+      // Landed: back at the floor on the way down (a frame of no time leaves a take-off as it is).
+      if (this.air <= 0 && this.vz < 0) {
+        this.air = 0;
+        this.vz = 0;
+      }
+    }
     // The eye follows the floor smoothly (stairs, the step onto a deck).
     const target = this.pose.z + walkTokens.eyeHeight;
     const t = 1 - Math.exp(-dt / Math.max(1e-3, walkTokens.heightSmoothing));
@@ -277,7 +311,7 @@ export class WalkController {
   private updateCamera(): void {
     const a = MathUtils.degToRad(this.heading), p = MathUtils.degToRad(this.pitch);
     // Model (x east, y north, z up) -> scene (x, z, -y).
-    const pos = new Vector3(this.pose.x, this.eyeZ, -this.pose.y);
+    const pos = new Vector3(this.pose.x, this.eyeZ + this.air, -this.pose.y);
     const dir = new Vector3(Math.sin(a) * Math.cos(p), Math.sin(p), -Math.cos(a) * Math.cos(p));
     this.camera.position.copy(pos);
     this.camera.up.set(0, 1, 0);

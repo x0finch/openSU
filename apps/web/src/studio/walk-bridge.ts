@@ -42,6 +42,10 @@ class WalkBridge {
     this.engine?.walkMove(forward, strafe);
   }
 
+  jump(): void {
+    this.engine?.walkJump();
+  }
+
   toLevel(id: string): void {
     this.engine?.walkToLevel(id);
   }

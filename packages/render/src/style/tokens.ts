@@ -298,6 +298,9 @@ export const walk = {
    * exponential ease; the owner found instant starts and stops dizzying).
    */
   moveEase: 0.15,
+  /** A jump: take-off speed (m/s) and gravity (m/s^2); 3.2 lifts the eye about half a metre. */
+  jumpSpeed: 3.2,
+  gravity: 9.8,
   /** Highest step up or down taken without a stair, metres. */
   stepUp: 0.45,
   /**
