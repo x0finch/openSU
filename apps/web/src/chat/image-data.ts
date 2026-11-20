@@ -14,28 +14,33 @@ const cache = new Map<string, string>();
  */
 const LONG_SIDE = 1024;
 const QUALITY = 0.78;
-/** A JPEG data URL longer than this is encoded again at a lower quality. */
-const MAX_URL = 220 * 1024;
+/** A JPEG data URL longer than this is encoded again at a lower quality, then smaller (four stay under 600 KB). */
+const MAX_URL = 140 * 1024;
 
 const newId = () => `img-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
 
 /** Decodes an image file and re-encodes it as a JPEG no larger than LONG_SIDE on its long side. */
 export async function prepareImage(file: Blob): Promise<PendingImage> {
   const bmp = await createImageBitmap(file);
-  const k = Math.min(1, LONG_SIDE / Math.max(bmp.width, bmp.height));
-  const w = Math.max(1, Math.round(bmp.width * k)), h = Math.max(1, Math.round(bmp.height * k));
-  const c = document.createElement('canvas');
-  c.width = w;
-  c.height = h;
-  const g = c.getContext('2d')!;
-  // A transparent PNG on white (JPEG has no alpha).
-  g.fillStyle = '#ffffff';
-  g.fillRect(0, 0, w, h);
-  g.drawImage(bmp, 0, 0, w, h);
+  const encode = (long: number) => {
+    const k = Math.min(1, long / Math.max(bmp.width, bmp.height));
+    const w = Math.max(1, Math.round(bmp.width * k)), h = Math.max(1, Math.round(bmp.height * k));
+    const c = document.createElement('canvas');
+    c.width = w;
+    c.height = h;
+    const g = c.getContext('2d')!;
+    // A transparent PNG on white (JPEG has no alpha).
+    g.fillStyle = '#ffffff';
+    g.fillRect(0, 0, w, h);
+    g.drawImage(bmp, 0, 0, w, h);
+    let dataUrl = c.toDataURL('image/jpeg', QUALITY);
+    for (const q of [0.62, 0.48]) if (dataUrl.length > MAX_URL) dataUrl = c.toDataURL('image/jpeg', q);
+    return { dataUrl, w, h };
+  };
+  let out = encode(LONG_SIDE);
+  if (out.dataUrl.length > MAX_URL) out = encode(768);
   bmp.close?.();
-  let dataUrl = c.toDataURL('image/jpeg', QUALITY);
-  for (const q of [0.62, 0.48]) if (dataUrl.length > MAX_URL) dataUrl = c.toDataURL('image/jpeg', q);
-  return { id: newId(), dataUrl, w, h };
+  return { id: newId(), ...out };
 }
 
 // --- This browser's store (IndexedDB), with a memory cache ---

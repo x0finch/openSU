@@ -308,10 +308,11 @@ async function sunAndCutChecks() {
 /**
  * Visible controls in the default state (task 015), desktop and phone alike:
  * the house name, 3D / 平面 / 图册, the four tools, and the input (history,
- * text, send): at most 9 widgets (a segmented control counts once, one tab
- * stop) and 11 elements (each segment counted).
+ * image, text, send): at most 10 widgets (a segmented control counts once,
+ * one tab stop) and 12 elements (each segment counted). Task 038 added the
+ * image button (the owner approved it on the idle screen): 9 / 11 before.
  */
-const CONTROL_LIMITS = { widgets: 9, elements: 11 };
+const CONTROL_LIMITS = { widgets: 10, elements: 12 };
 async function controlChecks() {
   if (!wanted('check-controls')) return;
   for (const [name, opts] of [['desktop', DESKTOP], ['phone', PHONE]]) {

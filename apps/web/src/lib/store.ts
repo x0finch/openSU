@@ -108,6 +108,8 @@ export interface GrowHint {
 }
 
 const LANG_KEY = 'opensu.lang';
+/** The latest language choice (setLang applies only the last one asked for). */
+let langAsk = 0;
 const PIN_KEY = 'opensu.chat.pinned.v1';
 
 function storedPin(): boolean {
@@ -151,8 +153,12 @@ export const useStudio = create<StudioState>((set) => ({
       /* private mode: keep it in memory only */
     }
     if (typeof document !== 'undefined') document.documentElement.lang = lang === 'zh' ? 'zh-CN' : 'en';
-    // English's dictionary loads on demand (task 033): the switch happens once it is here.
-    void loadLang(lang).then(() => set({ lang }));
+    // English's dictionary loads on demand (task 033): the switch happens once it is here, unless another choice
+    // came since (zh right after en would otherwise end in English when the dictionary arrives last).
+    const ask = ++langAsk;
+    void loadLang(lang).then(() => {
+      if (ask === langAsk) set({ lang });
+    });
   },
   setMode: (mode) => set((s) => ({ mode, tray: mode === 'sheet' || (mode === 'plan' && s.tray !== 'levels') ? null : s.tray, ...(mode === '3d' ? {} : { walk: false }) })),
   // The cutaway choice survives a change of view (eye level and elevations
