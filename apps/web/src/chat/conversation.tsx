@@ -6,6 +6,7 @@ import { cx } from '../components/ui';
 import { useT } from '../lib/i18n';
 import { useStudio } from '../lib/store';
 import { type ChatItem, loadAgent, newChat, retry, send, useChat } from './chat-store';
+import { MessageImages } from './attach';
 import { openSignIn } from './account';
 import { ChevronDownIcon, ComposeIcon, DockIcon, PlanCheckIcon, RetryIcon, SlidersIcon, UndockIcon } from './icons';
 import { accountKeyInUse, openKeySheet, useKeys } from './keys';
@@ -237,6 +238,7 @@ function UserMessage({ item }: { item: ChatItem }) {
   const [open, setOpen] = useState(false);
   return (
     <div className="flex flex-col items-start">
+      <MessageImages item={item} />
       {/* On glass the user's words are a quiet line above the answer (no bubble: no box inside glass). */}
       <p className="text-[14.5px] leading-[23px] font-medium break-words whitespace-pre-wrap text-ink-2" data-testid="user-message">
         {/* Clamped inside the padding, so no half line peeks out. */}

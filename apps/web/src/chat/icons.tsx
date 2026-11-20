@@ -149,3 +149,14 @@ export function InfoIcon(p: P) {
     </Svg>
   );
 }
+
+/** Attach an image: a picture frame with a sun and a hill. */
+export function ImageIcon(p: P) {
+  return (
+    <Svg {...p}>
+      <rect x="4" y="5.5" width="16" height="13" rx="2.5" />
+      <circle cx="9" cy="10" r="1.5" />
+      <path d="m4.5 16.5 4.5-4 3.5 3 2.5-2 4.5 3.5" />
+    </Svg>
+  );
+}

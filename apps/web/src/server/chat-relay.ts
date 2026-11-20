@@ -40,8 +40,14 @@ export const BYO_BASE_HEADER = 'x-opensu-base-url';
 /** The user message a model call belongs to (one credit per turn). */
 export const TURN_HEADER = 'x-opensu-turn';
 
-/** Largest request body accepted (the house description plus a trimmed history fits easily). */
-const MAX_BODY = 256 * 1024;
+/**
+ * Largest request body accepted: the house description and a trimmed
+ * history (about 100 KB) plus the images of one message (task 038: up to
+ * four, shrunk in the browser to 1024 px, at most about 220 KB each as
+ * base64). Parsing and re-encoding that stays near 4 ms of CPU
+ * (scripts/relay-check.mjs).
+ */
+const MAX_BODY = 1536 * 1024;
 /** Output cap per model call on the owner's key. */
 const OWNER_MAX_TOKENS = 4096;
 /**

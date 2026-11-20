@@ -102,6 +102,32 @@ export interface TurnOptions {
   maxRepairs?: number;
   /** Place lookup for the `find_place` tool (the tool is offered only with it). */
   findPlace?: FindPlace;
+  /**
+   * Images sent with the message (task 038): attached to it or mentioned in
+   * it ("@图2"), each with its label in the conversation and a data URL.
+   */
+  images?: readonly TurnImage[];
+}
+
+/** An image sent with a user message. */
+export interface TurnImage {
+  /** Its name in the conversation, e.g. "图2" (the user writes "@图2"). */
+  label: string;
+  /** data:image/jpeg;base64,... */
+  dataUrl: string;
+}
+
+/** The user message: its text alone, or the text then each image after its label. */
+export function userContent(text: string, images: readonly TurnImage[] = []): ModelMessage['content'] {
+  if (!images.length) return text;
+  const parts: Exclude<ModelMessage['content'], string | null> = [{ type: 'text', content: text }];
+  for (const im of images) {
+    const m = /^data:([^;,]+);base64,(.*)$/s.exec(im.dataUrl);
+    if (!m) continue;
+    parts.push({ type: 'text', content: `${im.label}:` });
+    parts.push({ type: 'image', source: { type: 'data', value: m[2]!, mimeType: m[1]! } });
+  }
+  return parts;
 }
 
 /** Earlier turns as plain messages (newest `HISTORY_TURNS`). */
@@ -223,7 +249,7 @@ export async function runTurn(opts: TurnOptions): Promise<TurnResult> {
       adapter: opts.adapter,
       threadId: opts.threadId ?? 'house',
       systemPrompts: [SYSTEM_PROMPT, houseContext(describeHouse(before, validate(before)))],
-      messages: [...pastMessages(opts.past ?? []), { role: 'user', content: opts.text }],
+      messages: [...pastMessages(opts.past ?? []), { role: 'user', content: userContent(opts.text, opts.images) }],
       tools,
       toolExecution: 'sequential',
       abortController: abort,

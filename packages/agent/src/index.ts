@@ -4,8 +4,8 @@
 export { SYSTEM_PROMPT, houseContext } from './prompt';
 export { createHouseTools, editHouseInputSchema, type AppliedBatch, type FindPlace, type PlaceMatch, type ToolHooks } from './tools';
 export {
-  HouseSession, runTurn, pastMessages, classifyError, summaryFromArgs, MAX_REPAIRS, HISTORY_TURNS,
-  type AgentEvent, type PastTurn, type TurnError, type TurnOptions, type TurnResult, type TurnStatus,
+  HouseSession, runTurn, pastMessages, userContent, classifyError, summaryFromArgs, MAX_REPAIRS, HISTORY_TURNS,
+  type AgentEvent, type PastTurn, type TurnError, type TurnImage, type TurnOptions, type TurnResult, type TurnStatus,
 } from './turn';
 export { describeDiff } from './diff';
 export { createRelayAdapter, DEFAULT_MODEL, type RelayOptions } from './provider';

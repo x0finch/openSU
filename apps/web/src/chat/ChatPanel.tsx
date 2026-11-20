@@ -15,6 +15,7 @@ import type { Lang } from '../lib/i18n';
 import { HistoryIcon, NoteIcon, PlanCheckIcon, RedoIcon, StopIcon, UndoIcon } from './icons';
 import { useKeys } from './keys';
 import { KeyPicker } from './KeyPicker';
+import { AttachButton, AttachStrip, useImageDrop, useMention } from './attach-light';
 import { Button, Dialog, Dot, InputBar, InputField, PromptText } from '@opensu/ui';
 
 // The conversation (messages, the recent strip, the pinned column and sheet) loads when needed (task 032).
@@ -283,13 +284,18 @@ function PromptInput({ phone, pinned, className }: { phone?: boolean; pinned?: b
     el.style.height = '0px';
     el.style.height = `${Math.min(120, el.scrollHeight)}px`;
   }, [text]);
+  const attachments = useChat((s) => s.attachments.length);
+  const mention = useMention(text, setText, ref);
+  const drop = useImageDrop();
   const submit = (e?: FormEvent) => {
     e?.preventDefault();
-    if (running || !text.trim()) return;
+    if (running || (!text.trim() && !attachments)) return;
     void send(text);
     setText('');
   };
   const onKey = (e: KeyboardEvent<HTMLTextAreaElement>) => {
+    // The "@" list is open: it takes the arrows, Enter and Escape.
+    if (mention.onKey(e)) return;
     if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing && e.keyCode !== 229) {
       e.preventDefault();
       submit();
@@ -304,7 +310,7 @@ function PromptInput({ phone, pinned, className }: { phone?: boolean; pinned?: b
   // shows the calm note with sign-in and the own-key offer).
   useOwnKey();
   const out = useChat((s) => !s.running && outOfCredits());
-  const can = !!text.trim() && !running;
+  const can = (!!text.trim() || attachments > 0) && !running;
   // Pinned (task 023): a field of the sidebar, concentric with its bottom
   // corner (desktop: 26 - 8, phone sheet: 34 - 12), one line high; its
   // children (picker, text, send) share one centre line, 4 px from the edge.
@@ -320,6 +326,9 @@ function PromptInput({ phone, pinned, className }: { phone?: boolean; pinned?: b
           ref.current?.focus();
         }
       }}
+      onPaste={drop.onPaste}
+      onDragOver={drop.onDragOver}
+      onDrop={drop.onDrop}
       className={cx('relative flex cursor-text items-end', field ? 'gap-1 p-1' : cx('gap-2', phone ? 'min-h-12 px-1.5 py-1.5' : 'min-h-14 px-2 py-2'))}
     >
       {pinned ? (
@@ -341,12 +350,17 @@ function PromptInput({ phone, pinned, className }: { phone?: boolean; pinned?: b
           {unseen && !recent && !running && <Dot size={7} className="absolute top-[7px] right-[7px]" />}
         </Button>
       )}
+      <AttachButton dim={dim} disabled={running} />
       <div className={cx('relative min-w-0 flex-1', field && 'pl-1')}>
+        <AttachStrip />
         <PromptText
           ref={ref}
           rows={1}
           value={text}
-          onChange={(e) => setText(e.target.value)}
+          onChange={(e) => {
+            mention.onInput(e.target.value, e.target.selectionStart ?? e.target.value.length);
+            setText(e.target.value);
+          }}
           onKeyDown={onKey}
           placeholder={placeholder}
           aria-label={t('chat.placeholder')}
@@ -358,7 +372,8 @@ function PromptInput({ phone, pinned, className }: { phone?: boolean; pinned?: b
           data-testid="prompt-bar"
           data-out={out ? '' : undefined}
         />
-        {!working && !text && note.item && !pinned && <ChangeNote item={note.item} hold={note.hold} />}
+        {!working && !text && !attachments && note.item && !pinned && <ChangeNote item={note.item} hold={note.hold} />}
+        {mention.picker}
         {working && !text && (
           <p className="pointer-events-none absolute inset-0 flex items-center truncate text-[15px] font-medium text-ink" role="status" data-testid="chat-status" data-phase={working.phase}>
             <span className="truncate" data-testid="chat-status-text">

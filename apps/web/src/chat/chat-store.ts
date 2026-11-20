@@ -9,6 +9,7 @@ import { useShallow } from 'zustand/react/shallow';
 import { useStudio } from '../lib/store';
 import { accountKeyInUse, DEFAULT_MODELS, syncKeys, useKeys } from './keys';
 import { type AiSettings, loadSettings, relayHeaders, requestModel, saveSettings, usesOwnKey } from './settings';
+import { type ChatImage, imageData, mentionedImages, type PendingImage } from './images';
 import { addCall, addChange, addText, type TurnPart } from './turn-parts';
 import { buildRecord, download, postRecord, postUndo, recordJson, type ToolCallRecord, type TurnRecord, type TurnRun } from './turn-record';
 
@@ -55,6 +56,8 @@ export interface ChatItem {
   lastErrors?: string[];
   /** An edit the user made in the UI (place, orientation, template): no model involved. */
   manual?: boolean;
+  /** User: the images attached to the message (task 038), numbered 图N in the conversation; kept on this device. */
+  images?: ChatImage[];
   /** Assistant (task 020): the turn's tool calls, in order (`parts` says where they happened). */
   calls?: ToolCallRecord[];
   /** Assistant (task 020): how the turn ran (turn id, model, key, time), for its record. */
@@ -98,6 +101,9 @@ interface ChatState {
   /** Unsent text of the prompt bar (kept while it moves between bar and panel). */
   draft: string;
   setDraft: (draft: string) => void;
+  /** Images attached to the unsent message (task 038). */
+  attachments: PendingImage[];
+  setAttachments: (a: PendingImage[]) => void;
   setSettings: (s: AiSettings) => void;
   setSettingsOpen: (open: boolean) => void;
 }
@@ -117,6 +123,8 @@ export const useChat = create<ChatState>((set) => ({
   server: null,
   draft: '',
   setDraft: (draft) => set({ draft }),
+  attachments: [],
+  setAttachments: (attachments) => set({ attachments }),
   setSettings: (settings) => {
     saveSettings(settings);
     set({ settings });
@@ -298,15 +306,39 @@ function recordTurn(id: string, prompt: string): void {
   }
 }
 
-export async function send(text: string): Promise<void> {
+/** The images of the conversation so far (user messages), by number. */
+function conversationImages(): ChatImage[] {
+  return useChat.getState().items.flatMap((it) => it.images ?? []);
+}
+
+/**
+ * Sends a message. `attach`: images attached to it (the compose field's,
+ * numbered here; a retry passes the failed message's own).
+ */
+export async function send(text: string, attach?: PendingImage[] | ChatImage[]): Promise<void> {
   const prompt = text.trim();
-  if (!prompt || useChat.getState().running) return;
+  const pending = attach ?? useChat.getState().attachments;
+  if ((!prompt && !pending.length) || useChat.getState().running) return;
   const userId = nextId();
   const id = nextId();
+  // Number new attachments after the conversation's images; keep them on this device.
+  let next = conversationImages().reduce((m, im) => Math.max(m, im.n), 0) + 1;
+  const images: ChatImage[] = pending.map((p) => ('n' in p ? p : { id: p.id, n: next++, w: p.w, h: p.h }));
+  if (pending.some((p) => 'dataUrl' in p)) void imageData().then((m) => { for (const p of pending) if ('dataUrl' in p) void m.putImage(p.id, p.dataUrl); });
+  if (!attach) useChat.setState({ attachments: [] });
+  const userItem: ChatItem = { id: userId, role: 'user', text: prompt, ...(images.length ? { images } : {}) };
+  // What the model gets: this message's images, then earlier ones it mentions (@图N), each after its label.
+  const mentioned = mentionedImages(prompt).filter((n) => !images.some((im) => im.n === n));
+  const earlier = conversationImages().filter((im) => mentioned.includes(im.n));
+  const sendImages = async () => (await Promise.all([...images, ...earlier].map(async (im) => {
+    const p = pending.find((q) => q.id === im.id);
+    const dataUrl = p && 'dataUrl' in p ? p.dataUrl : await (await imageData()).getImage(im.id);
+    return dataUrl ? { label: `图${im.n}`, dataUrl } : null;
+  }))).filter((x): x is { label: string; dataUrl: string } => !!x);
   // Known to be out of credits: say so at once instead of asking the server.
   if (outOfCredits()) {
     useChat.setState((s) => ({
-      items: [...s.items, { id: userId, role: 'user', text: prompt }, { id, role: 'assistant', text: '', parts: [], phase: 'done', prompt, error: { kind: 'quota', code: 'quota_exhausted', message: 'No credits left for today.' } }],
+      items: [...s.items, userItem, { id, role: 'assistant', text: '', parts: [], phase: 'done', prompt, error: { kind: 'quota', code: 'quota_exhausted', message: 'No credits left for today.' } }],
     }));
     // No turn ran, so no after-turn note: show the exchange with what to do.
     if (!useStudio.getState().pinned) useStudio.getState().setRecent(true);
@@ -314,7 +346,7 @@ export async function send(text: string): Promise<void> {
   }
   useChat.setState((s) => ({
     running: true,
-    items: [...s.items, { id: userId, role: 'user', text: prompt }, { id, role: 'assistant', text: '', parts: [], phase: 'thinking', prompt }],
+    items: [...s.items, userItem, { id, role: 'assistant', text: '', parts: [], phase: 'thinking', prompt }],
   }));
   abort = new AbortController();
   const settings = useChat.getState().settings;
@@ -359,6 +391,7 @@ export async function send(text: string): Promise<void> {
       adapter,
       session: sess,
       text: prompt,
+      images: await sendImages(),
       past: [...past.values()],
       signal: abort.signal,
       onEvent,
@@ -366,7 +399,9 @@ export async function send(text: string): Promise<void> {
       findPlace,
     });
     if (r.committed) pushCommitted(id, r.before, r.after);
-    past.set(id, { user: prompt, assistant: r.text, changes: r.changes.map((c) => c.summary) });
+    // Later turns remember the images by name only (they are sent again when mentioned).
+    const named = images.length ? `${prompt}\n(附图：${images.map((im) => `图${im.n}`).join('、')})` : prompt;
+    past.set(id, { user: named, assistant: r.text, changes: r.changes.map((c) => c.summary) });
     patch(id, {
       text: r.text,
       phase: 'done',
@@ -487,10 +522,11 @@ export function retry(id: string): void {
   const s = useChat.getState();
   const i = s.items.findIndex((it) => it.id === id);
   const item = s.items[i];
-  if (!item?.prompt || s.running) return;
+  if (item?.prompt === undefined || s.running) return;
   past.delete(id);
+  const images = s.items[i - 1]?.role === 'user' ? s.items[i - 1]!.images : undefined;
   useChat.setState({ items: s.items.filter((_, k) => k !== i && k !== i - 1) });
-  void send(item.prompt);
+  void send(item.prompt, images ?? []);
 }
 
 /**

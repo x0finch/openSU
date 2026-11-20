@@ -1,7 +1,7 @@
 // @opensu/ui (task 031): Liquid Glass components on Base UI, organised like
 // shadcn/ui (one file per component, small composable parts, variants as
 // props). Apps only apply these; see README.md.
-export { cx, Glass, GlassLayer, useGlass, useMergedRef, usePress, type GlassProps } from './surface';
+export { cx, Glass, GlassLayer, useGlass, useMergedRef, usePortalHost, usePress, type GlassProps } from './surface';
 export { Button, ButtonArrow, ButtonLink, buttonClass, type ButtonSize, type ButtonVariant } from './button';
 export { IconButton } from './icon-button';
 export { ToolbarButton, ToolbarGroup } from './toolbar';

@@ -53,6 +53,7 @@ const ALLOW = [
  */
 const PRODUCT = [
   { file: 'chat/turn.tsx', why: 'the assistant turn: its timeline marks and disclosure line are this product\'s conversation' },
+  { file: 'chat/attach.tsx', why: 'images in the conversation (task 038): the attachment thumbnails with their 图N names, a message\'s pictures and the "@" list are this product\'s chat' },
   { file: 'chat/GoogleButton.tsx', why: 'Google\'s own button: its brand rules (fill, stroke, radius), styles.css `.google-btn`' },
   { file: 'studio/paper-sheet.tsx', why: 'the drawing sheet\'s picture and its placeholder (this product\'s sheet layout)' },
 ];

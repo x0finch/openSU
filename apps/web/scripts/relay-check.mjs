@@ -92,8 +92,8 @@ const req = (headers = {}, body = { model: 'default', stream: false, max_tokens:
 
 // Oversized and malformed bodies.
 {
-  const big = await relayChat(req({}, 'x'.repeat(300 * 1024)), { OPENROUTER_API_KEY: 'k' });
-  check(big.status === 413, 'bodies over 256 KB are refused');
+  const big = await relayChat(req({}, 'x'.repeat(1600 * 1024)), { OPENROUTER_API_KEY: 'k' });
+  check(big.status === 413, 'bodies over 1.5 MB are refused');
   const bad = await relayChat(req({}, '{nope'), { OPENROUTER_API_KEY: 'k' });
   check(bad.status === 400, 'non-JSON body -> 400');
 }
@@ -130,6 +130,34 @@ const req = (headers = {}, body = { model: 'default', stream: false, max_tokens:
   const ms = relayUs / N / 1000;
   console.log(`  relay CPU per request (Node V8, ${(body.length / 1024).toFixed(1)} KB body, upstream mocked): ${ms.toFixed(3)} ms`);
   check(ms < 5, `relay CPU well under the 10 ms free-tier limit in this approximation (${ms.toFixed(2)} ms)`);
+}
+
+// The same with the images of one message (task 038): four JPEGs of about 120 KB (1024 px), inline as base64 (160 KB each).
+{
+  const env = { OPENROUTER_API_KEY: 'sk-or-owner' };
+  const image = (k) => ({ type: 'image_url', image_url: { url: `data:image/jpeg;base64,${String.fromCharCode(65 + k).repeat(160 * 1024)}` } });
+  const body = JSON.stringify({
+    model: 'default',
+    messages: [
+      { role: 'system', content: 'S'.repeat(22000) + '\n' + 'LEVEL L1 "一层" height 3300 ...\n'.repeat(180) },
+      { role: 'user', content: [{ type: 'text', text: '照着图1改' }, ...[0, 1, 2, 3].map(image)] },
+    ],
+    stream: true,
+  });
+  for (let i = 0; i < 20; i++) await (await relayChat(req({}, body), env)).arrayBuffer();
+  const N = 100;
+  let relayUs = 0;
+  for (let i = 0; i < N; i++) {
+    const r0 = req({}, body);
+    const c0 = process.cpuUsage();
+    const res = await relayChat(r0, env);
+    const c = process.cpuUsage(c0);
+    relayUs += c.user + c.system;
+    await res.arrayBuffer();
+  }
+  const ms = relayUs / N / 1000;
+  console.log(`  relay CPU per request with four images (${(body.length / 1024).toFixed(0)} KB body, upstream mocked): ${ms.toFixed(3)} ms`);
+  check(ms < 5, `relay CPU with images under the 10 ms free-tier limit in this approximation (${ms.toFixed(2)} ms)`);
 }
 
 if (failures.length) {
