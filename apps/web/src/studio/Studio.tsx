@@ -196,9 +196,16 @@ function useUndoKeys(): void {
  */
 function useEscapeCloses(): void {
   useEffect(() => {
+    // Whether a menu or panel was open when the key went down. Read first (window, capture): by the time the key
+    // bubbles back here, Base UI has closed the surface and React has already dropped it from the open list (a
+    // microtask runs between listeners), so reading it then let the same Escape close the strip or panel too.
+    let openAtDown = false;
+    const down = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') openAtDown = floatingOpen();
+    };
     const on = (e: KeyboardEvent) => {
       // Taken by an open menu or panel (Base UI closed it); a tooltip that closed lets the key through (task 033).
-      if (e.key !== 'Escape' || (e.defaultPrevented && floatingOpen())) return;
+      if (e.key !== 'Escape' || (e.defaultPrevented && openAtDown)) return;
       const s = useStudio.getState();
       if (useAccount.getState().open) {
         closeSignIn();
@@ -218,8 +225,12 @@ function useEscapeCloses(): void {
       } else return;
       e.preventDefault();
     };
+    window.addEventListener('keydown', down, true);
     window.addEventListener('keydown', on);
-    return () => window.removeEventListener('keydown', on);
+    return () => {
+      window.removeEventListener('keydown', down, true);
+      window.removeEventListener('keydown', on);
+    };
   }, []);
 }
 

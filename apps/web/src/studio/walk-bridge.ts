@@ -59,14 +59,24 @@ export function useWalkLevel(): string | null {
 /** Escape leaves walk mode (desktop keyboards), unless typing in a field. */
 export function useEscapeExitsWalk(): void {
   useEffect(() => {
+    // Whether a menu or panel was open when the key went down (read first: by the bubble it has already left the
+    // open list, see useEscapeCloses).
+    let openAtDown = false;
+    const down = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') openAtDown = floatingOpen();
+    };
     const on = (e: KeyboardEvent) => {
-      if (e.key !== 'Escape' || (e.defaultPrevented && floatingOpen())) return;
+      if (e.key !== 'Escape' || (e.defaultPrevented && openAtDown)) return;
       const t = e.target as HTMLElement | null;
       if (t && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName))) return;
       const s = useStudio.getState();
       if (s.walk) s.setWalk(false);
     };
+    window.addEventListener('keydown', down, true);
     window.addEventListener('keydown', on);
-    return () => window.removeEventListener('keydown', on);
+    return () => {
+      window.removeEventListener('keydown', down, true);
+      window.removeEventListener('keydown', on);
+    };
   }, []);
 }
