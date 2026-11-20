@@ -853,6 +853,11 @@ async function walkChecks() {
     return w.state;
   });
   check(door.y > 7.2, `the main door lets the walker through (y ${door.y.toFixed(2)} m, wall at 6.9 m)`);
+  // The click on the view above locked the pointer (a desktop look without a button held): it is freed first,
+  // as Esc frees it, before the exit button can be pressed.
+  check(await page.evaluate(() => document.pointerLockElement?.tagName === 'CANVAS'), 'a click on the view locks the pointer for looking round');
+  await page.evaluate(() => document.exitPointerLock());
+  await page.waitForFunction(() => !document.pointerLockElement, null, { timeout: tmo(5000) });
   // Exit returns to the view.
   await page.getByRole('button', { name: '退出漫游' }).click();
   // The exit is a dissolve driven by frames: wait for the state, not a fixed time.
