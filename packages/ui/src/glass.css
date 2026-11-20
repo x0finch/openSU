@@ -467,7 +467,14 @@
 .lg.lg-sheet[data-vaul-drawer] {
   transition:
     transform 0.5s cubic-bezier(0.32, 0.72, 0, 1),
-    height 0.4s cubic-bezier(0.32, 0.72, 0, 1);
+    height 0.4s cubic-bezier(0.32, 0.72, 0, 1),
+    background-color 0.3s ease;
+}
+/* At its large detent a sheet is no longer floating over the content: it turns opaque (iOS 26; task 036). */
+.lg.lg-sheet[data-detent="large"] {
+  background: var(--lg-tint);
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
 }
 .lg-sheet [data-vaul-handle].lg-grab {
   flex-shrink: 0;
@@ -505,9 +512,14 @@
 .lg-panel[data-phone] {
   padding: 4px 20px 24px;
 }
+/*
+ * The header (task 036, the owner's choice): the title and its line under it
+ * stay leading; a round filled button in each top corner (back leading,
+ * before the title; close trailing), as iOS 26 draws a sheet's buttons.
+ */
 .lg-panel-head {
   display: flex;
-  min-height: 32px;
+  min-height: 36px;
   align-items: center;
   gap: 8px;
 }

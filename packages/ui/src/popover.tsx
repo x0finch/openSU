@@ -111,18 +111,18 @@ export function SheetContent({ children, panel, ref }: { children: ReactNode; pa
   );
 }
 
-/** The header: an optional back button, the title, the close button (every surface has one). */
+/** The header: an optional back button, the title (leading), the close button trailing (every surface has one); the buttons round and filled. */
 export function PopoverHeader({ children, onClose, closeLabel, closeTestId, back }: { children: ReactNode; onClose: () => void; closeLabel: string; closeTestId?: string; back?: { label: string; onClick: () => void; testId?: string } }) {
   const parts = useContext(PopoverParts);
   const close = (
-    <IconButton label={closeLabel} tip={false} size={32} onClick={onClose} data-testid={closeTestId} data-panel-close="">
+    <IconButton label={closeLabel} tip={false} size={36} onClick={onClose} data-testid={closeTestId} data-panel-close="" data-filled="">
       <CloseGlyph />
     </IconButton>
   );
   return (
     <header className="lg-panel-head" data-slot="popover-header" data-panel-head="">
       {back && (
-        <IconButton label={back.label} tip={false} size={32} onClick={back.onClick} data-testid={back.testId} data-panel-back="">
+        <IconButton label={back.label} tip={false} size={36} onClick={back.onClick} data-testid={back.testId} data-panel-back="" data-filled="">
           <BackGlyph />
         </IconButton>
       )}
