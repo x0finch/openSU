@@ -68,6 +68,8 @@ export interface StairInfo {
   dir: Side;
   /** Which half of the well (across `dir`) carries the first flight: -1 = west/south, +1 = east/north. */
   firstHalf: -1 | 1;
+  /** Entered from the side: the first flight starts with winders (ResolvedStair.sideEntry). */
+  sideEntry: boolean;
   /** A flight starts on this level (draw "上" and a break line). */
   up: boolean;
   /** A flight arrives from the level below (draw "下"). */
@@ -219,7 +221,7 @@ function stairsOf(house: ResolvedHouse, index: number, spaces: SpaceInfo[], wall
     const half: -1 | 1 = st.firstHalf;
     out.push({
       space: sp.id, clip: sp.clear, well, kind: st.kind, dir: st.up,
-      firstHalf: half, up: !!up, down: !!down,
+      firstHalf: half, sideEntry: st.sideEntry, up: !!up, down: !!down,
       rise: up ? level.height : prev!.height,
     });
   }

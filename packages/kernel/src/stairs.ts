@@ -80,11 +80,38 @@ export function buildStairs(ctx: Ctx): StairInfo[] {
       const n1 = Math.ceil(n / 2), n2 = n - n1;
       const landing = width;
       const run = a1 - a0 - landing;
-      const g1 = run / Math.max(1, n1 - 1);
-      for (let k = 1; k < n1; k++) box(startA + sign * (k - 1) * g1, startA + sign * k * g1, f1[0], f1[1], k * riser);
       const lEnd = sign > 0 ? a1 : a0;
       const lStart = lEnd - sign * landing;
-      ramp(edgeA, lStart, f1[0], f1[1], [edgeA, lStart], [0, n1 * riser]);
+      // Entered from the side (the start end is a wall; ResolvedStair.sideEntry): the first flight starts with
+      // winders in its first square, fanning a quarter turn round the corner where the flight's open side meets
+      // the end of that square, so the first step faces the side the stair is entered from (task 037, as in the
+      // reference walk-through's stair). Enough winders that the straight treads after them keep a 220 mm going.
+      const side = st.kind === 'u' && st.sideEntry && run > width + 200;
+      const nw = side ? Math.min(5, Math.max(3, Math.ceil(n1 - 1 - (run - width) / 220))) : 0;
+      if (side) {
+        const fw = f1[1] - f1[0];
+        const cOut = firstHigh ? f1[1] : f1[0];
+        const C = 8, cs = fw / C;
+        for (let ia = 0; ia < C; ia++) {
+          for (let ic = 0; ic < C; ic++) {
+            // u: from the open side inwards; v: from the start end along the flight (cell centres).
+            const u = (ic + 0.5) * cs, v = (ia + 0.5) * cs;
+            const phi = (Math.atan2(fw - v, u) * 180) / Math.PI;
+            const k = Math.min(nw, Math.floor((90 - phi) / (90 / nw)) + 1);
+            const cr0 = firstHigh ? cOut - (ic + 1) * cs : cOut + ic * cs;
+            box(startA + sign * ia * cs, startA + sign * (ia + 1) * cs, cr0, cr0 + cs, k * riser);
+          }
+        }
+        const g = (run - fw) / Math.max(1, n1 - 1 - nw);
+        for (let k = nw + 1; k < n1; k++) box(startA + sign * (fw + (k - nw - 1) * g), startA + sign * (fw + (k - nw) * g), f1[0], f1[1], k * riser);
+        // Walking: the winders as a slope along the square (low at the end wall, where the side is entered), then the flight.
+        ramp(edgeA, startA + sign * fw, f1[0], f1[1], [edgeA, startA + sign * fw], [0, nw * riser]);
+        ramp(startA + sign * fw, lStart, f1[0], f1[1], [startA + sign * fw, lStart], [nw * riser, n1 * riser]);
+      } else {
+        const g1 = run / Math.max(1, n1 - 1);
+        for (let k = 1; k < n1; k++) box(startA + sign * (k - 1) * g1, startA + sign * k * g1, f1[0], f1[1], k * riser);
+        ramp(edgeA, lStart, f1[0], f1[1], [edgeA, lStart], [0, n1 * riser]);
+      }
       if (st.kind === 'u') {
         ramp(lStart, lEnd + sign * inset, c0, c1, [lStart, lStart], [n1 * riser, n1 * riser]);
         ramp(lStart, edgeA, f2[0], f2[1], [lStart, edgeA], [n1 * riser, H]);
@@ -92,7 +119,7 @@ export function buildStairs(ctx: Ctx): StairInfo[] {
         // reaches over that foot, as far as the headroom over the flight allows, so the top of the second flight
         // steps across onto it and out of the well on the first flight's side (the side the stair is entered from).
         const headroom = 2000;
-        const reach = ((H - FLOOR_SLAB - headroom) / (n1 * riser)) * run;
+        const reach = side ? (H - FLOOR_SLAB - headroom >= nw * riser ? width : 0) : ((H - FLOOR_SLAB - headroom) / (n1 * riser)) * run;
         const cover = Math.min(width, run * 0.5, reach);
         let railFrom = edgeA;
         if (cover >= 700) {

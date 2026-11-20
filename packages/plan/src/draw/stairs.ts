@@ -58,6 +58,32 @@ export function drawStair(st: StairInfo, v: View, texts: TextBox[], ty: Typograp
     const outline = intersection(toRect(fl.across, fl.from, limit), clip);
     if (!outline) return;
     s += rectEl(v.rect(outline), { fill: color.furnitureFill, stroke: color.stairLine, 'stroke-width': stroke.stair });
+    // Entered from the side: winders fan a quarter turn round the corner where the flight's open side meets the end
+    // of its first square (the kernel builds the same), then the straight treads.
+    const fw = fl.across[1] - fl.across[0];
+    if (isFirst && st.sideEntry && runLen > fw + 200) {
+      const outer = st.firstHalf > 0 ? fl.across[1] : fl.across[0], inward = st.firstHalf > 0 ? -1 : 1;
+      const nStraight = Math.max(1, Math.round((runLen - fw) / mm.tread));
+      const nw = Math.min(5, Math.max(3, risers - nStraight));
+      const P = (u: number, w: number): [number, number] => {
+        const ac = outer + inward * u, al = L.start + L.sgn * w;
+        return L.ns ? v.p([ac, al]) : v.p([al, ac]);
+      };
+      const pv = P(0, fw);
+      for (let i = 1; i < nw; i++) {
+        const a = (i * Math.PI) / 2 / nw, du = Math.cos(a), dv = Math.sin(a);
+        const k = Math.min(fw / Math.max(du, 1e-6), fw / Math.max(dv, 1e-6));
+        const q = P(du * k, fw - dv * k);
+        s += line(pv[0], pv[1], q[0], q[1], { stroke: color.stairLine, 'stroke-width': stroke.stair });
+      }
+      const g = (runLen - fw) / nStraight;
+      for (let k = 0; k < nStraight; k++) {
+        const at = L.start + L.sgn * (fw + k * g);
+        if (L.sgn * (at - limit) > 0.5) break;
+        s += seg(fl.across[0], fl.across[1], at);
+      }
+      return;
+    }
     for (let k = 1; k <= risers; k++) {
       const at = L.start + L.sgn * step * k;
       if (L.sgn * (at - limit) > 0.5) break;
@@ -153,7 +179,27 @@ export function drawStair(st: StairInfo, v: View, texts: TextBox[], ty: Typograp
     texts.push({ x0: lx - tw / 2, x1: lx + tw / 2, y0: ly - size / 2, y1: ly + size / 2, text: '下', kind: 'stair' });
     return w;
   };
-  if (st.up) s += arrow(first, L.start + L.sgn * 120, breakAt - L.sgn * 220, '上');
+  const fw0 = first.across[1] - first.across[0];
+  if (st.up && st.sideEntry && Math.abs(breakAt - L.start) > fw0 * 0.6) {
+    // Entered from the side: the walking line comes in over the open side, turns on the winders and runs up the
+    // flight; 上 just outside the open side.
+    const outer = st.firstHalf > 0 ? first.across[1] : first.across[0], inward = st.firstHalf > 0 ? -1 : 1;
+    const c = (first.across[0] + first.across[1]) / 2, mid = L.start + L.sgn * (fw0 / 2), end = breakAt - L.sgn * 120;
+    const P = (ac: number, al: number) => (L.ns ? v.p([ac, al]) : v.p([al, ac]));
+    const pts = [P(outer + inward * 80, mid), P(c, mid), P(c, end)];
+    const [q, e] = [pts[1]!, pts[2]!];
+    const ang = Math.atan2(e[1] - q[1], e[0] - q[0]);
+    const ah = 6.5, aw = 2.4;
+    const hx = e[0] - Math.cos(ang) * ah, hy = e[1] - Math.sin(ang) * ah;
+    s += `<path${attrs({ d: `M${f(pts[0]![0])},${f(pts[0]![1])}L${f(q[0])},${f(q[1])}L${f(hx)},${f(hy)}`, fill: 'none', stroke: color.stairArrow, 'stroke-width': stroke.stairArrow })}/>`;
+    s += `<path${attrs({ d: `M${f(e[0])},${f(e[1])}L${f(hx - Math.sin(ang) * aw)},${f(hy + Math.cos(ang) * aw)}L${f(hx + Math.sin(ang) * aw)},${f(hy - Math.cos(ang) * aw)}Z`, fill: color.stairArrow })}/>`;
+    s += `<circle${attrs({ cx: pts[0]![0], cy: pts[0]![1], r: 1.6, fill: color.stairArrow })}/>`;
+    const size = ty.font.stairSize;
+    const o = P(outer - inward * (size / v.len(1) / 2 + 60), mid);
+    const w = textWidth('上', size);
+    s += `<text${attrs({ x: o[0], y: o[1] + size * 0.36, 'text-anchor': 'middle', 'font-family': ty.font.cjk, 'font-size': size, fill: color.labelCn })}>上</text>`;
+    texts.push({ x0: o[0] - w / 2, x1: o[0] + w / 2, y0: o[1] - size / 2, y1: o[1] + size / 2, text: '上', kind: 'stair' });
+  } else if (st.up) s += arrow(first, L.start + L.sgn * 120, breakAt - L.sgn * 220, '上');
   if (st.down && !st.up && L.flights.length > 1) {
     // Top floor: one walking line down the arriving flight, across the
     // landing and on down the flight below, arrow at its end (no 上).
